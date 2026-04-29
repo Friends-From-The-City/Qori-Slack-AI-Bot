@@ -2357,9 +2357,13 @@ slackApp.view("stakeholder_interview_guide_modal", async ({ ack, body, view, cli
     await sendStudyResultMessage(client, channelId, studyName, blocks, 'stakeholder_guide');
 
     // Add study status for created file
+    // Explicitly pass file_name containing "stakeholder" so getStudyStakeholderGuide
+    // (which filters on file_name ILIKE '%stakeholder%') can find it later.
+    const stakeholderFileName = url.split('/').pop() || 'stakeholder_interview_guide.md';
     await addStudyStatus({
       study_name: studyName,
       path: url,
+      file_name: stakeholderFileName,
       status: 'created',
       created_by: body.user?.id || body.user_id || null,
     });

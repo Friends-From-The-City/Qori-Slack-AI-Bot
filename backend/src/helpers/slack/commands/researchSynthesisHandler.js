@@ -610,6 +610,9 @@ const handleResearchSynthesisSubmission = async ({ ack, body, view, client }) =>
       include_participant_tracker: includeParticipantTracker,
       include_research_plan: includeResearchPlan,
 
+      // Default for service_blueprint.yaml (no modal UI element for this yet)
+      blueprint_scope: 'end_to_end',
+
       // Combined content of all files
       combined_file_content: filesWithContent.map(f => f.content).join('\n\n---\n\n')
     };
