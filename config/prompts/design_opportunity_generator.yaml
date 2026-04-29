@@ -210,9 +210,6 @@ ai_generation_tasks:
 
       ## Methodology
 
-      <details>
-      <summary><strong>Framework & References</strong></summary>
-
       **Framework:** How Might We (HMW) Opportunity Framing
 
       **Approach:** Transform research-grounded problems into open questions that invite solution exploration without prescribing answers.
@@ -221,14 +218,10 @@ ai_generation_tasks:
 
       ### References
 
-      This analysis follows established opportunity framing methods:
-
       - **IDEO** — Design Thinking, HMW framework origin
       - **Stanford d.school** — "How Might We" question methodology
       - **Nielsen Norman Group** — From research insights to design opportunities
       - **Vijay Kumar** — "101 Design Methods" (Opportunity framing)
-
-      </details>
 
       ---
 
@@ -280,7 +273,8 @@ notes: |
   - Removed github_file_template (identical passthrough, redundant)
   - Removed default_delivery, slack_format, file_format from output_options (dead config)
   - Updated prompt: summary blockquote reordered to metrics first (no date)
-  - Removed decorative emoji from Methodology heading (was 📚, inside <details> block)
+  - Removed decorative emoji from Methodology heading (was 📚)
+  - Unwrapped Methodology from <details> toggle — should be visible, not collapsed
   - Standardized participant ID format to PT-001 (hyphenated)
   - Changed filename from {{study_folder}} to {{selected_study}} (matches actual variable)
   - Added inline comments on input_variables

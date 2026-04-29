@@ -221,9 +221,6 @@ ai_generation_tasks:
 
       ## Methodology
 
-      <details>
-      <summary><strong>Framework & References</strong></summary>
-
       **Framework:** Experience Journey Mapping
 
       **Approach:** Stage-by-stage analysis of user actions, emotions, pain points, and opportunities from qualitative research data.
@@ -232,14 +229,10 @@ ai_generation_tasks:
 
       ### References
 
-      This analysis follows established journey mapping methods:
-
       - **Adaptive Path** — Pioneers of journey mapping methodology
       - **Nielsen Norman Group** — Stage-based emotion mapping framework
       - **Service Design Thinking** — Stickdorn & Schneider, touchpoint analysis
       - **Mapping Experiences** — Jim Kalbach, O'Reilly Media
-
-      </details>
 
       ---
 
