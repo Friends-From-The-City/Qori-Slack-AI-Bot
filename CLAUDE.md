@@ -143,3 +143,13 @@ Templates migrated from `beta-test/YAML Templates/` to `config/prompts/`. Path a
 ### Study Folder Scaffold (decided April 29, 2026)
 
 The study folder scaffold (READMEs and directory structure copied into GitHub for each new study) lives at `config/templates/`. The old `study-template/` directory was a duplicate and has been deleted. `createStudyHandler.js` reads from `config/templates/` via `readFolders()`.
+
+### Document Design Language (locked April 29, 2026)
+
+A "Pentagram-style" design language was developed for Qori's generated documents. Key principles: editorial restraint, consistent masthead/methodology/footer patterns across document types, numbered sections only where they earn it, traceability woven into the design (per-finding source citations, confidence indicators, real artifact links).
+
+**Reference document:** `docs/design-references/research-readout-reference.md` shows the locked design applied to the research readout template.
+
+**Standards documentation:** `docs/qori-template-standards.md` Sections 4 and 6.
+
+**Status:** Design locked. YAML translation pending — `research_readout.yaml` is the first target template for translation.
