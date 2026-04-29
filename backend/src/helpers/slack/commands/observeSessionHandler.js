@@ -2,7 +2,7 @@ const { requestObserveSessionModal } = require("../ui/requestObserveSessionModal
 const { getResearchStudyWithRoles } = require("../../../services/research_study.service");
 const sessionObserverService = require("../../../services/session_observer.service");
 const studyParticipantService = require("../../../services/study_participant.service");
-const { getConfigRepo, fetchFileFromRepo } = require("../../github");
+const { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo } = require("../../github");
 const { processObserverYamlTemplate } = require("../../observerYamlProcessor");
 
 const observeSessionHandler = async ({ ack, body, client, command }) => {
@@ -270,7 +270,7 @@ const handleObserverApproval = async ({ ack, body, client }) => {
     let githubUrl;
 
     try {
-      const file = await fetchFileFromRepo(getConfigRepo(), "beta-test/YAML Templates", "participant_tracker.yaml");
+      const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, "participant_tracker.yaml");
 
       const inputData = {
         study_id: study.id,
@@ -322,7 +322,7 @@ const handleObserverApproval = async ({ ack, body, client }) => {
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: `<https://github.com/Friends-Innovation-Lab/qori-slack/blob/main/beta-test/templates/primary-research/03-fieldwork/observer_guidelines.md|:book: View Observer Guidelines>`,
+            text: `<https://github.com/friends-innovation-lab/qori-slack/blob/main/config/templates/primary-research/03-fieldwork/observer_guidelines.md|:book: View Observer Guidelines>`,
           },
         },
         {
@@ -388,7 +388,7 @@ const handleObserverDenial = async ({ ack, body, client }) => {
     let githubUrl;
 
     try {
-      const file = await fetchFileFromRepo(getConfigRepo(), "beta-test/YAML Templates", "participant_tracker.yaml");
+      const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, "participant_tracker.yaml");
 
       const inputData = {
         study_id: study.id,

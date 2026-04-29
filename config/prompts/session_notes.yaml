@@ -74,7 +74,7 @@ input_variables:
       help_text: "Freeform observations. AI will extract quotes, timestamps, tasks, and organize into sections."
 
 # AI Processing - Extract structure from freeform notes
-ai_processing_tasks:
+ai_generation_tasks:
   - task_id: "structure_notes"
     prompt: |
       You are processing raw session notes from a UX research observation. Extract and organize the content into structured sections.

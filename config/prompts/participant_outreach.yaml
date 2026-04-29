@@ -175,7 +175,7 @@ ai_generation_tasks:
       - Incentive: {{incentive_amount}}
       - Session Duration: {{session_duration}}
       
-      {{#if message_type == "initial_recruitment"}}
+      {% if message_type == "initial_recruitment" %}
       INITIAL RECRUITMENT EMAIL
       
       Signup Instructions: {{signup_instructions}}
@@ -189,9 +189,9 @@ ai_generation_tasks:
       6. How to sign up: {{signup_instructions}}
       7. Emphasize voluntary participation
       8. Sign-off with researcher contact info
-      {{/if}}
+      {% endif %}
       
-      {{#if message_type == "session_confirmation"}}
+      {% if message_type == "session_confirmation" %}
       SESSION CONFIRMATION EMAIL
       
       Session Date: {{session_date}}
@@ -205,9 +205,9 @@ ai_generation_tasks:
       4. How to join (click link, no download needed if applicable)
       5. Contact info if they need to reschedule
       6. Thank them for participating
-      {{/if}}
+      {% endif %}
       
-      {{#if message_type == "session_reminder"}}
+      {% if message_type == "session_reminder" %}
       SESSION REMINDER EMAIL (24-48 hours before)
       
       Session Date: {{session_date}}
@@ -220,9 +220,9 @@ ai_generation_tasks:
       3. Brief reminder of what to expect
       4. Contact info if anything comes up
       5. Looking forward to speaking with them
-      {{/if}}
+      {% endif %}
       
-      {{#if message_type == "rescheduling_request"}}
+      {% if message_type == "rescheduling_request" %}
       RESCHEDULING REQUEST EMAIL
       
       Original Date: {{original_date}}
@@ -235,9 +235,9 @@ ai_generation_tasks:
       4. Ask them to reply with preferred time
       5. Thank them for understanding
       6. Contact info
-      {{/if}}
+      {% endif %}
       
-      {{#if message_type == "follow_up"}}
+      {% if message_type == "follow_up" %}
       FOLLOW-UP EMAIL (gentle, non-pushy)
       
       Structure:
@@ -247,9 +247,9 @@ ai_generation_tasks:
       4. Easy way to sign up or respond
       5. Clear opt-out: "No pressure — just let me know if you're not interested"
       6. Contact info
-      {{/if}}
+      {% endif %}
       
-      {{#if message_type == "thank_you"}}
+      {% if message_type == "thank_you" %}
       THANK YOU EMAIL (post-session)
       
       Structure:
@@ -259,7 +259,7 @@ ai_generation_tasks:
       4. What happens next with the research
       5. Offer to share findings when available
       6. Final appreciation
-      {{/if}}
+      {% endif %}
       
       Generate the complete email body (no subject line).
     output_variable: "email_body"
@@ -269,7 +269,7 @@ ai_generation_tasks:
 # =============================================================================
 
 output_template: |
-  📧 **{{message_type | humanize}} Generated**
+  📧 **{{message_type}} Generated**
   
   **To:** {{participant_id}}
   **Subject:** {{ai_generated.subject_line}}

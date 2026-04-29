@@ -2,7 +2,7 @@ const { requestResearchModal } = require("../ui/requestResearchModal");
 const { createStudyModal } = require("../ui/createStudyModal");
 const { createStudyFromRequestModal } = require("../ui/createStudyFromRequestModal");
 const { researchBriefModal } = require("../ui/researchBriefModal");
-const { getConfigRepo, fetchFileFromRepo, readFolders, copyFilesToFolder } = require("../../github");
+const { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo, readFolders, copyFilesToFolder } = require("../../github");
 const { processYamlTemplate } = require("../../yamlProcessor");
 
 /**
@@ -98,7 +98,7 @@ const handleRequestResearchSubmission = async ({ ack, body, view, client }) => {
     let requestUrl = null;
     let requestPath = null;
     try {
-      const yamlFile = await fetchFileFromRepo(getConfigRepo(), "beta-test/YAML Templates", "research_request.yaml");
+      const yamlFile = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, "research_request.yaml");
       
       // Process YAML template — write to content repo, not config repo
       const sanitizedTitle = (requestData.project_title || 'research-request')

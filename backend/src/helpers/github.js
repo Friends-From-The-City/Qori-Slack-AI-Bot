@@ -10,6 +10,12 @@ function getConfigRepo() {
   return process.env.GITHUB_CONFIG_REPO || process.env.GITHUB_REPO;
 }
 
+/**
+ * Path to YAML prompt templates in the config repo.
+ * All fetchFileFromRepo calls for YAML templates should use this constant.
+ */
+const YAML_TEMPLATE_PATH = 'config/prompts';
+
 function getDestPath(filePath, baseFolder, folder, targetFolder) {
   const parts = filePath.split(path.posix.sep);
   const tmplIdx = parts.indexOf('templates');
@@ -610,6 +616,7 @@ async function deleteStudyFolderFromGitHub(folderPath, repo) {
 
 module.exports = {
   getConfigRepo,
+  YAML_TEMPLATE_PATH,
   copyFilesToFolder,
   readFolderContents,
   listAllTopLevelFolders,

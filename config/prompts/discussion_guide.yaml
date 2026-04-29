@@ -195,7 +195,7 @@ ai_generation_tasks:
       
       ## 🎯 Main Research Activities
       
-      {{#if research_method == "usability_testing"}}
+      {% if research_method == "usability_testing" %}
       *For each task, read the scenario and instruction verbatim. Observe without helping unless participant is completely stuck.*
       
       ### Task 1: [Clear Task Name]
@@ -230,7 +230,7 @@ ai_generation_tasks:
       ### Task 3: [Task Name]
       [Same format]
       
-      {{else if research_method == "user_interviews"}}
+      {% elif research_method == "user_interviews" %}
       *These are open-ended questions to explore experiences and mental models. Follow the participant's lead and probe deeper on interesting responses.*
       
       ### Topic Area 1: [Topic Name]
@@ -257,7 +257,7 @@ ai_generation_tasks:
       ### Topic Area 3: [Topic Name]
       [Same format]
       
-      {{else if research_method == "concept_testing"}}
+      {% elif research_method == "concept_testing" %}
       *Show each concept and gather reactions. Don't explain or defend the concept — let participants react naturally.*
       
       ### Concept 1: [Concept Name]
@@ -301,7 +301,7 @@ ai_generation_tasks:
       ### Activity 2: [Activity Name]
       [Same format]
       
-      {{/if}}
+      {% endif %}
       
       [END OF TASK 2 — Do not generate beyond this point]
 

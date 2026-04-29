@@ -8,7 +8,7 @@ const { sessionReminderModal } = require("../ui/outreach/sessionReminderModal");
 const { thankyouModal } = require("../ui/outreach/thankyouModal");
 const { basinInfoBlocks } = require("../ui/outreach/basicInfoBlock");
 const { getResearchStudyWithRoles, getStudiesByUser } = require("../../../services/research_study.service");
-const { getConfigRepo, fetchFileFromRepo } = require("@/helpers/github");
+const { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo } = require("@/helpers/github");
 const { processYamlTemplate } = require("@/helpers/yamlProcessor");
 const studyParticipantService = require("../../../services/study_participant.service");
 const { requestObserveSessionModal } = require("../ui/requestObserveSessionModal");
@@ -269,7 +269,7 @@ const handleInitialRecruitmentSubmit = async ({ ack, body, view, client }) => {
       signup_instructions,
       incentive_amount: "", // Will be pulled from study automatically
     }
-    const file = await fetchFileFromRepo(getConfigRepo(), "beta-test/YAML Templates", "participant_outreach.yaml");
+    const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, "participant_outreach.yaml");
     const renderedYaml = await processYamlTemplate(file.content, data, study.path);
     console.log("🚀 ~ handleInitialRecruitmentSubmit ~ renderedYaml:", renderedYaml)
 
@@ -395,7 +395,7 @@ const handleReschedulingRequestSubmit = async ({ ack, body, view, client }) => {
       new_options,
     }
 
-    const file = await fetchFileFromRepo(getConfigRepo(), "beta-test/YAML Templates", "participant_outreach.yaml");
+    const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, "participant_outreach.yaml");
     const renderedYaml = await processYamlTemplate(file.content, data, study.path);
     console.log("🚀 ~ handleReschedulingRequestSubmit ~ renderedYaml:", renderedYaml);
 
@@ -520,7 +520,7 @@ const handleSessionConfirmationSubmit = async ({ ack, body, view, client }) => {
       meeting_link,
     }
 
-    const file = await fetchFileFromRepo(getConfigRepo(), "beta-test/YAML Templates", "participant_outreach.yaml");
+    const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, "participant_outreach.yaml");
     const renderedYaml = await processYamlTemplate(file.content, data, study.path);
     console.log("🚀 ~ handleSessionConfirmationSubmit ~ renderedYaml:", renderedYaml);
 
@@ -642,7 +642,7 @@ const handleThankYouSubmit = async ({ ack, body, view, client }) => {
       incentive_amount,
     }
 
-    const file = await fetchFileFromRepo(getConfigRepo(), "beta-test/YAML Templates", "participant_outreach.yaml");
+    const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, "participant_outreach.yaml");
     const renderedYaml = await processYamlTemplate(file.content, data, study.path);
     console.log("🚀 ~ handleThankYouSubmit ~ renderedYaml:", renderedYaml)
 
@@ -758,7 +758,7 @@ const handleFollowUpSubmit = async ({ ack, body, view, client }) => {
       researcher_email,
     }
 
-    const file = await fetchFileFromRepo(getConfigRepo(), "beta-test/YAML Templates", "participant_outreach.yaml");
+    const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, "participant_outreach.yaml");
     const renderedYaml = await processYamlTemplate(file.content, data, study.path);
     console.log("🚀 ~ handleFollowUpSubmit ~ renderedYaml:", renderedYaml)
 
@@ -881,7 +881,7 @@ const handleSessionReminderSubmit = async ({ ack, body, view, client }) => {
       meeting_link,
     }
 
-    const file = await fetchFileFromRepo(getConfigRepo(), "beta-test/YAML Templates", "participant_outreach.yaml");
+    const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, "participant_outreach.yaml");
     const renderedYaml = await processYamlTemplate(file.content, data, study.path);
     console.log("🚀 ~ handleSessionReminderSubmit ~ renderedYaml:", renderedYaml);
 
@@ -1014,7 +1014,7 @@ const handleAddParticipantSubmit = async ({ ack, body, view, client }) => {
     };
 
 
-    const file = await fetchFileFromRepo(getConfigRepo(), "beta-test/YAML Templates", "participant_tracker.yaml");
+    const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, "participant_tracker.yaml");
     const fileData = {
       file: file.content,
       study_path: study.path

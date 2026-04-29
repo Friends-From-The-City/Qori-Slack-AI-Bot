@@ -2,7 +2,7 @@ id: usability_issues_extractor
 name: run_usability_issues_extractor
 
 label: 🐛 Usability Issues
-version: "v2.0"
+version: "v3.0"
 
 description: >
   Extract and prioritize usability issues from testing sessions, user observations, and research notes.
@@ -11,7 +11,7 @@ description: >
 
 author: Qori R&D
 created: 2025-06-26
-last_updated: 2025-09-10
+last_updated: 2026-04-29
 
 input_type: slack_modal_form
 input_processing: auto_file_discovery
@@ -39,20 +39,14 @@ privacy_controls:
     ssn: '\b\d{3}-\d{2}-\d{4}\b'
   masking_strategy:
     email: "[EMAIL_REDACTED]"
-    phone: "[PHONE_REDACTED]" 
+    phone: "[PHONE_REDACTED]"
     ssn: "[SSN_REDACTED]"
 
 # Slack modal input variables
 input_variables:
   - selected_study              # Study name from dropdown (REQUIRED)
   - include_research_plan       # Boolean from checkbox (OPTIONAL)
-  - include_participant_notes   # Boolean from checkbox (OPTIONAL)  
-  - include_raw_transcripts     # Boolean from checkbox (OPTIONAL)
-  
-  # Auto-generated during processing
-  - discovered_files            # Files found by auto-discovery (GENERATED)
   - combined_file_content       # Auto-combined content (GENERATED)
-  - quality_assessment          # Initial quality score (GENERATED)
 
 # Study metadata mapping
 study_metadata:
@@ -61,13 +55,13 @@ study_metadata:
     researcher: "jordan.researcher"
     channel: "#research-housing-app"
     focus_area: "housing application interface"
-    
+
   "Benefits Portal Navigation Research":
     folder: "benefits-portal-nav-2025"
     researcher: "alex.ux"
     channel: "#research-benefits"
     focus_area: "benefits portal interface"
-    
+
   "Veteran Onboarding Experience Study":
     folder: "veteran-onboarding-2025"
     researcher: "casey.research"
@@ -82,271 +76,239 @@ auto_file_discovery:
       search_paths: ["01-sessions/", "sessions/", "summaries/"]
       priority: "required"
       confidence_weight: 50
-      
+
     transcripts:
       file_patterns: ["*transcript*", "*interview*", "*recording*"]
       search_paths: ["01-sessions/", "transcripts/", "interviews/"]
       priority: "high"
       confidence_weight: 30
-  
+
   enhancement_files:
     research_plan:
       enabled_when: "{{include_research_plan}} == true"
       file_patterns: ["*research_plan*", "*study_plan*", "*methodology*"]
       search_paths: ["00-planning/", "planning/", "research/"]
       confidence_boost: 8
-      
-    participant_notes:
-      enabled_when: "{{include_participant_notes}} == true"
-      file_patterns: ["*participant*", "*notes*", "*observations*"]
-      search_paths: ["02-participants/", "participants/", "notes/"]
-      confidence_boost: 5
-      
-    raw_transcripts:
-      enabled_when: "{{include_raw_transcripts}} == true"
-      file_patterns: ["*raw*", "*unprocessed*", "*recording*"]
-      search_paths: ["01-sessions/raw/", "raw/", "recordings/"]
-      confidence_boost: 3
 
-# AI generation tasks
+# AI generation tasks - SINGLE CONSOLIDATED TASK
+# v3.0: Consolidated from 6 chained tasks into 1 comprehensive task.
+# The original 6-task architecture (v2.0) used {{ai_generated.*}} references
+# between tasks, but executeAiGenerationTasks runs all tasks via Promise.all
+# (parallel). Tasks 2-6 received empty strings for chained references,
+# causing the extraction to hang or produce empty output. Same fix applied
+# to affinity_mapping v3.0 — see its notes section.
 ai_generation_tasks:
-  # File discovery and quality assessment
-  - task_id: "file_discovery_summary"
+  - task_id: "usability_complete"
     prompt: |
-      As a research operations specialist, analyze the discovered files and quality:
-      
-      **Selected Study:** {{selected_study}}
-      **Enhancement Options Selected:**
-      - Research plan: {{include_research_plan}}
-      - Participant notes: {{include_participant_notes}}
-      - Raw transcripts: {{include_raw_transcripts}}
-      
-      **Discovered Files:** {{discovered_files}}
-      **Total Content:** [Analyze character/word count of combined_file_content]
-      
-      Report on file coverage, content quality, enhancement impact, and analysis confidence for usability issue extraction.
+      ============================================================
+      🚨 CRITICAL RULES - READ BEFORE ANYTHING ELSE 🚨
+      ============================================================
 
-  # Analyze usability data scope and determine optimal analysis approach
-  - task_id: "usability_scope_analysis"
-    prompt: |
-      As an experienced usability researcher and UX expert, analyze the scope and quality of usability testing data:
-      
+      RULE 1: NO HALLUCINATION - EXTRACT ONLY
+      You are an EXTRACTOR, not a GENERATOR.
+      - Every issue must be based on ACTUAL observations from the data
+      - Every quote must be VERBATIM from the data
+      - If you cannot find evidence, DO NOT INCLUDE IT
+
+      RULE 2: SYSTEMATIC EXTRACTION
+      Process the data in this order:
+      1. First, scan ALL data for distinct usability problems
+      2. For each problem, gather ALL supporting evidence
+      3. Analyze user behaviors and expectations for each
+      4. Assess severity using consistent criteria
+      5. Generate specific, actionable fix recommendations
+      6. Validate with supporting quotes
+
+      RULE 3: VA GOVERNMENT CONTEXT ONLY
+      These are Veterans using VA services.
+      - Pain points relate to: app usability, navigation, accessibility, claims, healthcare
+      - NEVER mention unrelated concepts
+
+      RULE 4: CITE EVERYTHING
+      Every quote MUST have:
+      - Participant ID (PT001, PT002, etc.)
+      - Timestamp if available (00:01:56)
+
+      RULE 5: ISSUES MUST BE DISTINCT
+      If two issues sound similar, combine them into ONE.
+      - "Button visibility issues" and "Hidden edit button" = ONE issue
+      - "Navigation challenges" and "Getting lost in benefits" = ONE issue
+
+      RULE 6: SPECIFIC ISSUE NAMES
+      Issue names should be specific to THIS data, not generic UX jargon.
+
+      ❌ GENERIC: "Navigation Challenges"
+      ❌ GENERIC: "Poor User Experience"
+      ✅ SPECIFIC: "Unlabeled Buttons Block Screen Reader Navigation"
+      ✅ SPECIFIC: "Claim Status Shows 'None' Despite Active Filing"
+
+      ============================================================
+      YOUR TASK
+      ============================================================
+
+      Perform a comprehensive usability issues extraction on this research data:
+
       **Study:** {{selected_study}}
-      **Focus Area:** {{focus_area}}
+      **Analysis Date:** {{current_date}}
       **Input Data:** {{combined_file_content}}
-      **Quality Assessment:** {{ai_generated.file_discovery_summary}}
-      
-      Analyze:
-      1. **Data Type Assessment:** What types of usability data are present (testing notes, task observations, error logs, etc.)?
-      2. **Issue Density:** How many distinct usability problems can be identified?
-      3. **Optimal Issue Count:** Based on data complexity, how many issues should be extracted?
-      4. **Overall Severity:** What's the general severity level of usability problems?
-      5. **Analysis Confidence:** What confidence level is appropriate?
-      
-      **Format:**
-      **Data Type Assessment:** [Types of usability data present - testing notes, observations, task completion data, etc.]
-      **Issue Density:** [High/Medium/Low] - [estimated number of distinct problems identifiable]
-      **Recommended Issue Count:** [3-8 issues] - [reasoning based on problem variety and severity]
-      **Overall Severity:** [High/Medium/Low] - [assessment of general problem severity]
-      **Analysis Confidence:** [High/Medium/Low] - [reasoning based on file assessment]
-      **Primary Problem Area:** [Main problematic feature/flow identified]
 
-  # Identify and categorize usability issues
-  - task_id: "issue_identification"
-    prompt: |
-      As an experienced UX researcher, identify distinct usability issues from the testing data:
-      
-      **Input Data:** {{combined_file_content}}
-      **Usability Context:** {{ai_generated.usability_scope_analysis}}
-      **Study Context:** {{selected_study}}
-      **Focus Area:** {{focus_area}}
-      
-      Based on the recommended issue count, identify each distinct usability problem:
-      
-      1. **Issue Titles:** Clear, specific names for each usability problem
-      2. **Issue Categories:** Type of problem (navigation, form, search, content, etc.)
-      3. **Problem Locations:** Specific screens, features, or interface elements affected
-      4. **Issue Distinctiveness:** How each problem differs from others
-      5. **Evidence Support:** What data supports each identified issue
-      
-      **Format for each issue:**
-      **Issue [X]: "[Clear, specific issue title]"**
-      - **Category:** [Type of usability problem - navigation, forms, search, content, visual design, etc.]
-      - **Location:** [Specific screen, feature, or interface element where problem occurs]
-      - **Problem Type:** [Workflow disruption, cognitive load, error-prone design, unclear feedback, etc.]
-      - **Affected Users:** [How many/which users encountered this problem]
-      - **Supporting Evidence:** [Specific observations, quotes, or data that demonstrate this issue]
-      - **Distinctiveness:** [How this issue differs from other identified problems]
-      
-      Requirements:
-      - Focus on specific, observable interface problems rather than general feedback
-      - Ensure each issue is genuinely distinct from others
-      - Base all issues on actual testing evidence
-      - Make issue titles clear and actionable for design/dev teams
-      - Include specific location information for each problem
+      ============================================================
+      OUTPUT FORMAT - FOLLOW EXACTLY
+      ============================================================
 
-  # Analyze user behaviors and expectations
-  - task_id: "behavior_expectation_analysis"
-    prompt: |
-      As an experienced usability analyst, analyze user behaviors and expectations for each identified issue:
-      
-      **Identified Issues:** {{ai_generated.issue_identification}}
-      **Input Data:** {{combined_file_content}}
-      
-      For each issue, analyze:
-      1. **Observed Behavior:** What users actually did when encountering this problem
-      2. **Expected Behavior:** What users thought would happen or tried to make happen
-      3. **Mental Model Mismatch:** Where user expectations differed from interface design
-      4. **Error Recovery:** How users tried to recover from or work around the problem
-      5. **Emotional Impact:** How the problem affected user confidence or frustration
-      
-      **Format for each issue:**
-      **Issue: "[Issue title]"**
-      
-      👀 **Observed Behavior:** [Specific actions users took - be detailed about what they clicked, where they looked, what they said]
-      🎯 **Expected Behavior:** [What users thought would happen or what they were trying to accomplish]
-      🧠 **Mental Model Mismatch:** [Where user expectations conflicted with interface design or behavior]
-      🔧 **Error Recovery Attempts:** [How users tried to fix or work around the problem]
-      😤 **Emotional Impact:** [How the problem affected user confidence, frustration, or task completion]
-      📊 **Frequency:** [How often this behavior pattern occurred: "All users" / "Majority of users" / "Several users" / "Specific user type"]
-      💬 **Supporting Evidence:** [Specific quotes or observations that demonstrate these behaviors]
-      
-      Requirements:
-      - Be specific about user actions - avoid generic descriptions
-      - Show clear contrast between observed and expected behavior
-      - Include actual user language and reactions when possible
-      - Focus on actionable insights for interface improvements
+      # 🐛 Usability Issues Report: [INSERT ACTUAL STUDY NAME]
 
-  # Assess severity levels and impact
-  - task_id: "severity_impact_assessment"
-    prompt: |
-      As an experienced UX researcher, assess severity levels and impact for each usability issue:
-      
-      **Issues with Behaviors:** {{ai_generated.behavior_expectation_analysis}}
-      **Study Context:** {{selected_study}}
-      **Focus Area:** {{focus_area}}
-      
-      For each issue, assess:
-      1. **Severity Level:** High/Medium/Low based on impact and frequency
-      2. **Task Impact:** How the issue affects task completion
-      3. **User Impact:** Effect on user experience and confidence
-      4. **Business Impact:** Potential effect on service/product goals
-      5. **Fix Complexity:** How difficult the issue would be to address
-      
-      **Severity Criteria:**
-      - **High:** Prevents task completion, affects majority of users, critical workflow blocker
-      - **Medium:** Causes confusion or delays, affects some users, workaround possible
-      - **Low:** Minor annoyance, affects few users, doesn't block core tasks
-      
-      **Format for each issue:**
-      **Issue: "[Issue title]"**
-      
-      🚨 **Severity Level:** [High/Medium/Low] - [specific reasoning based on criteria above]
-      📋 **Task Impact:** [How this issue affects users' ability to complete their intended task]
-      👤 **User Impact:** [Effect on user experience, confidence, frustration, or abandonment]
-      💼 **Business Impact:** [Potential effect on conversion, support burden, user retention, or service goals]
-      🛠️ **Fix Complexity:** [Low/Medium/High] - [assessment of technical difficulty to address]
-      ⏱️ **Time to Fix:** [Estimated effort: "Quick fix" / "Sprint work" / "Major effort"]
-      📈 **Priority Score:** [High/Medium/Low] - [overall priority considering severity, impact, and fix complexity]
-      
-      Requirements:
-      - Use consistent severity criteria across all issues
-      - Consider both user and business impact
-      - Be realistic about fix complexity and effort
-      - Provide clear prioritization guidance for teams
+      > **[X] issues** identified | **[Y] participants** affected | **Generated:** {{current_date}}
 
-  # Generate specific fix recommendations
-  - task_id: "fix_recommendation_generation"
-    prompt: |
-      As an experienced UX designer and interface specialist, generate specific fix recommendations for each usability issue:
-      
-      **Issues with Severity Assessment:** {{ai_generated.severity_impact_assessment}}
-      **Behavior Analysis:** {{ai_generated.behavior_expectation_analysis}}
-      **Study Context:** {{selected_study}}
-      
-      For each issue, generate:
-      1. **Primary Recommendation:** Most effective fix for the core problem
-      2. **Implementation Details:** Specific design or technical changes needed
-      3. **Alternative Solutions:** Other approaches that could address the issue
-      4. **Success Metrics:** How to measure if the fix resolves the problem
-      
-      **Format for each issue:**
-      **Issue: "[Issue title]"**
-      
-      💡 **Primary Recommendation:** [Specific, actionable fix that directly addresses the core usability problem]
-      
+      ---
+
+      ## At a Glance
+
+      | # | Issue | Severity | Affected Users | Fix Complexity |
+      |:-:|:------|:--------:|:---------------|:--------------:|
+      | 1 | [Specific issue name] | 🔴 High | PT00X, PT00X | 🔵⚪⚪ Low |
+      | 2 | [Specific issue name] | 🟡 Medium | PT00X, PT00X | 🔵🔵⚪ Medium |
+      | 3 | [Specific issue name] | 🟢 Low | PT00X | 🔵🔵🔵 High |
+
+      ---
+
+      ## Issue 1: [Specific Issue Name from Data]
+
+      **Category:** [Navigation / Forms / Search / Content / Visual Design / Accessibility / Feedback / Workflow]
+      **Location:** [Specific screen, feature, or interface element]
+      **Severity:** 🔴 High / 🟡 Medium / 🟢 Low
+
+      ### The Problem
+
+      [One-paragraph description of what's broken and why it matters]
+
+      ### User Behaviors & Expectations
+
+      | Aspect | Detail |
+      |--------|--------|
+      | 👀 **Observed** | [What users actually did — be specific about clicks, navigation, confusion] |
+      | 🎯 **Expected** | [What users thought would happen or tried to accomplish] |
+      | 🧠 **Mismatch** | [Where user mental model diverged from interface design] |
+      | 🔧 **Recovery** | [How users tried to work around the problem] |
+      | 😤 **Impact** | [Effect on user confidence, frustration, or task completion] |
+      | 📊 **Frequency** | [How often: "All users" / "Majority" / "Several" / "Isolated"] |
+
+      ### Evidence
+
+      | Type | Evidence | Source |
+      |:----:|----------|--------|
+      | 💬 | "[Verbatim quote demonstrating this issue]" | PT00X, 00:00:00 |
+      | 💬 | "[Another verbatim quote]" | PT00X, 00:00:00 |
+      | 🔴 | [Observed pain point] | PT00X |
+      | 👁️ | [Observed behavior] | PT00X |
+
+      **Signal Strength:** [Affected X out of Y users / Consistent problem / Recurring pattern]
+      **Evidence Quality:** [Strong / Moderate / Limited] — [reasoning]
+
+      ### Severity Assessment
+
+      - 📋 **Task Impact:** [How this affects users' ability to complete their task]
+      - 👤 **User Impact:** [Effect on experience, confidence, abandonment]
+      - 💼 **Business Impact:** [Effect on conversion, support burden, retention]
+      - ⏱️ **Fix Complexity:** [Low / Medium / High] — [reasoning]
+
+      ### Fix Recommendations
+
+      💡 **Primary Fix:** [Specific, actionable recommendation that addresses the core problem]
+
       🔧 **Implementation Details:**
-      - [Specific design change]: [What needs to be modified in the interface]
-      - [Technical requirement]: [Any development work needed]
-      - [Content change]: [Any text, label, or messaging updates]
-      
-      🔄 **Alternative Solutions:**
-      - [Alternative approach 1]: [Different way to solve the same problem]
-      - [Alternative approach 2]: [Another option if primary recommendation isn't feasible]
-      
-      📊 **Success Metrics:** [How to measure if the fix successfully resolves the usability issue]
-      ⚡ **Quick Win Potential:** [Yes/No] - [whether this could be implemented quickly for immediate impact]
-      
-      **Examples of good recommendations:**
-      - "Add visual feedback when form fields are successfully completed (green checkmark)"
-      - "Change button label from 'Submit' to 'Continue to Review' to clarify next step"
-      - "Move search function to header navigation for consistent access across pages"
-      
-      **NOT vague recommendations like:**
-      - "Improve user experience"
-      - "Make interface more intuitive"
-      - "Better design"
+      - [Specific design change needed]
+      - [Technical requirement if any]
+      - [Content/label update if any]
 
-  # Identify supporting quotes and evidence validation
-  - task_id: "evidence_quote_validation"
-    prompt: |
-      As an experienced qualitative researcher, identify supporting quotes and validate evidence for each usability issue:
-      
-      **Complete Issue Analysis:**
-      {{ai_generated.behavior_expectation_analysis}}
-      {{ai_generated.severity_impact_assessment}}
-      
-      **Input Data:** {{combined_file_content}}
-      
-      For each issue, find:
-      1. **Representative Quote:** Direct quote that best illustrates the usability problem
-      2. **Signal Strength:** How often this issue appeared in testing
-      3. **Evidence Quality:** How well-supported this issue is
-      4. **Additional Evidence:** Other observations that support the issue
-      
-      **Format for each issue:**
-      **Issue: "[Issue title]"**
-      
-      💬 **Representative Quote:** "[Direct quote from user that clearly demonstrates this usability problem]"
-      📊 **Signal Strength:** [How often this issue appeared: "Affected X out of Y users" / "Consistent problem across sessions" / "Recurring pattern" / "Isolated but severe"]
-      ✅ **Evidence Quality:** [Strong/Moderate/Limited] - [assessment of how well data supports this issue]
-      📝 **Additional Evidence:** [Other quotes, observations, or data points that support this usability issue]
-      📱 **Device/Context:** [Any specific device, browser, or context factors that influenced this issue]
-      
-      Requirements:
-      - Use direct quotes that genuinely demonstrate the usability problem
-      - Be specific about signal strength - use actual numbers when possible
-      - Include contextual factors that may influence the issue
-      - Assess evidence quality honestly based on data strength
+      🔄 **Alternatives:**
+      - [Alternative approach if primary fix isn't feasible]
+
+      📊 **Success Metric:** [How to measure if this fix works]
+      ⚡ **Quick Win?** [Yes / No] — [reasoning]
+
+      ---
+
+      ## Issue 2: [Specific Issue Name]
+
+      [Same complete format as Issue 1 — include ALL sections]
+
+      ---
+
+      [REPEAT FOR EACH ISSUE — typically 3-8 issues depending on data density]
+
+      ---
+
+      ## ✅ What's Working
+
+      Positive usability findings from the research:
+
+      | What Works | Evidence | Source |
+      |------------|----------|--------|
+      | [Positive finding] | "[Quote or observation]" | PT00X |
+      | [Positive finding] | "[Quote or observation]" | PT00X |
+
+      ---
+
+      ## 🔗 Cross-Issue Connections
+
+      [How issues relate — are they symptoms of the same root design problem? Are there systemic patterns?]
+
+      ---
+
+      ## Recommended Fix Priority
+
+      | Priority | Issue | Quick Win? | Effort | Addresses |
+      |:--------:|-------|:----------:|:------:|-----------|
+      | 1 | [Issue name] | ⚡ Yes | 🔵⚪⚪ | [Core problem area] |
+      | 2 | [Issue name] | No | 🔵🔵⚪ | [Core problem area] |
+      | 3 | [Issue name] | No | 🔵🔵🔵 | [Core problem area] |
+
+      ---
+
+      ## Methodology
+
+      **Framework:** Systematic Usability Issue Extraction
+
+      **Approach:** Issues were identified through systematic analysis of testing data, with each issue validated against direct evidence. User behaviors and expectations were analyzed to understand the root cause. Severity was assessed using consistent criteria (task impact, user impact, frequency). Fix recommendations are specific and actionable.
+
+      **Severity Criteria:**
+      - 🔴 **High:** Prevents task completion, affects majority of users, critical workflow blocker
+      - 🟡 **Medium:** Causes confusion or delays, affects some users, workaround possible
+      - 🟢 **Low:** Minor annoyance, affects few users, doesn't block core tasks
+
+      **Data Sources:** [List ALL participant IDs analyzed]
+
+      ---
+
+      *Generated by Qori • {{current_date}}*
+
+      ============================================================
+      QUALITY REQUIREMENTS (INTERNAL - DO NOT OUTPUT)
+      ============================================================
+
+      Before submitting, verify:
+      - [ ] Every quote is VERBATIM from source data
+      - [ ] Every participant ID exists in source
+      - [ ] Issue names are specific to THIS study (not generic)
+      - [ ] Issues are distinct (no overlap)
+      - [ ] Each issue has complete behavior analysis (observed, expected, mismatch)
+      - [ ] Each issue has severity assessment with reasoning
+      - [ ] Each issue has specific fix recommendations
+      - [ ] Evidence citations include participant IDs and timestamps
+      - [ ] Cross-issue connections identified
+      - [ ] Fix priority table completed
 
 # Processing workflow
 processing_workflow:
   1. validate_slack_modal_inputs
   2. discover_files_from_study_selection
-  3. calculate_initial_quality_assessment
-  4. validate_discovered_files
-  5. combine_selected_files_with_truncation
-  6. execute_file_discovery_summary
-  7. execute_usability_scope_analysis
-  8. execute_issue_identification
-  9. execute_behavior_expectation_analysis
-  10. execute_severity_impact_assessment
-  11. execute_fix_recommendation_generation
-  12. execute_evidence_quote_validation
-  13. format_slack_output
-  14. format_github_output
-  15. save_to_analysis_folder
-  16. send_team_notifications
+  3. combine_selected_files_with_truncation
+  4. execute_usability_complete
+  5. format_slack_output
+  6. format_github_output
+  7. save_to_analysis_folder
+  8. send_team_notifications
 
 # Output configuration
 output_options:
@@ -354,166 +316,58 @@ output_options:
   slack_format: "usability_focused"
   file_format: "github_markdown"
   path: "04-analysis/usability-issues/"
-  filename: "{{study_folder}}_usability_issues_{{current_date}}.md"
+  filename: "{{selected_study}}_usability_issues_{{current_date}}.md"
 
-# Slack output template
-slack_output_template: |
-  🐛 **Usability Issues Extraction Complete**
-
-  **Study:** {{selected_study}}
-  **Analysis:** {{num_issues}} usability issues identified with {{severity_overview}} severity overall
-
-  ---
-
-  ## **Issues Identified**
-
-  {{ai_generated.issue_identification}}
-
-  ---
-
-  ## **User Behaviors & Expectations**
-
-  {{ai_generated.behavior_expectation_analysis}}
-
-  ---
-
-  ## **Severity & Impact Assessment**
-
-  {{ai_generated.severity_impact_assessment}}
-
-  ---
-
-  ## **Fix Recommendations**
-
-  {{ai_generated.fix_recommendation_generation}}
-
-  ---
-
-  **Ready to fix?** Reply in thread:
-  • Which issues should we tackle first?
-  • Any quick wins we can implement this sprint?
-  • Should we create GitHub issues for these fixes?
-
-  📋 [View detailed report with evidence]({{github_file_link}})
+# Output template - renders the single consolidated AI response
+output_template: |
+  {{ai_generated.usability_complete}}
 
 # GitHub markdown file template
 github_file_template: |
-  # 🐛 Usability Issues Report
-  
-  ---
-  
-  ## 📋 **Study Overview**
-  
-  **Study:** {{selected_study}}  
-  **Analysis Date:** {{current_date}}  
-  **Researcher:** {{researcher_contact}}  
-  **Focus Area:** {{focus_area}}  
-  **Analysis Version:** {{analysis_version}}
-  
-  ---
-  
-  ## 📊 **Data Quality Assessment**
-  
-  {{ai_generated.file_discovery_summary}}
-  
-  ---
-  
-  ## 🔍 **Usability Scope Analysis**
-  
-  {{ai_generated.usability_scope_analysis}}
-  
-  **Methodology:** Systematic extraction and prioritization of usability issues from testing sessions, observations, and user feedback to identify specific interface problems and actionable fixes.
-  
-  ---
-  
-  ## 🐛 **Identified Usability Issues**
-  
-  {{ai_generated.issue_identification}}
-  
-  ---
-  
-  ## 👀 **User Behaviors & Expectations**
-  
-  {{ai_generated.behavior_expectation_analysis}}
-  
-  ---
-  
-  ## 🚨 **Severity & Impact Assessment**
-  
-  {{ai_generated.severity_impact_assessment}}
-  
-  ---
-  
-  ## 💡 **Fix Recommendations**
-  
-  {{ai_generated.fix_recommendation_generation}}
-  
-  ---
-  
-  ## 💬 **Supporting Evidence**
-  
-  {{ai_generated.evidence_quote_validation}}
-  
-  ---
-  
-  ## 📚 **Methodology Notes**
-  
-  **Analysis Approach:** Usability issues were systematically extracted from testing data by identifying specific interface problems, analyzing user behaviors and expectations, assessing severity and impact, and generating actionable fix recommendations. Each issue is supported by direct evidence from user testing.
-  
-  **Quality Controls:**
-  - ✅ Evidence validation performed for each issue
-  - ✅ Severity assessment using consistent criteria
-  - ✅ Fix recommendations prioritized by impact and complexity
-  
-  **Implementation Guidelines:**
-  - Prioritize fixes based on severity and business impact
-  - Consider fix complexity when planning sprints
-  - Measure success using recommended metrics
-  - Validate fixes through follow-up testing
-  
-  ---
-  
-  ## 📞 **Contact & Follow-up**
-  
-  **Lead Researcher:** {{researcher_contact}}  
-  **Study Channel:** {{study_channel}}  
-  **Questions?** Reply in the study channel or contact the research team directly.
-  
-  **Related Analyses:** Consider running complementary synthesis methods:
-  - 🧠 Affinity Mapping - to identify broader themes
-  - 🧭 Journey Mapping - to understand process flow
-  - 👤 Persona Generation - to create user archetypes
-  - 🎯 Jobs to be Done - to identify functional needs
-  - 💡 Design Opportunities - to identify specific improvements
-  
-  ---
-  
-  *Generated by Qori Research Synthesis • {{current_date}} • Version {{analysis_version}}*
+  {{ai_generated.usability_complete}}
 
-# Auto-generated variables
-auto_variables:
-  - num_issues: extract_issue_count(ai_generated.usability_scope_analysis) || 4
-  - severity_overview: extract_severity_overview(ai_generated.usability_scope_analysis) || "Medium"
-  - primary_problem_area: extract_primary_problem_area(ai_generated.usability_scope_analysis) || "User interface"
-  - current_date: new Date().toISOString().split('T')[0]
-  - analysis_version: generate_version_number() || "v1.0"
-  - github_file_link: generate_github_link(study_name, current_date)
+  ---
+
+  ## 📞 Contact & Follow-up
+
+  **Questions?** Reply in the study channel or contact the research team directly.
+
+  **Related Analyses:** Consider running complementary synthesis methods:
+  - 🧠 Affinity Mapping — to identify broader themes
+  - 🧭 Journey Mapping — to understand process flow
+  - 👤 Persona Generation — to create user archetypes
+  - 🎯 Jobs to be Done — to identify functional needs
+  - 💡 Design Opportunities — to identify specific improvements
+
+  ---
+
+  *Generated by Qori Research Synthesis • {{current_date}}*
 
 notify:
   - role: team
     action: "Usability issues extraction completed"
     channel: "{{study_channel}}"
-    message: "{{researcher_contact}} identified {{num_issues}} usability issues from {{selected_study}} with {{severity_overview}} severity overall. Ready for prioritization!"
 
 output_use: |
   Slack-Native Usability Issues Extractor automatically discovers research files from selected study folders,
   systematically identifies specific interface problems with user behaviors and expectations, assesses severity
-  and impact, and generates actionable fix recommendations. Outputs concise Slack summaries focused on issues 
+  and impact, and generates actionable fix recommendations. Outputs concise Slack summaries focused on issues
   and fixes, plus detailed GitHub markdown reports for development teams and stakeholders.
 
-  Use this method to:
-    - Extract specific, actionable usability problems from testing data
-    - Understand user behaviors and expectations vs. actual interface design
-    - Prioritize fixes based on severity, impact, and implementation complexity
-    - Generate specific recommendations for design and development teams
-    - Create evidence-based issue reports for product planning and sprints
+notes: |
+  v3.0 Changes (Task Consolidation):
+  - Consolidated 6 chained AI tasks into 1 comprehensive task
+  - Previous 6-task architecture used {{ai_generated.*}} cross-references between
+    tasks, but executeAiGenerationTasks runs all tasks via Promise.all (parallel).
+    Tasks 2-6 received empty context, causing hang/failure. Same issue that drove
+    affinity_mapping v3.0 redesign.
+  - All analytical depth preserved: issue identification, behavior/expectation
+    analysis, severity assessment, fix recommendations, and evidence validation
+    are all included in the single consolidated prompt.
+  - Removed auto_variables (num_issues, severity_overview, github_file_link)
+    that were never processed by yamlProcessor.js.
+  - output_template now renders the complete AI response directly (matching
+    affinity_mapping pattern).
+
+  v2.0: 6-task chained architecture (broken by parallel execution)
+  v1.0: Original implementation

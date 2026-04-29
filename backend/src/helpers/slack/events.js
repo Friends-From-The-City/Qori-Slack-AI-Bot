@@ -5,7 +5,7 @@ const pathLib = require("node:path");
 const { App } = require("@slack/bolt"); // Slack Bolt SDK
 const { punchService, workspaceService, userService } = require("../../services");
 const { getTeamInfo, getAllMembers } = require("../utils");
-const { getConfigRepo, readFolderContents, listAllTopLevelFolders, listOrgRepos, fetchFileFromRepo, readFolders, copyFilesToFolder, deleteStudyFolderFromGitHub } = require("../github");
+const { getConfigRepo, YAML_TEMPLATE_PATH, readFolderContents, listAllTopLevelFolders, listOrgRepos, fetchFileFromRepo, readFolders, copyFilesToFolder, deleteStudyFolderFromGitHub } = require("../github");
 const { addChannelConfig, getChannelConfigByChannelId } = require("../../services/channel-config.service");
 const { runRAG, setupVectorStore } = require("../rag");
 const { indexRepoQueue } = require("../queue/indexRepo.queue");
@@ -824,7 +824,7 @@ slackApp.view('ask-study-modal', async ({ ack, view, client, body }) => {
 
 //   // fetch your templates list
 //   const templates = await readFolderContents(
-//     "beta-test/YAML Templates",
+//     YAML_TEMPLATE_PATH,
 //     process.env.GITHUB_REPO
 //   );
 //   const templateOptions = templates.map(t => ({
@@ -1274,7 +1274,7 @@ slackApp.view('research_plan_modal', async ({ ack, body, view, client }) => {
   };
   
   console.log('📋 Extracted research plan data:', JSON.stringify(data, null, 2));
-  const file = await fetchFileFromRepo(getConfigRepo(), "beta-test/YAML Templates", "research_plan.yaml");
+  const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, "research_plan.yaml");
   const renderedYaml = await processYamlTemplate(file.content, data, study.path);
 
   const url = renderedYaml.result.url;
@@ -1511,7 +1511,7 @@ slackApp.view('research_brief_modal', async ({ ack, body, view, client }) => {
     constraints: extract('constraints_block', 'constraints_input'),
   };
 
-  const file = await fetchFileFromRepo(getConfigRepo(), "beta-test/YAML Templates", "research_brief.yaml");
+  const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, "research_brief.yaml");
 
   let renderedYaml;
   let url;
@@ -1808,7 +1808,7 @@ slackApp.view("discussion_guide_modal", async ({ ack, body, view, client }) => {
   };
 
   const study = await getResearchStudyWithRoles(studyName);
-  const file = await fetchFileFromRepo(getConfigRepo(), "beta-test/YAML Templates", "discussion_guide.yaml");
+  const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, "discussion_guide.yaml");
 
   const renderedYaml = await processYamlTemplate(file.content, guideData, study.path);
 
@@ -2113,7 +2113,7 @@ slackApp.view("stakeholder_interview_guide_modal", async ({ ack, body, view, cli
 
     // Fetch and process YAML template
     const study = await getResearchStudyWithRoles(studyName);
-    const file = await fetchFileFromRepo(getConfigRepo(), "beta-test/YAML Templates", "stakeholder_interview_guide.yaml");
+    const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, "stakeholder_interview_guide.yaml");
     
     const renderedYaml = await processYamlTemplate(file.content, templateData, study.path);
     const url = renderedYaml.result.url;
@@ -2315,7 +2315,7 @@ slackApp.view('upload_stakeholder_notes_modal', async ({ ack, view, body, client
     // Fetch and process the YAML template for stakeholder notes
     const file = await fetchFileFromRepo(
       getConfigRepo(),
-      "beta-test/YAML Templates",
+      YAML_TEMPLATE_PATH,
       "stakeholder_synthesis.yaml" // Update this to your actual template filename
     );
 
@@ -2525,7 +2525,7 @@ slackApp.view('upload_survey_data_modal', async ({ ack, view, body, client }) =>
     // Fetch and process the YAML template for survey data
     const file = await fetchFileFromRepo(
       getConfigRepo(),
-      "beta-test/YAML Templates",
+      YAML_TEMPLATE_PATH,
       "survey_synthesis.yaml" // Update this to your actual template filename
     );
 
@@ -2663,7 +2663,7 @@ slackApp.view('upload_desk_research_modal', async ({ ack, view, body, client }) 
       return;
     }
 
-    const file = await fetchFileFromRepo(getConfigRepo(), "beta-test/YAML Templates", "desk_research.yaml");
+    const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, "desk_research.yaml");
 
     const renderedYaml = await processYamlTemplate(file.content, deskResearchData, study.path, 'desk-research');
 

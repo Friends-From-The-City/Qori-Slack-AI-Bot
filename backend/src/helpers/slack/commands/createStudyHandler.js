@@ -177,7 +177,7 @@ const handleCreateStudySubmission = async ({ ack, body, view, client }) => {
 
     // Create study with GitHub folder
     const info = await getChannelConfigByChannelId(channelId);
-    const response = await readFolders('beta-test/templates', getConfigRepo());
+    const response = await readFolders('config/templates', getConfigRepo());
     const result = await copyFilesToFolder(
       response,
       `${info.sub_folder_name}/research`,

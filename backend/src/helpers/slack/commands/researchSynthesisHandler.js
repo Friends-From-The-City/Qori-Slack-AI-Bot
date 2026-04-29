@@ -3,7 +3,7 @@ const { getStudiesByUser, getResearchStudyWithRoles } = require("../../../servic
 const { studyNotesService } = require("../../../services");
 const sessionSummaryService = require("../../../services/session-summary.service");
 const { getStudyStakeholderGuide } = require("../../../services/study-status.service");
-const { getConfigRepo, fetchFileFromRepoByPath, fetchFileFromRepo, readFolderContents } = require("../../../helpers/github");
+const { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepoByPath, fetchFileFromRepo, readFolderContents } = require("../../../helpers/github");
 const { processYamlTemplate, extractAiResponsesFromYaml } = require("../../../helpers/yamlProcessor");
 
 // Command handler to open the research synthesis modal
@@ -718,7 +718,7 @@ const handleResearchSynthesisSubmission = async ({ ack, body, view, client }) =>
     }
 
     try {
-      const yamlTemplateFile = await fetchFileFromRepo(getConfigRepo(), "beta-test/YAML Templates", yamlFileName);
+      const yamlTemplateFile = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, yamlFileName);
 
       // Process the specific analysis YAML with the simplified data
       const renderedAnalysis = await processYamlTemplate(yamlTemplateFile.content, analysisData, study?.path);

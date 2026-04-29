@@ -295,11 +295,11 @@ ai_generation_tasks:
       Create timeline DATA ROWS ONLY for {{timeline_preference}} research.
       
       ===== CRITICAL DATE INSTRUCTION =====
-      TODAY'S DATE IS: {{timeline_date}}
+      THE USER-SELECTED START DATE IS: {{start_date}}
       USE THIS EXACT DATE AS YOUR STARTING POINT.
-      DO NOT USE ANY OTHER DATE.
+      DO NOT USE ANY OTHER DATE. Today's date is {{current_date}} but the project starts on {{start_date}}.
       =====================================
-      
+
       Phase durations for Standard (4-6 weeks total):
       - Planning: 3 days
       - Collaboration Cycle: 5 days
@@ -307,16 +307,16 @@ ai_generation_tasks:
       - Research: 7 days
       - Analysis: 3 days
       - Reporting: 2 days
-      
+
       Rules:
-      - Planning starts on {{current_date}} (this is the REAL start date)
+      - Planning starts on {{start_date}} (this is the user's selected start date)
       - Each phase starts the day after the previous phase ends
       - Format dates as: Month DD, YYYY (example: November 25, 2025)
       - Do NOT output the header row - only output data rows
       - Do NOT use placeholder dates like January 2023 or October 2023
-      
-      Output ONLY these 6 rows starting from {{current_date}}:
-      | Planning | 3 days | {{current_date}} | [end date] | Project Brief, Research Plan |
+
+      Output ONLY these 6 rows starting from {{start_date}}:
+      | Planning | 3 days | {{start_date}} | [end date] | Project Brief, Research Plan |
       | Collaboration Cycle | 5 days | [start date] | [end date] | Stakeholder Alignment |
       | Recruiting | 10 days | [start date] | [end date] | Participant Selection |
       | Research | 7 days | [start date] | [end date] | Data Collection |
