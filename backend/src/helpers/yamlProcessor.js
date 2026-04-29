@@ -6,6 +6,33 @@ const path = require('path');
 const { createOrUpdateFileOnGitHub } = require('./github');
 const { executeAiGenerationTasks } = require('./langchain');
 
+// Build YAML frontmatter for traceability (prepended to every generated document)
+function buildTraceabilityFrontmatter(yamlConfig, inputValues) {
+  const lines = ['---'];
+
+  lines.push(`generated_at: "${new Date().toISOString()}"`);
+  lines.push(`model: "${process.env.ANTHROPIC_MODEL_NAME || 'claude-sonnet-4-20250514'}"`);
+  lines.push(`template: "${yamlConfig.id || 'unknown'}"`);
+  lines.push(`template_version: "${yamlConfig.version || 'unknown'}"`);
+  lines.push(`study: "${inputValues.selected_study || inputValues.study_name || 'unknown'}"`);
+
+  // Add input files if available
+  const noteFiles = inputValues.selected_note_files;
+  if (noteFiles) {
+    const files = Array.isArray(noteFiles) ? noteFiles : [noteFiles];
+    if (files.length > 0 && files[0]) {
+      lines.push('input_files:');
+      files.forEach(f => lines.push(`  - "${f}"`));
+    }
+  }
+
+  lines.push(`max_tokens: ${process.env.ANTHROPIC_MAX_TOKENS || '8192'}`);
+  lines.push('---');
+  lines.push('');
+
+  return lines.join('\n');
+}
+
 // Generate the output content using Handlebars for different templates
 function generateOutputTemplate(outputTemplate, { aiGenerated, ...inputValues }) {
   const template = Handlebars.compile(outputTemplate, { noEscape: true });
@@ -63,10 +90,11 @@ async function processYamlTemplate(rawYamlContent, inputValues, baseFolderEncode
     current_date: format(new Date(), 'MMMM d, yyyy'),
   });
 
-  // 7. Push the generated content to GitHub
+  // 7. Prepend traceability frontmatter and push to GitHub
+  const frontmatter = buildTraceabilityFrontmatter(yamlConfig, inputValues);
+  const fullContent = frontmatter + outputTemplate;
   const fullPath = path.posix.join(baseFolder, extraFolder, filePath, filename);
-  // 6. Push the generated content to GitHub
-  const result = await createOrUpdateFileOnGitHub(fullPath, outputTemplate);
+  const result = await createOrUpdateFileOnGitHub(fullPath, fullContent);
   if (aiCheck) {
     return { result, outputTemplate, aiResponses };
   } else {
