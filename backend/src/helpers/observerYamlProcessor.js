@@ -94,7 +94,12 @@ function generateSessionObservers(observerRequests, participants) {
         sessionMap[sessionId].date_time = `${participant.scheduled_date} ${participant.scheduled_time}`;
       }
 
-      sessionMap[sessionId].observers.push(`${request.requester_name} (${getObserverRoleDisplay(request.role)})`);
+      // requester_name is a JSON array (e.g., ["Alice", "Bob"]), not a plain string.
+      // Iterate over each individual observer in the array.
+      const names = Array.isArray(request.requester_name) ? request.requester_name : [request.requester_name];
+      names.forEach(name => {
+        sessionMap[sessionId].observers.push(`${name} (${getObserverRoleDisplay(request.role)})`);
+      });
     }
   });
 

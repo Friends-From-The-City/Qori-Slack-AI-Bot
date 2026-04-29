@@ -68,8 +68,9 @@ class SessionObserverService {
         const currentRequesterIds = this._toArray(observer.requester_id || observer.dataValues?.requester_id);
         const currentRequesterNames = this._toArray(observer.requester_name || observer.dataValues?.requester_name);
 
+        // Only update the requester arrays — don't spread observerData, which
+        // would overwrite the first observer's role/reason with the new one's.
         await observer.update({
-          ...observerData,
           requester_id: this._addUnique(currentRequesterIds, newRequesterId),
           requester_name: this._addUnique(currentRequesterNames, newRequesterName),
           updated_at: new Date()

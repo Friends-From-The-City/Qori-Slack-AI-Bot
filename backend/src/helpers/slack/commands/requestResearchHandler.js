@@ -126,8 +126,12 @@ const handleRequestResearchSubmission = async ({ ack, body, view, client }) => {
     });
 
     // Send notification to research team channel with "Create Brief" button
-    // TODO: Replace with actual research team channel ID from config
-    const researchTeamChannelId = process.env.RESEARCH_TEAM_CHANNEL_ID || channelId;
+    const researchTeamChannelId = process.env.RESEARCH_TEAM_CHANNEL_ID;
+    const isValidChannelId = researchTeamChannelId && researchTeamChannelId !== 'C1234567890';
+
+    if (!isValidChannelId) {
+      console.warn('⚠️ RESEARCH_TEAM_CHANNEL_ID not configured — skipping research team notification. Set this env var to a real Slack channel ID to enable notifications.');
+    }
 
     const notificationBlocks = [
       {
@@ -204,11 +208,19 @@ const handleRequestResearchSubmission = async ({ ack, body, view, client }) => {
       }
     );
 
-    await client.chat.postMessage({
-      channel: researchTeamChannelId,
-      text: `📬 New Research Request from ${submitterName}`,
-      blocks: notificationBlocks,
-    });
+    if (isValidChannelId) {
+      try {
+        await client.chat.postMessage({
+          channel: researchTeamChannelId,
+          text: `📬 New Research Request from ${submitterName}`,
+          blocks: notificationBlocks,
+        });
+        console.log(`✅ Research request notification sent to channel ${researchTeamChannelId}`);
+      } catch (channelError) {
+        console.error(`❌ Failed to send research team notification to ${researchTeamChannelId}:`, channelError.message);
+        // Don't fail the whole request — the submitter already got their confirmation
+      }
+    }
 
   } catch (error) {
     console.error('Error processing research request:', error);
