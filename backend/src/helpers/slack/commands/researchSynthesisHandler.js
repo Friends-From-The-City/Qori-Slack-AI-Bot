@@ -603,7 +603,7 @@ const handleResearchSynthesisSubmission = async ({ ack, body, view, client }) =>
     // Create simplified data object structure
     const analysisData = {
       // Core required fields
-      study_folder: selectedStudyName,
+      selected_study: selectedStudyName,
       selected_session_summaries: selectedSummaryIds,
       selected_transcripts: selectedTranscriptIds,
       selected_stakeholder_guides: selectedStakeholderGuideIds,

@@ -357,7 +357,7 @@ output_options:
   filename: "{{study_folder}}_usability_issues_{{current_date}}.md"
 
 # Slack output template
-slack_output_template: |
+output_template: |
   🐛 **Usability Issues Extraction Complete**
 
   **Study:** {{selected_study}}

@@ -34,7 +34,7 @@ async function processYamlTemplate(rawYamlContent, inputValues, baseFolderEncode
   // 4. Prepare LangChain tasks for AI generation (optional)
   let aiResponses = {};
   if (yamlConfig.ai_generation_tasks && yamlConfig.ai_generation_tasks.length > 0) {
-    aiResponses = await executeAiGenerationTasks(yamlConfig.ai_generation_tasks, inputValues);
+    aiResponses = await executeAiGenerationTasks(yamlConfig.ai_generation_tasks, { ...inputValues, current_date: format(new Date(), 'MMMM d, yyyy') });
     console.log("🚀 ~ processYamlTemplate ~ aiResponses:", aiResponses)
   } else {
     aiResponses = {};
