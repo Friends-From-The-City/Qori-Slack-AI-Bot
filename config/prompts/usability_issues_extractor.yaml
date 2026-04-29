@@ -1,96 +1,36 @@
+# ═══════════════════════════════════════════════════════════
+# IDENTITY
+# ═══════════════════════════════════════════════════════════
 id: usability_issues_extractor
 name: run_usability_issues_extractor
-
 label: 🐛 Usability Issues
-version: "v3.0"
+version: "v3.1"
 
 description: >
   Extract and prioritize usability issues from testing sessions, user observations, and research notes.
-  Automatically discovers and analyzes research files from selected study folder with optional quality improvements.
-  Identifies specific UX problems with severity levels, user behaviors, and actionable recommendations for immediate fixes.
+  Identifies specific UX problems with severity levels, user behaviors, and actionable recommendations.
 
 author: Qori R&D
 created: 2025-06-26
 last_updated: 2026-04-29
 
+# ═══════════════════════════════════════════════════════════
+# CONFIGURATION
+# ═══════════════════════════════════════════════════════════
 input_type: slack_modal_form
 input_processing: auto_file_discovery
 
-# LLM Configuration
-llm_config:
-  model: "gpt-4o"
-  temperature: 0.4
-  max_tokens: 4000
-
-# System limits
-system_limits:
-  max_total_tokens: 50000
-  min_content_threshold: 1000
-  max_file_size: 100000
-  supported_formats: [".md", ".txt", ".csv", ".json"]
-  max_files_per_analysis: 20
-
-# Privacy controls
-privacy_controls:
-  enable_pii_detection: true
-  pii_detection_patterns:
-    email: '\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
-    phone: '\b\d{3}[-.]?\d{3}[-.]?\d{4}\b'
-    ssn: '\b\d{3}-\d{2}-\d{4}\b'
-  masking_strategy:
-    email: "[EMAIL_REDACTED]"
-    phone: "[PHONE_REDACTED]"
-    ssn: "[SSN_REDACTED]"
-
-# Slack modal input variables
+# ═══════════════════════════════════════════════════════════
+# INPUTS
+# ═══════════════════════════════════════════════════════════
 input_variables:
   - selected_study              # Study name from dropdown (REQUIRED)
   - include_research_plan       # Boolean from checkbox (OPTIONAL)
   - combined_file_content       # Auto-combined content (GENERATED)
 
-# Study metadata mapping
-study_metadata:
-  "VA Housing Application Usability Study":
-    folder: "va-housing-usability-2025"
-    researcher: "jordan.researcher"
-    channel: "#research-housing-app"
-    focus_area: "housing application interface"
-
-  "Benefits Portal Navigation Research":
-    folder: "benefits-portal-nav-2025"
-    researcher: "alex.ux"
-    channel: "#research-benefits"
-    focus_area: "benefits portal interface"
-
-  "Veteran Onboarding Experience Study":
-    folder: "veteran-onboarding-2025"
-    researcher: "casey.research"
-    channel: "#research-onboarding"
-    focus_area: "onboarding interface"
-
-# File discovery system
-auto_file_discovery:
-  core_files:
-    session_summaries:
-      file_patterns: ["*session_summary*", "*summary*", "*session*"]
-      search_paths: ["01-sessions/", "sessions/", "summaries/"]
-      priority: "required"
-      confidence_weight: 50
-
-    transcripts:
-      file_patterns: ["*transcript*", "*interview*", "*recording*"]
-      search_paths: ["01-sessions/", "transcripts/", "interviews/"]
-      priority: "high"
-      confidence_weight: 30
-
-  enhancement_files:
-    research_plan:
-      enabled_when: "{{include_research_plan}} == true"
-      file_patterns: ["*research_plan*", "*study_plan*", "*methodology*"]
-      search_paths: ["00-planning/", "planning/", "research/"]
-      confidence_boost: 8
-
-# AI generation tasks - SINGLE CONSOLIDATED TASK
+# ═══════════════════════════════════════════════════════════
+# AI GENERATION
+# ═══════════════════════════════════════════════════════════
 # v3.0: Consolidated from 6 chained tasks into 1 comprehensive task.
 # The original 6-task architecture (v2.0) used {{ai_generated.*}} references
 # between tasks, but executeAiGenerationTasks runs all tasks via Promise.all
@@ -126,7 +66,7 @@ ai_generation_tasks:
 
       RULE 4: CITE EVERYTHING
       Every quote MUST have:
-      - Participant ID (PT001, PT002, etc.)
+      - Participant ID (PT-001, PT-002, etc.)
       - Timestamp if available (00:01:56)
 
       RULE 5: ISSUES MUST BE DISTINCT
@@ -158,7 +98,7 @@ ai_generation_tasks:
 
       # 🐛 Usability Issues Report: [INSERT ACTUAL STUDY NAME]
 
-      > **[X] issues** identified | **[Y] participants** affected | **Generated:** {{current_date}}
+      > **[X] issues** identified | **[Y] participants** affected
 
       ---
 
@@ -166,9 +106,9 @@ ai_generation_tasks:
 
       | # | Issue | Severity | Affected Users | Fix Complexity |
       |:-:|:------|:--------:|:---------------|:--------------:|
-      | 1 | [Specific issue name] | 🔴 High | PT00X, PT00X | 🔵⚪⚪ Low |
-      | 2 | [Specific issue name] | 🟡 Medium | PT00X, PT00X | 🔵🔵⚪ Medium |
-      | 3 | [Specific issue name] | 🟢 Low | PT00X | 🔵🔵🔵 High |
+      | 1 | [Specific issue name] | 🔴 High | PT-001, PT-002 | 🔵⚪⚪ Low |
+      | 2 | [Specific issue name] | 🟡 Medium | PT-001, PT-003 | 🔵🔵⚪ Medium |
+      | 3 | [Specific issue name] | 🟢 Low | PT-002 | 🔵🔵🔵 High |
 
       ---
 
@@ -197,10 +137,10 @@ ai_generation_tasks:
 
       | Type | Evidence | Source |
       |:----:|----------|--------|
-      | 💬 | "[Verbatim quote demonstrating this issue]" | PT00X, 00:00:00 |
-      | 💬 | "[Another verbatim quote]" | PT00X, 00:00:00 |
-      | 🔴 | [Observed pain point] | PT00X |
-      | 👁️ | [Observed behavior] | PT00X |
+      | 💬 | "[Verbatim quote demonstrating this issue]" | PT-001, 00:00:00 |
+      | 💬 | "[Another verbatim quote]" | PT-002, 00:00:00 |
+      | 🔴 | [Observed pain point] | PT-001 |
+      | 👁️ | [Observed behavior] | PT-003 |
 
       **Signal Strength:** [Affected X out of Y users / Consistent problem / Recurring pattern]
       **Evidence Quality:** [Strong / Moderate / Limited] — [reasoning]
@@ -245,12 +185,12 @@ ai_generation_tasks:
 
       | What Works | Evidence | Source |
       |------------|----------|--------|
-      | [Positive finding] | "[Quote or observation]" | PT00X |
-      | [Positive finding] | "[Quote or observation]" | PT00X |
+      | [Positive finding] | "[Quote or observation]" | PT-001 |
+      | [Positive finding] | "[Quote or observation]" | PT-002 |
 
       ---
 
-      ## 🔗 Cross-Issue Connections
+      ## Cross-Issue Connections
 
       [How issues relate — are they symptoms of the same root design problem? Are there systemic patterns?]
 
@@ -299,62 +239,50 @@ ai_generation_tasks:
       - [ ] Cross-issue connections identified
       - [ ] Fix priority table completed
 
-# Processing workflow
+# ═══════════════════════════════════════════════════════════
+# OUTPUT
+# ═══════════════════════════════════════════════════════════
+output_template: |
+  {{ai_generated.usability_complete}}
+
+output_options:
+  path: "04-analysis/usability-issues/"
+  filename: "{{selected_study}}_usability_issues_{{current_date}}.md"
+
+# ═══════════════════════════════════════════════════════════
+# METADATA (documentation only — not read by backend)
+# ═══════════════════════════════════════════════════════════
 processing_workflow:
   1. validate_slack_modal_inputs
   2. discover_files_from_study_selection
   3. combine_selected_files_with_truncation
   4. execute_usability_complete
-  5. format_slack_output
-  6. format_github_output
-  7. save_to_analysis_folder
-  8. send_team_notifications
-
-# Output configuration
-output_options:
-  default_delivery: "slack_and_file"
-  slack_format: "usability_focused"
-  file_format: "github_markdown"
-  path: "04-analysis/usability-issues/"
-  filename: "{{selected_study}}_usability_issues_{{current_date}}.md"
-
-# Output template - renders the single consolidated AI response
-output_template: |
-  {{ai_generated.usability_complete}}
-
-# GitHub markdown file template
-github_file_template: |
-  {{ai_generated.usability_complete}}
-
-  ---
-
-  ## 📞 Contact & Follow-up
-
-  **Questions?** Reply in the study channel or contact the research team directly.
-
-  **Related Analyses:** Consider running complementary synthesis methods:
-  - 🧠 Affinity Mapping — to identify broader themes
-  - 🧭 Journey Mapping — to understand process flow
-  - 👤 Persona Generation — to create user archetypes
-  - 🎯 Jobs to be Done — to identify functional needs
-  - 💡 Design Opportunities — to identify specific improvements
-
-  ---
-
-  *Generated by Qori Research Synthesis • {{current_date}}*
+  5. format_output
+  6. save_to_analysis_folder
 
 notify:
   - role: team
     action: "Usability issues extraction completed"
     channel: "{{study_channel}}"
 
-output_use: |
-  Slack-Native Usability Issues Extractor automatically discovers research files from selected study folders,
-  systematically identifies specific interface problems with user behaviors and expectations, assesses severity
-  and impact, and generates actionable fix recommendations. Outputs concise Slack summaries focused on issues
-  and fixes, plus detailed GitHub markdown reports for development teams and stakeholders.
+quality_assurance:
+  require_verbatim_quotes: true
+  require_citations: true
+  require_specific_names: true
+  require_severity_assessment: true
+  require_fix_recommendations: true
 
 notes: |
+  v3.1 Changes (Standards Polish):
+  - Applied canonical key ordering (IDENTITY → CONFIGURATION → INPUTS → AI GENERATION → OUTPUT → METADATA)
+  - Removed dead config: llm_config, system_limits, privacy_controls, study_metadata, auto_file_discovery
+  - Removed github_file_template (referenced variables never provided by handler)
+  - Removed default_delivery, slack_format, file_format from output_options (dead config)
+  - Updated prompt: summary blockquote removes date (date is in footer)
+  - Removed decorative emoji from Cross-Issue Connections heading (was 🔗)
+  - Standardized participant ID format to PT-001 (hyphenated)
+  - Added inline comments on input_variables
+
   v3.0 Changes (Task Consolidation):
   - Consolidated 6 chained AI tasks into 1 comprehensive task
   - Previous 6-task architecture used {{ai_generated.*}} cross-references between
@@ -364,10 +292,12 @@ notes: |
   - All analytical depth preserved: issue identification, behavior/expectation
     analysis, severity assessment, fix recommendations, and evidence validation
     are all included in the single consolidated prompt.
-  - Removed auto_variables (num_issues, severity_overview, github_file_link)
-    that were never processed by yamlProcessor.js.
-  - output_template now renders the complete AI response directly (matching
-    affinity_mapping pattern).
 
   v2.0: 6-task chained architecture (broken by parallel execution)
   v1.0: Original implementation
+
+output_use: |
+  Slack-Native Usability Issues Extractor systematically identifies specific
+  interface problems with user behaviors and expectations, assesses severity
+  and impact, and generates actionable fix recommendations. Outputs concise
+  Slack summaries plus detailed GitHub markdown reports.
