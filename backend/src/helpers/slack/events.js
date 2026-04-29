@@ -2558,6 +2558,17 @@ slackApp.view('upload_stakeholder_notes_modal', async ({ ack, view, body, client
 
     const url = renderedYaml.result.url;
 
+    // Register in research_status so synthesis modal (Service Blueprint, etc.)
+    // can discover this file via getStudyStakeholderGuide (ILIKE '%stakeholder%')
+    const stakeholderSynthesisFileName = url.split('/').pop() || 'stakeholder_synthesis.md';
+    await addStudyStatus({
+      study_name: studyName,
+      path: url,
+      file_name: stakeholderSynthesisFileName,
+      status: 'created',
+      created_by: body.user?.id || body.user_id || null,
+    });
+
     // Generate and send result message
     const blocks = generateStudyResultBlocks(studyName, study, url, channelId, 'stakeholder_notes');
     await sendStudyResultMessage(client, channelId, studyName, blocks, 'stakeholder_notes');
