@@ -18,7 +18,7 @@ function getObserverRoleDisplay(role) {
 
 // Helper function to check if observer section exists in content
 function hasObserverSection(content) {
-  return content.includes('## 👥 Observer Management');
+  return content.includes('## Observer Management');
 }
 
 // Helper function to add observer section if it doesn't exist
@@ -38,7 +38,7 @@ function addObserverSectionIfMissing(content, observerRequests, participants) {
     '',
     '---',
     '',
-    '## 👥 Observer Management',
+    '## Observer Management',
     '',
     '**Session Observer Assignments:**',
     '',
@@ -177,7 +177,7 @@ async function updateObserverSections(fileContent, observerRequests, participant
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
 
-    if (line.includes('## 👥 Observer Management')) {
+    if (line.includes('## Observer Management')) {
       observerSectionStartIndex = i;
       observerSectionFound = true;
     }
