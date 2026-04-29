@@ -262,38 +262,31 @@ const researchSynthesisModal = (
         },
       ]),
 
-      // Transcripts
+      // Session Notes & Transcripts (coded transcripts + raw transcript files only)
       {
         type: "section",
         block_id: "transcripts_header",
         text: {
           type: "mrkdwn",
-          text: `*Transcripts*\n${transcriptsCount} ${transcriptsCount === 1 ? 'file' : 'files'} available`,
+          text: `*Session Notes & Transcripts*\n${transcriptsCount} ${transcriptsCount === 1 ? 'file' : 'files'} available`,
         },
       },
-      ...(transcriptOptions.length > 0 ? (() => {
-        // Split into chunks of 10 (Slack limit)
-        const chunks = [];
-        for (let i = 0; i < transcriptOptions.length; i += 10) {
-          chunks.push(transcriptOptions.slice(i, i + 10));
-        }
-        return chunks.map((chunk, chunkIndex) => ({
-          type: "section",
-          block_id: `transcripts_list_${chunkIndex}`,
-          text: { 
-            type: "mrkdwn", 
-            text: chunkIndex === 0 ? "Select transcripts:" : `_Additional transcripts (${chunkIndex + 1}/${chunks.length}):_` 
-          },
-          accessory: {
-            type: "checkboxes",
-            action_id: "transcripts_checkboxes",
-            options: chunk,
-          },
-        }));
-      })() : [
+      ...(transcriptOptions.length > 0 ? [{
+        type: "section",
+        block_id: "transcripts_list_0",
+        text: {
+          type: "mrkdwn",
+          text: "Select session notes & transcripts:"
+        },
+        accessory: {
+          type: "checkboxes",
+          action_id: "transcripts_checkboxes",
+          options: transcriptOptions.slice(0, 10),
+        },
+      }] : [
         {
           type: "context",
-          elements: [ { type: "mrkdwn", text: "No transcripts available for this study." } ],
+          elements: [ { type: "mrkdwn", text: "No session notes or transcripts available for this study." } ],
         },
       ]),
 
