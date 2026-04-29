@@ -55,7 +55,7 @@ const emailModal = (params = {}) => {
         type: "section",
         text: {
           type: "mrkdwn",
-          text: messageBody || "_No message body provided._",
+          text: (messageBody || "_No message body provided._").replace(/\*\*(.+?)\*\*/g, '*$1*'),
         },
       },
       {

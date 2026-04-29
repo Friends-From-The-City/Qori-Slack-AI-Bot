@@ -4,6 +4,7 @@ const Handlebars = require('handlebars');
 const { format } = require('date-fns');
 const path = require('path');
 const { createOrUpdateFileOnGitHub, fetchFileFromRepo } = require('./github');
+const SessionObserverService = require('../services/session_observer.service');
 
 // Helper function to calculate recruitment breakdown
 function calculateRecruitmentBreakdown(participants) {
@@ -500,8 +501,25 @@ async function processParticipantYamlTemplate(rawYamlContent, inputValues, baseF
       confirmed_sessions: allParticipants.filter(p => p.status_select === 'confirmed'),
       pending_sessions: allParticipants.filter(p => p.status_select === 'pending_response'),
       rescheduling_sessions: allParticipants.filter(p => p.status_select === 'rescheduling_needed'),
-      session_observers: [], // This would be populated from observer data
-      observer_action_items: [], // This would be populated from observer data
+      session_observers: await (async () => {
+        try {
+          if (!inputValues.study_id) return [];
+          const observers = await SessionObserverService.getObserverRequestsByStudy(inputValues.study_id);
+          return observers.map(obs => {
+            const names = Array.isArray(obs.requester_name) ? obs.requester_name : [obs.requester_name];
+            return {
+              session_id: obs.session_id,
+              observer_names: names.join(', '),
+              observer_role: obs.role || 'observer',
+              status: obs.status || 'confirmed',
+            };
+          });
+        } catch (err) {
+          console.warn('⚠️ Could not fetch observer data for tracker:', err.message);
+          return [];
+        }
+      })(),
+      observer_action_items: [],
       accommodations: allParticipants.filter(p => p.notes_field && p.notes_field.trim() !== '').map(p => ({
         participant_id: p.id,
         accommodation_details: p.notes_field
