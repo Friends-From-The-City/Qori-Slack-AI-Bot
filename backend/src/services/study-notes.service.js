@@ -24,6 +24,20 @@ class StudyNotesService {
         }
       }
 
+      // Prevent duplicates: if a note with the same filename and study_id
+      // already exists, update it instead of creating a new one.
+      // This handles double-submit from slow modal responses.
+      if (noteData.filename && noteData.study_id) {
+        const existing = await this.StudyNotes.findOne({
+          where: { filename: noteData.filename, study_id: noteData.study_id }
+        });
+        if (existing) {
+          console.log(`📝 Duplicate note detected (${noteData.filename}), updating existing record ${existing.id}`);
+          await existing.update({ ...noteData, updated_at: new Date() });
+          return existing;
+        }
+      }
+
       // Set manual timestamps
       const now = new Date();
       noteData.created_at = now;
