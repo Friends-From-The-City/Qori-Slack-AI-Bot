@@ -1,7 +1,10 @@
+# ═══════════════════════════════════════════════════════════
+# IDENTITY
+# ═══════════════════════════════════════════════════════════
 id: research_brief
 name: create_research_brief
-label: 📋 Research Brief
-version: v4.1
+label: "📋 Research Brief"
+version: v4.2
 description: |
   Researcher tool to create formal research briefs from stakeholder requests.
   Translates business problems into research scope, objectives, and methodology.
@@ -9,23 +12,17 @@ description: |
 
 author: Qori R&D
 created: 2025-06-26
-last_updated: 2026-01-28
+last_updated: 2026-04-29
 
-# Character encoding fix
-encoding: utf-8
-output_encoding: utf-8
-
-# LLM Configuration - Upgraded for better quality
-llm_config:
-  model: "gpt-4o"
-  temperature: 0.2
-  max_tokens: 4000
-
+# ═══════════════════════════════════════════════════════════
+# CONFIGURATION
+# ═══════════════════════════════════════════════════════════
 input_type: text
 input_processing: summarize_if_long
-precision_mode: concise
 
-# Input schema for Slack UI - Researcher fills this out
+# ═══════════════════════════════════════════════════════════
+# INPUTS
+# ═══════════════════════════════════════════════════════════
 input_variables:
   # Link to original request (optional - can create brief without request)
   - name: research_request_link
@@ -40,7 +37,7 @@ input_variables:
     required: true
     label: "Lead researcher"
     placeholder: "e.g., Jordan Smith"
-    
+
   - name: research_team
     type: string
     required: false
@@ -162,12 +159,14 @@ input_variables:
     label: "Constraints & risks"
     placeholder: "Budget, access limitations, recruitment challenges, etc."
 
-# AI Generation Tasks - Hybrid: refine some fields, keep others raw
+# ═══════════════════════════════════════════════════════════
+# AI GENERATION
+# ═══════════════════════════════════════════════════════════
 ai_generation_tasks:
   - task_id: "project_scope"
     prompt: |
       Based on the project title "{{project_title}}" and business context "{{business_context}}", identify the VA domain area.
-      
+
       Choose from:
       - Digital Services
       - Benefits Claims
@@ -175,101 +174,101 @@ ai_generation_tasks:
       - Education Services
       - Career Services
       - Financial Services
-      
+
       Output only the domain (e.g., "Digital Services").
 
   - task_id: "formatted_objectives"
     prompt: |
       Format these research objectives into a consistent structure:
       "{{research_objectives}}"
-      
+
       Rules:
       - Each objective should start with a bold verb: **Where**, **Which**, **Why**, or **How**
       - Keep to 3-4 objectives maximum
       - Each should be one clear sentence
       - Preserve the researcher's original intent
-      
+
       Output format:
       - **Where** veterans [encounter/experience/face] [specific issue]
       - **Which** [elements/factors/features] [cause/contribute to] [outcome]
       - **Why** veterans [behavior/experience] [specific context]
       - **How** veterans [currently do something] [relevant to research]
-      
+
       Output only the formatted bullet points, no preamble.
 
   - task_id: "formatted_questions"
     prompt: |
       Format these research questions into a clean numbered list:
       "{{research_questions}}"
-      
+
       Rules:
       - Number each question (1, 2, 3, etc.)
       - Ensure each is phrased as a question (ends with ?)
       - Questions should be specific and answerable through research
       - Keep to 3-5 questions maximum
       - Preserve the researcher's original intent
-      
+
       Output only the numbered questions, no preamble.
 
   - task_id: "formatted_journeys"
     prompt: |
       Format these user journeys into a consistent numbered list with arrow notation:
       "{{user_journeys_in_scope}}"
-      
+
       Rules:
       - Number each journey (1, 2, 3, etc.)
       - Use arrows (→) to show flow between steps
       - Keep each journey to one line
       - Use concise step names
       - Preserve the researcher's original scope
-      
+
       Example format:
       1. App onboarding → account creation → initial feature discovery
       2. Dashboard → claims status → claim details → document upload
-      
+
       Output only the numbered journeys, no preamble.
 
   - task_id: "formatted_barriers"
     prompt: |
       Format these target barriers into a categorized table:
       "{{target_barriers}}"
-      
+
       Rules:
       - Group similar barriers into categories
       - Categories might include: Navigation, Information Architecture, Visual Design, Labeling, Onboarding, Mobile Usability, Accessibility
       - Keep barrier descriptions concise but specific
       - Preserve the researcher's original barriers
-      
+
       Output as markdown table:
       | Category | Barrier |
       |:---------|:--------|
       | [Category] | [Specific barrier description] |
-      
+
       Output only the table, no preamble.
 
   - task_id: "formatted_participants"
     prompt: |
       Organize these participant criteria into a structured format:
       "{{participant_criteria}}"
-      
+
       Rules:
       - Separate into three sections: Must-haves, Nice-to-haves, Exclude
       - If exclusion criteria aren't mentioned, add standard ones (VA employees, recent research participants)
       - Use bullet points within each section
       - Preserve the researcher's original criteria
-      
+
       Output format:
       **Must-haves:**
       - [Criterion]
       - [Criterion]
-      
+
       **Nice-to-haves:**
       - [Criterion]
       - [Criterion]
-      
+
       **Exclude:**
       - [Criterion]
-      
+
       Output only the formatted sections, no preamble.
 
   - task_id: "success_criteria"
@@ -277,13 +276,13 @@ ai_generation_tasks:
       Based on these research objectives and questions, define success criteria:
       Objectives: {{research_objectives}}
       Questions: {{research_questions}}
-      
+
       Generate 3-4 success criteria that describe how we'll know the research succeeded.
-      
+
       Format as bullet points starting with "We will have succeeded if..."
-      
+
       Make criteria specific and measurable where possible.
-      
+
       Output only the bullet points, no preamble.
 
   - task_id: "expected_outcomes"
@@ -291,18 +290,20 @@ ai_generation_tasks:
       Based on the business context and objectives, describe expected outcomes:
       Context: {{business_context}}
       Objectives: {{research_objectives}}
-      
+
       Generate 3 bullet points describing how this research will be used.
-      
+
       Format as:
       Research will inform:
       - **[Area]** — [specific application of findings]
       - **[Area]** — [specific application of findings]
       - **[Area]** — [specific application of findings]
-      
+
       Output only "Research will inform:" followed by the bullet points, no other preamble.
 
-# Processing workflow
+# ═══════════════════════════════════════════════════════════
+# OUTPUT
+# ═══════════════════════════════════════════════════════════
 processing_workflow:
   1. validate_inputs
   2. execute_ai_generation_tasks
@@ -310,7 +311,6 @@ processing_workflow:
   4. populate_template
   5. save_to_outputs
 
-# Output template - Researcher-created brief with AI refinement
 output_template: |
   # Research Brief: {{project_title}}
 
@@ -424,24 +424,23 @@ output_template: |
 
   ---
 
-  > **Status:** 🟡 Pending stakeholder approval
+  > **Status:** Pending stakeholder approval
 
   *Created by {{lead_researcher}} • {{current_date}}*
 
-# Output configuration
 output_options:
   filename: "{{project_title}}_research_brief_{{current_date}}.md"
   path: "01-planning/"
-  
+
   delivery:
     github:
       enabled: true
       commit_message: "Add research brief: {{project_title}}"
-      
+
     slack:
       enabled: true
       channel: "#research-planning"
-      message: "📋 {{lead_researcher}} created a research brief for *{{project_title}}*"
+      message: "{{lead_researcher}} created a research brief for *{{project_title}}*"
       include_preview: false
       actions:
         - text: "View Brief"
@@ -449,46 +448,27 @@ output_options:
         - text: "Create Research Plan"
           action: "run_research_plan"
 
-# Study metadata mapping
-study_metadata:
-  "VA Housing Application Usability Study":
-    folder: "va-housing-usability-2025"
-    researcher: "jordan.researcher"
-    channel: "#research-housing-app"
-    focus_area: "housing application usability"
-    
-  "Benefits Portal Navigation Research":
-    folder: "benefits-portal-nav-2025"
-    researcher: "alex.ux"
-    channel: "#research-benefits"
-    focus_area: "benefits portal navigation"
-    
-  "Veteran Onboarding Experience Study":
-    folder: "veteran-onboarding-2025"
-    researcher: "casey.research"
-    channel: "#research-onboarding"
-    focus_area: "veteran onboarding process"
-
-# Auto-generated variables
+# ═══════════════════════════════════════════════════════════
+# METADATA
+# ═══════════════════════════════════════════════════════════
 auto_variables:
   - current_date: new Date().toISOString().split('T')[0]
   - brief_version: generate_version_number() || "v1.0"
   - github_file_link: generate_github_link(project_title, current_date)
 
-# Slack notifications
 notify:
   - role: research_team
     action: "Research brief created"
     channel: "#research-planning"
-    message: "📋 {{lead_researcher}} created a research brief for *{{project_title}}*. Method: {{research_method}}, Timeline: {{timeline_weeks}} weeks."
-    
+    message: "{{lead_researcher}} created a research brief for *{{project_title}}*. Method: {{research_method}}, Timeline: {{timeline_weeks}} weeks."
+
   - role: stakeholder
     action: "Brief ready for review"
     channel: "DM"
     to: "{{requestor_name}}"
-    message: "📋 Your research brief for *{{project_title}}* is ready for review. Please review and approve within 3 business days."
+    message: "Your research brief for *{{project_title}}* is ready for review. Please review and approve within 3 business days."
 
 output_use: |
-  Researchers use this tool to create formal research briefs after reviewing 
-  stakeholder requests. Captures research scope, methodology, participant 
+  Researchers use this tool to create formal research briefs after reviewing
+  stakeholder requests. Captures research scope, methodology, participant
   criteria, and timeline. Outputs to 00-planning/ for the study repository.
