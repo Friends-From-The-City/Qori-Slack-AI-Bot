@@ -75,9 +75,9 @@ const researchSynthesisModal = (
     };
   });
 
-  // Format stakeholder guides as checkboxes
+  // Format stakeholder notes & synthesis as checkboxes
   const stakeholderGuideOptions = stakeholderGuides.map((guide, index) => {
-    const fileName = guide.file_name || guide.path?.split('/').pop() || `Stakeholder Guide ${index + 1}`;
+    const fileName = guide.file_name || guide.path?.split('/').pop() || `Stakeholder File ${index + 1}`;
     
     return {
       text: {
@@ -297,13 +297,13 @@ const researchSynthesisModal = (
         },
       ]),
 
-      // Stakeholder Interview Guides
+      // Stakeholder Notes & Synthesis
       {
         type: "section",
         block_id: "stakeholder_guides_header",
         text: {
           type: "mrkdwn",
-          text: `*Stakeholder Interviews*\n${stakeholderGuidesCount} ${stakeholderGuidesCount === 1 ? 'file' : 'files'} available`,
+          text: `*Stakeholder Notes & Synthesis*\n${stakeholderGuidesCount} ${stakeholderGuidesCount === 1 ? 'file' : 'files'} available`,
         },
       },
       ...(stakeholderGuideOptions.length > 0 ? (() => {
@@ -317,7 +317,7 @@ const researchSynthesisModal = (
           block_id: `stakeholder_guides_list_${chunkIndex}`,
           text: { 
             type: "mrkdwn", 
-            text: chunkIndex === 0 ? "Select stakeholder guides:" : `_Additional guides (${chunkIndex + 1}/${chunks.length}):_` 
+            text: chunkIndex === 0 ? "Select stakeholder files:" : `_Additional files (${chunkIndex + 1}/${chunks.length}):_` 
           },
           accessory: {
             type: "checkboxes",
@@ -328,7 +328,7 @@ const researchSynthesisModal = (
       })() : [
         {
           type: "context",
-          elements: [ { type: "mrkdwn", text: "No stakeholder interview guides available for this study." } ],
+          elements: [ { type: "mrkdwn", text: "No stakeholder notes or synthesis available for this study." } ],
         },
       ]),
 

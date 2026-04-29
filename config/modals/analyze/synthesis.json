@@ -229,7 +229,7 @@
       "type": "section",
       "text": {
         "type": "mrkdwn",
-        "text": "*Stakeholder Interviews*"
+        "text": "*Stakeholder Notes & Synthesis*"
       }
     },
     {
@@ -238,7 +238,7 @@
       "optional": true,
       "label": {
         "type": "plain_text",
-        "text": "Select stakeholder files"
+        "text": "Select stakeholder notes & synthesis"
       },
       "element": {
         "type": "checkboxes",
