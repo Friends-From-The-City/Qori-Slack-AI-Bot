@@ -286,7 +286,12 @@ const handleSessionNotesSubmission = async ({ ack, body, view, client }) => {
         templateData = {
           ...templateData,
           input_text: fileContent,
-          transcript_files: files.files.map(f => f.name).join(', ')
+          transcript_files: files.files.map(f => f.name).join(', '),
+          filename: files.files[0]?.name || 'transcript_upload.md',
+          folder_context: templateData.study_name || '',
+          upload_date_utc: new Date().toISOString(),
+          transcript_source: 'file_upload',
+          manual_notes_text_or_blank: '',
         };
       } else if (pastedText) {
         // Process pasted text

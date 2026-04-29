@@ -112,229 +112,6 @@ slackExpressRouter.post('/commands', (req, res) => {
 });
 
 
-slackApp.command('/civicmind', async ({ command, ack, client }) => {
-  console.log("🚀 ~ slackApp.command ~ command:", command)
-  // 1️⃣ Acknowledge immediately
-  await ack();
-
-  // 2️⃣ Send one placeholder
-  const placeholder = await client.chat.postMessage({
-    channel: command.channel_id,
-    text: '⏳ Processing your request…'
-  });
-
-  const [action, ...rest] = (command.text || '').trim().split(/\s+/);
-  const arg = rest.join(' ');
-  console.log("🚀 ~ slackApp.command ~ action:", action, "////", arg)
-
-
-  try {
-    if (action === 'new-study') {
-      if (!arg) {
-        await client.chat.update({
-          channel: placeholder.channel,
-          ts: placeholder.ts,
-          text: '❓ Usage: /civicmind new-study <study name>'
-        });
-        return;
-      }
-
-      const info = await getChannelConfigByChannelId(command.channel_id);
-      const response = await readFolders('beta-test/templates', getConfigRepo());
-      const result = await copyFilesToFolder(
-        response,
-        `${info.sub_folder_name}/research`,
-        arg,
-        info.repo,
-        info.product_folder_name
-      );
-
-      await client.chat.update({
-        channel: placeholder.channel,
-        ts: placeholder.ts,
-        text: `✅ Created new study *${arg}* — <${result.url}|open on GitHub>`
-      });
-      return;
-    }
-
-    if (action === 'ask') {
-      await client.chat.update({
-        channel: placeholder.channel,
-        ts: placeholder.ts,
-        text: "This command isn't available yet. RAG-based study search is planned for a future release."
-      });
-      return;
-    }
-
-    if (action === 'sync') {
-      const folder = await getChannelConfigByChannelId(command.channel_id);
-      const files = await readFolders(`${folder.product_folder_name}/${folder.sub_folder_name}/research/${arg}`, folder.repo)
-      for (const file of files) {
-        // console.log("🚀 ~ slackApp.command ~ file:", file)
-        const parts = file.path.split("/");
-        await setupVectorStore(file.content, parts[3], file.path, file.sha)
-      }
-      await client.chat.update({
-        channel: placeholder.channel,
-        ts: placeholder.ts,
-        text: `written`
-      });
-      return;
-    }
-
-    if (action === 'ask-study') {
-      await client.chat.update({
-        channel: placeholder.channel,
-        ts: placeholder.ts,
-        text: "This command isn't available yet. RAG-based study search is planned for a future release."
-      });
-      return;
-    }
-
-    if (action === "create-template-study") {
-      await client.chat.update({
-        channel: placeholder.channel,
-        ts: placeholder.ts,
-        text: "This command isn't available yet. RAG-based study search is planned for a future release."
-      });
-      return;
-    }
-
-    if (!action || action === 'help') {
-      // const data = {
-      //   project_title: "Improving User Experience for VA Benefits Portal",
-      //   study_context: "This study focuses on understanding barriers to accessing benefits for veterans through a digital platform. The goal is to identify friction points and optimize the user experience.",
-      //   target_barriers: "1. Complex navigation\n2. Lack of accessibility options\n3. Long form filling process",
-      //   user_flows: "1. Login to the portal\n2. Navigate to benefits section\n3. Fill out application form\n4. Submit and track application status",
-      //   stakeholders: "VA Product Team, VA Design Team, UX Researchers, Veterans using the benefits portal",
-      //   research_approach: "A mixed-methods approach involving user interviews, usability testing, and data analysis of portal interactions.",
-      //   prepared_by: "John Doe, UX Researcher",
-      // };
-
-      // const study = await getResearchStudyWithRoles("research study 5");
-      // const file = await fetchFileFromRepo(getConfigRepo(), "beta-test/YAML Templates", "research_brief.yaml");
-      // console.log("🚀 ~ slackApp.view ~ file:", file)
-      // const renderedYaml = await processYamlTemplate(file.content, data, study.path);
-      // console.log("🚀 ~ slackApp.command ~ renderedYaml:", renderedYaml)
-      const helpBlocks = [
-        { type: 'header', text: { type: 'plain_text', text: ':robot_face: Bot command reference' } },
-        { type: 'divider' },
-
-        // ------------- civicmind -------------
-        {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: '*`/civicmind new-study <study-name>`*\nCreate a brand-new research study scaffold in the configured repo.'
-          }
-        },
-        {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: '*`/civicmind ask <question>`*\nAsk any question; the bot answers using the docs in the current repo / folder.'
-          }
-        },
-        {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: '*`/civicmind sync <study-subfolder>`*\n(Re)-index every file in the given study subfolder into the vector store.'
-          }
-        },
-        {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: '*`/civicmind create-template-study <template> <"folder"> <question>`*\nAsk any question; the bot answers using the content of folder in the provided template format.'
-          }
-        },
-        {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: '*`/civicmind ask-study <question>`*\nAsk a question across _all_ studies linked to this channel.'
-          }
-        },
-
-        // ------------- repo / folder config -------------
-        {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: '*`/choose-repo`*\nOpen a modal to link this channel to a GitHub repo & folder (alias of `connect`).'
-          }
-        },
-
-        // ------------- modal Q&A -------------
-        {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: '*`/ask-study`*\nOpen a modal to pick a study from a dropdown, type your question, and let the bot answer.'
-          }
-        },
-
-        // ------------- research study commands -------------
-        {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: '*`/request-research`*\nSubmit a research request to the research team. Describe your business problem and what you need to learn.'
-          }
-        },
-        {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: '*`/plan-study`*\nCreate a new research study with team members and roles, then open research setup options.'
-          }
-        },
-        {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: '*`/qori-start`*\nStart research activities directly (create plan, brief, discussion guide, or upload desk research).'
-          }
-        },
-
-        // ------------- helpers -------------
-        { type: 'divider' },
-        {
-          type: 'context',
-          elements: [
-            { type: 'mrkdwn', text: 'Need this list again?  Just type `/civicmind help`.' }
-          ]
-        }
-      ];
-
-      await client.chat.postEphemeral({
-        channel: command.channel_id,
-        user: command.user_id,     // only the requester sees it
-        text: 'Bot command reference',  // Fallback if blocks fail
-        blocks: helpBlocks
-      });
-      return;
-    }
-
-    // … other sub-commands …
-
-    // Default: unknown
-    await client.chat.update({
-      channel: placeholder.channel,
-      ts: placeholder.ts,
-      text: `⚠️ Unknown command: "${command.text}". Try: /civicmind help`
-    });
-  } catch (err) {
-    // Any error during processing
-    await client.chat.update({
-      channel: placeholder.channel,
-      ts: placeholder.ts,
-      text: `❌ Oops, something went wrong: ${err.message}`
-    });
-  }
-});
-
 // Command for user help and guidance - Show all available commands
 slackApp.command('/qori', async ({ ack, command, client }) => {
   await ack();
@@ -1103,18 +880,6 @@ slackApp.view('ask-study-modal', async ({ ack, view, client, body }) => {
 //     }
 //   });
 // });
-
-// 2️⃣ Handle submission of the modal (template + folder variant)
-slackApp.view('ask-study-modal', async ({ ack, view, client }) => {
-  await ack();
-
-  const { channelId } = JSON.parse(view.private_metadata);
-
-  await client.chat.postMessage({
-    channel: channelId,
-    text: "This command isn't available yet. RAG-based study search is planned for a future release."
-  });
-});
 
 slackApp.command('/run-template', async ({ ack, command, client }) => {
   try {
@@ -2336,8 +2101,9 @@ slackApp.view("stakeholder_interview_guide_modal", async ({ ack, body, view, cli
       interview_focus: interviewFocus,
       known_constraints: knownConstraints,
       research_questions: researchQuestions || userFindings || '',
+      user_findings: userFindings || '',
       session_duration: sessionDurationText || sessionDuration || '',
-      
+
       // Additional metadata for template processing
       stakeholder_name: stakeholderName || '',
       study_name: studyName,
@@ -2881,7 +2647,9 @@ slackApp.view('upload_desk_research_modal', async ({ ack, view, body, client }) 
 
     const deskResearchData = {
       research_topic: studyName,
-      document_content: formattedDocumentContent, // Structured format with clear document boundaries
+      selected_study: studyName,
+      description: studyName,
+      document_content: formattedDocumentContent,
     };
 
     // TODO: Now you can pass this data to your YAML processor

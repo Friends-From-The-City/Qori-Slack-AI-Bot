@@ -1,5 +1,4 @@
 # Production Docker Compose for Qori Slack AI Bot
-version: "3.8"
 
 services:
   qori-backend:

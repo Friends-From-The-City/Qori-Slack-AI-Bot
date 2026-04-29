@@ -22,7 +22,7 @@ const { NODE_ENV, DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT, PORT, DB_DIAL
 
 const app = express();
 
-if (NODE_ENV !== "development") {
+if (NODE_ENV !== "development" && process.env.SENTRY_DSN) {
   Sentry.init(configs.sentryConfig(app));
   app.use(Sentry.Handlers.requestHandler());
   app.use(Sentry.Handlers.tracingHandler());

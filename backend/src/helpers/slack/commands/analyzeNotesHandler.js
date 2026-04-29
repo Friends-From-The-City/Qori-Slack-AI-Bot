@@ -162,9 +162,10 @@ const handleAnalyzeNotesSubmission = async ({ ack, body, view, client }) => {
 
     // Create template data object with all required keys
     const templateData = {
-      study_folder: studyName, // Extract just the folder name, not full path
+      study_folder: studyName,
       study_name: studyName,
       session_name: sessionName || 'No specific session selected',
+      session_date: new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
       selected_note_files: notesWithContent.map(note => note.filename || 'Unknown File'),
       coded_transcript_content: coded_transcript_content,
       notes_content: notes_content,

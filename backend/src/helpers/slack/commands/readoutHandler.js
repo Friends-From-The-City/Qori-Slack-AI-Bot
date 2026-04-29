@@ -362,11 +362,14 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }) => {
       study_name: selectedStudyName,
       researcher_contact: selectedStudy?.researcher_email || 'Unknown Researcher',
       study_channel: state.origin?.channel || 'general',
-      research_readout_data: researchReadoutData, // All content as combined text
-      input_text: inputText, // All content as combined text
-      detected_files: detectedFilesList, // List of file names for research readout prompt
+      research_readout_data: researchReadoutData,
+      input_text: inputText,
+      detected_files: detectedFilesList,
       study_link: selectedStudy?.link || '',
-      team_members: teamMembers
+      team_members: teamMembers,
+      github_repository: `${process.env.GITHUB_OWNER}/${process.env.GITHUB_REPO}`,
+      github_repo_url: `https://github.com/${process.env.GITHUB_OWNER}/${process.env.GITHUB_REPO}`,
+      max_issues: '10',
     };
 
     // Add readout_link for github_issues
