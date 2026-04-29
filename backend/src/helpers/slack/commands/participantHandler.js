@@ -371,9 +371,16 @@ const handleUpdateParticipantSubmission = async ({ ack, body, view, client }) =>
       status_select: newStatus
     };
 
-    // Add notes if provided
+    // Append notes instead of overwriting — preserve previous notes with timestamp
     if (updateNotes.trim()) {
-      updateData.notes_field = updateNotes;
+      const existingParticipant = await studyParticipantService.getParticipantById(parseInt(participantId));
+      const existingNotes = existingParticipant?.notes_field?.trim() || '';
+      const timestamp = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      if (existingNotes) {
+        updateData.notes_field = `${existingNotes}\n\n[${timestamp}] ${updateNotes}`;
+      } else {
+        updateData.notes_field = `[${timestamp}] ${updateNotes}`;
+      }
     }
 
     // Update the participant using the service
