@@ -1,13 +1,26 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# TRANSCRIPT UPLOAD — Upload & code session transcripts with PII redaction
+# ═══════════════════════════════════════════════════════════════════════════════
+
 id: transcript_upload
+name: upload_transcript
 label: "📝 Upload & Code Session Transcript"
 description: Upload transcripts with automatic PII redaction and AI-powered research coding
+author: Qori R&D
+version: "v2.4"
+created: 2025-07-07
+last_updated: 2026-04-29
+
 input_type: tabbed_upload
 input_processing: ai_enhanced_coding
-version: v2.3
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# INPUT TABS
+# ═══════════════════════════════════════════════════════════════════════════════
 
 input_tabs:
   file_upload:
-    label: "📁 Upload File"
+    label: "Upload File"
     description: "Upload transcript from Zoom, Otter.ai, or other source"
     fields:
       uploaded_file:
@@ -17,7 +30,7 @@ input_tabs:
         max_size: "15MB"
         drag_drop: true
         required: true
-        
+
       transcript_source:
         type: "select"
         label: "Source (Optional)"
@@ -29,9 +42,9 @@ input_tabs:
           - "Teams Auto-Generated"
           - "Manual Notes"
           - "Other"
-    
+
   paste_text:
-    label: "📋 Paste Text"
+    label: "Paste Text"
     description: "Copy and paste transcript directly"
     fields:
       manual_transcript:
@@ -42,188 +55,36 @@ input_tabs:
         word_count: true
         required: true
 
-privacy_protection:
-  pii_scrubbing:
-    enabled: true
-    auto_detect: true
-    
-    speaker_label_redaction:
-      enabled: true
-      replace_name_labels_with: "Speaker {{number}}"
-      auto_assign_speaker_numbers: true
-    
-    patterns_to_redact:
-      names: true
-      email_addresses: true
-      phone_numbers: true
-      ssn: true
-      addresses: true
-      veteran_ids: true
-      case_numbers: true
-      company_names: true
-    
-    replacement_strategy:
-      names: "{{auto_detected_participant_id}}"
-      email_addresses: "[EMAIL]"
-      phone_numbers: "[PHONE]"
-      addresses: "[ADDRESS]"
-      company_names: "[COMPANY]"
-      generic: "[REDACTED]"
-      
-    confidence_threshold: 0.85
-
-ai_processing:
-  metadata_extraction:
-    auto_detect_participant_id: true
-    auto_detect_session_info: true
-    auto_detect_study_context: true
-    
-    extraction_patterns:
-      participant_id:
-        filename_patterns: ["pt001", "participant_1", "p1", "user_01"]
-        content_patterns: ["Participant ID:", "Participant:", "User:"]
-        fallback: "participant_{{timestamp}}"
-        
-      session_id:
-        filename_patterns: ["session_1", "s1", "interview_1"]
-        content_patterns: ["Session:", "Interview #", "Meeting ID:"]
-        fallback: "session_{{date}}"
-        
-      study_name:
-        folder_context: true
-        filename_patterns: ["housing_study", "va_research"]
-        content_patterns: ["Study:", "Research Project:", "Project:"]
-        fallback: "research_study"
-        
-      session_date:
-        filename_date_patterns: true
-        content_patterns: ["Date:", "Session Date:", "Interview Date:"]
-        file_modified_date: true
-        fallback: "{{upload_date}}"
-    
-  transcript_cleaning:
-    fix_obvious_errors: true
-    auto_detect_speaker_format: true
-    standardize_speaker_labels: true
-    preserve_timestamps: true
-    remove_excessive_filler: false
-    
-    speaker_format_patterns:
-      - pattern: "Interviewer:|Moderator:|Researcher:|Speaker 1:|Speaker1:|S1:"
-        standardize_to: "Speaker 1:"
-      - pattern: "Participant:|User:|Respondent:|Interviewee:|Speaker 2:|Speaker2:|S2:"
-        standardize_to: "Speaker 2:"
-      - pattern: "^[A-Z][a-z]+ [A-Z][a-z]*:"
-        standardize_to: "Speaker {{auto_number}}:"
-        pii_redaction_required: true
-        auto_number_speakers: true
-    
-  research_formatting:
-    paragraph_breaks_by_speaker: true
-    consistent_speaker_format: true
-    preserve_emotional_indicators: true
-    maintain_context_cues: true
-
-ai_coding:
-  enabled: true
-  
-  coding_categories:
-    pain_points:
-      icon: "🔴"
-      description: "Frustrations, difficulties, problems, barriers"
-      severity_levels: ["Critical", "High", "Medium", "Low"]
-      extract_quotes: true
-      
-    opportunities:
-      icon: "🟡"  
-      description: "Unmet needs, suggestions, improvement areas"
-      impact_levels: ["High Impact", "Medium Impact", "Quick Win"]
-      extract_quotes: true
-      priority: "high"
-      minimum_required: 2
-      
-    insights:
-      icon: "💡"
-      description: "Key behaviors, patterns, revelations, mental models"
-      insight_types: ["User Behavior", "Mental Model", "Workflow", "Preference", "Accessibility Pattern", "Benchmarking", "Abandonment Pattern", "Workaround"]
-      extract_quotes: true
-      priority: "high"
-      minimum_required: 2
-      
-    positive_feedback:
-      icon: "🟢"
-      description: "What's working well, successful interactions"
-      extract_quotes: true
-      
-    feature_requests:
-      icon: "✨"
-      description: "Explicit requests for new features or changes"
-      priority_levels: ["Must Have", "Should Have", "Nice to Have"]
-      extract_quotes: true
-      
-    usability_issues:
-      icon: "⚠️"
-      description: "Interface problems, confusion, interaction failures"
-      severity_levels: ["Blocker", "Major", "Minor"]
-      extract_quotes: true
-      cross_code_from_pain_points: true
-      
-    emotions:
-      icon: "😊"
-      description: "Emotional reactions and sentiment"
-      emotion_types: ["Frustrated", "Confused", "Delighted", "Relieved", "Anxious", "Confident", "Satisfied", "Resigned"]
-      extract_quotes: true
-      minimum_required: 2
-
-  coding_confidence:
-    min_confidence: 0.75
-    flag_low_confidence: true
-    human_review_threshold: 0.60
-
-file_processing:
-  supported_formats:
-    text: [".txt", ".md"]
-    documents: [".docx", ".pdf"]
-    subtitles: [".vtt", ".srt"]
-    csv: [".csv"]
-    
-  max_file_size: "15MB"
-  
-  content_extraction:
-    pdf_ocr: true
-    docx_formatting: true
-    csv_parsing: true
-    subtitle_parsing: true
-    timestamp_preservation: true
-    speaker_diarization_preservation: true
-    filename_analysis: true
+# ═══════════════════════════════════════════════════════════════════════════════
+# AI GENERATION TASKS
+# ═══════════════════════════════════════════════════════════════════════════════
 
 ai_generation_tasks:
   - task_id: "transcript_coding_markdown"
     prompt: |
       ============================================================
-      🚨 CRITICAL - READ BEFORE ANYTHING ELSE 🚨
+      CRITICAL - READ BEFORE ANYTHING ELSE
       ============================================================
-      
+
       NEVER USE PARTICIPANT REAL NAMES ANYWHERE IN YOUR OUTPUT.
-      
+
       When writing ANY text (descriptions, context, issues, insights):
       - Use the participant ID (e.g., PT001) or "the participant"
       - NEVER use first names like "David" or full names like "David Chen"
       - This applies to EVERY section you write
-      
+
       VIOLATION EXAMPLES (DO NOT DO THIS):
-      ❌ "David struggled to find the button"
-      ❌ "David Chen is a former Marine"
-      ❌ "The participant, David, uses VoiceOver"
-      
+      - "David struggled to find the button"
+      - "David Chen is a former Marine"
+      - "The participant, David, uses VoiceOver"
+
       CORRECT EXAMPLES:
-      ✅ "PT001 struggled to find the button"
-      ✅ "The participant is a former Marine"
-      ✅ "PT001 uses VoiceOver"
-      
+      - "PT001 struggled to find the button"
+      - "The participant is a former Marine"
+      - "PT001 uses VoiceOver"
+
       If your output contains ANY real participant names, it is INVALID.
-      
+
       ============================================================
 
       MANDATORY WRITING REQUIREMENTS
@@ -248,7 +109,7 @@ ai_generation_tasks:
       {{input_text}}
 
       ============================================================
-      ⚠️ MANDATORY ENFORCEMENT RULES - READ FIRST
+      MANDATORY ENFORCEMENT RULES - READ FIRST
       ============================================================
 
       These rules are NON-NEGOTIABLE. Outputs that violate these rules are INVALID.
@@ -261,7 +122,7 @@ ai_generation_tasks:
       - Age, military service, or other background mentioned
       - Experience level with technology
       - Comparison points they reference
-      
+
       If the transcript mentions ANY of these, include them. Only output "Limited participant context" if the transcript truly contains ZERO context clues.
 
       RULE 1B - PII IN DESCRIPTIONS: NEVER USE REAL NAMES
@@ -269,16 +130,16 @@ ai_generation_tasks:
       - Use "PT001" or "the participant" - NEVER "David" or "David Chen"
       - This applies to: Participant Context, Pain Point descriptions, Insight descriptions, ALL text
       - Quotes can remain verbatim (names in quotes are already redacted)
-      
+
       WRONG: "David struggled to find the button"
       RIGHT: "PT001 struggled to find the button" or "The participant struggled to find the button"
-      
+
       WRONG: "David Chen is a former Marine with vision loss"
       RIGHT: "PT001 is a former Marine with vision loss"
 
       RULE 2 - USABILITY ISSUES MUST CROSS-CODE FROM PAIN POINTS
       Every pain point that involves a UI element MUST ALSO appear in Usability Issues.
-      
+
       Cross-code when pain point involves:
       - Buttons, links, or controls
       - Navigation or menus
@@ -288,20 +149,20 @@ ai_generation_tasks:
       - Loading or performance
       - Error messages
       - Search functionality
-      
+
       The usability_issues_count should typically be 50-80% of pain_points_count.
       If usability_issues_count is 0 but pain_points_count is greater than 0, your output is INVALID.
 
       RULE 3 - EMOTIONAL JOURNEY IS MANDATORY
       Every research session has emotional moments. You MUST capture at least 2.
-      
+
       Look for these signals:
       - Frustration: "frustrating" / "annoying" / "I give up" / "I'd probably just call"
       - Confusion: "confusing" / "I don't understand" / "what does this mean" / questions
       - Satisfaction: "that works" / "makes sense" / "I like" / "good"
       - Relief: "found it" / "there it is" / "finally"
       - Resignation: "I'd just call instead" / "give up" / "not worth it"
-      
+
       If emotions_count is 0 for a session with any struggle or success, your output is INVALID.
 
       RULE 4 - OPPORTUNITIES MINIMUM = 2
@@ -311,7 +172,7 @@ ai_generation_tasks:
       - Pain point about slow loading → Opportunity: Improve performance
       - Positive feedback about one area → Opportunity: Apply pattern elsewhere
       - User says "I'd call instead" → Opportunity: Reduce need to call
-      
+
       If opportunities_count is 0 but pain_points_count is greater than 2, your output is INVALID.
 
       RULE 5 - INSIGHTS MINIMUM = 2
@@ -322,7 +183,7 @@ ai_generation_tasks:
       - Workarounds user employs
       - What causes user to abandon tasks
       - What user compares the app to
-      
+
       If insights_count is 0 but total session length is over 3 minutes, your output is INVALID.
 
       RULE 6 - NO DUPLICATE PAIN POINTS
@@ -336,14 +197,14 @@ ai_generation_tasks:
       - High: Significant frustration OR multiple failed attempts
       - Medium: Moderate confusion or inefficiency
       - Low: Minor annoyance that user overcomes easily
-      
+
       Do NOT assign Critical to issues the user eventually overcomes.
       Do NOT assign Low to issues that cause explicit frustration statements.
 
       ============================================================
       PII REDACTION RULES
       ============================================================
-      
+
       Apply before coding and in final transcript:
       - Redact personal names, email addresses, phone numbers, street addresses, company names, veteran IDs, case numbers, SSNs
       - Replace:
@@ -365,7 +226,7 @@ ai_generation_tasks:
       ============================================================
       SPEAKER NORMALIZATION
       ============================================================
-      
+
       - Map Interviewer/Moderator/Researcher/Speaker 1/S1 to Speaker 1:
       - Map Participant/User/Respondent/Interviewee/Speaker 2/S2 to Speaker 2:
       - If a real name appears as speaker label, convert to Speaker number and redact name
@@ -375,7 +236,7 @@ ai_generation_tasks:
       ============================================================
       METADATA DETECTION
       ============================================================
-      
+
       Use hints, then fallbacks:
       - auto_detected_participant_id: detect from filename/folder/content. Fallback: participant_YYYYMMDDHHmmss
       - auto_detected_session_id: detect session_1/s1/interview_1. Fallback: session_YYYYMMDD
@@ -386,7 +247,7 @@ ai_generation_tasks:
       ============================================================
       AI CODING RULES
       ============================================================
-      
+
       - Confidence range: 0 to 1
       - Include items with confidence >= 0.75
       - If 0.60-0.74, include but flag for review
@@ -394,7 +255,7 @@ ai_generation_tasks:
       - Each item must include verbatim supporting_quote and timestamp if available
 
       ============================================================
-      🔴 PAIN POINTS
+      PAIN POINTS
       ============================================================
 
       Things that are BROKEN, FRUSTRATING, or INEFFICIENT.
@@ -417,7 +278,7 @@ ai_generation_tasks:
       If yes, MERGE them. Keep the best quote. Use ONE entry.
 
       ============================================================
-      🟡 OPPORTUNITIES
+      OPPORTUNITIES
       ============================================================
 
       Improvements that would make experience better. MINIMUM: 2 per session.
@@ -445,44 +306,44 @@ ai_generation_tasks:
       - Quick Win: Easy fix, clear benefit, low effort
 
       ============================================================
-      💡 KEY INSIGHTS
+      KEY INSIGHTS
       ============================================================
 
       Reveal HOW users think and work. MINIMUM: 2 per session.
 
       INSIGHT TYPES:
-      
+
       Mental Model: How user expects things to work
       - "I thought it would be under..." / "I expected..."
       - Correct or incorrect predictions about navigation
-      
+
       Behavior Pattern: How user actually navigates
       - Trial-and-error exploration
       - Systematic/methodical approach
       - Giving up and trying alternative channels
-      
+
       Abandonment Pattern: When and why users give up
       - "I'd probably give up and call"
       - "By the time this loads, I could have talked to a person"
       - Switching to phone, in-person, or other channels
-      
+
       Workaround: How user compensates for issues
       - Using external tools
       - Calling instead of using app
       - Memorizing complex navigation paths
-      
+
       Benchmarking: What user compares to
       - Other apps or websites
       - Previous versions
       - Phone or in-person experience
 
       DO NOT just restate pain points. Insights are about USER BEHAVIOR, not interface problems.
-      
+
       WRONG: "User faces difficulty with navigation" (this is a pain point)
       RIGHT: "User employs trial-and-error navigation, testing multiple paths when labels are unclear" (behavior pattern)
 
       ============================================================
-      🟢 POSITIVE FEEDBACK
+      POSITIVE FEEDBACK
       ============================================================
 
       What works well. Include ALL positive comments, even brief ones:
@@ -492,7 +353,7 @@ ai_generation_tasks:
       - Quick task completion without confusion
 
       ============================================================
-      ✨ FEATURE REQUESTS
+      FEATURE REQUESTS
       ============================================================
 
       Explicit requests for new or changed functionality:
@@ -506,7 +367,7 @@ ai_generation_tasks:
       - Nice to Have: Appreciated but not essential
 
       ============================================================
-      ⚠️ USABILITY ISSUES
+      USABILITY ISSUES
       ============================================================
 
       MANDATORY: Cross-code from pain points involving UI elements.
@@ -527,7 +388,7 @@ ai_generation_tasks:
       - Minor: Slight friction, user overcomes
 
       ============================================================
-      😊 EMOTIONAL JOURNEY
+      EMOTIONAL JOURNEY
       ============================================================
 
       MANDATORY: Capture at least 2 emotional moments per session.
@@ -570,40 +431,40 @@ ai_generation_tasks:
       ============================================================
 
       STEP 1: Read entire transcript
-      
+
       STEP 2: Extract Participant Context
       - Note ANY background mentioned (frequency, tasks, accessibility needs, experience)
       - Only say "Limited" if truly NOTHING is mentioned
-      
+
       STEP 3: Identify Pain Points
       - Find all frustrations, confusions, failures
       - Assign severity based on rules
       - DEDUPLICATE: Merge similar issues into one entry
-      
+
       STEP 4: Cross-code Usability Issues
       - For EACH pain point involving UI, create matching usability issue
       - Use same quote, adjust severity if needed
-      
+
       STEP 5: Extract Emotional Journey
       - Find at least 2 emotional moments
       - Include timestamp and context
-      
+
       STEP 6: Infer Opportunities (minimum 2)
       - For each pain point, what would fix it?
       - What patterns from positive areas could apply elsewhere?
-      
+
       STEP 7: Extract Insights (minimum 2)
       - How does user navigate? (behavior pattern)
       - What does user expect? (mental model)
       - When does user give up? (abandonment pattern)
       - What does user compare to? (benchmarking)
-      
+
       STEP 8: Capture Positive Feedback
       - Include ALL positive comments
-      
+
       STEP 9: Note Feature Requests
       - Explicit suggestions for new functionality
-      
+
       STEP 10: Final Validation
       - Verify no duplicate pain points
       - Verify usability_issues_count > 0 if pain_points_count > 0
@@ -684,32 +545,32 @@ ai_generation_tasks:
       ============================================================
       FINAL CHECK BEFORE OUTPUT
       ============================================================
-      
+
       Before generating output, verify:
       1. You have NOT used any real participant names (David, David Chen, etc.)
       2. You have used PT001 or "the participant" instead
       3. All descriptions reference participant by ID only
-      
+
       ============================================================
       OUTPUT FORMAT
       ============================================================
 
       # auto_detected_participant_id Coded Transcript
 
-      **Study:** auto_detected_study_name  
-      **Participant:** auto_detected_participant_id  
-      **Date:** auto_detected_date  
-      **Source:** transcript_source  
+      **Study:** auto_detected_study_name
+      **Participant:** auto_detected_participant_id
+      **Date:** auto_detected_date
+      **Source:** transcript_source
       **Analysis:** AI-coded + PII redacted
 
       ---
 
-      ## 👤 Participant Context
+      ## Participant Context
       [2-3 sentences about participant background, app usage frequency, accessibility needs, experience level. Extract from transcript. Use participant ID (e.g., PT001) or "the participant" - NEVER use real names like "David" or "David Chen". Only say "Limited" if truly nothing mentioned.]
 
       ---
 
-      ## 🔴 Pain Points (pain_points_count)
+      ## Pain Points (pain_points_count)
       For each item:
       **severity - title**
       - *Issue:* description
@@ -720,7 +581,7 @@ ai_generation_tasks:
 
       ---
 
-      ## 🟡 Opportunities (opportunities_count)
+      ## Opportunities (opportunities_count)
       For each item:
       **impact_level - title**
       - *Opportunity:* description
@@ -731,7 +592,7 @@ ai_generation_tasks:
 
       ---
 
-      ## 💡 Key Insights (insights_count)
+      ## Key Insights (insights_count)
       For each item:
       **insight_type - title**
       - *Insight:* description
@@ -742,7 +603,7 @@ ai_generation_tasks:
 
       ---
 
-      ## 🟢 Positive Feedback (positive_feedback_count)
+      ## Positive Feedback (positive_feedback_count)
       For each item:
       **title**
       - *What worked:* description
@@ -753,7 +614,7 @@ ai_generation_tasks:
 
       ---
 
-      ## ✨ Feature Requests (feature_requests_count)
+      ## Feature Requests (feature_requests_count)
       For each item:
       **priority_level - title**
       - *Request:* description
@@ -764,7 +625,7 @@ ai_generation_tasks:
 
       ---
 
-      ## ⚠️ Usability Issues (usability_issues_count)
+      ## Usability Issues (usability_issues_count)
       For each item:
       **severity - title**
       - *Issue:* description
@@ -775,7 +636,7 @@ ai_generation_tasks:
 
       ---
 
-      ## 😊 Emotional Journey (emotions_count)
+      ## Emotional Journey (emotions_count)
       For each item:
       **emotion_type** (timestamp)
       - *Context:* description
@@ -785,7 +646,7 @@ ai_generation_tasks:
 
       ---
 
-      ## 📊 Coding Summary
+      ## Coding Summary
       - **Total Codes:** total_codes_found
       - **High-Confidence Codes:** high_confidence_codes
       - **Flagged for Review:** flagged_codes
@@ -795,7 +656,7 @@ ai_generation_tasks:
 
       ---
 
-      ## ✅ Validation Checklist
+      ## Validation Checklist
       - No real names in descriptions: [Yes/No]
       - Pain points deduplicated: [Yes/No]
       - Usability issues cross-coded: [Yes/No] (usability_issues_count / pain_points_count)
@@ -823,54 +684,195 @@ ai_generation_tasks:
       Output: PARTICIPANT_ID-coded-transcript-analysis.md (lowercase)
       Return ONLY the filename, one line.
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# OUTPUT
+# ═══════════════════════════════════════════════════════════════════════════════
+
 output_template: |
   {{ai_generated.transcript_coding_markdown}}
 
 output_options:
-  filename: "{{ai_generated.transcript_coding_filename}}"
   path: "03-fieldwork/coded-transcript-analysis/"
-    
-  delivery:
-    github:
+  filename: "{{ai_generated.transcript_coding_filename}}"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# METADATA — Privacy, processing, coding, QA, cross-session, notifications
+# ═══════════════════════════════════════════════════════════════════════════════
+
+privacy_protection:
+  pii_scrubbing:
+    enabled: true
+    auto_detect: true
+
+    speaker_label_redaction:
       enabled: true
-      commit_message: "📝 {{auto_detected_participant_id}} coded transcript - {{total_codes_found}} codes"
-      
-    slack:
-      enabled: true
-      message_template: |
-        🤖 **AI Coding Complete** for {{auto_detected_participant_id}}
-        
-        **Study:** {{auto_detected_study_name}} 
-        **Session Date:** {{auto_detected_date}}
-        
-        🔴 {{pain_points_count}} Pain Points
-        🟡 {{opportunities_count}} Opportunities  
-        💡 {{insights_count}} Key Insights
-        ⚠️ {{usability_issues_count}} Usability Issues
-        😊 {{emotions_count}} Emotional Moments
-        
-      actions:
-        - text: "📖 View Coded Analysis"
-          url: "{{github_coded_analysis_url}}"
+      replace_name_labels_with: "Speaker {{number}}"
+      auto_assign_speaker_numbers: true
+
+    patterns_to_redact:
+      names: true
+      email_addresses: true
+      phone_numbers: true
+      ssn: true
+      addresses: true
+      veteran_ids: true
+      case_numbers: true
+      company_names: true
+
+    replacement_strategy:
+      names: "{{auto_detected_participant_id}}"
+      email_addresses: "[EMAIL]"
+      phone_numbers: "[PHONE]"
+      addresses: "[ADDRESS]"
+      company_names: "[COMPANY]"
+      generic: "[REDACTED]"
+
+    confidence_threshold: 0.85
+
+ai_processing:
+  metadata_extraction:
+    auto_detect_participant_id: true
+    auto_detect_session_info: true
+    auto_detect_study_context: true
+
+    extraction_patterns:
+      participant_id:
+        filename_patterns: ["pt001", "participant_1", "p1", "user_01"]
+        content_patterns: ["Participant ID:", "Participant:", "User:"]
+        fallback: "participant_{{timestamp}}"
+
+      session_id:
+        filename_patterns: ["session_1", "s1", "interview_1"]
+        content_patterns: ["Session:", "Interview #", "Meeting ID:"]
+        fallback: "session_{{date}}"
+
+      study_name:
+        folder_context: true
+        filename_patterns: ["housing_study", "va_research"]
+        content_patterns: ["Study:", "Research Project:", "Project:"]
+        fallback: "research_study"
+
+      session_date:
+        filename_date_patterns: true
+        content_patterns: ["Date:", "Session Date:", "Interview Date:"]
+        file_modified_date: true
+        fallback: "{{upload_date}}"
+
+  transcript_cleaning:
+    fix_obvious_errors: true
+    auto_detect_speaker_format: true
+    standardize_speaker_labels: true
+    preserve_timestamps: true
+    remove_excessive_filler: false
+
+    speaker_format_patterns:
+      - pattern: "Interviewer:|Moderator:|Researcher:|Speaker 1:|Speaker1:|S1:"
+        standardize_to: "Speaker 1:"
+      - pattern: "Participant:|User:|Respondent:|Interviewee:|Speaker 2:|Speaker2:|S2:"
+        standardize_to: "Speaker 2:"
+      - pattern: "^[A-Z][a-z]+ [A-Z][a-z]*:"
+        standardize_to: "Speaker {{auto_number}}:"
+        pii_redaction_required: true
+        auto_number_speakers: true
+
+  research_formatting:
+    paragraph_breaks_by_speaker: true
+    consistent_speaker_format: true
+    preserve_emotional_indicators: true
+    maintain_context_cues: true
+
+ai_coding:
+  enabled: true
+
+  coding_categories:
+    pain_points:
+      icon: "🔴"
+      description: "Frustrations, difficulties, problems, barriers"
+      severity_levels: ["Critical", "High", "Medium", "Low"]
+      extract_quotes: true
+
+    opportunities:
+      icon: "🟡"
+      description: "Unmet needs, suggestions, improvement areas"
+      impact_levels: ["High Impact", "Medium Impact", "Quick Win"]
+      extract_quotes: true
+      priority: "high"
+      minimum_required: 2
+
+    insights:
+      icon: "💡"
+      description: "Key behaviors, patterns, revelations, mental models"
+      insight_types: ["User Behavior", "Mental Model", "Workflow", "Preference", "Accessibility Pattern", "Benchmarking", "Abandonment Pattern", "Workaround"]
+      extract_quotes: true
+      priority: "high"
+      minimum_required: 2
+
+    positive_feedback:
+      icon: "🟢"
+      description: "What's working well, successful interactions"
+      extract_quotes: true
+
+    feature_requests:
+      icon: "✨"
+      description: "Explicit requests for new features or changes"
+      priority_levels: ["Must Have", "Should Have", "Nice to Have"]
+      extract_quotes: true
+
+    usability_issues:
+      icon: "⚠️"
+      description: "Interface problems, confusion, interaction failures"
+      severity_levels: ["Blocker", "Major", "Minor"]
+      extract_quotes: true
+      cross_code_from_pain_points: true
+
+    emotions:
+      icon: "😊"
+      description: "Emotional reactions and sentiment"
+      emotion_types: ["Frustrated", "Confused", "Delighted", "Relieved", "Anxious", "Confident", "Satisfied", "Resigned"]
+      extract_quotes: true
+      minimum_required: 2
+
+  coding_confidence:
+    min_confidence: 0.75
+    flag_low_confidence: true
+    human_review_threshold: 0.60
+
+file_processing:
+  supported_formats:
+    text: [".txt", ".md"]
+    documents: [".docx", ".pdf"]
+    subtitles: [".vtt", ".srt"]
+    csv: [".csv"]
+
+  max_file_size: "15MB"
+
+  content_extraction:
+    pdf_ocr: true
+    docx_formatting: true
+    csv_parsing: true
+    subtitle_parsing: true
+    timestamp_preservation: true
+    speaker_diarization_preservation: true
+    filename_analysis: true
 
 quality_assurance:
   content_validation:
     min_content_length: 200
     verify_speaker_labels: true
     check_pii_redaction: true
-    
+
   metadata_validation:
     verify_auto_detection_accuracy: true
     validate_participant_id_format: true
     check_session_id_format: true
     confirm_study_context: true
-    
+
   coding_validation:
     min_codes_expected: 5
     verify_quote_accuracy: true
     check_timestamp_alignment: true
     flag_low_confidence_codes: true
-    
+
     # Enforcement rules
     require_opportunities_minimum: 2
     require_insights_minimum: 2
@@ -878,11 +880,11 @@ quality_assurance:
     require_usability_crosscode: true
     require_pain_point_deduplication: true
     require_participant_context: true
-    
+
     validate_opportunities_are_not_pain_points: true
     validate_insights_reveal_behavior: true
     ensure_usability_overlap_with_pain_points: true
-    
+
   research_readiness:
     verify_participant_id_consistency: true
     check_coding_coverage: true
@@ -894,7 +896,7 @@ cross_session_analysis:
     compare_with_existing_sessions: true
     identify_recurring_themes: true
     flag_new_patterns: true
-    
+
   synthesis_triggers:
     auto_trigger_synthesis: "session_count >= 5"
     weekly_synthesis: true
@@ -903,36 +905,36 @@ cross_session_analysis:
 notifications:
   coding_complete:
     message: |
-      🤖 **AI Coding Complete: {{auto_detected_participant_id}}**
-      
+      **AI Coding Complete: {{auto_detected_participant_id}}**
+
       **{{total_codes_found}} codes identified**
-      
+
       🔴 {{pain_points_count}} Pain Points
       🟡 {{opportunities_count}} Opportunities
       💡 {{insights_count}} Insights
       ⚠️ {{usability_issues_count}} Usability Issues
       😊 {{emotions_count}} Emotional Moments
-      
+
       {% if flagged_codes > 0 %}
-      ⚠️ {{flagged_codes}} codes flagged for review
+      {{flagged_codes}} codes flagged for review
       {% endif %}
-      
+
     actions:
-      - text: "📖 Review Coded Analysis"
+      - text: "Review Coded Analysis"
         url: "{{github_coded_analysis_url}}"
 
 error_handling:
   validation_failure:
     message: "Coding validation failed. Check enforcement rules."
     action: "flag_for_review"
-    
+
   file_too_large:
     message: "File exceeds 15MB limit."
     suggestion: "Split or compress file."
-    
+
   unsupported_format:
     message: "Format not supported. Convert to .txt, .docx, .pdf, or .md"
-    
+
   pii_detection_failed:
     message: "PII redaction incomplete. Manual review required."
     action: "flag_for_manual_review"
@@ -947,18 +949,25 @@ analytics:
   measure_coding_consistency: true
 
 notes: |
+  v2.4 Changes:
+  - Removed llm_config (dead config — model resolved at runtime via langchain.js)
+  - Added name, author fields
+  - Removed decorative emoji from output_template H2 headings
+  - Standardized section dividers
+  - Simplified footer
+
   v2.3 Changes:
   - Moved NO REAL NAMES rule to absolute top of prompt as critical blocker
   - Added violation/correct examples at top for clarity
   - Added reminder in Participant Context output section
   - Added FINAL CHECK BEFORE OUTPUT section
   - Triple-reinforcement of name redaction rule
-  
+
   v2.2 Changes:
   - Added Rule 1B: Never use real names in descriptions - use participant ID only
   - Added PII check to validation checklist
   - Reinforced name redaction in PII section with explicit examples
-  
+
   v2.1 Changes:
   - Added MANDATORY ENFORCEMENT RULES section at top of prompt
   - Added Rule 1: Participant Context is mandatory (not just "Limited")

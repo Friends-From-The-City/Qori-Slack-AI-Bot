@@ -1,11 +1,15 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# PARTICIPANT OUTREACH — Generate professional outreach messages for studies
+# ═══════════════════════════════════════════════════════════════════════════════
+
 id: participant_outreach
 name: run_participant_outreach
-label: 📧 Participant Outreach
-version: v4.0
+label: "📧 Participant Outreach"
+version: "v4.1"
 
 description: |
   Generate professional participant outreach messages for research studies.
-  
+
   v4.0 Changes:
   - Switched to Claude Sonnet
   - Simplified inputs — auto-fills researcher info from study
@@ -15,20 +19,14 @@ description: |
 
 author: Qori R&D
 created: 2025-07-07
-last_updated: 2026-01-29
-
-# LLM Configuration - Claude Sonnet
-llm_config:
-  model: "claude-sonnet-4-20250514"
-  temperature: 0.3
-  max_tokens: 2000
+last_updated: 2026-04-29
 
 input_type: structured
 input_processing: dynamic_conditional
 
-# =============================================================================
-# INPUT VARIABLES - Minimal per message type
-# =============================================================================
+# ═══════════════════════════════════════════════════════════════════════════════
+# INPUT VARIABLES — Minimal per message type
+# ═══════════════════════════════════════════════════════════════════════════════
 
 input_variables:
   # From Step 1 (Participant Outreach selector)
@@ -36,7 +34,7 @@ input_variables:
     type: select
     required: true
     description: "Study folder name"
-    
+
   - name: message_type
     type: select
     required: true
@@ -54,7 +52,7 @@ input_variables:
     required: true
     placeholder: "e.g., P001 or Alex M."
     hint: "Use ID or alias — no full names for privacy"
-    
+
   # Initial recruitment only
   - name: signup_instructions
     type: textarea
@@ -62,30 +60,30 @@ input_variables:
     placeholder: "e.g., https://calendly.com/research-team or Reply to this email"
     hint: "Include screener link, Calendly, or instructions"
     used_by: [initial_recruitment]
-    
+
   # Session-related (confirmation, reminder)
   - name: session_date
     type: date
     required: false
     used_by: [session_confirmation, session_reminder]
-    
+
   - name: session_time
     type: time
     required: false
     used_by: [session_confirmation, session_reminder]
-    
+
   - name: meeting_link
     type: url
     required: false
     placeholder: "e.g., https://va-gov.zoom.us/j/123456789"
     used_by: [session_confirmation, session_reminder]
-    
+
   # Rescheduling only
   - name: original_date
     type: date
     required: false
     used_by: [rescheduling_request]
-    
+
   - name: new_options
     type: textarea
     required: false
@@ -93,51 +91,51 @@ input_variables:
     hint: "Provide 2-3 alternative times"
     used_by: [rescheduling_request]
 
-# =============================================================================
+# ═══════════════════════════════════════════════════════════════════════════════
 # AUTO-FILLED FROM STUDY (backend pulls these)
-# =============================================================================
+# ═══════════════════════════════════════════════════════════════════════════════
 
 auto_fill_variables:
   - name: study_name
     source: "study.name"
-    
+
   - name: study_description
     source: "study.research_brief.description"
-    
+
   - name: researcher_name
     source: "study.researcher.name"
-    
+
   - name: researcher_title
     source: "study.researcher.title"
-    
+
   - name: researcher_email
     source: "study.researcher.email"
-    
+
   - name: incentive_amount
     source: "study.settings.incentive"
-    
+
   - name: session_duration
     source: "study.settings.session_duration"
     default: "45 minutes"
 
-# =============================================================================
+# ═══════════════════════════════════════════════════════════════════════════════
 # AI GENERATION TASKS
-# =============================================================================
+# ═══════════════════════════════════════════════════════════════════════════════
 
 ai_generation_tasks:
   - task_id: "subject_line"
     prompt: |
       Create a clear, professional email subject line.
-      
+
       Message Type: {{message_type}}
       Study: {{study_name}}
       Participant: {{participant_id}}
-      
+
       Requirements:
       - Keep under 60 characters
       - Be specific and action-oriented
       - Friendly but professional tone
-      
+
       Examples by type:
       - initial_recruitment: "Research Opportunity: Help Improve VA Services"
       - session_confirmation: "Confirmed: Your Research Session on {{session_date}}"
@@ -145,26 +143,26 @@ ai_generation_tasks:
       - rescheduling_request: "Need to Reschedule: {{study_name}} Session"
       - follow_up: "Following Up: {{study_name}} Research Opportunity"
       - thank_you: "Thank You for Participating in {{study_name}}"
-      
+
       Return only the subject line.
     output_variable: "subject_line"
 
   - task_id: "email_body"
     prompt: |
       Generate a professional, warm email for {{message_type}}.
-      
+
       WRITING RULES:
       - Simple, direct language (8th-grade reading level)
       - Short paragraphs (2-3 sentences max)
       - Active voice, present tense
       - Warm and human, not robotic
       - Friendly tone throughout
-      
+
       LANGUAGE GUIDE:
       - Instead of "This study seeks to..." → "This study will help us..."
       - Instead of "Your input would facilitate..." → "Your input will help us..."
       - Instead of "At your earliest convenience" → "When you have a moment"
-      
+
       CONTEXT:
       - Message Type: {{message_type}}
       - Participant: {{participant_id}}
@@ -174,12 +172,12 @@ ai_generation_tasks:
       - Researcher Email: {{researcher_email}}
       - Incentive: {{incentive_amount}}
       - Session Duration: {{session_duration}}
-      
+
       {% if message_type == "initial_recruitment" %}
       INITIAL RECRUITMENT EMAIL
-      
+
       Signup Instructions: {{signup_instructions}}
-      
+
       Structure:
       1. Warm greeting to {{participant_id}}
       2. Brief intro of who you are
@@ -190,14 +188,14 @@ ai_generation_tasks:
       7. Emphasize voluntary participation
       8. Sign-off with researcher contact info
       {% endif %}
-      
+
       {% if message_type == "session_confirmation" %}
       SESSION CONFIRMATION EMAIL
-      
+
       Session Date: {{session_date}}
       Session Time: {{session_time}}
       Meeting Link: {{meeting_link}}
-      
+
       Structure:
       1. Warm greeting confirming the session
       2. Session details box (date, time, duration, link)
@@ -206,14 +204,14 @@ ai_generation_tasks:
       5. Contact info if they need to reschedule
       6. Thank them for participating
       {% endif %}
-      
+
       {% if message_type == "session_reminder" %}
       SESSION REMINDER EMAIL (24-48 hours before)
-      
+
       Session Date: {{session_date}}
       Session Time: {{session_time}}
       Meeting Link: {{meeting_link}}
-      
+
       Structure:
       1. Friendly reminder about tomorrow's/upcoming session
       2. Session details box (date, time, link)
@@ -221,13 +219,13 @@ ai_generation_tasks:
       4. Contact info if anything comes up
       5. Looking forward to speaking with them
       {% endif %}
-      
+
       {% if message_type == "rescheduling_request" %}
       RESCHEDULING REQUEST EMAIL
-      
+
       Original Date: {{original_date}}
       New Options: {{new_options}}
-      
+
       Structure:
       1. Apologetic opening about needing to reschedule
       2. Mention original date if provided
@@ -236,10 +234,10 @@ ai_generation_tasks:
       5. Thank them for understanding
       6. Contact info
       {% endif %}
-      
+
       {% if message_type == "follow_up" %}
       FOLLOW-UP EMAIL (gentle, non-pushy)
-      
+
       Structure:
       1. Friendly check-in
       2. Brief reminder about the study opportunity
@@ -248,10 +246,10 @@ ai_generation_tasks:
       5. Clear opt-out: "No pressure — just let me know if you're not interested"
       6. Contact info
       {% endif %}
-      
+
       {% if message_type == "thank_you" %}
       THANK YOU EMAIL (post-session)
-      
+
       Structure:
       1. Warm thank you for their time
       2. Acknowledge the value of their input
@@ -260,49 +258,35 @@ ai_generation_tasks:
       5. Offer to share findings when available
       6. Final appreciation
       {% endif %}
-      
+
       Generate the complete email body (no subject line).
     output_variable: "email_body"
 
-# =============================================================================
+# ═══════════════════════════════════════════════════════════════════════════════
 # OUTPUT
-# =============================================================================
+# ═══════════════════════════════════════════════════════════════════════════════
 
 output_template: |
-  📧 **{{message_type}} Generated**
-  
+  **{{message_type}} Generated**
+
   **To:** {{participant_id}}
   **Subject:** {{ai_generated.subject_line}}
-  
+
   ---
-  
+
   {{ai_generated.email_body}}
-  
+
   ---
-  
-  💾 Saved to `02-participants/outreach/{{participant_id}}_{{message_type}}_{{current_date}}.md`
+
+  *Saved to 02-participants/outreach/{{participant_id}}_{{message_type}}_{{current_date}}.md*
 
 output_options:
   path: "02-participants/outreach/"
   filename: "{{participant_id}}_{{message_type}}_{{current_date}}.md"
-  
-  delivery:
-    slack:
-      enabled: true
-      actions:
-        - text: "📋 Copy Email"
-          action: "copy_to_clipboard"
-          content: "{{ai_generated.email_body}}"
-        - text: "✏️ Edit & Regenerate"
-          action: "open_modal"
-          modal: "outreach_{{message_type}}_modal"
-    github:
-      enabled: true
-      commit_message: "Add {{message_type}} message for {{participant_id}}"
 
-# =============================================================================
-# SLACK UI - Minimal modals per message type
-# =============================================================================
+# ═══════════════════════════════════════════════════════════════════════════════
+# METADATA — Slack UI, message types, delivery
+# ═══════════════════════════════════════════════════════════════════════════════
 
 slack_ui:
   step_1:
@@ -312,7 +296,7 @@ slack_ui:
     fields:
       - selected_study
       - message_type
-      
+
   step_2_modals:
     initial_recruitment:
       modal_id: "outreach_initial_recruitment_modal"
@@ -322,7 +306,7 @@ slack_ui:
       fields:
         - participant_id
         - signup_instructions
-        
+
     session_confirmation:
       modal_id: "outreach_session_confirmation_modal"
       title: "Session confirmation"
@@ -333,7 +317,7 @@ slack_ui:
         - session_date
         - session_time
         - meeting_link
-        
+
     session_reminder:
       modal_id: "outreach_session_reminder_modal"
       title: "Session reminder"
@@ -344,7 +328,7 @@ slack_ui:
         - session_date
         - session_time
         - meeting_link
-        
+
     rescheduling_request:
       modal_id: "outreach_rescheduling_modal"
       title: "Rescheduling request"
@@ -354,7 +338,7 @@ slack_ui:
         - participant_id
         - original_date
         - new_options
-        
+
     follow_up:
       modal_id: "outreach_follow_up_modal"
       title: "Follow-up"
@@ -362,7 +346,7 @@ slack_ui:
       close_label: "Back"
       fields:
         - participant_id
-        
+
     thank_you:
       modal_id: "outreach_thank_you_modal"
       title: "Thank you"
@@ -371,7 +355,6 @@ slack_ui:
       fields:
         - participant_id
 
-# Message type metadata
 message_types:
   initial_recruitment:
     icon: "📧"
