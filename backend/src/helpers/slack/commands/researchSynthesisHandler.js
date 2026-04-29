@@ -97,22 +97,24 @@ const handleStudySelectionChange = async ({ ack, body, client }) => {
       console.error("❌ Error fetching session summaries:", error);
     }
 
-    // Fetch transcripts (both transcript=true and transcript=false) from study notes
+    // Fetch only actual transcripts (transcript=true) from study notes
     let transcripts = [];
     try {
-      // Get all study notes (both transcript and non-transcript)
       const allStudyNotes = await studyNotesService.getStudyNotesByStudyId(parseInt(studyId));
       console.log(`✅ Fetched ${allStudyNotes.length} study notes`);
-      
-      // Map all notes as transcripts (both transcript=true and transcript=false)
-      transcripts = allStudyNotes.map(note => ({
-        id: note.id,
-        filename: note.filename,
-        transcript: note.transcript || false,
-        file_path: note.file_path,
-        file_url: note.file_url,
-      }));
-      console.log(`✅ Formatted ${transcripts.length} transcripts`);
+
+      // Only include notes flagged as transcripts — session notes already
+      // appear in the Session Summaries section via sessionSummaryService
+      transcripts = allStudyNotes
+        .filter(note => note.transcript === true)
+        .map(note => ({
+          id: note.id,
+          filename: note.filename,
+          transcript: true,
+          file_path: note.file_path,
+          file_url: note.file_url,
+        }));
+      console.log(`✅ Formatted ${transcripts.length} transcripts (filtered from ${allStudyNotes.length} total notes)`);
     } catch (error) {
       console.error("❌ Error fetching transcripts:", error);
     }

@@ -62,7 +62,7 @@ const researchSynthesisModal = (
     };
   });
 
-  // Format transcripts as checkboxes (both transcript=true and transcript=false)
+  // Format transcripts as checkboxes (only actual transcripts, not session notes)
   const transcriptOptions = transcripts.map((transcript, index) => {
     const fileName = transcript.filename;
     
