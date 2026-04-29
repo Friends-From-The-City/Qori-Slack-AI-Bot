@@ -3,7 +3,7 @@ const { getStudiesByUser, getResearchStudyWithRoles } = require("../../../servic
 const { studyNotesService } = require("../../../services");
 const sessionSummaryService = require("../../../services/session-summary.service");
 const { getStudyStakeholderGuide } = require("../../../services/study-status.service");
-const { getConfigRepo, fetchFileFromRepoByPath, fetchFileFromRepo } = require("../../../helpers/github");
+const { getConfigRepo, fetchFileFromRepoByPath, fetchFileFromRepo, readFolderContents } = require("../../../helpers/github");
 const { processYamlTemplate, extractAiResponsesFromYaml } = require("../../../helpers/yamlProcessor");
 
 // Command handler to open the research synthesis modal
@@ -129,6 +129,86 @@ const handleStudySelectionChange = async ({ ack, body, client }) => {
       }
     } catch (error) {
       console.error("❌ Error fetching stakeholder guides:", error);
+    }
+
+    // Validate DB records against GitHub — prune any whose files were deleted
+    try {
+      const repo = process.env.GITHUB_REPO;
+      // Collect all unique parent folders from file paths
+      const allRecords = [
+        ...sessionSummaries.map(s => ({ record: s, type: 'summary', path: s.file_path })),
+        ...transcripts.map(t => ({ record: t, type: 'transcript', path: t.file_path })),
+      ];
+      const folderMap = {};
+      for (const r of allRecords) {
+        if (!r.path) continue;
+        const folder = r.path.substring(0, r.path.lastIndexOf('/'));
+        if (!folderMap[folder]) folderMap[folder] = [];
+        folderMap[folder].push(r);
+      }
+
+      // List each folder once and check which files exist
+      for (const [folder, records] of Object.entries(folderMap)) {
+        try {
+          const githubFiles = await readFolderContents(folder, repo);
+          const githubFileNames = new Set(githubFiles.map(f => f.name));
+
+          for (const r of records) {
+            const fileName = r.path.split('/').pop();
+            if (!githubFileNames.has(fileName)) {
+              console.log(`🗑️ Pruning stale ${r.type} record: ${fileName} (not found in GitHub)`);
+              if (r.type === 'summary') {
+                await sessionSummaryService.deleteSessionSummary(r.record.id);
+                sessionSummaries = sessionSummaries.filter(s => s.id !== r.record.id);
+              } else if (r.type === 'transcript') {
+                await studyNotesService.deleteStudyNote(r.record.id);
+                transcripts = transcripts.filter(t => t.id !== r.record.id);
+              }
+            }
+          }
+        } catch (folderError) {
+          // Folder itself doesn't exist in GitHub — prune all records from it
+          if (folderError.status === 404) {
+            console.log(`🗑️ Folder not found in GitHub: ${folder}, pruning ${records.length} records`);
+            for (const r of records) {
+              if (r.type === 'summary') {
+                await sessionSummaryService.deleteSessionSummary(r.record.id);
+                sessionSummaries = sessionSummaries.filter(s => s.id !== r.record.id);
+              } else if (r.type === 'transcript') {
+                await studyNotesService.deleteStudyNote(r.record.id);
+                transcripts = transcripts.filter(t => t.id !== r.record.id);
+              }
+            }
+          } else {
+            console.error(`⚠️ Error checking GitHub folder ${folder}:`, folderError.message);
+          }
+        }
+      }
+
+      // Validate stakeholder records (check by file URL)
+      for (const guide of [...stakeholderGuides]) {
+        if (!guide.path) continue;
+        try {
+          // Extract GitHub path from the URL
+          const urlPath = guide.path.replace(/https:\/\/github\.com\/[^/]+\/[^/]+\/(blob|tree)\/main\//, '');
+          const folder = decodeURIComponent(urlPath.substring(0, urlPath.lastIndexOf('/')));
+          const fileName = decodeURIComponent(urlPath.split('/').pop());
+          const githubFiles = await readFolderContents(folder, repo);
+          if (!githubFiles.some(f => f.name === fileName)) {
+            console.log(`🗑️ Pruning stale stakeholder record: ${fileName}`);
+            stakeholderGuides = stakeholderGuides.filter(g => g.id !== guide.id);
+          }
+        } catch (err) {
+          if (err.status === 404) {
+            console.log(`🗑️ Stakeholder file folder not found, pruning: ${guide.file_name}`);
+            stakeholderGuides = stakeholderGuides.filter(g => g.id !== guide.id);
+          }
+        }
+      }
+
+      console.log(`✅ GitHub validation complete: ${sessionSummaries.length} summaries, ${transcripts.length} transcripts, ${stakeholderGuides.length} stakeholder files`);
+    } catch (validationError) {
+      console.error("⚠️ GitHub validation failed (continuing with unvalidated data):", validationError.message);
     }
 
     // Update modal again with loaded files (button will still be visible)
