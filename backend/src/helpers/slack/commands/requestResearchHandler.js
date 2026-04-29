@@ -80,6 +80,7 @@ const handleRequestResearchSubmission = async ({ ack, body, view, client }) => {
     deadline: extract('deadline_block', 'deadline_picker'),
     existing_knowledge: extract('existing_knowledge_block', 'existing_knowledge_input'),
     prepared_by: extract('submitted_by_block', 'submitted_by_input'),
+    requestor_name: extract('submitted_by_block', 'submitted_by_input'),
     requestedBy: userId,
     channelId: channelId,
     // Legacy fields for backward compatibility
@@ -99,13 +100,14 @@ const handleRequestResearchSubmission = async ({ ack, body, view, client }) => {
     try {
       const yamlFile = await fetchFileFromRepo(getConfigRepo(), "beta-test/YAML Templates", "research_request.yaml");
       
-      // Process YAML template - file will be created in tester_content folder
-      // Path and filename come from the YAML file configuration
+      // Process YAML template — write to content repo, not config repo
+      const sanitizedTitle = (requestData.project_title || 'research-request')
+        .toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
       const renderedYaml = await processYamlTemplate(
         yamlFile.content,
         requestData,
-        "beta-test/tester_content", // Base folder
-        "" // Empty extraFolder since path comes from YAML
+        sanitizedTitle,
+        "research-requests"
       );
       
       requestUrl = renderedYaml.result.url;

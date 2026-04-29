@@ -13,13 +13,13 @@ Running log of small bugs, UX rough edges, and cleanup tasks discovered during a
 |---|---|---|
 | /qori-start | ✅ Works | Full end-to-end verified (2026-04-23) |
 | /qori-repo | ⚠️ Works with rough edge | See "Open issues" below |
-| /qori-plan | 🔴 Broken | Plan/guide don't generate; brief saves to wrong repo |
+| /qori-plan | ✅ Works | Plan generates with correct dates (2026-04-29); brief repo issue still open |
 | /qori-participants | ❓ Not yet tested | |
 | /qori-outreach | ❓ Not yet tested | |
 | /qori-observe | ❓ Not yet tested | |
 | /qori-notes | ❓ Not yet tested | |
 | /qori-analyze | ❓ Not yet tested | |
-| /qori-synthesis | ❓ Not yet tested | |
+| /qori-synthesis | ✅ Works | All sub-types generating (2026-04-29); stakeholder file picker fixed |
 | /qori-report | ❓ Not yet tested | |
 | /qori-update-participant | ❓ Not yet tested | |
 | /qori-delete | ❓ Not yet tested | |
@@ -89,7 +89,32 @@ Discovered during first full end-to-end alpha test on Railway. ~95% of flows wor
 
 ## Fixed
 
-(Move items here with the commit SHA when resolved.)
+### ✅ Usability Issues synthesis hang (2026-04-29, c129aac2 + c1db9ae8)
+Consolidated 6 chained AI tasks into 1 comprehensive task (v3.0). The original 6-task architecture used `{{ai_generated.*}}` cross-references between tasks, but `executeAiGenerationTasks` runs all tasks via `Promise.all` — tasks 2-6 got empty context. Also fixed `slack_output_template` → `output_template` key name and `study_folder` → `selected_study` variable name.
+
+### ✅ current_date injection across 6+ templates (2026-04-29, c1db9ae8)
+`yamlProcessor.js` now injects `current_date` into AI prompt `inputValues`, not just the Handlebars output context. Fixes empty dates in research_plan, service_blueprint, stakeholder_synthesis, stakeholder_interview_guide, survey_synthesis, journey_mapping.
+
+### ✅ Research plan timeline uses user-selected start_date (2026-04-29, aae4fde5)
+Timeline prompt was using `{{current_date}}` and `{{timeline_date}}` (never provided) instead of `{{start_date}}` from the modal's date picker. Now starts from the user's selected date.
+
+### ✅ Stakeholder file discovery in synthesis modal (2026-04-29, fd983f37 + c129aac2)
+`addStudyStatus()` calls for stakeholder guides and synthesis docs now pass explicit `file_name` containing "stakeholder" so `getStudyStakeholderGuide` (`ILIKE '%stakeholder%'`) can find them. Previously `file_name` was NULL. Also added `blueprint_scope: 'end_to_end'` default for service blueprint.
+
+### ✅ Service blueprint output path (2026-04-29, 00d67ffe)
+Fixed doubled `primary-research/` prefix in service_blueprint.yaml output path. Now writes to `04-analysis/service-blueprint/`.
+
+### ✅ Synthesis modal: duplicate files and wrong labels (2026-04-29, 22f2c17b + 6840fca6)
+Transcripts section was showing ALL study notes (including session notes that already appear in Session Summaries). Now filters to `transcript === true` only. Renamed sections: "Transcripts" → "Session Notes & Transcripts", "Stakeholder Interviews" → "Stakeholder Notes & Synthesis". Removed "Additional transcripts" overflow section.
+
+### ✅ Duplicate session notes prevention (2026-04-29, c86f3c67)
+`createStudyNote` now checks for existing record with same `filename` + `study_id` before inserting. Updates instead of creating duplicate. Handles double-submit from slow modal responses. Cleaned up 3 existing duplicate records.
+
+### ✅ Truncation fix — ANTHROPIC_MAX_TOKENS bumped to 8192 (2026-04-29)
+`langchain.js` default was 3000 tokens. Set `ANTHROPIC_MAX_TOKENS=8192` in Railway env vars. YAML `llm_config.max_tokens` values are still dead config (never read by backend).
+
+### ✅ GitHub file sync for synthesis modal (2026-04-29, cc5b6c74)
+When the synthesis modal loads, it now validates DB records against what actually exists in GitHub. Files deleted from GitHub are automatically pruned from the DB so they don't show as stale entries in the modal.
 
 ### ✅ Railway migration (2026-04-23 – 2026-04-24)
 Railway deployment complete. Backend, Postgres, and Redis all running. 22 migrations applied. End-to-end Slack flow verified.

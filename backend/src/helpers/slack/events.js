@@ -1754,8 +1754,10 @@ slackApp.view('research_brief_modal', async ({ ack, body, view, client }) => {
 
   // Handle brief creation from request (no study exists yet)
   if (isFromRequest) {
-    // Use default path for requests
-    renderedYaml = await processYamlTemplate(file.content, data, "beta-test/tester_content/", "");
+    // Derive a content-repo path from the project title (no study object exists yet)
+    const sanitizedTitle = (data.project_title || 'research-request')
+      .toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+    renderedYaml = await processYamlTemplate(file.content, data, sanitizedTitle, "01-planning");
     url = renderedYaml.result.url;
     displayStudyName = data.project_title || 'Research Request';
   } else {
@@ -2529,6 +2531,7 @@ slackApp.view('upload_stakeholder_notes_modal', async ({ ack, view, body, client
 
     const stakeholderNotesData = {
       selected_study: studyName,
+      study_name: studyName,
       combined_file_content: formattedDocumentContent,
     };
 
