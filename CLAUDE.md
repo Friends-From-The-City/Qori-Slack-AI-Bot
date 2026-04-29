@@ -15,11 +15,11 @@ Qori is an AI-powered research operations platform for VA (Veterans Affairs) UX 
 - **Backend (Node.js):** `backend/` — Express + Slack Bolt app. Handles slash commands, modal submissions, LLM orchestration via LangChain, and GitHub document storage via Octokit. Uses Sequelize (PostgreSQL) + Redis/Bull for queuing.
 - **Sam Agent (Python):** `sam/` — Support assistant using the Anthropic SDK directly. Has its own Slack handler (`SamSlackHandler`) but is **not finished or functional** — it was started as a help desk agent but never completed.
 
-**Config-driven AI pipeline:** The intelligence layer lives in YAML files, not in application code. Each YAML defines input variables, chained `ai_generation_tasks` (sequential LLM calls), output templates (Handlebars-style `{{ai_generated.*}}`), and delivery options. **Important:** at runtime the backend fetches YAML templates from the GitHub repo (e.g., `beta-test/YAML Templates/`), not from the local `config/prompts/` directory. The local copies appear to be reference/development versions.
+**Config-driven AI pipeline:** The intelligence layer lives in YAML files, not in application code. Each YAML defines input variables, chained `ai_generation_tasks` (sequential LLM calls), output templates (Handlebars-style `{{ai_generated.*}}`), and delivery options. At runtime the backend fetches YAML templates from the GitHub config repo at path `config/prompts/` (controlled by the `YAML_TEMPLATE_PATH` constant in `github.js`).
 
 **Two-repo GitHub architecture:** The backend uses two GitHub repos, controlled by env vars:
 - `GITHUB_REPO` — the **content repo** where studies are created, documents are written, and issues are filed (e.g., `qori-studies`).
-- `GITHUB_CONFIG_REPO` — the **config repo** where templates (`beta-test/templates/`) and YAML prompts (`beta-test/YAML Templates/`) are read from (e.g., `qori-slack`). If not set, falls back to `GITHUB_REPO` for backward compatibility.
+- `GITHUB_CONFIG_REPO` — the **config repo** where templates (`config/templates/`) and YAML prompts (`config/prompts/`) are read from (e.g., `qori-slack`). If not set, falls back to `GITHUB_REPO` for backward compatibility.
 
 In code, config reads go through `getConfigRepo()` (defined in `github.js`), which returns `GITHUB_CONFIG_REPO || GITHUB_REPO`. Content writes use `GITHUB_REPO` directly.
 
@@ -82,7 +82,9 @@ docker-compose up    # Starts app (3000), postgres (5432), redis (6379)
 - `sam/` — Unfinished Python support agent with its own config, prompts, and escalation rules
 - `study-template/` — Canonical folder structure copied into GitHub for each new study (00-brief through 07-implementation)
 - `docs/learn/` — Static HTML/Tailwind GitHub Pages documentation site
-- `beta-test/` — **Active test data. DO NOT modify without asking.**
+- `config/prompts/` — YAML workflow configs (23 files). Runtime source of truth, fetched from GitHub by the backend.
+- `config/templates/` — Study folder scaffold (markdown READMEs) copied into GitHub for each new study.
+- `config/` — Also contains `command-mapping.json` (not used at runtime) and `sam-config.yaml` (Sam agent, unfinished).
 
 ## Important Conventions
 
@@ -121,5 +123,23 @@ These are from a codebase audit. Tanzeel (original backend developer) is no long
 2. **ChromaDB: dead dependency.** Listed in `package.json` but never imported in any source file. Safe to remove.
 3. **Sam Python dependencies:** `sam/requirements.txt` was generated from imports in `sam-agent.py` (anthropic, slack_sdk, pyyaml). There may be missing transitive dependencies or version constraints that aren't captured.
 4. **No CI/CD pipeline exists.** Deployment docs in `docs/internal/deployment.md` describe scripts and processes that don't appear to be implemented yet.
-5. **YAML templates fetched from GitHub, not local `config/prompts/`.** The backend fetches prompt YAMLs from the GitHub repo at runtime (e.g., `beta-test/YAML Templates/research_plan.yaml`), not from the local `config/prompts/` directory. The original intent was for `config/prompts/` to be the source of truth for easy updates — this needs to be reconciled.
+5. **YAML templates fetched from GitHub at `config/prompts/`.** ~~Reconciled (2026-04-29).~~ The backend now fetches from `config/prompts/` via the `YAML_TEMPLATE_PATH` constant. The old `beta-test/YAML Templates/` path has been deleted. `config/prompts/` is both the local and GitHub source of truth.
 6. **`command-mapping.json` is not used at runtime.** The backend never loads this file. Slash command routing is handled directly in `events.js`.
+
+## Architecture Decisions
+
+### YAML Template Location (decided April 29, 2026)
+
+Templates migrated from `beta-test/YAML Templates/` to `config/prompts/`. Path abstracted to `YAML_TEMPLATE_PATH` constant in `github.js`. The `beta-test/` directory has been deleted entirely — it was a legacy testing dump containing YAML templates, stale modal drafts, and test data.
+
+### Modals Architecture (decided April 29, 2026)
+
+**Decision:** Modal definitions live as JS in `backend/src/helpers/slack/ui/` as the single source of truth. The original `config/modals/` JSON folder has been deleted as it was never loaded at runtime and had diverged from the working JS modals (incompatible callback_ids, different action_ids, missing blocks).
+
+**Reasoning:** ~35% of modals are dynamic factory functions that build structures from DB queries and conditional logic — these resist pure JSON representation without building a custom templating runtime. The remaining ~65% are static or semi-static objects that could theoretically live as JSON, but the cost of building a JSON loader + hybrid template system is not justified at current team scale.
+
+**Sam agent** (originally envisioned to let non-developers edit modals): deferred. Claude Code currently serves this role effectively. Revisit if/when there's clear demand for non-developer self-service modal editing. If revisiting: start with hybrid JSON migration of the 19 static modals before considering full Sam infrastructure. See `docs/modals-migration-plan.md` for the analysis.
+
+### Study Folder Scaffold (decided April 29, 2026)
+
+The study folder scaffold (READMEs and directory structure copied into GitHub for each new study) lives at `config/templates/`. The old `study-template/` directory was a duplicate and has been deleted. `createStudyHandler.js` reads from `config/templates/` via `readFolders()`.

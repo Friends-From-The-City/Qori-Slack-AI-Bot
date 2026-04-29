@@ -1,0 +1,1 @@
+- [ask-study RAG disabled](project_ask_study_rag.md) — /ask-study and /qori-ask need Supabase+OpenAI RAG pipeline, disabled for alpha
