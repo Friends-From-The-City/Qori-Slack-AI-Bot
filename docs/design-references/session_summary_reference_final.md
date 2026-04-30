@@ -130,7 +130,7 @@ Every screen requires additional swipes to navigate past headers, banners, and n
 
 **Tasks attempted** — Schedule appointment, refill prescription, send secure message, locate benefits information, update contact information
 
-**Sources analyzed** — Coded transcript (primary source for verbatim quotes and behavioral data) and 3 observer notes files
+**Sources analyzed** — Raw session notes or transcript (primary source for verbatim quotes and behavioral data) and 3 observer notes files
 
 **Analysis approach** — Pain points and quotes are direct extractions from the coded transcript; opportunities and insights are reasoned inferences from behavioral patterns observed during the session.
 
@@ -152,9 +152,8 @@ Every screen requires additional swipes to navigate past headers, banners, and n
 
 | Artifact | Location | Status |
 |----------|----------|--------|
-| PT-001 coded transcript | [03-fieldwork/coded-transcript-analysis/pt-001-coded-transcript-analysis.md](../../03-fieldwork/coded-transcript-analysis/pt-001-coded-transcript-analysis.md) | Complete |
+| PT-001 session notes / transcript | [03-fieldwork/session-notes/pt-001-session-notes.md](../../03-fieldwork/session-notes/pt-001-session-notes.md) | Complete |
 | PT-001 observer notes | [03-fieldwork/observer-notes/pt-001-observer-notes.md](../../03-fieldwork/observer-notes/pt-001-observer-notes.md) | Complete |
-| PT-001 session notes | [03-fieldwork/session-notes/pt-001-session-notes.md](../../03-fieldwork/session-notes/pt-001-session-notes.md) | Complete |
 | Discussion guide | [01-planning/discussion-guide.md](../../01-planning/discussion-guide.md) | Complete |
 | Research plan | [01-planning/research-plan.md](../../01-planning/research-plan.md) | Complete |
 
@@ -165,7 +164,7 @@ Every screen requires additional swipes to navigate past headers, banners, and n
 
 | Criterion | Verified |
 |-----------|:--------:|
-| All quotes verbatim from coded transcript | ✓ |
+| All quotes verbatim from session notes / transcript | ✓ |
 | Pain points grounded in specific observed behaviors | ✓ |
 | Inferences (insights, opportunities) traced to evidence | ✓ |
 | Confidence levels declared per pain point | ✓ |
