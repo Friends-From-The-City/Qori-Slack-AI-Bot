@@ -4,7 +4,7 @@
 id: journey_mapping
 name: run_journey_mapping
 label: 🧭 Journey Mapping
-version: "v3.11"
+version: "v3.12"
 
 description: >
   Turn raw user research into a clear, step-by-step journey map. Maps key stages of the
@@ -13,7 +13,7 @@ description: >
 
 author: Qori R&D
 created: 2025-06-30
-last_updated: 2026-04-29
+last_updated: 2026-04-30
 
 # ═══════════════════════════════════════════════════════════
 # CONFIGURATION
@@ -53,7 +53,7 @@ ai_generation_tasks:
 
       Report on file coverage, content quality, enhancement impact, and analysis confidence for journey mapping.
 
-  # Main journey mapping task - CONSOLIDATED
+  # Main journey mapping task
   - task_id: "journey_map_complete"
     prompt: |
       You are creating a journey map from research data.
@@ -61,7 +61,7 @@ ai_generation_tasks:
       IMPORTANT: Generate the COMPLETE output following the format below. Do not stop early.
 
       ============================================================
-      🚨 CRITICAL RULES - READ THEN GENERATE FULL OUTPUT 🚨
+      CRITICAL RULES - READ THEN GENERATE FULL OUTPUT
       ============================================================
 
       RULE 1: NO HALLUCINATION - EXTRACT ONLY
@@ -73,7 +73,7 @@ ai_generation_tasks:
       RULE 2: NO REAL PARTICIPANT NAMES
       - Use participant IDs (PT-001, PT-002, etc.) or "the participant"
       - NEVER use names like "John", "Sarah", "David Chen"
-      - This applies everywhere: persona, descriptions, all text
+      - This applies everywhere: descriptions, quotes, all text
 
       RULE 3: VA GOVERNMENT CONTEXT ONLY
       This is a VA (Department of Veterans Affairs) research study.
@@ -96,17 +96,12 @@ ai_generation_tasks:
 
       GENERIC (DO NOT WRITE):
       ❌ "Success looks like: Clear navigation to view claim status accurately"
-      ❌ "Success looks like: Better user experience"
-      ❌ "Success looks like: Improved visibility of key elements"
       ❌ "Opportunity: Enhance the visibility of the Edit button"
       ❌ "Opportunity: Streamline the process"
 
       SPECIFIC (WRITE LIKE THIS):
       ✅ "Success looks like: User finds claim status within 2 taps from home screen"
-      ✅ "Success looks like: Loading completes in under 3 seconds with progress indicator"
-      ✅ "Success looks like: Edit button is visible without scrolling, uses standard pencil icon"
       ✅ "Opportunity: Move Edit button from overflow menu to inline with profile header"
-      ✅ "Opportunity: Add skeleton loading animation during API calls"
 
       Ask yourself: "Could a developer implement this tomorrow?" If no, it's too vague.
 
@@ -116,11 +111,6 @@ ai_generation_tasks:
       If input contains PT-001, PT-002, PT-003:
       ❌ WRONG: Every citation is from PT-003
       ✅ RIGHT: Mix of PT-001, PT-002, PT-003 citations throughout
-
-      Before finalizing, check:
-      - Are multiple participants cited in Pain Points?
-      - Are multiple participants cited in Emotions?
-      - Did you pull insights from ALL available transcripts?
 
       If all your citations are from one participant, GO BACK and find supporting evidence from the others.
 
@@ -133,6 +123,15 @@ ai_generation_tasks:
       - Owners are VA teams (not Marketing/Sales)
 
       ============================================================
+      OUTPUT PROCESS
+      ============================================================
+
+      STEP 1: Generate ALL journey stages first (## 01 through ## 05 or 06).
+      STEP 2: THEN build the Summary section from the stage findings.
+      The "Critical issues" count for each stage in the Summary table
+      MUST match the actual pain points listed under that stage.
+
+      ============================================================
       INPUT DATA
       ============================================================
 
@@ -142,101 +141,157 @@ ai_generation_tasks:
       **Quality Assessment:** {{ai_generated.file_discovery_summary}}
 
       ============================================================
-      NOW GENERATE THE COMPLETE OUTPUT BELOW
+      OUTPUT FORMAT
       ============================================================
 
-      # 🧭 Journey Map: [INSERT ACTUAL STUDY NAME FROM INPUT]
+      # Journey Map: [DESCRIPTIVE TITLE — infer from the research data, e.g., "VA Mobile App Navigation" or "Benefits Claims Processing". If a descriptive title cannot be confidently inferred from the data, use the study slug.]
 
-      > **[X] stages** | **[Y] pain points** | **[Z] participants**
-
-      ---
-
-      ## Overview
-
-      | Priority | Pain Point | Opportunity |
-      |:--------:|------------|-------------|
-      | 🔴 | [Top pain point] — PT-001 | [Specific fix] |
-      | 🔴 | [Second pain point] — PT-002 | [Specific fix] |
-      | 🟡 | [Third pain point] — PT-003 | [Specific fix] |
+      **Study:** {{selected_study}} &nbsp; | &nbsp; **Researcher:** {{researcher_contact}} &nbsp; | &nbsp; **Date:** {{current_date}}
 
       ---
 
-      ## Journey Stages
+      ## Summary
 
-      [FOR EACH STAGE - Create 3-6 stages based on data. Use this exact format:]
+      [2-3 sentence narrative synthesis of the journey. Reference: how many stages, where failures concentrate, what pattern emerges across stages. Ground every sentence in THIS study's data.]
 
-      ### 1️⃣ [Clear 2-4 word label]
+      > [!IMPORTANT]
+      > **Most critical journey moment:** [Identify the stage with the highest number of task-blocking pain points OR the stage that affects the most participants. Explain what happens and why it matters.]
 
-      **What happens:** [1-2 sentences describing user action at this stage]
-
-      **📱 Touchpoints:** [What user interacts with — e.g., "Home screen → Benefits tab → Claims section" or "VoiceOver screen reader, Edit button"]
-
-      | Emotion | Quote |
-      |:-------:|-------|
-      | [emoji + word, e.g., 😤 Frustrated] | "[Direct quote]" — PT-001, 00:00:00 |
-
-      **🔴 Pain Points:**
-      - [Specific issue] — PT-001, 00:00:00
-      - [Specific issue] — PT-002, 00:00:00
-
-      **✅ Success looks like:** [SPECIFIC measurable outcome - e.g., "completes in under 30 seconds" or "finds it within 2 taps" - NOT vague like "clear navigation"]
-
-      **💡 Opportunity:** [SPECIFIC implementable fix - e.g., "Add loading spinner with percentage" - NOT vague like "improve performance"]
-
-      **👥 Owner:** `[Team]` — [1 sentence why]
-
-      <br>
+      | Stage | Critical issues | Participants affected |
+      |-------|-----------------|----------------------|
+      | 01 — [Stage name] | [count] | [X of Y] |
+      | 02 — [Stage name] | [count] | [X of Y] |
+      | 03 — [Stage name] | [count] | [X of Y] |
+      | 04 — [Stage name] | [count] | [X of Y] |
+      | 05 — [Stage name] | [count] | [X of Y] |
 
       ---
 
-      [Repeat for each stage using 2️⃣ 3️⃣ 4️⃣ 5️⃣ 6️⃣]
+      ## 01 &nbsp;&nbsp; [Stage Title — Descriptive]
+
+      [1-2 sentence description of what happens at this stage]
+
+      **Touchpoints** — [What user interacts with — e.g., "Home screen → Bottom navigation tabs → Section discovery"]
+
+      **User emotion** — [Single word: Confused, Frustrated, Confident, Uncertain, etc.]
+
+      > "[Verbatim quote from data]"
+      > — PT-001, [timestamp]
+
+      #### What goes wrong
+
+      - [Specific issue] — PT-001, [timestamp]
+      - [Specific issue] — PT-003, [timestamp]
+      - [Specific issue] — PT-001, [timestamp]
+
+      #### Success looks like
+
+      [SPECIFIC measurable outcome — e.g., "Users discover all available app sections within 30 seconds of opening the app, regardless of accessibility settings." NOT vague like "clear navigation."]
+
+      #### Design opportunity
+
+      [SPECIFIC implementable fix — e.g., "Modify VoiceOver focus behavior to start on the tab bar, and implement responsive navigation labels that remain visible at 180% text scaling." NOT vague like "improve accessibility."]
+
+      **Suggested owner** — [Team name]
 
       ---
 
-      ## Recommendations
+      ## 02 &nbsp;&nbsp; [Stage Title]
 
-      > **Priority:** 🔴 High | 🟡 Medium | 🟢 Low — **Effort:** 🔵🔵🔵 High | 🔵🔵⚪ Med | 🔵⚪⚪ Low
-
-      | Priority | Opportunity | Stage | Owner | Effort |
-      |:--------:|-------------|-------|-------|:------:|
-      | 🔴 | [Specific fix] | [Stage name] | `[Team]` | 🔵🔵🔵 |
-      | 🟡 | [Specific fix] | [Stage name] | `[Team]` | 🔵🔵⚪ |
-      | 🟢 | [Specific fix] | [Stage name] | `[Team]` | 🔵⚪⚪ |
-
-      <br>
+      [Same format as Stage 01. Include description, touchpoints, emotion, quote, what goes wrong, success looks like, design opportunity, suggested owner.]
 
       ---
 
-      ## Discussion Questions
+      [Continue for each stage. Typically 3-6 stages. Each follows the exact same format.]
 
-      | # | Question | For |
-      |---|----------|-----|
-      | 1 | [Specific question about a finding that needs team input] | [Team] |
-      | 2 | [Question about prioritization or implementation] | [Team] |
-      | 3 | [Question about cross-team collaboration needed] | [Team + Team] |
+      ---
 
-      <br>
+      ## Recommended actions
+
+      | Priority | Action | Stage | Owner | Effort |
+      |:--------:|--------|-------|-------|:------:|
+      | 1 | [Specific action] | 01 — [Stage name] | [Team] | [High/Medium/Low] |
+      | 2 | [Specific action] | 04 — [Stage name] | [Team] | [High/Medium/Low] |
+      | 3 | [Specific action] | 02 — [Stage name] | [Team] | [High/Medium/Low] |
+
+      ---
+
+      ## Discussion questions
+
+      These questions emerged from the journey analysis and warrant team alignment before implementation.
+
+      1. [Specific question about a finding that needs team input] — *[Team]*
+
+      2. [Question about prioritization or implementation] — *[Team]*
+
+      3. [Question about cross-team collaboration needed] — *[Team + Team]*
 
       ---
 
       ## Methodology
 
-      **Framework:** Experience Journey Mapping
+      **Framework** — Experience journey mapping
 
-      **Approach:** Stage-by-stage analysis of user actions, emotions, pain points, and opportunities from qualitative research data.
+      **Approach** — Stage-by-stage analysis of user actions, emotions, pain points, and opportunities derived from qualitative session data. Each stage's findings are grounded in verbatim quotes and observed behaviors. Pattern B traceability — citations are inline at each stage rather than aggregated separately.
 
-      **Data Sources:** [List participant IDs used, e.g., PT-001, PT-002, PT-003]
+      **Data sources** — [List participant IDs: PT-001, PT-002, PT-003]
+
+      **Limitations** — [Number] participants. [Note any sample composition bias]. Stage definitions are study-specific — different study contexts would surface different stage structures.
 
       ### References
 
-      - **Adaptive Path** — Pioneers of journey mapping methodology
-      - **Nielsen Norman Group** — Stage-based emotion mapping framework
-      - **Service Design Thinking** — Stickdorn & Schneider, touchpoint analysis
-      - **Mapping Experiences** — Jim Kalbach, O'Reilly Media
+      - Adaptive Path — Pioneers of journey mapping methodology
+      - Nielsen Norman Group — Stage-based emotion mapping framework
+      - Stickdorn, M. & Schneider, J. — *This Is Service Design Thinking* (2011)
+      - Kalbach, J. — *Mapping Experiences* (O'Reilly, 2nd ed., 2020)
 
       ---
 
-      *Generated by Qori • {{current_date}}*
+      ## Appendix
+
+      <details>
+      <summary><strong>Related artifacts</strong></summary>
+
+      RELATED ARTIFACTS:
+      Populate this table with artifacts from {{detected_files}} when available.
+      Use exact paths from the detected files list. Prepend ../ to each path.
+      If a file isn't in the list, omit the row. Do NOT invent files.
+
+      | Artifact | Location | Status |
+      |----------|----------|--------|
+      | [Per-participant session summary] | [path from detected_files](../path) | Complete |
+      | [Analysis artifacts if present] | [path](../path) | Complete |
+
+      </details>
+
+      <details>
+      <summary><strong>Validity checklist</strong></summary>
+
+      | Criterion | Verified |
+      |-----------|:--------:|
+      | All quotes verbatim from session data | ✓ |
+      | No real participant names used | ✓ |
+      | Stage labels consistent throughout document | ✓ |
+      | Citations represent all participants in study | ✓ |
+      | Opportunities are specific and implementable | ✓ |
+      | Owners are concrete teams (not vague roles) | ✓ |
+
+      </details>
+
+      ============================================================
+      QUALITY CHECKS (do not include in output)
+      ============================================================
+
+      Before outputting, verify:
+      - Every quote appears EXACTLY in source data
+      - No real participant names used anywhere
+      - Stage labels are consistent between Summary table and stage headings
+      - Citations represent ALL participants, not just one
+      - Opportunities are specific enough for a developer to implement
+      - Owners are VA teams (Product, Engineering, Design, Content, Accessibility, Policy)
+      - Summary stage overview counts match actual pain points per stage
+
+      Do NOT output a footer or "Generated by Qori" line — that is added automatically.
 
 # ═══════════════════════════════════════════════════════════
 # OUTPUT
@@ -246,7 +301,7 @@ output_template: |
 
 output_options:
   path: "04-analysis/journey-mapping/"
-  filename: "{{selected_study}}_journey_mapping_{{current_date}}.md"
+  filename: "{{selected_study}}-journey-map-{{current_date_iso}}.md"
 
 # ═══════════════════════════════════════════════════════════
 # METADATA (documentation only — not read by backend)
@@ -254,19 +309,15 @@ output_options:
 processing_workflow:
   1. validate_slack_modal_inputs
   2. discover_files_from_study_selection
-  3. calculate_initial_quality_assessment
-  4. validate_discovered_files
-  5. combine_selected_files_with_truncation
-  6. execute_file_discovery_summary
-  7. execute_journey_map_complete
-  8. format_output
-  9. save_to_analysis_folder
+  3. combine_selected_files_with_truncation
+  4. execute_file_discovery_summary
+  5. execute_journey_map_complete
+  6. format_output
+  7. save_to_analysis_folder
 
 auto_variables:
   - stage_count: extract_stage_count(ai_generated.journey_map_complete) || 5
-  - data_confidence: extract_confidence(ai_generated.journey_map_complete) || "Medium"
   - current_date: new Date().toISOString().split('T')[0]
-  - analysis_version: generate_version_number() || "v1.0"
 
 notify:
   - role: team
@@ -283,30 +334,36 @@ quality_assurance:
   require_stage_consistency: true
 
 notes: |
-  v3.11 Changes (Standards Polish):
-  - Applied canonical key ordering (IDENTITY → CONFIGURATION → INPUTS → AI GENERATION → OUTPUT → METADATA)
-  - Removed dead config: llm_config, system_limits, privacy_controls, study_metadata, auto_file_discovery
-  - Removed github_file_template (referenced variables never provided: analysis_version, researcher_contact, discovered_files, study_channel)
-  - Removed default_delivery, slack_format, file_format from output_options (dead config)
-  - Updated prompt: summary blockquote changed to metric-focused format (stages/pain points/participants)
-  - Removed decorative emoji from headings: Journey Stages (was 🗺️), Recommendations (was 🎯), Discussion Questions (was 💬), Methodology (was 📚)
-  - Standardized participant ID format to PT-001 (hyphenated)
-  - Changed filename from {{study_folder}} to {{selected_study}} (matches actual variable)
-  - Note: file_discovery_summary task references {{discovered_files}} which is never provided — kept as-is (task structure unchanged)
-  - Note: journey_map_complete references {{ai_generated.file_discovery_summary}} — tasks run in parallel so this resolves to empty string
+  v3.12 Changes (Design Language Translation):
+  - Translated locked design from docs/design-references/journey-map-reference.md
+  - Pattern B traceability: inline citations per stage, no per-stage Sources lines
+  - H1: clean text with descriptive title (inferred from data, fallback to study slug)
+  - Added masthead (Study/Researcher/Date)
+  - Added Summary section with narrative + > [!IMPORTANT] callout + stage overview table
+  - Stages: ## 01 &nbsp;&nbsp; editorial numbering (was 1️⃣ emoji), text labels (was inline
+    emoji 📱🔴✅💡👥), H4 sub-sections (What goes wrong / Success looks like /
+    Design opportunity)
+  - Removed ## Journey Stages wrapper heading (stages are H2 directly)
+  - Removed ## Overview section (merged into Summary)
+  - Recommended actions: numeric priority + text effort labels (was emoji)
+  - Discussion questions: numbered list with italic team attribution (was table)
+  - Methodology: bold-em-dash format, added Limitations and updated References
+  - Added Appendix with Related Artifacts (from {{detected_files}}) + Validity Checklist
+  - Validity checklist: added "No real participant names used" row
+  - Added OUTPUT PROCESS instruction: generate stages first, then build Summary from them
+  - Footer removed from prompt (backend buildTraceabilityFooter handles it)
+  - Filename: {{selected_study}}-journey-map-{{current_date_iso}}.md
+  - Preserved all 8 CRITICAL RULES (including NO REAL NAMES, CITATION DIVERSITY)
+  - Preserved two-task structure (file_discovery_summary + journey_map_complete)
 
-  v3.10 Changes (Citation Diversity):
-  - Added RULE 7: Citation Diversity - must use ALL participants, not just one
-
-  v3.3: Anti-generic rules + header fix
-  v3.2: Output cleanup, emotion table formatting
-  v3.1: Visual polish, numbered stages
-  v3.0: Major restructure, consolidated from 6 tasks
+  v3.11: Standards Polish (canonical structure, dead config removal)
+  v3.10: Citation Diversity rule
+  v3.3: Anti-generic rules
+  v3.0: Major restructure
   v2.0: Original multi-task architecture
 
 output_use: |
-  Slack-Native Journey Mapping identifies the primary user type and maps their
-  journey through sequential stages with specific emotions, pain points, and
-  improvement opportunities. All findings are grounded in research data with
-  required citations. Outputs concise Slack summaries plus detailed GitHub
-  markdown reports.
+  Journey mapping identifies sequential stages of the user experience and maps
+  actions, emotions, pain points, and opportunities at each stage. Pattern B
+  traceability — citations inline per stage. All findings grounded in research
+  data with participant IDs and timestamps.
