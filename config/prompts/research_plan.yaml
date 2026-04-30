@@ -4,7 +4,7 @@
 id: research_plan
 name: run_research_plan
 label: "📋 Research Plan"
-version: "v4.6"
+version: "v4.7"
 
 description: |
   Transform your research concept into a stakeholder-ready execution plan.
@@ -393,15 +393,6 @@ output_template: |
   |------|:----------:|------------|
   {{ai_generated.risks}}
 
-  ---
-
-  ## Approval
-
-  - [ ] Reviewed by lead researcher
-  - [ ] Approved by product stakeholder
-  - [ ] Recruitment criteria validated
-  - [ ] Privacy review complete (if required)
-
 output_options:
   path: "01-planning/"
   filename: "research-plan-{{project_title}}-{{current_date_iso}}.md"
@@ -422,6 +413,9 @@ notify:
     message: "Research plan for {{project_title}} is ready for review."
 
 notes: |
+  v4.7: Removed Approval section — approval gate now lives in research brief.
+  Research brief = approval gate. Research plan = execution doc.
+
   v4.6 Changes (Design Language Translation):
   - Translated locked design from docs/design-references/research_plan_reference.md
   - Pattern C: document-level footer only (backend buildTraceabilityFooter)
