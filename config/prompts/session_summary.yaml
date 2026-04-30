@@ -284,14 +284,14 @@ ai_generation_tasks:
       ## Appendix
 
       <details>
-      <summary><strong>Related artifacts</strong></summary>
+      <summary><strong>Sources analyzed</strong></summary>
 
-      | Artifact | Location | Status |
-      |----------|----------|--------|
-      | {{participant_id}} transcript | 03-fieldwork/transcripts/ | Complete |
-      | Observer notes | 03-fieldwork/session-notes/ | Complete |
-      | Discussion guide | 01-planning/ | Complete |
-      | Research plan | 01-planning/ | Complete |
+      | Source | Location | Status |
+      |--------|----------|--------|
+      | {{participant_id}} transcript | 03-fieldwork/transcripts/ | Analyzed |
+      | Observer notes | 03-fieldwork/session-notes/ | [Include count if used, or "Not included"] |
+
+      Only sources that were actually analyzed are listed. The transcript is the primary source; observer notes are supporting context when available.
 
       </details>
 
