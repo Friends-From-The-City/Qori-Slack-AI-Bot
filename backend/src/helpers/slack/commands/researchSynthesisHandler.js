@@ -710,6 +710,9 @@ const handleResearchSynthesisSubmission = async ({ ack, body, view, client }) =>
       // Default for service_blueprint.yaml (no modal UI element for this yet)
       blueprint_scope: 'end_to_end',
 
+      // Researcher info for masthead
+      researcher_contact: study?.researcher_name || study?.researcher_email || '',
+
       // Source files for traceability citations
       detected_files: detectedFilesList || 'No files detected',
 
