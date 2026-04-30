@@ -157,3 +157,7 @@ A "Pentagram-style" design language was developed for Qori's generated documents
 **Standards documentation:** `docs/qori-template-standards.md` Sections 4 and 6.
 
 **Status:** Design locked. YAML translation pending — `research_readout.yaml` is the first target template for translation.
+
+### Per-template input audit (locked April 30, 2026)
+
+Every template translation now requires an "Inputs and rationale" pass — explicitly documenting what files feed the template and why. This caught a stale reference to coded transcripts when the research flow evolved (raw transcript replaced coded transcript as the primary session summary input — the AI coding step was redundant since `/qori-analyze` handles coding + summarization in one pass). Pattern is documented in Section 7 of the standards doc. Input rationale is captured in each template's design reference header note.

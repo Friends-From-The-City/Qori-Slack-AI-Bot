@@ -273,9 +273,34 @@ This would enable:
 
 ---
 
+## Section 7 — Inputs and Rationale
+
+Every template must have a clear answer to: "What inputs produce the best output for this document type?"
+
+Each translation plan and design reference must include an "Inputs and rationale" section with:
+
+- **Required inputs** — Files that MUST exist for the template to produce useful output
+- **Recommended inputs** — Files that improve output quality when present
+- **Excluded inputs** — Files NOT fed in, with rationale (e.g., "discussion guide content is already reflected in the session transcript")
+
+### Why this matters
+
+1. Researchers know what to prepare before running the command
+2. Future template work has clear rationale for input changes
+3. Onboarding documentation can reference these as "prep checklists" per document type
+4. Helps surface stale inputs when research processes evolve (e.g., we removed coded transcripts from the flow — every template referencing them needed updating)
+
+### Documentation locations
+
+- In each template's design reference (in the header note)
+- In each template's translation plan ("Inputs and rationale" section)
+- In CLAUDE.md as a process pattern
+
+---
+
 ## Revision History
 
 | Date | Change |
 |------|--------|
-| April 30, 2026 | Traceability patterns A/B/C defined. H1 emoji removed (clean text). Canonical examples: research_readout v5.4.1, affinity_mapping v3.2. |
+| April 30, 2026 | Added Section 7 (Inputs and Rationale). Traceability patterns A/B/C defined. H1 emoji removed. Canonical examples: research_readout v5.4.1, affinity_mapping v3.2. |
 | April 29, 2026 | Initial version. Locked design language for Pentagram-style documents. |
