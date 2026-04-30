@@ -289,14 +289,20 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }) => {
       const decodedPath = decodeURIComponent(folderPath);
       const primaryResearchBase = `${decodedPath}/primary-research/`;
 
+      // Deduplicate research plans — keep only the latest version by date
+      const plansByBase = {};
       researchPlans.forEach(plan => {
         if (plan.file_path) {
           const relativePath = plan.file_path.includes('primary-research/')
             ? plan.file_path.split('primary-research/')[1]
             : plan.filename;
-          detectedFiles.push(relativePath);
+          const base = relativePath.replace(/_[A-Z][a-z]+ \d{1,2},? \d{4}/, '');
+          if (!plansByBase[base] || relativePath > plansByBase[base]) {
+            plansByBase[base] = relativePath;
+          }
         }
       });
+      Object.values(plansByBase).forEach(p => detectedFiles.push(p));
       sessionSummaries.forEach(summary => {
         if (summary.file_path) {
           const relativePath = summary.file_path.includes('primary-research/')
@@ -322,10 +328,21 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }) => {
         try {
           const scanPath = `${primaryResearchBase}${scan.folder}`;
           const files = await readFolderContents(scanPath, process.env.GITHUB_REPO);
-          files.forEach(f => {
-            if (f.name !== 'README.md' && f.name !== '.gitkeep') {
-              detectedFiles.push(`${scan.folder}/${f.name}`);
+          const validFiles = files.filter(f => f.name !== 'README.md' && f.name !== '.gitkeep');
+
+          // Group by base name (strip date suffix) and keep only the latest version.
+          // Files like "study_affinity_mapping_April 24, 2026.md" and
+          // "study_affinity_mapping_April 29, 2026.md" share the same base.
+          // Date pattern: _Month DD, YYYY or _Month D, YYYY at end of filename before .ext
+          const byBase = {};
+          for (const f of validFiles) {
+            const base = f.name.replace(/_[A-Z][a-z]+ \d{1,2},? \d{4}/, '');
+            if (!byBase[base] || f.name > byBase[base].name) {
+              byBase[base] = f;
             }
+          }
+          Object.values(byBase).forEach(f => {
+            detectedFiles.push(`${scan.folder}/${f.name}`);
           });
         } catch (err) {
           // Folder doesn't exist — skip silently
