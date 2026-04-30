@@ -1422,23 +1422,27 @@ slackApp.action('create_research_brief', async ({ ack, body, client }) => {
       };
     }
 
+    const viewPayload = {
+      ...researchBriefModal,
+      blocks: modalBlocks,
+      private_metadata: JSON.stringify({
+        ...meta,
+        studyName: preselectStudyName,
+        studyId: preselectStudyId,
+        leadResearcher, // Pass through for use in submission
+      })
+    };
+
+    console.log('📋 Research brief modal view payload:', JSON.stringify(viewPayload, null, 2).substring(0, 2000));
+
     await client.views.update({
       view_id: body.view.id,
-      view: {
-        ...researchBriefModal,
-        blocks: modalBlocks,
-        private_metadata: JSON.stringify({
-          ...meta,
-          studyName: preselectStudyName,
-          studyId: preselectStudyId,
-          leadResearcher, // Pass through for use in submission
-        })
-      }
+      view: viewPayload
     });
 
     console.log(`✅ Opened research brief modal for study: ${preselectStudyName}`);
   } catch (err) {
-    console.error('Error opening brief modal:', err.data?.response_metadata?.messages || err.data || err.message || err);
+    console.error('Error opening brief modal - full error:', JSON.stringify(err.data, null, 2));
     // Notify user of the error
     try {
       const meta = JSON.parse(body.view?.private_metadata || '{}');
