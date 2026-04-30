@@ -41,18 +41,16 @@ const handleAnalyzeNotesSubmission = async ({ ack, body, view, client }) => {
   // Extract form data
   const studyId = view.state.values.study_select_block?.study_select_test?.selected_option?.value;
   const sessionId = view.state.values.session_select_block?.analyze_notes_session_select?.selected_option?.value;
+  const selectedTranscriptId = view.state.values.transcript_select_block?.transcript_select?.selected_option?.value;
   const selectedNotes = view.state.values.notes_select_block?.notes_select?.selected_options || [];
 
-  // Check if notes block exists - if not, this is an early submission
-  const notesBlock = view.state.values.notes_select_block;
-  
-  // If notes are not available yet, don't allow submission
-  if (!notesBlock || selectedNotes.length === 0 || selectedNotes[0]?.value === "no_files") {
-    // Acknowledge but don't process - modal will stay open
+  // Transcript is required
+  const transcriptBlock = view.state.values.transcript_select_block;
+  if (!transcriptBlock || !selectedTranscriptId) {
     await ack({
       response_action: "errors",
       errors: {
-        notes_select_block: notesBlock ? "Please select at least one note file to analyze." : "Please wait for notes to load, then select files to analyze."
+        transcript_select_block: "Please select a session transcript to analyze."
       }
     });
     return;
@@ -73,11 +71,19 @@ const handleAnalyzeNotesSubmission = async ({ ack, body, view, client }) => {
     const studyName = view.state.values.study_select_block?.study_select_test?.selected_option?.text?.text || "Unknown Study";
     const sessionName = view.state.values.session_select_block?.analyze_notes_session_select?.selected_option?.text?.text || null;
 
-    // Process the selected notes for analysis
-    const noteIds = selectedNotes.map(note => note.value);
-
-    // Fetch the actual note details for analysis
+    // Fetch the transcript (required)
     let noteDetails = [];
+    try {
+      const transcript = await studyNotesService.getStudyNoteById(parseInt(selectedTranscriptId));
+      if (transcript) {
+        noteDetails.push(transcript);
+      }
+    } catch (error) {
+      console.warn("Warning: Could not fetch transcript:", error.message);
+    }
+
+    // Fetch optional observer notes
+    const noteIds = selectedNotes.map(note => note.value);
     try {
       for (const noteId of noteIds) {
         const note = await studyNotesService.getStudyNoteById(parseInt(noteId));
@@ -86,7 +92,7 @@ const handleAnalyzeNotesSubmission = async ({ ack, body, view, client }) => {
         }
       }
     } catch (error) {
-      console.warn("Warning: Could not fetch some note details:", error.message);
+      console.warn("Warning: Could not fetch some observer notes:", error.message);
     }
 
     // Get the study details
@@ -426,11 +432,11 @@ const handleSessionSelectionChange = async ({ ack, body, client }) => {
     const noteFiles = studyNotes.map(note => ({
       id: note.id.toString(),
       filename: note.filename,
+      transcript: note.transcript || false,
       author: note.created_by,
       participant_name: note.participant_name,
       session_date: note.session_date,
       session_time: note.session_time,
-      size: "N/A", // Size not stored in our schema
       study_name: note.study_name,
       file_url: note.file_url
     }));

@@ -39,10 +39,25 @@ const analyzeNotesModal = (researchStudies = [], noteFiles = [], sessions = [], 
     ? sessionOptions.find(opt => opt.value === selectedSession.toString())
     : null;
 
-  // Build note file options dynamically (limit to 10 to avoid Slack's limit)
-  const fileOptions = noteFiles.slice(0, 10).map((file) => ({
+  // Split note files into transcripts and observer notes
+  const transcriptFiles = noteFiles.filter(f => f.transcript === true);
+  const observerNoteFiles = noteFiles.filter(f => f.transcript !== true);
+
+  // Build transcript options (radio — select one)
+  const transcriptOptions = transcriptFiles.slice(0, 10).map((file) => ({
+    text: {
+      type: "plain_text",
+      text: (file.filename || 'Unknown').length > 75
+        ? file.filename.substring(0, 72) + '...'
+        : file.filename || 'Unknown',
+    },
+    value: file.id.toString(),
+  }));
+
+  // Build observer note options (checkboxes — select many, optional)
+  const observerNoteOptions = observerNoteFiles.slice(0, 10).map((file) => ({
     key: file.id || file.filename,
-    label: `${file.filename}\n${file.participant_name} • ${file.session_date} • ${file.session_time}`,
+    label: `${file.filename}\n${file.participant_name || ''} • ${file.session_date || ''} • ${file.session_time || ''}`,
   }));
 
   const blocks = [];
@@ -54,7 +69,7 @@ const analyzeNotesModal = (researchStudies = [], noteFiles = [], sessions = [], 
       block_id: "research_study_header",
       text: {
         type: "mrkdwn",
-        text: "*📂 Research Study*",
+        text: "*Research Study*",
       },
     });
 
@@ -81,11 +96,10 @@ const analyzeNotesModal = (researchStudies = [], noteFiles = [], sessions = [], 
       studySelectElement.initial_option = selectedStudyOption;
     }
 
-    // Use input block with dispatch_action: true on the block (not element) for full-width + auto-trigger
     blocks.push({
       type: "input",
       block_id: "study_select_block",
-      dispatch_action: true,  // Fire  immediately on select - goes on input block, not element!
+      dispatch_action: true,
       label: {
         type: "plain_text",
         text: "Study *",
@@ -94,7 +108,6 @@ const analyzeNotesModal = (researchStudies = [], noteFiles = [], sessions = [], 
       element: studySelectElement,
     });
 
-    // Show message if there are more than 10 studies
     if (researchStudies.length > 10) {
       blocks.push({
         type: "context",
@@ -102,7 +115,7 @@ const analyzeNotesModal = (researchStudies = [], noteFiles = [], sessions = [], 
         elements: [
           {
             type: "mrkdwn",
-            text: `⚠️ *Note:* Showing first 10 of ${researchStudies.length} available studies. Contact support if you need access to all studies.`,
+            text: `*Note:* Showing first 10 of ${researchStudies.length} available studies.`,
           },
         ],
       });
@@ -120,7 +133,7 @@ const analyzeNotesModal = (researchStudies = [], noteFiles = [], sessions = [], 
       block_id: "session_header",
       text: {
         type: "mrkdwn",
-        text: "*📅 Session*",
+        text: "*Session*",
       },
     });
 
@@ -142,16 +155,14 @@ const analyzeNotesModal = (researchStudies = [], noteFiles = [], sessions = [], 
       ],
     };
 
-    // Preserve selection if session was already selected
     if (selectedSessionOption) {
       sessionSelectElement.initial_option = selectedSessionOption;
     }
 
-    // Use input block with dispatch_action: true on the block (not element) for full-width + auto-trigger
     blocks.push({
       type: "input",
       block_id: "session_select_block",
-      dispatch_action: true,  // Fire immediately on select - goes on input block, not element!
+      dispatch_action: true,
       label: {
         type: "plain_text",
         text: "Session *",
@@ -160,7 +171,6 @@ const analyzeNotesModal = (researchStudies = [], noteFiles = [], sessions = [], 
       element: sessionSelectElement,
     });
 
-    // Show message if there are more than 10 sessions
     if (sessions.length > 10) {
       blocks.push({
         type: "context",
@@ -168,15 +178,62 @@ const analyzeNotesModal = (researchStudies = [], noteFiles = [], sessions = [], 
         elements: [
           {
             type: "mrkdwn",
-            text: `⚠️ *Note:* Showing first 10 of ${sessions.length} available sessions.`,
+            text: `*Note:* Showing first 10 of ${sessions.length} available sessions.`,
           },
         ],
       });
     }
   }
 
-  // Section 3: Select Notes to Analyze (shown when showNotes is true)
+  // Section 3: Session Transcript (required) + Observer Notes (optional)
   if (showNotes) {
+    blocks.push({
+      type: "divider",
+    });
+
+    // Section 3a: Session Transcript (required)
+    blocks.push({
+      type: "section",
+      block_id: "transcript_selection_header",
+      text: {
+        type: "mrkdwn",
+        text: `*Session Transcript*\n${transcriptFiles.length > 0 ? 'Select the session transcript to analyze. This is the primary source for the summary.' : 'No transcripts available for this session.'}`,
+      },
+    });
+
+    if (transcriptOptions.length > 0) {
+      blocks.push({
+        type: "input",
+        block_id: "transcript_select_block",
+        label: {
+          type: "plain_text",
+          text: "Transcript *",
+          emoji: false,
+        },
+        element: {
+          type: "static_select",
+          action_id: "transcript_select",
+          placeholder: {
+            type: "plain_text",
+            text: "Choose transcript...",
+          },
+          options: transcriptOptions,
+        },
+      });
+    } else {
+      blocks.push({
+        type: "context",
+        block_id: "no_transcripts_warning",
+        elements: [
+          {
+            type: "mrkdwn",
+            text: "No transcripts available. Upload a session transcript first via `/qori-notes`.",
+          },
+        ],
+      });
+    }
+
+    // Section 3b: Observer Notes (optional)
     blocks.push({
       type: "divider",
     });
@@ -186,106 +243,45 @@ const analyzeNotesModal = (researchStudies = [], noteFiles = [], sessions = [], 
       block_id: "notes_selection_header",
       text: {
         type: "mrkdwn",
-        text: `:pencil2: *Select Notes to Analyze*\n${noteFiles.length > 0 ? 'Choose note files to generate a quick summary with key pain points, quotes, and observations.' : 'No notes available for this session.'}`,
+        text: `*Observer Notes (optional)*\n${observerNoteFiles.length > 0 ? 'Select observer notes to include as supporting context.' : 'No observer notes available for this session.'}`,
       },
     });
 
-    blocks.push({
-      type: "context",
-      block_id: "notes_meta_block",
-      elements: [
-        {
-          type: "mrkdwn",
-          text: noteFiles.length > 0
-            ? `*Available Note Files* :white_check_mark: ${noteFiles.length} files found`
-            : "*Available Note Files* :white_check_mark: No notes available for this session",
+    if (observerNoteOptions.length > 0) {
+      blocks.push({
+        type: "input",
+        block_id: "notes_select_block",
+        optional: true,
+        label: {
+          type: "plain_text",
+          text: "Observer Notes",
+          emoji: false,
         },
-      ],
-    });
-
-    blocks.push({
-      type: "input",
-      block_id: "notes_select_block",
-      label: {
-        type: "plain_text",
-        text: "Note Files",
-        emoji: false,
-      },
-      element: {
-        type: "checkboxes",
-        action_id: "notes_select",
-        options: fileOptions.length > 0 ? generateFileCheckboxOptions(fileOptions) : [
-          {
-            text: {
-              type: "plain_text",
-              text: "No notes available",
-            },
-            value: "no_files",
-          },
-        ],
-      },
-    });
-
-    // Show message if there are more than 10 files
-    if (noteFiles.length > 10) {
+        element: {
+          type: "checkboxes",
+          action_id: "notes_select",
+          options: generateFileCheckboxOptions(observerNoteOptions),
+        },
+      });
+    } else {
       blocks.push({
         type: "context",
-        block_id: "files_limit_warning",
+        block_id: "no_notes_info",
         elements: [
           {
             type: "mrkdwn",
-            text: `⚠️ *Note:* Showing first 10 of ${noteFiles.length} available files. Select a study with fewer files or contact support for analysis of all files.`,
+            text: "No observer notes available. The summary will be generated from the transcript only.",
           },
         ],
       });
     }
   }
 
-  // Section 4: What you'll get (always shown at the end if notes are shown)
-  // if (showNotes) {
-  //   blocks.push({
-  //     type: "divider",
-  //   });
-
-  //   blocks.push({
-  //     type: "context",
-  //     block_id: "benefits_header",
-  //     elements: [
-  //       {
-  //         type: "mrkdwn",
-  //         text: "*What you'll get* :bar_chart:",
-  //       },
-  //     ],
-  //   });
-
-  //   blocks.push({
-  //     type: "context",
-  //     block_id: "benefits_description",
-  //     elements: [
-  //       {
-  //         type: "mrkdwn",
-  //         text: "A concise summary perfect for sharing with your team, including:",
-  //       },
-  //     ],
-  //   });
-
-  //   blocks.push({
-  //     type: "context",
-  //     block_id: "benefits_list",
-  //     elements: [
-  //       {
-  //         type: "mrkdwn",
-  //         text: "• Top 3 pain points from the session\n• Key participant quotes with context\n• Notable observations and behaviors\n• Quick action items for the team",
-  //       },
-  //     ],
-  //   });
-  // }
-
   // Submit button text based on state
-  const submitButtonText = showNotes && noteFiles.length > 0 
-    ? "Analyze" 
-    : showSession 
-      ? "Continue" 
+  const submitButtonText = showNotes && (transcriptOptions.length > 0)
+    ? "Analyze"
+    : showSession
+      ? "Continue"
       : "Continue";
 
   return {
@@ -293,7 +289,7 @@ const analyzeNotesModal = (researchStudies = [], noteFiles = [], sessions = [], 
     callback_id: "analyze_notes_submit",
     title: {
       type: "plain_text",
-      text: "Analyze Notes",
+      text: "Analyze Session",
       emoji: false,
     },
     close: {

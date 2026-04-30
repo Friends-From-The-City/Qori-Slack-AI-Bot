@@ -42,8 +42,8 @@ input_variables:
   - coded_transcript_file:
       type: "select"
       required: true
-      label: "Coded transcript"
-      placeholder: "Select coded transcript file..."
+      label: "Session transcript"
+      placeholder: "Select session transcript file..."
       data_source: "coded_transcripts"
       help_text: "Primary source for analysis"
 
@@ -89,10 +89,10 @@ ai_generation_tasks:
       - Study Name: {{study_name}}
       - Session Date: {{session_date}}
 
-      PRIMARY SOURCE - Coded Transcript:
+      PRIMARY SOURCE - Session Transcript:
       {{coded_transcript_content}}
 
-      SUPPORTING SOURCES - Observer Notes:
+      SUPPORTING SOURCES - Observer Notes (may be empty):
       {{notes_content}}
 
       ============================================================
@@ -263,9 +263,9 @@ ai_generation_tasks:
 
       **Tasks attempted** — [List tasks the participant was asked to complete]
 
-      **Sources analyzed** — Coded transcript (primary source for verbatim quotes and behavioral data) and [X] observer notes files
+      **Sources analyzed** — Session transcript (primary source for verbatim quotes and behavioral data) and [X] observer notes files
 
-      **Analysis approach** — Pain points and quotes are direct extractions from the coded transcript; opportunities and insights are reasoned inferences from behavioral patterns observed during the session.
+      **Analysis approach** — Pain points and quotes are direct extractions from the session transcript; opportunities and insights are reasoned inferences from behavioral patterns observed during the session.
 
       **Limitations** — [Single participant caveat. Note source completeness. Cross-reference recommendation.]
 
@@ -285,7 +285,7 @@ ai_generation_tasks:
 
       | Artifact | Location | Status |
       |----------|----------|--------|
-      | {{participant_id}} coded transcript | 03-fieldwork/coded-transcript-analysis/ | Complete |
+      | {{participant_id}} session transcript | 03-fieldwork/coded-transcript-analysis/ | Complete |
       | Observer notes | 03-fieldwork/session-notes/ | Complete |
       | Discussion guide | 01-planning/ | Complete |
       | Research plan | 01-planning/ | Complete |
@@ -297,7 +297,7 @@ ai_generation_tasks:
 
       | Criterion | Verified |
       |-----------|:--------:|
-      | All quotes verbatim from coded transcript | ✓ |
+      | All quotes verbatim from session transcript | ✓ |
       | Pain points grounded in specific observed behaviors | ✓ |
       | Inferences (insights, opportunities) traced to evidence | ✓ |
       | Confidence levels declared per pain point | ✓ |
@@ -381,7 +381,7 @@ slack_ui:
         fields:
           - session_id
       - section_title: "Sources to Analyze"
-        section_description: "Select notes and coded transcript for analysis"
+        section_description: "Select notes and session transcript for analysis"
         fields:
           - selected_notes
           - coded_transcript_file
