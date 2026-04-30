@@ -200,56 +200,28 @@ ai_generation_tasks:
   # Timeline — calculate dates from start_date + preference
   - task_id: "timeline"
     prompt: |
-      Create timeline DATA ROWS ONLY for {{timeline_preference}} research.
+      Create a timeline table for {{timeline_preference}} research starting {{start_date}}.
 
-      ===== CRITICAL DATE INSTRUCTION =====
-      THE USER-SELECTED START DATE IS: {{start_date}}
-      USE THIS EXACT DATE AS YOUR STARTING POINT.
-      DO NOT USE ANY OTHER DATE.
-      =====================================
+      CRITICAL: Output EXACTLY 3 columns per row. No more, no less.
+      The 3 columns are: Phase | Dates | Duration
+      The Dates column combines start AND end into ONE cell: "May 18 – May 25, 2026"
 
-      Phase durations by timeline type:
-
-      Standard (5 weeks total):
-      - Planning and stakeholder alignment: 7 days
-      - Recruitment: 10 days
-      - Fieldwork (sessions): 7 days
-      - Analysis: 3 days
-      - Reporting: 2 days
-
-      Accelerated (2 weeks total):
-      - Planning: 2 days
-      - Recruitment: 4 days
-      - Fieldwork: 4 days
-      - Analysis: 2 days
-      - Reporting: 2 days
-
-      Extended (8 weeks total):
-      - Planning and stakeholder alignment: 14 days
-      - Recruitment: 14 days
-      - Fieldwork (sessions): 14 days
-      - Analysis: 7 days
-      - Reporting: 7 days
+      Phase durations for {{timeline_preference}}:
+      - standard: Planning 7d, Recruitment 10d, Fieldwork 7d, Analysis 3d, Reporting 2d
+      - accelerated: Planning 2d, Recruitment 4d, Fieldwork 4d, Analysis 2d, Reporting 2d
+      - extended: Planning 14d, Recruitment 14d, Fieldwork 14d, Analysis 7d, Reporting 7d
 
       Rules:
-      - Planning starts on {{start_date}}
-      - Each phase starts the day after the previous phase ends
-      - Format dates as: Month DD, YYYY
-      - Do NOT output the header row — only data rows
-      - Do NOT use placeholder dates
-      - Always use markdown dash (-) for bullets, never Unicode bullets (•)
+      - Start from {{start_date}}. Each phase starts the day after the previous ends.
+      - Do NOT output a header row — only the 5 data rows.
+      - No blank lines between rows.
 
-      OUTPUT FORMAT: exactly 3 columns per row — Phase | Dates | Duration.
-      Dates column combines start and end as "Start – End, Year".
-
-      Example rows (DO NOT copy these dates — calculate from {{start_date}}):
+      YOUR OUTPUT MUST LOOK EXACTLY LIKE THIS (but with dates calculated from {{start_date}}):
       | Planning and stakeholder alignment | May 18 – May 25, 2026 | 1 week |
       | Recruitment | May 26 – June 4, 2026 | 1.5 weeks |
       | Fieldwork (sessions) | June 5 – June 11, 2026 | 1 week |
       | Analysis | June 12 – June 14, 2026 | 3 days |
       | Reporting | June 15 – June 16, 2026 | 2 days |
-
-      Output ONLY 5 rows in this exact 3-column format. Calculate real dates from {{start_date}}.
 
   # Deliverables — methodology-driven static list
   - task_id: "deliverables"
@@ -326,6 +298,9 @@ ai_generation_tasks:
       Risks should be specific to this study — not generic project management.
       Consider: recruitment difficulty for this population, technical setup for
       {{methodology}}, timeline constraints for {{timeline_preference}} schedule.
+
+      CRITICAL: Output rows with NO blank lines between them. Every row must
+      connect directly to the next. Blank lines break markdown table rendering.
 
 # ═══════════════════════════════════════════════════════════
 # OUTPUT
