@@ -450,21 +450,17 @@ const handleLoadSynthesisFiles = async ({ ack, body, client }) => {
               const scanPath = `${analysisBase}/${scan.folder}`;
               const files = await readFolderContents(scanPath, process.env.GITHUB_REPO);
               const validFiles = files.filter(f => f.name !== 'readme.md' && f.name !== '.gitkeep');
-              const byBase = {};
-              for (const f of validFiles) {
-                const base = f.name.replace(/_[A-Z][a-z]+ \d{1,2},? \d{4}/, '');
-                if (!byBase[base] || f.name > byBase[base].name) {
-                  byBase[base] = f;
-                }
-              }
-              Object.values(byBase).forEach(f => {
+              // Keep only the newest file per folder (last alphabetically)
+              if (validFiles.length > 0) {
+                const sorted = validFiles.sort((a, b) => b.name.localeCompare(a.name));
+                const newest = sorted[0];
                 analysisFiles.push({
-                  name: f.name,
-                  path: f.path,
+                  name: newest.name,
+                  path: newest.path,
                   label: scan.label,
-                  relative_path: `04-analysis/${scan.folder}/${f.name}`,
+                  relative_path: `04-analysis/${scan.folder}/${newest.name}`,
                 });
-              });
+              }
             } catch (err) {
               // Folder doesn't exist — skip silently
             }
