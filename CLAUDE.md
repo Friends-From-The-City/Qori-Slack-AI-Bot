@@ -161,3 +161,7 @@ A "Pentagram-style" design language was developed for Qori's generated documents
 ### Per-template input audit (locked April 30, 2026)
 
 Every template translation now requires an "Inputs and rationale" pass — explicitly documenting what files feed the template and why. This caught a stale reference to coded transcripts when the research flow evolved (raw transcript replaced coded transcript as the primary session summary input — the AI coding step was redundant since `/qori-analyze` handles coding + summarization in one pass). Pattern is documented in Section 7 of the standards doc. Input rationale is captured in each template's design reference header note.
+
+### Research plan template lean rewrite (April 30, 2026)
+
+`research_plan.yaml` v4.6 establishes the planning-doc pattern (Pattern C). VA-specific sections removed: OCTO Priorities (internal process, not research methodology), User Journey (assumptions before research), Implementation Plan (belongs in research readout), VA Compliance Notes (belongs in study-specific compliance addendum). Modal simplified from 15 fields to 8 with sensible defaults (lead researcher auto-fills from Slack profile, start date defaults to next Monday). Output collapsed from ~292 lines to ~145 lines. AI tasks reduced from 15 to 9. Deliverables section is methodology-driven (LLM selects the right list based on methodology choice). If researchers ask "where did OCTO Priorities go?" — those are VA-internal process concerns, not research methodology. They can be added to a separate compliance addendum if needed.
