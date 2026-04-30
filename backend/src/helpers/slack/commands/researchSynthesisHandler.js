@@ -682,6 +682,21 @@ const handleResearchSynthesisSubmission = async ({ ack, body, view, client }) =>
     const filesWithContent = await Promise.all(fileContentPromises);
     console.log(`🚀 ~ Successfully fetched content for ${filesWithContent.length} files`);
 
+    // Build detected_files list with relative paths for source citations
+    const detectedFilesList = filesWithContent
+      .filter(f => f.file_path)
+      .map(f => {
+        // Strip the study base path to get primary-research-relative paths
+        if (f.file_path.includes('primary-research/')) {
+          return f.file_path.split('primary-research/')[1];
+        }
+        // For paths outside primary-research/, use the last 3 segments
+        const parts = f.file_path.split('/');
+        return parts.slice(-3).join('/');
+      })
+      .map(f => `- ${f}`)
+      .join('\n');
+
     // Create simplified data object structure
     const analysisData = {
       // Core required fields
@@ -694,6 +709,9 @@ const handleResearchSynthesisSubmission = async ({ ack, body, view, client }) =>
 
       // Default for service_blueprint.yaml (no modal UI element for this yet)
       blueprint_scope: 'end_to_end',
+
+      // Source files for traceability citations
+      detected_files: detectedFilesList || 'No files detected',
 
       // Combined content of all files
       combined_file_content: filesWithContent.map(f => f.content).join('\n\n---\n\n')
