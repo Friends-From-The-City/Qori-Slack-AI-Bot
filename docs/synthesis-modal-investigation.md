@@ -87,6 +87,23 @@ User checks files + selects analysis method + clicks Submit
 
 ## 4. Proposed solution
 
+### Folder name audit (April 30, 2026)
+
+Verified against `friends-lab/alpha/research/va-mobile-nav-2026/primary-research/04-analysis/` in qori-studies:
+
+| Folder | Exists | Files |
+|--------|--------|-------|
+| `affinity-mapping` | Yes | 4 (including old date-stamped versions) |
+| `journey-mapping` | Yes | 3 |
+| `personas` | Yes | 2 |
+| `usability-issues` | Yes | 1 |
+| `jobs-to-be-done` | Yes | 2 |
+| `design-opportunities` | Yes | 1 |
+| `survey-synthesis` | Yes | 1 — **missing from original proposal, added** |
+| `service-blueprint` | No | Folder doesn't exist yet (no blueprint generated for this study) |
+
+The scan list should include `survey-synthesis` and `service-blueprint`. Folders that don't exist return 404 silently — no error handling needed beyond the existing try/catch pattern.
+
 ### Recommended approach: GitHub folder scan + new modal section
 
 **Option 3 (auto-include with informational display)** is the cleanest:

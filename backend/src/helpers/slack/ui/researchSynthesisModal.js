@@ -12,7 +12,8 @@ const researchSynthesisModal = (
   sessionSummaries = [],
   transcripts = [],
   selectedAnalysisMethod = null,
-  stakeholderGuides = []
+  stakeholderGuides = [],
+  analysisFiles = []
 ) => {
   // Helper function to get analysis method display name
   const getAnalysisMethodName = (method) => {
@@ -88,11 +89,23 @@ const researchSynthesisModal = (
     };
   });
 
+  // Format analysis files as checkboxes
+  const analysisFileOptions = analysisFiles.map((file, index) => ({
+    text: {
+      type: "plain_text",
+      text: (`${file.label}: ${file.name}`).length > 75
+        ? (`${file.label}: ${file.name}`).substring(0, 72) + '...'
+        : `${file.label}: ${file.name}`,
+    },
+    value: `analysis_${index}_${file.relative_path}`,
+  }));
+
   // Count selected files
   const summariesCount = sessionSummaryOptions.length;
   const transcriptsCount = transcriptOptions.length;
   const stakeholderGuidesCount = stakeholderGuideOptions.length;
-  const totalFiles = summariesCount + transcriptsCount + stakeholderGuidesCount;
+  const analysisFilesCount = analysisFileOptions.length;
+  const totalFiles = summariesCount + transcriptsCount + stakeholderGuidesCount + analysisFilesCount;
 
   // Store metadata
   const privateMetadata = JSON.stringify({
@@ -324,6 +337,41 @@ const researchSynthesisModal = (
           elements: [ { type: "mrkdwn", text: "No stakeholder notes or synthesis available for this study." } ],
         },
       ]),
+
+      // Prior Analysis (optional) — analysis-layer files from 04-analysis/
+      ...(analysisFileOptions.length > 0 ? [
+        {
+          type: "section",
+          block_id: "analysis_files_header",
+          text: {
+            type: "mrkdwn",
+            text: `*Prior Analysis (optional)*\n${analysisFilesCount} ${analysisFilesCount === 1 ? 'file' : 'files'} available from prior synthesis`,
+          },
+        },
+        {
+          type: "context",
+          block_id: "analysis_files_help",
+          elements: [
+            {
+              type: "mrkdwn",
+              text: "Include previously generated analyses as context. Downstream synthesis (personas, journey maps, design opportunities) produces better results when it can reference cross-participant themes from prior analysis.",
+            },
+          ],
+        },
+        {
+          type: "section",
+          block_id: "analysis_files_list_0",
+          text: {
+            type: "mrkdwn",
+            text: "Select analysis files to include:",
+          },
+          accessory: {
+            type: "checkboxes",
+            action_id: "analysis_files_checkboxes",
+            options: analysisFileOptions.slice(0, 10),
+          },
+        },
+      ] : []),
 
       // Context Data
       // {

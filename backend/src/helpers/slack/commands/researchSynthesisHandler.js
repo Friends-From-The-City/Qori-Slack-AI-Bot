@@ -211,8 +211,61 @@ const handleStudySelectionChange = async ({ ack, body, client }) => {
       console.error("⚠️ GitHub validation failed (continuing with unvalidated data):", validationError.message);
     }
 
+    // Scan analysis-layer folders for prior synthesis files
+    let analysisFiles = [];
+    try {
+      const selectedStudy = studies.find(s => s.id.toString() === studyId.toString());
+      if (selectedStudy) {
+        const study = await getResearchStudyWithRoles(selectedStudy.name);
+        if (study?.path) {
+          const decodedPath = decodeURIComponent(study.path);
+          const analysisBase = `${decodedPath}/primary-research/04-analysis`;
+          const analysisScans = [
+            { folder: 'affinity-mapping', label: 'Affinity map' },
+            { folder: 'journey-mapping', label: 'Journey map' },
+            { folder: 'personas', label: 'Personas' },
+            { folder: 'usability-issues', label: 'Usability issues' },
+            { folder: 'jobs-to-be-done', label: 'Jobs to be done' },
+            { folder: 'design-opportunities', label: 'Design opportunities' },
+            { folder: 'service-blueprint', label: 'Service blueprint' },
+            { folder: 'survey-synthesis', label: 'Survey synthesis' },
+          ];
+
+          for (const scan of analysisScans) {
+            try {
+              const scanPath = `${analysisBase}/${scan.folder}`;
+              const files = await readFolderContents(scanPath, process.env.GITHUB_REPO);
+              const validFiles = files.filter(f => f.name !== 'readme.md' && f.name !== '.gitkeep');
+
+              // Deduplicate: keep only latest version per base name
+              const byBase = {};
+              for (const f of validFiles) {
+                const base = f.name.replace(/_[A-Z][a-z]+ \d{1,2},? \d{4}/, '');
+                if (!byBase[base] || f.name > byBase[base].name) {
+                  byBase[base] = f;
+                }
+              }
+              Object.values(byBase).forEach(f => {
+                analysisFiles.push({
+                  name: f.name,
+                  path: f.path,
+                  label: scan.label,
+                  relative_path: `04-analysis/${scan.folder}/${f.name}`,
+                });
+              });
+            } catch (err) {
+              // Folder doesn't exist — skip silently
+            }
+          }
+          console.log(`✅ Found ${analysisFiles.length} analysis-layer files`);
+        }
+      }
+    } catch (analysisError) {
+      console.error("⚠️ Analysis file scan failed (continuing without):", analysisError.message);
+    }
+
     // Update modal again with loaded files (button will still be visible)
-    updatedModal = researchSynthesisModal(studies, studyId, sessionSummaries, transcripts, currentAnalysisMethod, stakeholderGuides);
+    updatedModal = researchSynthesisModal(studies, studyId, sessionSummaries, transcripts, currentAnalysisMethod, stakeholderGuides, analysisFiles);
     
     // Preserve existing private_metadata if any
     if (view.private_metadata) {
@@ -474,8 +527,8 @@ const handleLoadStudyNotes = async ({ ack, body, client }) => {
       console.error("Error fetching stakeholder guides:", error);
     }
 
-    // Update the modal with session summaries, transcripts, and stakeholder guides
-    const updatedModal = researchSynthesisModal(studies, studyId, sessionSummaries, transcripts, currentAnalysisMethod, stakeholderGuides);
+    // Update the modal (analysis files loaded by handleStudySelectionChange, not here)
+    const updatedModal = researchSynthesisModal(studies, studyId, sessionSummaries, transcripts, currentAnalysisMethod, stakeholderGuides, []);
 
     await client.views.update({
       view_id: view.id,
@@ -553,8 +606,11 @@ const handleResearchSynthesisSubmission = async ({ ack, body, view, client }) =>
       throw new Error("Please select an analysis method");
     }
 
+    // Extract selected analysis files count for validation
+    const selectedAnalysisCount = (view.state.values.analysis_files_list_0?.analysis_files_checkboxes?.selected_options || []).length;
+
     // At least one file must be selected
-    if (selectedSummaryIds.length === 0 && selectedTranscriptIds.length === 0 && selectedStakeholderGuideIds.length === 0 && !includeParticipantTracker && !includeResearchPlan) {
+    if (selectedSummaryIds.length === 0 && selectedTranscriptIds.length === 0 && selectedStakeholderGuideIds.length === 0 && selectedAnalysisCount === 0 && !includeParticipantTracker && !includeResearchPlan) {
       throw new Error("Please select at least one file or data source for analysis.");
     }
 
@@ -642,6 +698,23 @@ const handleResearchSynthesisSubmission = async ({ ack, body, view, client }) =>
     if (includeResearchPlan) {
       // Implementation needed
       console.log("Research plan selected - implementation needed");
+    }
+
+    // Fetch selected analysis files (from 04-analysis/ GitHub folders)
+    const selectedAnalysisFiles = view.state.values.analysis_files_list_0?.analysis_files_checkboxes?.selected_options || [];
+    if (selectedAnalysisFiles.length > 0) {
+      const decodedStudyPath = decodeURIComponent(study.path);
+      for (const opt of selectedAnalysisFiles) {
+        // Value format: analysis_{index}_{relative_path}
+        const relativePath = opt.value.replace(/^analysis_\d+_/, '');
+        const fullPath = `${decodedStudyPath}/primary-research/${relativePath}`;
+        allFiles.push({
+          filename: relativePath.split('/').pop(),
+          file_type: 'analysis',
+          file_path: fullPath,
+        });
+      }
+      console.log(`✅ Added ${selectedAnalysisFiles.length} analysis files to input`);
     }
 
     if (allFiles.length === 0) {
