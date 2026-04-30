@@ -112,13 +112,17 @@ Three-tier system with required parenthetical explanation:
 
 ### 4.8 Emoji usage
 
-**Decorative emoji:** Not used on H2/H3 headings. Editorial restraint.
+**H1 titles:** Clean text, no emoji. The masthead below carries context (study, researcher, date), so the title doesn't need decorative markers. Example: `# Research Report`, `# Affinity Map`, `# Session Summary`.
+
+**H2/H3 headings:** Emoji allowed only when it conveys severity, status, or category that the text alone doesn't convey. Otherwise clean text. Decorative emoji on headings is removed.
 
 **Status emoji:** Severity indicators (🔴🟡🟢) used only when text labels don't already convey the information. The standard favors text labels (`Critical`, `High`, `Medium`) over emoji in most cases.
 
 **Acceptable emoji uses:**
 - Evidence type indicators in tables (💬 quote, 🔴 issue, 👁️ observation, 🟢 positive)
 - Collapsible section markers where needed for scannability
+
+> **Updated April 30, 2026:** H1 emoji guidance changed from "required" to "not used." Supersedes earlier guidance. All templates should use clean H1 titles.
 
 ### 4.9 Footer pattern
 
