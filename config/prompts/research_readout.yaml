@@ -4,16 +4,17 @@
 id: research_readout
 name: run_research_readout
 label: "📊 Research Report"
-version: "v5.3"
+version: "v5.4"
 
 description: |
   Generate comprehensive, stakeholder-ready research reports from session summaries
-  and synthesis artifacts. Features professional GitHub styling, industry-standard
-  research documentation structure, and actionable recommendations framework.
+  and synthesis artifacts. Pentagram-style design language with per-finding
+  traceability (confidence levels, source citations), editorial numbering,
+  and masthead pattern.
 
 author: Qori R&D
 created: 2025-06-26
-last_updated: 2026-04-29
+last_updated: 2026-04-30
 
 # ═══════════════════════════════════════════════════════════
 # CONFIGURATION
@@ -27,12 +28,13 @@ input_processing: summarize_if_long
 input_variables:
   - research_folder_path        # Path to study folder in GitHub
   - study_name                  # Human-readable study name
-  - researcher_contact          # Lead researcher Slack handle
+  - researcher_contact          # Lead researcher name
   - study_channel               # Slack channel for this study
   - research_readout_data       # Aggregated research data from files
   - input_text                  # Additional context or raw text input
   - study_link                  # URL to full study documentation
   - team_members                # Team members to notify
+  - detected_files              # List of detected source files
 
 # ═══════════════════════════════════════════════════════════
 # AI GENERATION
@@ -50,9 +52,9 @@ ai_generation_tasks:
       1. ONLY use findings, quotes, and insights from the source data below
       2. NEVER invent quotes, participants, or findings
       3. NEVER mention products, features, or issues not in the source data
-      4. If the source data is empty or insufficient, say so - do not fabricate
-      5. Use participant IDs exactly as they appear (PT001, PT002, etc.)
-      6. Counts must be accurate (if 3 participants, say 3 - not 10 or 20)
+      4. If the source data is empty or insufficient, say so — do not fabricate
+      5. Use participant IDs in PT-### format (e.g., PT-001, PT-002)
+      6. Counts must be accurate (if 3 participants, say 3 — not 10 or 20)
 
       FORBIDDEN (hallucination indicators):
       - "checkout process" / "conversion rates" / "e-commerce" (unless in source)
@@ -60,6 +62,26 @@ ai_generation_tasks:
       - Participant counts that don't match source
       - Quotes not found verbatim in source
       - Generic findings not tied to specific evidence
+
+      CONFIDENCE ASSESSMENT (required for each finding):
+      Assess evidence strength using three levels. Always include a parenthetical
+      explanation of WHY you assigned that level:
+      - Strong: Multiple evidence types (quote + observed behavior), cross-participant
+        Example: Strong (verbatim quotes + observed task failure + WCAG violation)
+      - Moderate: Single participant but consistent with broader pattern
+        Example: Moderate (single participant, consistent with session 2 pattern)
+      - Limited: Single data point, inference required
+        Example: Limited (observer interpretation, no direct quote)
+
+      SOURCE CITATION (required for each finding):
+      For each finding, list the specific source documents that support it.
+      Use relative paths from the study's primary-research folder:
+      - Session summaries: ../03-fieldwork/session-summaries/[PT-ID]-session-summary.md
+      - Coded transcripts: ../03-fieldwork/coded-transcript-analysis/[pt-id]-coded-transcript-analysis.md
+      - Analysis outputs: ../04-analysis/[analysis-type]/[filename]
+
+      The participant IDs in the source filenames must match the IDs cited in the finding.
+      Use middle-dot (·) between sources.
 
       ============================================================
       SOURCE DATA
@@ -81,12 +103,12 @@ ai_generation_tasks:
       ============================================================
 
       Extract from source data:
-      - Participant count: Count unique PT### IDs in source
+      - Participant count: Count unique PT-### IDs in source
       - Session count: Same as participant count (1 session per participant)
       - Methodology: Look for "usability testing," "interviews," etc.
       - Product area: What product/app is being researched
 
-      Extract from research plan (for Research Overview section):
+      Extract from research plan (for "Why we conducted this research"):
       - Business context / why this research was conducted
       - Research objectives (what we set out to learn)
       - Research questions (specific questions we aimed to answer)
@@ -97,79 +119,54 @@ ai_generation_tasks:
       OUTPUT PRIORITIES - READ BEFORE WRITING
       ============================================================
 
-      CRITICAL: You MUST complete ALL sections of this report
-      through the final Qori attribution line. Do not stop early.
+      CRITICAL: You MUST complete ALL sections of this report. Do not stop early.
 
       To ensure completion:
-      - Limit Detailed Findings to the TOP 5 most critical/high
-        severity findings only. Use the full table+quote format
-        for these 5.
-      - Any remaining lower-severity findings should appear ONLY
-        in the "Findings at a Glance" summary table, not as
-        detailed finding blocks.
-      - Keep "What We Observed" to 2-3 sentences max per finding.
-      - Use 1-2 quotes per finding, not 3+.
-      - All sections after Detailed Findings (What's Working Well,
-        Participant Overview, Methodology, Recommended Actions,
-        Appendix) are REQUIRED. Do not skip them.
+      - Limit findings to the TOP 5 most critical/high severity
+      - Keep descriptions to 2-3 sentences per finding
+      - Use 1-2 quotes per finding, not 3+
+      - All sections after findings (What's Working, Recommended Actions,
+        Participants, Methodology, Appendix) are REQUIRED. Do not skip them.
 
       ============================================================
-      OUTPUT FORMAT - PROFESSIONAL GITHUB STYLING
+      OUTPUT FORMAT
       ============================================================
-
-      <div align="center">
 
       # Research Report
-      ## [Study name from source or variable]
 
-      **[Actual date]**
-
-      ---
-
-      | Participants | Sessions | Methodology | Lead Researcher |
-      |:------------:|:--------:|:-----------:|:---------------:|
-      | [Count] | [Count] | [Type] | {{researcher_contact}} |
-
-      </div>
+      **Study:** {{study_name}} &nbsp; | &nbsp; **Researcher:** {{researcher_contact}} &nbsp; | &nbsp; **Date:** [actual date inferred from data or use {{current_date}}]
 
       ---
 
-      ## Executive Summary
+      ## Summary
+
+      [2-3 sentence narrative summary that synthesizes the most important findings from THIS study. Reference specific findings, participant counts, and the core implication. Do not write generic UX observations — ground every sentence in this study's data.]
 
       > [!IMPORTANT]
-      > **Bottom Line:** [Single sentence capturing the most critical insight and its business implication]
+      > **Bottom line:** [Single sentence — the most critical insight and its implication for the product/service]
 
-      ### Key Takeaways
-
-      | Priority | Finding | Impact | Action Required |
-      |:--------:|:--------|:-------|:----------------|
-      | 🔴 | [Critical finding in one line] | [Business/user impact] | [Immediate action] |
-      | 🟡 | [High-priority finding] | [Impact] | [Action] |
-      | 🟢 | [What's working well] | [Positive impact] | [Maintain/enhance] |
+      | Priority | Finding | Action required |
+      |:--------:|---------|-----------------|
+      | **Critical** | [Finding title] | [Action] |
+      | **Critical** | [Finding title] | [Action] |
+      | **High** | [Finding title] | [Action] |
+      | **Medium** | [Finding title] | [Action] |
+      | **Working well** | [Positive finding] | [Action to preserve/replicate] |
 
       ---
 
-      ## Research Overview
+      ## Why we conducted this research
 
-      ### Why We Conducted This Research
+      [2-3 sentences: business context, what decision this research informs, key metrics if available. Extract from research plan.]
 
-      [Extract from research plan: 2-3 sentences explaining the business context. Focus on the problem/opportunity and decision this research informs. Include key metrics if available.]
-
-      ### Research Objectives
-
-      [Extract from research plan. Keep each objective to ONE concise line. Use learning-focused verbs, not output-focused verbs:]
+      ### Objectives
 
       - **Identify** [what barriers/issues we aimed to find]
       - **Understand** [what mental models/behaviors we aimed to learn]
       - **Evaluate** [what we aimed to assess]
       - **Prioritize** [what we aimed to rank/compare]
 
-      > [!NOTE]
-      > Avoid output-focused objectives like "Document..." — focus on what we aimed to *learn*, not what we aimed to *produce*.
-
-      ### Research Questions
-
-      [Extract from research plan. Keep questions concise — one line each if possible:]
+      ### Research questions
 
       1. [Question about user behavior or pain points]
       2. [Question about mental models or expectations]
@@ -178,279 +175,160 @@ ai_generation_tasks:
 
       ---
 
-      ## Findings at a Glance
+      ## 01 &nbsp;&nbsp; [Finding Title — Specific and Descriptive]
 
-      <table>
-      <tr>
-      <td width="33%" valign="top">
+      [2-3 sentence description of what was observed and why it matters. Be specific about the behavior, context, and consequence.]
 
-      ### 🔴 Critical Issues
-      **[Count] findings**
+      #### Evidence
 
-      - [Issue 1 - brief]
-      - [Issue 2 - brief]
+      > "[Exact verbatim quote from source]"
+      > — PT-001, [brief context — what they were doing when they said this]
 
-      </td>
-      <td width="33%" valign="top">
+      > "[Another quote if applicable]"
+      > — PT-003, [brief context]
 
-      ### 🟡 Improvements Needed
-      **[Count] findings**
+      **Severity** — Critical &nbsp;|&nbsp; **Affected** — [X] of [Y] participants &nbsp;|&nbsp; **Confidence** — [Strong/Moderate/Limited] ([parenthetical reasoning])
 
-      - [Issue 1 - brief]
-      - [Issue 2 - brief]
+      **Sources** — [PT-001 session summary](../03-fieldwork/session-summaries/PT-001-session-summary.md) · [PT-003 session summary](../03-fieldwork/session-summaries/PT-003-session-summary.md)
 
-      </td>
-      <td width="33%" valign="top">
+      #### Recommendation
 
-      ### 🟢 Working Well
-      **[Count] findings**
+      **Action** — [Specific, actionable recommendation]
 
-      - [Positive 1 - brief]
-      - [Positive 2 - brief]
+      **Rationale** — [Why this addresses the finding]
 
-      </td>
-      </tr>
-      </table>
+      **Suggested owner** — [Team] &nbsp;|&nbsp; **Effort** — [High/Medium/Low]
 
       ---
 
-      ## Detailed Findings
+      ## 02 &nbsp;&nbsp; [Finding Title]
 
-      <!-- MAX 5 detailed findings. Additional findings go in Findings at a Glance only. -->
-
-      ### Finding 1: [Specific title from data]
-
-      <table>
-      <tr>
-      <td width="70%" valign="top">
-
-      #### What We Observed
-
-      [2-3 sentence description grounded in source data. Be specific about the behavior, context, and consequence.]
-
-      #### Supporting Evidence
-
-      > "[Exact quote from source]"
-      >
-      > — **PT001** *[Brief context if available]*
-
-      > "[Another exact quote from source]"
-      >
-      > — **PT002** *[Brief context]*
-
-      </td>
-      <td width="30%" valign="top">
-
-      **Severity**
-
-      `🔴 CRITICAL`
-
-      **Frequency**
-
-      [X] of [Y] participants
-      ([percentage]%)
-
-      **Participants**
-
-      PT001, PT002, PT003
-
-      </td>
-      </tr>
-      </table>
-
-      <details>
-      <summary><strong>Recommendation</strong></summary>
-
-      **Suggested Action:** [Specific, actionable recommendation]
-
-      **Rationale:** [Why this addresses the finding]
-
-      **Owner:** [Suggested team/role]
-
-      **Effort Estimate:** [Low / Medium / High]
-
-      </details>
+      [Same format as Finding 01. Include description, evidence, metadata line with confidence, sources, and recommendation.]
 
       ---
 
-      ### Finding 2: [Specific title from data]
-
-      <table>
-      <tr>
-      <td width="70%" valign="top">
-
-      #### What We Observed
-
-      [2-3 sentence description grounded in source data.]
-
-      #### Supporting Evidence
-
-      > "[Exact quote from source]"
-      >
-      > — **PT00X** *[Brief context if available]*
-
-      </td>
-      <td width="30%" valign="top">
-
-      **Severity**
-
-      `🟡 HIGH`
-
-      **Frequency**
-
-      [X] of [Y] participants
-      ([percentage]%)
-
-      **Participants**
-
-      [IDs]
-
-      </td>
-      </tr>
-      </table>
-
-      <details>
-      <summary><strong>Recommendation</strong></summary>
-
-      **Suggested Action:** [Specific, actionable recommendation]
-
-      **Rationale:** [Why this addresses the finding]
-
-      **Owner:** [Suggested team/role]
-
-      **Effort Estimate:** [Low / Medium / High]
-
-      </details>
+      [Continue through Finding 05. MAX 5 findings. Each follows the exact same format.]
 
       ---
 
-      [Continue with Findings 3-5 using same format. STOP at 5 findings maximum, then proceed to "What's Working Well".]
-
-      ---
-
-      ## What's Working Well
+      ## What's working
 
       > [!TIP]
-      > These elements should be preserved and potentially expanded in future iterations.
+      > These elements should be preserved and used as patterns for future iterations.
 
-      | Positive Finding | Evidence | Participant(s) |
-      |:-----------------|:---------|:---------------|
-      | **[Positive 1]** | "[Supporting quote]" | PT00X |
-      | **[Positive 2]** | "[Supporting quote]" | PT00X |
-      | **[Positive 3]** | "[Supporting quote]" | PT00X |
+      | What works | Evidence | Participant |
+      |:-----------|:---------|:-----------:|
+      | **[Positive finding]** | "[Supporting quote]" | PT-001 |
+      | **[Positive finding]** | "[Supporting quote or observation]" | PT-002 |
+      | **[Positive finding]** | [Observation] | All |
+
+      [1-2 sentence paragraph explaining what pattern these positive findings represent and how it could be replicated across the product.]
 
       ---
 
-      ## Participant Overview
+      ## Recommended actions
 
-      | ID | Context | Key Contribution | Notable Quotes |
-      |:---|:--------|:-----------------|:---------------|
-      | **PT001** | [From participant context] | [What they highlighted] | [Brief memorable quote] |
-      | **PT002** | [From participant context] | [What they highlighted] | [Brief quote] |
-      | **PT003** | [From participant context] | [What they highlighted] | [Brief quote] |
+      #### Immediate (next 2 weeks)
 
-      <details>
-      <summary><strong>Sample Characteristics</strong></summary>
+      | # | Action | Addresses | Owner | Effort |
+      |:-:|--------|-----------|-------|:------:|
+      | 1 | [Specific action] | Finding 01 | [Team] | [H/M/L] |
+      | 2 | [Specific action] | Finding 03 | [Team] | [H/M/L] |
 
-      | Characteristic | Distribution |
-      |:---------------|:-------------|
-      | Total Participants | [N] |
-      | [Demographic 1 if known] | [Distribution] |
-      | [Demographic 2 if known] | [Distribution] |
+      #### Short-term (1–2 months)
+
+      | # | Action | Addresses | Owner | Effort |
+      |:-:|--------|-----------|-------|:------:|
+      | 1 | [Action] | Finding 02 | [Team] | [H/M/L] |
+      | 2 | [Action] | Finding 04 | [Team] | [H/M/L] |
+
+      #### Future considerations
+
+      | # | Action | Addresses | Notes |
+      |:-:|--------|-----------|-------|
+      | 1 | [Action] | Finding 05 | [Context] |
+      | 2 | [Action] | Working well | [Context] |
+
+      #### Follow-up research
 
       > [!NOTE]
-      > [Any notes about recruitment, sample limitations, or representation]
+      > These gaps emerged during analysis and warrant further investigation before final design decisions.
 
-      </details>
+      - [ ] [Research gap or question that emerged]
+      - [ ] [Another area needing investigation]
+      - [ ] [Third area if applicable]
+
+      ---
+
+      ## Participants
+
+      | ID | Context | Key contribution |
+      |:---|---------|------------------|
+      | **PT-001** | [Background, accessibility needs, usage context] | [What they uniquely highlighted] |
+      | **PT-002** | [Background] | [Contribution] |
+      | **PT-003** | [Background] | [Contribution] |
+
+      #### Sample composition
+
+      [X] participants. [Key demographic detail — e.g., "2 of 3 use assistive technology"]. App usage frequency: [range]. Devices: [types].
+
+      > [!NOTE]
+      > [Any caveats about sample size, recruitment limitations, or representativeness]
 
       ---
 
       ## Methodology
 
-      | Aspect | Details |
-      |:-------|:--------|
-      | **Research Type** | [From research plan or inferred] |
-      | **Sessions Conducted** | [Count] |
-      | **Session Duration** | [If known] |
-      | **Research Focus** | [What was being tested/explored] |
-      | **Recruitment Method** | [If known] |
-      | **Data Collection** | [Methods used] |
+      **Research type** — [From research plan or inferred — e.g., "Moderated usability testing with mixed methods approach"]
 
-      ---
+      **Approach** — [2-3 sentences: protocol used, what sessions explored, how data was collected]
 
-      ## Recommended Actions
+      **Sessions** — [Count] sessions, [duration] each
 
-      ### 🔴 Immediate Priority (Next 2 Weeks)
+      **Recruitment** — [Methods used, any prioritization criteria]
 
-      | # | Action | Addresses Finding | Owner | Effort |
-      |:-:|:-------|:------------------|:------|:------:|
-      | 1 | **[Specific action]** | [Finding title] | [Team] | [L/M/H] |
-      | 2 | **[Specific action]** | [Finding title] | [Team] | [L/M/H] |
+      **Data collection** — [Methods: think-aloud, screen recording, observer notes, etc.]
 
-      ### 🟡 Short-Term (1-2 Months)
+      #### References
 
-      | # | Action | Addresses Finding | Owner | Effort |
-      |:-:|:-------|:------------------|:------|:------:|
-      | 1 | **[Action]** | [Finding] | [Team] | [L/M/H] |
-      | 2 | **[Action]** | [Finding] | [Team] | [L/M/H] |
-
-      ### 🟢 Future Considerations
-
-      | # | Action | Addresses Finding | Notes |
-      |:-:|:-------|:------------------|:------|
-      | 1 | **[Action]** | [Finding] | [Context] |
-
-      ### Follow-Up Research Needed
-
-      > [!NOTE]
-      > These gaps emerged during analysis and warrant further investigation.
-
-      - [ ] [Research gap or question that emerged]
-      - [ ] [Another area needing investigation]
+      - [Methodology reference 1 — author, title or standard]
+      - [Methodology reference 2]
+      - [Methodology reference 3 if applicable]
 
       ---
 
       ## Appendix
 
       <details>
-      <summary><strong>Related Artifacts</strong></summary>
+      <summary><strong>Related artifacts</strong></summary>
 
       | Artifact | Location | Status |
-      |:---------|:---------|:-------|
-      | Session Summaries | [{{research_folder_path}}/03-fieldwork/session-summaries/]({{research_folder_path}}/03-fieldwork/session-summaries/) | ✅ Complete |
-      | Affinity Map | [{{research_folder_path}}/04-analysis/affinity-mapping/]({{research_folder_path}}/04-analysis/affinity-mapping/) | [Status] |
-      | Full Study Documentation | [Link]({{study_link}}) | ✅ Available |
+      |----------|----------|--------|
+      | [PT-001 session summary] | [03-fieldwork/session-summaries/PT-001-session-summary.md](../03-fieldwork/session-summaries/PT-001-session-summary.md) | Complete |
+      | [PT-002 session summary] | [link] | Complete |
+      | [PT-003 session summary] | [link] | Complete |
+      | Coded transcripts | [03-fieldwork/coded-transcript-analysis/](../03-fieldwork/coded-transcript-analysis/) | Complete |
+      | [Analysis artifact if used] | [link] | [Status] |
+      | Research plan | [01-planning/research_plan.md](../01-planning/research_plan.md) | Complete |
+
+      Populate with REAL paths using participant IDs from the data. Do not use placeholders.
 
       </details>
 
       <details>
-      <summary><strong>Research Validity Checklist</strong></summary>
+      <summary><strong>Research validity checklist</strong></summary>
 
-      | Criterion | Status | Notes |
-      |:----------|:------:|:------|
-      | All quotes verbatim from source | ✅ | Verified |
-      | All participant IDs match source | ✅ | PT### format preserved |
-      | Participant count accurate | ✅ | [N] participants |
-      | No fabricated findings | ✅ | All grounded in data |
-      | Findings specific to this study | ✅ | No generic insights |
+      | Criterion | Verified |
+      |-----------|:--------:|
+      | All quotes verbatim from source materials | ✓ |
+      | Participant IDs match source format (PT-###) | ✓ |
+      | Participant count accurate to source | ✓ |
+      | No fabricated findings | ✓ |
+      | Findings specific to this study, not generic | ✓ |
+      | Source documents linked for each finding | ✓ |
+      | Confidence levels declared per finding | ✓ |
 
       </details>
-
-      ---
-
-      <div align="center">
-
-      ---
-
-      **Questions about this research?**
-
-      Contact {{researcher_contact}} | Channel: {{study_channel}}
-
-      ---
-
-      *Generated by Qori • {{current_date}}*
-
-      </div>
 
       ============================================================
       QUALITY CHECKS (do not include in output)
@@ -458,14 +336,17 @@ ai_generation_tasks:
 
       Before outputting, verify:
       - Every quote appears EXACTLY in source
-      - Participant IDs are PT### format, not P1 or P01
+      - Participant IDs use PT-### format (hyphenated)
       - Participant count matches unique IDs in source
       - No mentions of products/features not in source
       - Findings are specific to THIS study, not generic
-      - GitHub HTML elements are properly closed
       - Tables have consistent column counts
+      - Every finding has a Confidence level with parenthetical reasoning
+      - Every finding has a Sources line with real document links
+      - Summary narrative references specific findings from THIS data
+      - Numbered findings use ## 01 &nbsp;&nbsp; format
 
-      Output ends at the centered Qori attribution line.
+      Do NOT output a footer or "Generated by Qori" line — that is added automatically.
 
 # ═══════════════════════════════════════════════════════════
 # OUTPUT
@@ -475,7 +356,7 @@ output_template: |
 
 output_options:
   path: "05-findings/"
-  filename: "research_readout_{{study_name}}_{{current_date}}.md"
+  filename: "research-readout-{{study_name}}-{{current_date_iso}}.md"
 
 # ═══════════════════════════════════════════════════════════
 # METADATA (documentation only — not read by backend)
@@ -485,74 +366,36 @@ core_files:
     file: "research_plan.md"
     required: true
     extract: ["objectives", "methods", "success_criteria", "timeline"]
-    description: "Study objectives, research methods, and success criteria"
 
   session_summaries:
     folder: "03-fieldwork/session-summaries/"
     required: true
     extract: ["pain_points", "opportunities", "insights", "quotes", "participant_context"]
-    description: "Session summaries with coded findings per participant"
     file_pattern: "*session_summary*.md"
-    processing: "aggregate_all_sessions"
 
   participant_tracker:
     file: "participant_tracker.md"
     required: false
     extract: ["demographics", "sample_size", "completion_status"]
-    description: "Participant demographics and completion data"
 
 optional_files:
   affinity_mapping:
     file: "04-analysis/affinity-mapping/*.md"
     extract: ["themes", "evidence_counts", "recommendations"]
-    description: "Synthesized themes from affinity analysis"
 
   journey_mapping:
     file: "04-analysis/journey-mapping/*.md"
     extract: ["stages", "pain_points", "opportunities"]
-    description: "User journey analysis"
 
   personas:
     file: "04-analysis/personas/*.md"
     extract: ["user_types", "behaviors", "goals"]
-    description: "User archetypes"
 
 auto_variables:
-  - current_date: |
-      new Date().toISOString().split('T')[0]
-  - github_file_link: |
-      generate_github_link(study_name, current_date) || null
-  - detected_files: |
-      scan_research_folder(research_folder_path, core_files, optional_files)
-  - file_quality_score: |
-      assess_file_completeness(detected_files, core_files, optional_files)
-  - participant_count: |
-      extract_from_md(participant_tracker, "participants") || "Unknown"
-  - session_count: |
-      count_completed_sessions(participant_tracker, "completed") || "Unknown"
-  - methodology_type: |
-      extract_methodology(research_plan) || "Usability Testing"
-  - product_area: |
-      extract_product_area(research_plan) || "Digital Services"
-
-slack_output:
-  post_in_channel: true
-  create_thread: false
-  title_format: "Research Report Ready"
-  ping_team: ["{{researcher_contact}}", "{{team_members}}"]
-  interactive_elements:
-    - text: "View Full Research Report"
-      url: "{{github_file_link}}"
-
-slack_message_format: |
-  **Research Report Complete**
-
-  **Study:** {{study_name}}
-  **Participants:** {{participant_count}} | **Sessions:** {{session_count}}
-
-  **View Full Report:** [Link]({{github_file_link}})
-
-  *Questions?* Contact {{researcher_contact}}
+  - current_date: new Date().toISOString().split('T')[0]
+  - detected_files: scan_research_folder(research_folder_path, core_files, optional_files)
+  - participant_count: extract_from_md(participant_tracker, "participants") || "Unknown"
+  - session_count: count_completed_sessions(participant_tracker, "completed") || "Unknown"
 
 notify:
   - role: research_team
@@ -561,19 +404,33 @@ notify:
     message: "Research report for {{study_name}} is ready for review."
 
 notes: |
-  v5.3 Changes (Standards Polish):
-  - Applied canonical key ordering (IDENTITY → CONFIGURATION → INPUTS → AI GENERATION → OUTPUT → METADATA)
-  - Removed dead config: llm_config
-  - Removed dead output_options keys: default_delivery, slack_format, github_format
-  - Added inline comments on input_variables
-  - Removed decorative emoji from H2 headings in prompt output
-  - Standardized footer to italic line
-  - Moved slack_output, slack_message_format to METADATA as dead config
-  - Kept core_files, optional_files, auto_variables in METADATA
-  - Kept <div align="center"> header/footer and HTML tables (Phase 4)
-  - Kept <details> for recommendations, sample characteristics, artifacts, validity checklist
+  v5.4 Changes (Design Language Translation):
+  - Translated locked design from docs/design-references/research_readout_traceable.md
+  - Pentagram-style design: masthead, editorial numbered findings, editorial restraint
+  - Added per-finding traceability: Confidence levels (Strong/Moderate/Limited with
+    required parenthetical reasoning) and Sources lines (relative links to actual
+    source documents)
+  - Removed all HTML tables — GFM pipe tables and prose only
+  - Removed <details> from recommendations — now inline
+  - Removed <div align="center"> header/footer — masthead + backend footer
+  - Removed "Findings at a Glance" section (Summary table covers it)
+  - Removed emoji severity labels — text labels (Critical/High/Medium)
+  - Removed "Notable Quotes" column from Participants — quotes in findings
+  - Methodology: table → bold-em-dash paragraph format
+  - Participants: collapsible Sample Characteristics → inline prose paragraph
+  - Related Artifacts: populated with real paths, not placeholders
+  - Validity checklist: added source and confidence verification rows
+  - Footer removed from prompt — backend buildTraceabilityFooter handles it
+  - Filename: research-readout-{{study_name}}-{{current_date_iso}}.md (slugified)
+
+  Known issue: Source links in findings may 404 if actual filenames in the repo
+  don't match the standard naming pattern (e.g., trailing hyphens in filenames).
+  Will be fixed retroactively when existing files are audited.
+
+  v5.3: Standards Polish (canonical structure, dead config removal)
+  v5.2: Original template
 
 output_use: |
-  Generate comprehensive, stakeholder-ready research reports from session summaries
-  and synthesis artifacts. Features professional GitHub styling, industry-standard
-  research documentation structure, and actionable recommendations framework.
+  Generate comprehensive, stakeholder-ready research reports with per-finding
+  traceability. Pentagram-style design language: masthead, editorial numbering,
+  confidence levels, source citations, methodology references.
