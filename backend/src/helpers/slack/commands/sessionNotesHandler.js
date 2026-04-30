@@ -310,53 +310,45 @@ const handleSessionNotesSubmission = async ({ ack, body, view, client }) => {
         return;
       }
 
-      // Use transcript_upload.yaml for upload flow
-      yamlTemplateName = "transcript_upload.yaml";
+    }
 
-      // Store raw content in GitHub for uploaded files or pasted text
-      let rawFilePath = null;
-      let rawFileUrl = null;
-      try {
-        const study = await getResearchStudyWithRoles(templateData.study_name);
+    let result;
+    let fileName;
 
-        // Create raw file path: study.link/primary-research/03-fieldwork/session-{study_name}/raw-transcript/{participant_name}
-        const rawFileName = `${templateData.participant_name}_raw_transcript_${new Date().toISOString().split('T')[0]}.txt`;
-        const baseFolder = decodeURIComponent(study.path);
-        rawFilePath = `${baseFolder}/primary-research/03-fieldwork/session-${templateData.study_name}/raw-transcript/${rawFileName}`;
+    if (isManual) {
+      // Manual notes: process through session_notes.yaml for AI structuring
+      const study = await getResearchStudyWithRoles(templateData.study_name);
+      const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, yamlTemplateName);
+      renderedYaml = await processYamlTemplate(file.content, templateData, study.path);
+      console.log("🚀 ~ handleSessionNotesSubmission ~ renderedYaml:", renderedYaml);
+      result = renderedYaml.result;
+      const urlParts = result.path.split('/');
+      fileName = urlParts[urlParts.length - 1];
+    } else {
+      // Transcript upload: save raw content directly to GitHub (no AI coding step)
+      // The /qori-analyze command handles all analysis from the raw transcript
+      const study = await getResearchStudyWithRoles(templateData.study_name);
+      const baseFolder = decodeURIComponent(study.path);
+      const transcriptFileName = `${templateData.participant_name}-transcript-${new Date().toISOString().split('T')[0]}.md`;
+      const transcriptPath = `${baseFolder}/primary-research/03-fieldwork/transcripts/${transcriptFileName}`;
 
-        // Add metadata header to the raw content
-        const rawContentWithHeader = `# Raw Transcript - ${templateData.participant_name}
+      const transcriptContent = `# Session Transcript: ${templateData.participant_name}
+
 **Study:** ${templateData.study_name}
-**Session Date:** ${templateData.session_date}
-**Session Time:** ${templateData.session_time}
+**Session date:** ${templateData.session_date}
+**Session time:** ${templateData.session_time}
 **Researcher:** ${templateData.researcher}
-**Created:** ${new Date().toISOString()}
+**Uploaded:** ${new Date().toISOString()}
 
 ---
 
-${rawContent}`;
+${templateData.input_text}`;
 
-        // Store raw content in GitHub
-        const rawFileResult = await createOrUpdateFileOnGitHub(rawFilePath, rawContentWithHeader);
-        rawFileUrl = rawFileResult.url;
-
-        console.log("Raw file stored in GitHub:", rawFileResult);
-      } catch (rawError) {
-        console.error("Error storing raw file in GitHub:", rawError);
-        // Continue with normal flow even if raw storage fails
-      }
+      const githubResult = await createOrUpdateFileOnGitHub(transcriptPath, transcriptContent);
+      result = githubResult;
+      fileName = transcriptFileName;
+      console.log("✅ Raw transcript saved to GitHub:", transcriptPath);
     }
-
-    // Process with YAML template
-    const study = await getResearchStudyWithRoles(templateData.study_name);
-    const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, yamlTemplateName);
-    renderedYaml = await processYamlTemplate(file.content, templateData, study.path);
-    console.log("🚀 ~ handleSessionNotesSubmission ~ renderedYaml:", renderedYaml);
-
-    const { result } = renderedYaml;
-
-    const urlParts = result.path.split('/');
-    const fileName = urlParts[urlParts.length - 1];
 
     // Store the study note in the database
     const studyNoteData = {
