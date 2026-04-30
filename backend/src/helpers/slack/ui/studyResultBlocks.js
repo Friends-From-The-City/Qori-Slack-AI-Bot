@@ -1,7 +1,7 @@
 const { getResearchStudyWithRoles } = require('../../../services/research_study.service');
 
 // Generic function to generate study result blocks with action buttons
-const generateStudyResultBlocks = (studyName, study, url, channelId, documentType, briefData = null) => {
+const generateStudyResultBlocks = (studyName, study, url, channelId, documentType) => {
   const actionButtons = {
     plan: [
       {
@@ -25,7 +25,9 @@ const generateStudyResultBlocks = (studyName, study, url, channelId, documentTyp
         text: { type: 'plain_text', text: 'Approve' },
         style: 'primary',
         action_id: 'approve_brief',
-        value: JSON.stringify({ studyName, channelId, url, briefData }),
+        // Note: briefData removed from value to avoid exceeding Slack's 2000 char limit
+        // The approval handler has fallback logic using studyName + url
+        value: JSON.stringify({ studyName, channelId, url }),
       },
       {
         type: 'button',

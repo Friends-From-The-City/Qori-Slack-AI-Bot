@@ -1556,32 +1556,10 @@ slackApp.view('research_brief_modal', async ({ ack, body, view, client }) => {
     }
   }
 
-  // Prepare brief data to pass through approval flow
-  // Only include requestedBy if we have a valid user ID (not null/undefined)
-  const briefData = {
-    project_title: data.project_title,
-    requestor_name: data.requestor_name,
-    ...(requestorUserId && { requestedBy: requestorUserId }), // Only include if we have a user ID
-    lead_researcher: data.lead_researcher,
-    research_team: data.research_team,
-    business_context: data.business_context,
-    research_objectives: data.research_objectives,
-    research_questions: data.research_questions,
-    user_journeys_in_scope: data.user_journeys_in_scope,
-    target_barriers: data.target_barriers,
-    hypotheses: data.hypotheses,
-    research_method: data.research_method,
-    method_rationale: data.method_rationale,
-    participant_criteria: data.participant_criteria,
-    sample_size: data.sample_size,
-    timeline_weeks: data.timeline_weeks,
-    deadline: data.deadline,
-    constraints: data.constraints,
-    brief_url: url,
-  };
-
-  // Generate blocks with approval buttons (pass briefData)
-  const blocks = generateStudyResultBlocks(displayStudyName, study, url, channelId, 'brief', briefData);
+  // Generate blocks with approval buttons
+  // Note: briefData removed from button value to avoid exceeding Slack's 2000 char limit
+  // The approval handler uses fallback logic with studyName + url
+  const blocks = generateStudyResultBlocks(displayStudyName, study, url, channelId, 'brief');
 
   // For research briefs from requests, send to stakeholder (requestor) for approval
   if (isFromRequest) {
