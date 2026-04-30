@@ -284,14 +284,15 @@ const handleStudySelectionChange = async ({ ack, body, client }) => {
       throw new Error("Modal has duplicate block_ids");
     }
 
-    console.log(`🚀 ~ Updating modal with ${sessionSummaries.length} summaries and ${transcripts.length} transcripts`);
+    console.log(`🚀 ~ Updating modal with ${sessionSummaries.length} summaries, ${transcripts.length} transcripts, ${analysisFiles.length} analysis files`);
+    console.log(`🚀 ~ Analysis files:`, analysisFiles.map(f => f.name));
 
     await client.views.update({
       view_id: view.id,
       view: updatedModal
     });
 
-    console.log("✅ Modal updated successfully with files");
+    console.log("✅ Modal updated successfully with files and analysis");
 
   } catch (error) {
     console.error("🚨 Error in handleStudySelectionChange:", error);

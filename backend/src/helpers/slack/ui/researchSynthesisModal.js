@@ -338,16 +338,18 @@ const researchSynthesisModal = (
         },
       ]),
 
-      // Prior Analysis (optional) — analysis-layer files from 04-analysis/
-      ...(analysisFileOptions.length > 0 ? [
-        {
-          type: "section",
-          block_id: "analysis_files_header",
-          text: {
-            type: "mrkdwn",
-            text: `*Prior Analysis (optional)*\n${analysisFilesCount} ${analysisFilesCount === 1 ? 'file' : 'files'} available from prior synthesis`,
-          },
+      // Prior Analysis — analysis-layer files from 04-analysis/
+      {
+        type: "section",
+        block_id: "analysis_files_header",
+        text: {
+          type: "mrkdwn",
+          text: analysisFilesCount > 0
+            ? `*Prior Analysis*\n${analysisFilesCount} ${analysisFilesCount === 1 ? 'file' : 'files'} available from prior synthesis`
+            : `*Prior Analysis*\nNo prior analysis files found for this study`,
         },
+      },
+      ...(analysisFileOptions.length > 0 ? [
         {
           type: "context",
           block_id: "analysis_files_help",
@@ -371,7 +373,18 @@ const researchSynthesisModal = (
             options: analysisFileOptions.slice(0, 10),
           },
         },
-      ] : []),
+      ] : [
+        {
+          type: "context",
+          block_id: "analysis_files_empty",
+          elements: [
+            {
+              type: "mrkdwn",
+              text: "Run affinity mapping or another analysis method first to build a foundation for downstream synthesis. Without prior analysis, the synthesis will work from session data alone.",
+            },
+          ],
+        },
+      ]),
 
       // Context Data
       // {
