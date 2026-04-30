@@ -240,105 +240,7 @@ const researchSynthesisModal = (
       ] : []),
 
 
-      // Session Summaries
-      {
-        type: "section",
-        block_id: "session_summaries_header",
-        text: {
-          type: "mrkdwn",
-          text: `*Session Summaries*\n${summariesCount} ${summariesCount === 1 ? 'file' : 'files'} available`,
-        },
-      },
-      ...(sessionSummaryOptions.length > 0 ? (() => {
-        // Split into chunks of 10 (Slack limit)
-        const chunks = [];
-        for (let i = 0; i < sessionSummaryOptions.length; i += 10) {
-          chunks.push(sessionSummaryOptions.slice(i, i + 10));
-        }
-        return chunks.map((chunk, chunkIndex) => ({
-          type: "section",
-          block_id: `session_summaries_list_${chunkIndex}`,
-          text: { 
-            type: "mrkdwn", 
-            text: chunkIndex === 0 ? "Select session summaries:" : `_Additional summaries (${chunkIndex + 1}/${chunks.length}):_` 
-          },
-          accessory: {
-            type: "checkboxes",
-            action_id: "session_summaries_checkboxes",
-            options: chunk,
-          },
-        }));
-      })() : [
-        {
-          type: "context",
-          elements: [ { type: "mrkdwn", text: "No session summaries available for this study." } ],
-        },
-      ]),
-
-      // Session Notes & Transcripts (coded transcripts + raw transcript files only)
-      {
-        type: "section",
-        block_id: "transcripts_header",
-        text: {
-          type: "mrkdwn",
-          text: `*Session Notes & Transcripts*\n${transcriptsCount} ${transcriptsCount === 1 ? 'file' : 'files'} available`,
-        },
-      },
-      ...(transcriptOptions.length > 0 ? [{
-        type: "section",
-        block_id: "transcripts_list_0",
-        text: {
-          type: "mrkdwn",
-          text: "Select session notes & transcripts:"
-        },
-        accessory: {
-          type: "checkboxes",
-          action_id: "transcripts_checkboxes",
-          options: transcriptOptions.slice(0, 10),
-        },
-      }] : [
-        {
-          type: "context",
-          elements: [ { type: "mrkdwn", text: "No session notes or transcripts available for this study." } ],
-        },
-      ]),
-
-      // Stakeholder Notes & Synthesis
-      {
-        type: "section",
-        block_id: "stakeholder_guides_header",
-        text: {
-          type: "mrkdwn",
-          text: `*Stakeholder Notes & Synthesis*\n${stakeholderGuidesCount} ${stakeholderGuidesCount === 1 ? 'file' : 'files'} available`,
-        },
-      },
-      ...(stakeholderGuideOptions.length > 0 ? (() => {
-        // Split into chunks of 10 (Slack limit)
-        const chunks = [];
-        for (let i = 0; i < stakeholderGuideOptions.length; i += 10) {
-          chunks.push(stakeholderGuideOptions.slice(i, i + 10));
-        }
-        return chunks.map((chunk, chunkIndex) => ({
-          type: "section",
-          block_id: `stakeholder_guides_list_${chunkIndex}`,
-          text: { 
-            type: "mrkdwn", 
-            text: chunkIndex === 0 ? "Select stakeholder files:" : `_Additional files (${chunkIndex + 1}/${chunks.length}):_` 
-          },
-          accessory: {
-            type: "checkboxes",
-            action_id: "stakeholder_guides_checkboxes",
-            options: chunk,
-          },
-        }));
-      })() : [
-        {
-          type: "context",
-          elements: [ { type: "mrkdwn", text: "No stakeholder notes or synthesis available for this study." } ],
-        },
-      ]),
-
-      // Prior Analysis — analysis-layer files from 04-analysis/
+      // Prior Analysis — analysis-layer files from 04-analysis/ (FIRST — most consequential input)
       {
         type: "section",
         block_id: "analysis_files_header",
@@ -383,6 +285,102 @@ const researchSynthesisModal = (
               text: "Run affinity mapping or another analysis method first to build a foundation for downstream synthesis. Without prior analysis, the synthesis will work from session data alone.",
             },
           ],
+        },
+      ]),
+
+      // Session Summaries
+      {
+        type: "section",
+        block_id: "session_summaries_header",
+        text: {
+          type: "mrkdwn",
+          text: `*Session Summaries*\n${summariesCount} ${summariesCount === 1 ? 'file' : 'files'} available`,
+        },
+      },
+      ...(sessionSummaryOptions.length > 0 ? (() => {
+        const chunks = [];
+        for (let i = 0; i < sessionSummaryOptions.length; i += 10) {
+          chunks.push(sessionSummaryOptions.slice(i, i + 10));
+        }
+        return chunks.map((chunk, chunkIndex) => ({
+          type: "section",
+          block_id: `session_summaries_list_${chunkIndex}`,
+          text: {
+            type: "mrkdwn",
+            text: chunkIndex === 0 ? "Select session summaries:" : `_Additional summaries (${chunkIndex + 1}/${chunks.length}):_`
+          },
+          accessory: {
+            type: "checkboxes",
+            action_id: "session_summaries_checkboxes",
+            options: chunk,
+          },
+        }));
+      })() : [
+        {
+          type: "context",
+          elements: [ { type: "mrkdwn", text: "No session summaries available for this study." } ],
+        },
+      ]),
+
+      // Session Notes & Transcripts
+      {
+        type: "section",
+        block_id: "transcripts_header",
+        text: {
+          type: "mrkdwn",
+          text: `*Session Notes & Transcripts*\n${transcriptsCount} ${transcriptsCount === 1 ? 'file' : 'files'} available`,
+        },
+      },
+      ...(transcriptOptions.length > 0 ? [{
+        type: "section",
+        block_id: "transcripts_list_0",
+        text: {
+          type: "mrkdwn",
+          text: "Select session notes & transcripts:"
+        },
+        accessory: {
+          type: "checkboxes",
+          action_id: "transcripts_checkboxes",
+          options: transcriptOptions.slice(0, 10),
+        },
+      }] : [
+        {
+          type: "context",
+          elements: [ { type: "mrkdwn", text: "No session notes or transcripts available for this study." } ],
+        },
+      ]),
+
+      // Stakeholder Notes & Synthesis
+      {
+        type: "section",
+        block_id: "stakeholder_guides_header",
+        text: {
+          type: "mrkdwn",
+          text: `*Stakeholder Notes & Synthesis*\n${stakeholderGuidesCount} ${stakeholderGuidesCount === 1 ? 'file' : 'files'} available`,
+        },
+      },
+      ...(stakeholderGuideOptions.length > 0 ? (() => {
+        const chunks = [];
+        for (let i = 0; i < stakeholderGuideOptions.length; i += 10) {
+          chunks.push(stakeholderGuideOptions.slice(i, i + 10));
+        }
+        return chunks.map((chunk, chunkIndex) => ({
+          type: "section",
+          block_id: `stakeholder_guides_list_${chunkIndex}`,
+          text: {
+            type: "mrkdwn",
+            text: chunkIndex === 0 ? "Select stakeholder files:" : `_Additional files (${chunkIndex + 1}/${chunks.length}):_`
+          },
+          accessory: {
+            type: "checkboxes",
+            action_id: "stakeholder_guides_checkboxes",
+            options: chunk,
+          },
+        }));
+      })() : [
+        {
+          type: "context",
+          elements: [ { type: "mrkdwn", text: "No stakeholder notes or synthesis available for this study." } ],
         },
       ]),
 
