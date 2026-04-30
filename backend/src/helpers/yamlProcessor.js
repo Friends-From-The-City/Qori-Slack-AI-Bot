@@ -6,6 +6,19 @@ const path = require('path');
 const { createOrUpdateFileOnGitHub } = require('./github');
 const { executeAiGenerationTasks } = require('./langchain');
 
+// Slugify a filename: lowercase, hyphens, no spaces or special chars, preserve extension
+function slugifyFilename(filename) {
+  const ext = path.extname(filename);
+  const base = path.basename(filename, ext);
+  const slugged = base
+    .toLowerCase()
+    .replace(/[_\s]+/g, '-')     // underscores and spaces → hyphens
+    .replace(/[^a-z0-9-\.]/g, '') // strip anything that isn't alphanumeric, hyphen, or dot
+    .replace(/-+/g, '-')          // collapse multiple hyphens
+    .replace(/^-|-$/g, '');       // trim leading/trailing hyphens
+  return slugged + ext.toLowerCase();
+}
+
 // Build traceability metadata footer (appended to every generated document)
 function buildTraceabilityFooter(yamlConfig, inputValues) {
   const now = new Date();
@@ -52,7 +65,8 @@ function generateOutputTemplate(outputTemplate, { aiGenerated, ...inputValues })
   return template({
     ...inputValues,
     current_date: format(new Date(), 'MMMM d, yyyy'),
-    ai_generated: aiGenerated, // Map to the expected template variable name
+    current_date_iso: format(new Date(), 'yyyy-MM-dd'),
+    ai_generated: aiGenerated,
   });
 }
 
@@ -74,7 +88,7 @@ async function processYamlTemplate(rawYamlContent, inputValues, baseFolderEncode
   // 4. Prepare LangChain tasks for AI generation (optional)
   let aiResponses = {};
   if (yamlConfig.ai_generation_tasks && yamlConfig.ai_generation_tasks.length > 0) {
-    aiResponses = await executeAiGenerationTasks(yamlConfig.ai_generation_tasks, { ...inputValues, current_date: format(new Date(), 'MMMM d, yyyy') });
+    aiResponses = await executeAiGenerationTasks(yamlConfig.ai_generation_tasks, { ...inputValues, current_date: format(new Date(), 'MMMM d, yyyy'), current_date_iso: format(new Date(), 'yyyy-MM-dd') });
     console.log("🚀 ~ processYamlTemplate ~ aiResponses:", aiResponses)
   } else {
     aiResponses = {};
@@ -90,17 +104,20 @@ async function processYamlTemplate(rawYamlContent, inputValues, baseFolderEncode
   const filenameTemplate = (yamlConfig.output_options && yamlConfig.output_options.filename) || 'research_brief.md';
   const filePathTemplate = (yamlConfig.output_options && yamlConfig.output_options.path) || '';
 
-  // Render filename and path with Handlebars
-  const filename = generateOutputTemplate(filenameTemplate, {
+  // Render filename with Handlebars and slugify for clean URLs
+  const rawFilename = generateOutputTemplate(filenameTemplate, {
     ...inputValues,
     aiGenerated: aiResponses,
     current_date: format(new Date(), 'MMMM d, yyyy'),
+    current_date_iso: format(new Date(), 'yyyy-MM-dd'),
   });
+  const filename = slugifyFilename(rawFilename);
 
   const filePath = generateOutputTemplate(filePathTemplate, {
     ...inputValues,
     aiGenerated: aiResponses,
     current_date: format(new Date(), 'MMMM d, yyyy'),
+    current_date_iso: format(new Date(), 'yyyy-MM-dd'),
   });
 
   // 7. Append traceability metadata footer and push to GitHub
