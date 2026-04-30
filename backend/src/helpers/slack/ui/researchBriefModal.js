@@ -131,7 +131,7 @@ const researchBriefModal = {
         action_id: "learning_objectives_input",
         placeholder: {
           type: "plain_text",
-          text: "- Where veterans expect to find [feature]\n- How veterans mentally categorize...\n- Which navigation pattern enables faster...",
+          text: "Where veterans expect to find X, How they categorize Y, Which pattern enables Z...",
         },
         multiline: true,
       },
