@@ -128,6 +128,10 @@ These are from a codebase audit. Tanzeel (original backend developer) is no long
 
 ## Architecture Decisions
 
+### Design Language Reference Template (updated April 30, 2026)
+
+`config/prompts/research_readout.yaml` (v5.4.1) is the first template to fully embody the locked design language from `docs/design-references/research_readout_traceable.md`. It demonstrates: Pentagram-style masthead, editorial numbered findings (`## 01 &nbsp;&nbsp;`), per-finding confidence levels with parenthetical reasoning, per-finding source citations from `{{detected_files}}`, bold-em-dash methodology format, and backend-injected traceability footer. Use this as the reference when translating the design language to other templates.
+
 ### YAML Template Location (decided April 29, 2026)
 
 Templates migrated from `beta-test/YAML Templates/` to `config/prompts/`. Path abstracted to `YAML_TEMPLATE_PATH` constant in `github.js`. The `beta-test/` directory has been deleted entirely — it was a legacy testing dump containing YAML templates, stale modal drafts, and test data.

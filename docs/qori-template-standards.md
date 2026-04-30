@@ -98,6 +98,8 @@ Below the metadata line, lists clickable links to source documents. Use middle-d
 **Sources** — [Doc 1](path) · [Doc 2](path) · [Doc 3](path)
 ```
 
+> **Lesson from v5.4.1:** Source paths must come from `{{detected_files}}` verbatim — never constructed from patterns. The LLM should copy exact filenames from the detected files list and prepend `../` for relative linking. Pattern-based path construction (e.g., `../03-fieldwork/session-summaries/PT-001-session-summary.md`) produces 404s when real filenames differ from the pattern (trailing hyphens, different casing, date suffixes). The backend (`readoutHandler.js`) populates `{{detected_files}}` with real paths scanned from the study folder.
+
 ### 4.7 Confidence levels
 
 Three-tier system with required parenthetical explanation:
@@ -202,13 +204,20 @@ This makes the evidence basis explicit rather than presenting all findings with 
 
 ### 6.3 Real artifact links
 
-The Related Artifacts table in appendices must be populated with actual paths to source documents, not placeholders.
+The Related Artifacts table in appendices must be populated with actual paths to source documents, not placeholders. Include **all** artifact categories when files are present:
+
+- **Planning:** research plan, research brief, discussion guide
+- **Fieldwork:** session summaries (one row per participant), coded transcripts
+- **Analysis:** affinity map, journey map, personas, usability issues, jobs to be done, design opportunities, service blueprint
+- **Reference:** participant tracker
+
+Paths come from `{{detected_files}}` (same source-of-truth principle as per-finding citations). Only the latest version of each file is included — the backend deduplicates when multiple date-stamped versions exist.
 
 ```markdown
 | Artifact | Location | Status |
 |----------|----------|--------|
-| Session summaries | `03-fieldwork/session-summaries/` | Complete |
-| Affinity map | `04-analysis/affinity-mapping/` | Complete |
+| PT-001 session summary | [path from detected_files](../path) | Complete |
+| Affinity map | [path from detected_files](../path) | Complete |
 ```
 
 ### 6.4 Future enhancements
