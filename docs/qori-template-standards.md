@@ -48,12 +48,14 @@ Example:
 
 Editorial style (`## 01 &nbsp;&nbsp; Section Title`) used **only** on:
 - Findings documents (numbered findings)
-- Sequential documents (discussion guides, step-by-step procedures)
+- Sequential documents with inherent chronological order (discussion guides, step-by-step procedures)
 
 **Not** used on:
-- Planning documents
+- Categorical planning documents (research plans, briefs) — section order is flexible
 - Reference documents
 - Communication documents
+
+> **Clarification (April 30, 2026):** Discussion guides use editorial numbering because they're chronological (Introduction → Warm-up → Tasks → Retrospective → Closing). Research plans do NOT use numbering because their sections are categorical (Background, Objectives, Method) with flexible order.
 
 ```markdown
 ## 01 &nbsp;&nbsp; Finding Title Here

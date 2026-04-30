@@ -165,3 +165,7 @@ Every template translation now requires an "Inputs and rationale" pass — expli
 ### Research plan template lean rewrite (April 30, 2026)
 
 `research_plan.yaml` v4.6 establishes the planning-doc pattern (Pattern C). VA-specific sections removed: OCTO Priorities (internal process, not research methodology), User Journey (assumptions before research), Implementation Plan (belongs in research readout), VA Compliance Notes (belongs in study-specific compliance addendum). Modal simplified from 15 fields to 8 with sensible defaults (lead researcher auto-fills from Slack profile, start date defaults to next Monday). Output collapsed from ~292 lines to ~145 lines. AI tasks reduced from 15 to 9. Deliverables section is methodology-driven (LLM selects the right list based on methodology choice). If researchers ask "where did OCTO Priorities go?" — those are VA-internal process concerns, not research methodology. They can be added to a separate compliance addendum if needed.
+
+### Discussion guide v6.3 follow-up (noted April 30, 2026)
+
+**Research plan integration:** When a research plan exists for the study, the discussion guide should auto-ground its warm-up and retrospective questions in the plan's objectives. Pattern would mirror the synthesis modal's analysis-layer file inputs — a modal checkbox: "Pull objectives from research plan if available." Estimated effort: M. Not implemented in v6.2 to keep scope manageable.

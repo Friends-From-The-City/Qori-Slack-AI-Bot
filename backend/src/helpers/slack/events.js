@@ -1720,6 +1720,26 @@ slackApp.action('create_discussion_guide', async ({ ack, body, client }) => {
       };
     }
 
+    // Auto-fill lead moderator from study or Slack profile
+    let leadModerator = null;
+    try {
+      const study = await getResearchStudyWithRoles(studyName);
+      if (study?.researcher_name) leadModerator = study.researcher_name;
+    } catch (err) { /* ignore */ }
+    if (!leadModerator) {
+      try {
+        const userInfo = await client.users.info({ user: userId });
+        leadModerator = userInfo.user.real_name || userInfo.user.profile?.display_name || userInfo.user.name || '';
+      } catch (err) { /* ignore */ }
+    }
+    const moderatorIdx = blocks.findIndex(b => b.block_id === 'lead_moderator_block');
+    if (moderatorIdx !== -1 && leadModerator) {
+      blocks[moderatorIdx] = {
+        ...blocks[moderatorIdx],
+        element: { ...blocks[moderatorIdx].element, initial_value: leadModerator },
+      };
+    }
+
     await client.views.update({
       view_id: body.view.id,
       trigger_id: body.trigger_id,
@@ -1771,30 +1791,15 @@ slackApp.view("discussion_guide_modal", async ({ ack, body, view, client }) => {
     return null;
   };
 
-  const _whatAreYouResearching = extract("research_focus_block", "research_focus");
-  const _specificQuestions = extract("research_questions_block", "research_questions");
-  const _participants = extract("participants_block", "participants");
-  const _researchMethod = extract("research_method_block", "research_method");
-  const _sessionLength = extract("session_length_block", "session_length");
-  const _testingUrl = extract("testing_url_block", "testing_url");
-
   const guideData = {
-    // Match input_variables structure exactly
     selected_study: studyName,
-    research_focus: _whatAreYouResearching,
-    research_questions: _specificQuestions,
-    participants: _participants,
-    research_method: _researchMethod,
-    session_length: _sessionLength,
-    testing_url: _testingUrl || '',
-
-    // Keep backward compatibility for YAML template if needed
     study_name: studyName,
-    moderator_name: body.user?.name || null,
-    what_are_you_researching: _whatAreYouResearching,
-    specific_questions: _specificQuestions,
-    who_are_your_participants: _participants,
-    session_length_minutes: _sessionLength,
+    research_focus: extract("research_focus_block", "research_focus"),
+    research_questions: extract("research_questions_block", "research_questions"),
+    research_method: extract("research_method_block", "research_method") || 'usability_testing',
+    session_length: extract("session_length_block", "session_length") || '60',
+    task_count: extract("task_count_block", "task_count") || '5',
+    lead_researcher: extract("lead_moderator_block", "lead_moderator") || body.user?.name || '',
   };
 
   const study = await getResearchStudyWithRoles(studyName);

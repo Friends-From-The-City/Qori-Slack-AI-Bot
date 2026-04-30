@@ -21,21 +21,14 @@ const discussionGuideModal = {
       elements: [
         {
           type: "mrkdwn",
-          text: "Create a conversation guide for your user research sessions.",
+          text: "Create a session guide for your user research. Qori generates introduction scripts, methodology-specific tasks, and closing protocols.",
         },
       ],
     },
     {
       type: "divider",
     },
-    {
-      type: "section",
-      text: {
-        type: "mrkdwn",
-        text: "*📂 Study*",
-      },
-    },
-    // Study Context (auto-populated) - keep the same input block
+    // Study (auto-populated)
     {
       type: "input",
       block_id: "study_name",
@@ -55,60 +48,46 @@ const discussionGuideModal = {
     {
       type: "divider",
     },
-    {
-      type: "section",
-      text: {
-        type: "mrkdwn",
-        text: "*🎯 Research Focus*",
-      },
-    },
+    // Research goal / focus
     {
       type: "input",
       block_id: "research_focus_block",
       label: {
         type: "plain_text",
-        text: "What are you researching? *",
+        text: "Research goal / focus",
+      },
+      hint: {
+        type: "plain_text",
+        text: "What are you trying to learn in this session?",
       },
       element: {
         type: "plain_text_input",
         action_id: "research_focus",
         placeholder: {
           type: "plain_text",
-          text: "e.g., VA Video Connect telehealth onboarding experience",
+          text: "e.g., How Veterans navigate the mobile app to complete tasks",
         },
         multiline: true,
       },
     },
+    // Research questions
     {
       type: "input",
       block_id: "research_questions_block",
       label: {
         type: "plain_text",
-        text: "What specific questions do you need answered? *",
+        text: "Research questions",
+      },
+      hint: {
+        type: "plain_text",
+        text: "Specific questions this session should answer",
       },
       element: {
         type: "plain_text_input",
         action_id: "research_questions",
         placeholder: {
           type: "plain_text",
-          text: "e.g., Where do Veterans drop off? What causes technical issues?",
-        },
-        multiline: true,
-      },
-    },
-    {
-      type: "input",
-      block_id: "participants_block",
-      label: {
-        type: "plain_text",
-        text: "Who are your participants? *",
-      },
-      element: {
-        type: "plain_text_input",
-        action_id: "participants",
-        placeholder: {
-          type: "plain_text",
-          text: "e.g., Veterans who completed at least one telehealth visit",
+          text: "e.g., Where do Veterans abandon tasks? What causes confusion?",
         },
         multiline: true,
       },
@@ -116,19 +95,13 @@ const discussionGuideModal = {
     {
       type: "divider",
     },
-    {
-      type: "section",
-      text: {
-        type: "mrkdwn",
-        text: "*🔬 Method & Session*",
-      },
-    },
+    // Methodology
     {
       type: "input",
       block_id: "research_method_block",
       label: {
         type: "plain_text",
-        text: "Research method *",
+        text: "Methodology",
       },
       element: {
         type: "static_select",
@@ -139,97 +112,125 @@ const discussionGuideModal = {
         },
         options: [
           {
-            text: {
-              type: "plain_text",
-              text: "Usability Testing",
-            },
+            text: { type: "plain_text", text: "Usability Testing" },
             value: "usability_testing",
           },
           {
-            text: {
-              type: "plain_text",
-              text: "User Interviews",
-            },
+            text: { type: "plain_text", text: "User Interviews" },
             value: "user_interviews",
           },
           {
-            text: {
-              type: "plain_text",
-              text: "Contextual Inquiry",
-            },
+            text: { type: "plain_text", text: "Card Sorting" },
+            value: "card_sorting",
+          },
+          {
+            text: { type: "plain_text", text: "Concept Testing" },
+            value: "concept_testing",
+          },
+          {
+            text: { type: "plain_text", text: "Contextual Inquiry" },
             value: "contextual_inquiry",
           },
           {
-            text: {
-              type: "plain_text",
-              text: "Concept Testing",
-            },
-            value: "concept_testing",
+            text: { type: "plain_text", text: "Tree Test" },
+            value: "tree_test",
+          },
+          {
+            text: { type: "plain_text", text: "Mixed Methods" },
+            value: "mixed_methods",
           },
         ],
       },
     },
+    // Session length
     {
       type: "input",
       block_id: "session_length_block",
       label: {
         type: "plain_text",
-        text: "Session length (minutes) *",
+        text: "Session length",
       },
       element: {
         type: "static_select",
         action_id: "session_length",
-        placeholder: {
-          type: "plain_text",
-          text: "Select...",
+        initial_option: {
+          text: { type: "plain_text", text: "60 minutes" },
+          value: "60",
         },
         options: [
           {
-            text: {
-              type: "plain_text",
-              text: "30 minutes",
-            },
+            text: { type: "plain_text", text: "30 minutes" },
             value: "30",
           },
           {
-            text: {
-              type: "plain_text",
-              text: "45 minutes",
-            },
+            text: { type: "plain_text", text: "45 minutes" },
             value: "45",
           },
           {
-            text: {
-              type: "plain_text",
-              text: "60 minutes",
-            },
+            text: { type: "plain_text", text: "60 minutes" },
             value: "60",
           },
           {
-            text: {
-              type: "plain_text",
-              text: "90 minutes",
-            },
+            text: { type: "plain_text", text: "90 minutes" },
             value: "90",
           },
         ],
       },
     },
+    // Number of tasks / topics
     {
       type: "input",
-      block_id: "testing_url_block",
-      optional: true,
+      block_id: "task_count_block",
       label: {
         type: "plain_text",
-        text: "Testing URL",
+        text: "Number of tasks / topics",
+      },
+      hint: {
+        type: "plain_text",
+        text: "Main activities in the session (typically 3-7)",
+      },
+      element: {
+        type: "static_select",
+        action_id: "task_count",
+        initial_option: {
+          text: { type: "plain_text", text: "5" },
+          value: "5",
+        },
+        options: [
+          {
+            text: { type: "plain_text", text: "3" },
+            value: "3",
+          },
+          {
+            text: { type: "plain_text", text: "5" },
+            value: "5",
+          },
+          {
+            text: { type: "plain_text", text: "7" },
+            value: "7",
+          },
+        ],
+      },
+    },
+    {
+      type: "divider",
+    },
+    // Lead moderator (auto-filled)
+    {
+      type: "input",
+      block_id: "lead_moderator_block",
+      label: {
+        type: "plain_text",
+        text: "Lead moderator",
+      },
+      hint: {
+        type: "plain_text",
+        text: "Auto-filled from your profile. Edit if needed.",
       },
       element: {
         type: "plain_text_input",
-        action_id: "testing_url",
-        placeholder: {
-          type: "plain_text",
-          text: "e.g., https://staging.va.gov/telehealth",
-        },
+        action_id: "lead_moderator",
+        initial_value: "{{lead_researcher}}",
       },
     },
   ],
