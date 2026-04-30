@@ -4,15 +4,15 @@
 id: research_plan
 name: run_research_plan
 label: "📋 Research Plan"
-version: v4.5
-description: |
-  **Research Idea → Complete Execution Plan**
+version: "v4.6"
 
-  Transform your research concept into a comprehensive, VA-compliant plan in minutes. Streamlined for faster stakeholder approval while maintaining professional quality.
+description: |
+  Transform your research concept into a stakeholder-ready execution plan.
+  Lean output focused on methodology, participants, timeline, and deliverables.
 
 author: Qori R&D
 created: 2025-06-26
-last_updated: 2026-04-29
+last_updated: 2026-04-30
 
 # ═══════════════════════════════════════════════════════════
 # CONFIGURATION
@@ -27,255 +27,155 @@ input_variables:
   - project_title:
       type: "text"
       required: true
-      placeholder: "e.g., Debt Letters Usability Study"
-
-  - product_area:
-      type: "text"
-      required: true
-      placeholder: "e.g., Debt Letters, Benefits Navigation, Claims Processing"
-
   - decision_context:
       type: "textarea"
       required: true
-      placeholder: "e.g., Should we redesign the debt letter format to reduce veteran confusion?"
-
   - research_goal:
       type: "textarea"
       required: true
-      placeholder: "e.g., Understand how veterans interpret current debt letters and identify pain points"
-
   - methodology:
-      type: "checkboxes"
+      type: "select"
       required: true
-      options: ["Usability Testing", "User Interviews", "Survey Research", "Card Sorting", "Concept Testing", "Competitive Analysis"]
-
   - target_participants:
       type: "textarea"
       required: true
-      placeholder: "e.g., Veterans who received debt letters in past 6 months"
-
   - participant_count:
-      type: "text"
+      type: "select"
       required: true
-      placeholder: "e.g., 5-8 participants"
-
+  - start_date:
+      type: "date"
+      required: true
   - timeline_preference:
       type: "radio"
       required: true
-      options: ["Rush (2-3 weeks total)", "Standard (4-6 weeks total)", "Extended (8+ weeks total)"]
-
   - lead_researcher:
       type: "text"
       required: true
-      placeholder: "e.g., Jordan Smith"
-
-  - team_office:
-      type: "text"
-      required: true
-      placeholder: "e.g., VA Digital Services, OCTO, 18F"
 
 # ═══════════════════════════════════════════════════════════
 # AI GENERATION
 # ═══════════════════════════════════════════════════════════
 ai_generation_tasks:
-  # Format target participants as bullets
-  - task_id: "formatted_participants"
+  # Summary — narrative synthesis of the plan
+  - task_id: "summary"
     prompt: |
-      Format the following participant criteria as a bulleted list:
+      Write a 2-3 sentence summary of this research plan:
 
-      {{target_participants}}
+      Study: {{project_title}}
+      Context: {{decision_context}}
+      Goal: {{research_goal}}
+      Method: {{methodology}}
+      Participants: {{participant_count}} — {{target_participants}}
 
-      Rules:
-      - Each distinct participant type or criteria should be its own bullet point
-      - Start each bullet with a dash and space (- )
-      - Keep the original wording, just add line breaks and bullets
-      - Do not add any extra text or headers
+      The summary should explain: what the study will do, how many participants
+      and what method, and what decision the findings will inform. Be specific
+      and concise. Do not use quotes around text.
 
-      Example output format:
-      - Veterans who have completed at least one telehealth appointment
-      - Veterans who prefer video visits due to mobility issues
-      - Caregivers who help Veterans join video visits
-
-  # Clean product area name - SHORT NAME ONLY
-  - task_id: "clean_product_area"
-    prompt: |
-      Extract ONLY the core product name from this input: {{product_area}}
-
-      Rules:
-      - Return ONLY the short product name (2-4 words maximum)
-      - Do not include descriptions, features, or platform mentions
-      - Do not include phrases like "and supporting..."
-      - Do not wrap your answer in quotes
-
-      Examples:
-      - Input: "VA Mobile App navigation and search" → Output: VA Mobile App
-      - Input: "VA Video Connect and supporting telehealth touchpoints across mobile and desktop" → Output: VA Video Connect
-      - Input: "Debt Letters redesign project" → Output: Debt Letters
-
-      Return ONLY the short name, nothing else. No quotes.
-
-  # Product description - concise
-  - task_id: "product_description"
-    prompt: |
-      Create a concise, professional description for {{product_area}}:
-
-      Requirements:
-      - 1-2 sentences maximum
-      - Explain what it does for Veterans
-      - Use clear, direct language
-      - No marketing speak
-      - Do not wrap text in quotes
-
-      Format: [Short Product Name] — [what it does for Veterans in one sentence].
-
-  # OCTO Priorities
-  - task_id: "octo_priorities"
-    prompt: |
-      Select appropriate OCTO-DE priorities for {{product_area}} based on target participants: {{target_participants}}
-
-      Available priorities:
-      1. Improve the Veteran login experience
-      2. Solidify the VA.gov platform
-      3. Integrate health portal features into VA.gov
-      4. Expand the flagship mobile app
-      5. Refresh VA.gov homepage and IA
-      6. Enhance Veterans' personalized online experience
-      7. Fast-track disability claims, starting with PACT Act claims
-
-      Format your response WITHOUT numbers - use clean names only:
-      **Primary OCTO Priority:** [Select priority name only, no numbers]
-
-      **Explanation:** [1 sentence connecting {{product_area}} to this priority]
-
-      **Additional Priorities:**
-      - **[Priority Name Only]:** [Brief explanation]
-      - **[Priority Name Only]:** [Brief explanation]
-
-      IMPORTANT: Do not include the numbers (1, 2, 3, etc.) in your output. Do not use quotes around text.
-
-  # User Journey
-  - task_id: "user_journey"
-    prompt: |
-      Map {{product_area}} to the VA Journey of Veterans Map.
-
-      Provide your response in this format (do not use quotes around any text):
-
-      **User Journey Connection:** [1 sentence explaining where {{product_area}} fits in veteran journey]
-
-      **Key Moments/Phases:**
-      - **Taking care of myself:** [How {{product_area}} helps veterans manage their health and wellbeing]
-      - **Putting down roots:** [How {{product_area}} supports veterans settling into civilian life]
-      - **Retiring:** [How {{product_area}} assists veterans in retirement]
-
-      **Critical Pain Points:** [2-3 specific pain points for {{product_area}}]
-
-      Write naturally without wrapping any content in quotation marks.
-
-  # Background/Decision Context
+  # Background — expand business context
   - task_id: "background"
     prompt: |
-      Transform this decision context into clear background: {{decision_context}}
+      Expand this business context into a clear, professional background
+      paragraph (3-4 sentences):
 
-      Create 2-3 sentences that explain:
-      - What decision this research will inform about {{product_area}}
-      - How this will benefit Veterans
-      - The business impact for VA
+      {{decision_context}}
 
-      Use direct, professional language. No jargon. Focus on specific outcomes.
+      Include: what the product/feature is, what problem exists, what decision
+      this research will inform, and why it matters now. Use direct language.
       Do not wrap text in quotes.
 
-  # Research Goals
-  - task_id: "research_goals"
+  # Objectives — reformulate research goal as learning verbs
+  - task_id: "objectives"
     prompt: |
-      Create clear research goals based on: {{research_goal}}
+      Transform this research goal into 3-4 specific objectives using
+      learning-focused verbs (Identify, Understand, Evaluate, Document):
 
-      **Primary Goal:** [Improved version of the input goal - 1-2 sentences, specific and measurable, referencing {{product_area}}]
+      Goal: {{research_goal}}
+      Method: {{methodology}}
 
-      **Supporting Goals:**
-      - [Specific goal achievable through {{methodology}} that provides actionable insights for {{product_area}}]
-      - [Specific goal related to {{product_area}} that addresses user needs]
-      - [Specific goal that supports decision-making with concrete outcomes for {{product_area}}]
+      Format as:
+      - **Identify** [what barriers/issues we aim to find]
+      - **Understand** [what mental models/behaviors we aim to learn]
+      - **Evaluate** [what we aim to assess]
+      - **Document** [what we aim to record for future reference]
 
-      IMPORTANT:
-      - Use the product name "{{product_area}}" directly in your response
-      - Do not use empty quotes or placeholder text
-      - Do not wrap any text in quotation marks
-      - Make each goal specific to the product and methodology
+      Each objective should be one line, specific to this study.
+      Do not wrap text in quotes.
 
-  # Success Criteria - USER-STUDY-CENTERED
-  - task_id: "success_criteria"
+  # Research questions — derive from objectives + context
+  - task_id: "research_questions"
     prompt: |
-      Generate exactly these 4 user-study-centered success criteria numbered 1-4.
+      Generate 3-4 specific research questions for this study:
 
-      Create success criteria for {{product_area}} research with {{participant_count}} participants using {{methodology}}:
+      Study: {{project_title}}
+      Context: {{decision_context}}
+      Goal: {{research_goal}}
+      Method: {{methodology}}
 
-      1. **Participant Completion:** Minimum 90% of recruited participants ({{participant_count}}) complete full research sessions, ensuring adequate data for meaningful analysis
-      2. **Data Quality:** Achieve thematic saturation or pattern consistency by the final participant session, with clear triangulation across multiple data points to validate findings
-      3. **Timeline Adherence:** All research sessions completed and initial analysis documented within the {{timeline_preference}} timeframe, with final report delivered within 5 business days of last session
-      4. **Stakeholder Alignment:** Research findings reviewed by key stakeholders within 3 business days of report delivery, with documented agreement on priority recommendations for {{product_area}}
+      Format as a numbered list:
+      1. [Question about user behavior or pain points]
+      2. [Question about mental models or expectations]
+      3. [Question about specific feature/flow effectiveness]
+      4. [Question about priorities or improvements]
 
-      Use exactly this format and numbering.
+      Questions should be answerable through {{methodology}} research.
+      Do not wrap text in quotes.
 
-  # Key Deliverables - CONSISTENT FORMATTING
-  - task_id: "deliverables"
+  # Method — expand methodology selection
+  - task_id: "method"
     prompt: |
-      List essential deliverables for {{methodology}} research on {{product_area}}.
+      Describe the research methodology for this study:
 
-      Use this EXACT format with bold labels and numbered list:
+      Method: {{methodology}}
+      Participants: {{participant_count}} — {{target_participants}}
+      Study: {{project_title}}
 
-      **Primary Deliverables:**
-      1. **Usability Report:** Key findings, pain points, and prioritized recommendations for {{product_area}} — delivered within 2 days of research completion
-      2. **Decision Matrix:** Prioritized enhancements based on user feedback and {{methodology}} results — delivered within 3 days of research completion
-      3. **Executive Summary:** Key insights and recommendations for stakeholder decision-making — delivered within 3 days of research completion
+      Write in bold-em-dash format:
 
-      **Supporting Materials:**
-      4. **Design Recommendations:** Wireframes or mockups illustrating proposed changes for {{product_area}} — delivered within 1 day of research completion
-      5. **Validation Plan:** Methodology and criteria for testing proposed design changes — delivered within 2 days of research completion
+      **Approach** — [2-3 sentences: what the sessions will explore, what protocol
+      will be used, how data will be collected. Be specific to {{methodology}}.]
 
-      IMPORTANT FORMATTING RULES:
-      - Use numbered list (1-5) for ALL items
-      - Bold the deliverable name before the colon
-      - Use em dash (—) before delivery timeline
-      - Reference {{product_area}} where appropriate
+      **Session format** — [Format, duration, and setup. For moderated research,
+      note remote/in-person and any accessibility accommodations.]
 
-  # Methodology Details
-  - task_id: "methodology_details"
+      **Data collection** — [List specific methods: think-aloud protocol, screen
+      recording, observer notes, post-session interviews, etc.]
+
+      **Tasks** — [List 4-5 realistic task scenarios specific to this study.
+      These are what participants will be asked to do.]
+
+      End with: "Detailed task scripts and discussion guide will be developed
+      separately and reviewed before fielding."
+
+      Do not wrap text in quotes.
+
+  # Participants — format participant criteria
+  - task_id: "participants"
     prompt: |
-      Provide methodology details for {{methodology}} research on {{product_area}}:
+      Format participant recruitment details for this study:
 
-      **Methodology Rationale:** [Why {{methodology}} is specifically right for {{product_area}} research - 1-2 sentences]
+      Target: {{target_participants}}
+      Count: {{participant_count}}
+      Method: {{methodology}}
 
-      **Implementation Approach:**
-      - **Session Format:** [Format and duration appropriate for {{methodology}}]
-      - **Key Activities:** [Data collection techniques specific to {{product_area}}]
-      - **Evaluation Protocol:** [Specific protocols for evaluating {{product_area}} user experience]
+      Write in this format:
 
-      **VA Compliance Notes:**
-      - **Collaboration Cycle:** [Requirements and timeline]
-      - **Trauma-Informed Approach:** [Considerations for veteran participants]
-      - **Accessibility:** [Accommodations for diverse participant needs]
+      **Sample size** — {{participant_count}}
 
-      Be specific about why this methodology answers the research questions. Do not use quotes around text.
+      **Required composition:**
 
-  # Demographics
-  - task_id: "demographics"
-    prompt: |
-      Create demographic targets for {{participant_count}} participants researching {{product_area}}:
+      [Format the target participant criteria as a bulleted list. Each distinct
+      criterion gets its own bullet. Include device diversity, accessibility
+      needs, usage frequency, and any demographic requirements mentioned.]
 
-      **Demographic Targets:**
-      Based on {{participant_count}} participants:
-      - **Service Era:** [realistic breakdown - Vietnam, Gulf War, Post-9/11 - that adds up to total]
-      - **Age:** [realistic breakdown that adds up to total]
-      - **Gender:** [realistic breakdown that adds up to total]
-      - **Accessibility Needs:** [realistic breakdown for inclusive research]
+      **Recruitment** — [1-2 sentences about recruitment channels appropriate
+      for reaching these participants]
 
-      **Secondary Targets:**
-      - **{{product_area}} Usage Patterns:** [frequency and experience levels]
-      - **Technology Comfort Levels:** [range of digital literacy]
+      **Compensation** — [Standard rate for this type of research, typically
+      $50-$100 per participant for 60-90 minute sessions]
 
-      Ensure all numbers add up logically to {{participant_count}}.
+      Do not wrap text in quotes.
 
-  # Timeline - FIXED VERSION
+  # Timeline — calculate dates from start_date + preference
   - task_id: "timeline"
     prompt: |
       Create timeline DATA ROWS ONLY for {{timeline_preference}} research.
@@ -283,155 +183,142 @@ ai_generation_tasks:
       ===== CRITICAL DATE INSTRUCTION =====
       THE USER-SELECTED START DATE IS: {{start_date}}
       USE THIS EXACT DATE AS YOUR STARTING POINT.
-      DO NOT USE ANY OTHER DATE. Today's date is {{current_date}} but the project starts on {{start_date}}.
+      DO NOT USE ANY OTHER DATE.
       =====================================
 
-      Phase durations for Standard (4-6 weeks total):
-      - Planning: 3 days
-      - Collaboration Cycle: 5 days
-      - Recruiting: 10 days
-      - Research: 7 days
+      Phase durations by timeline type:
+
+      Standard (5 weeks total):
+      - Planning and stakeholder alignment: 7 days
+      - Recruitment: 10 days
+      - Fieldwork (sessions): 7 days
       - Analysis: 3 days
       - Reporting: 2 days
 
+      Accelerated (2 weeks total):
+      - Planning: 2 days
+      - Recruitment: 4 days
+      - Fieldwork: 4 days
+      - Analysis: 2 days
+      - Reporting: 2 days
+
+      Extended (8 weeks total):
+      - Planning and stakeholder alignment: 14 days
+      - Recruitment: 14 days
+      - Fieldwork (sessions): 14 days
+      - Analysis: 7 days
+      - Reporting: 7 days
+
       Rules:
-      - Planning starts on {{start_date}} (this is the user's selected start date)
+      - Planning starts on {{start_date}}
       - Each phase starts the day after the previous phase ends
-      - Format dates as: Month DD, YYYY (example: November 25, 2025)
-      - Do NOT output the header row - only output data rows
-      - Do NOT use placeholder dates like January 2023 or October 2023
+      - Format dates as: Month DD, YYYY
+      - Do NOT output the header row — only data rows
+      - Do NOT use placeholder dates
 
-      Output ONLY these 6 rows starting from {{start_date}}:
-      | Planning | 3 days | {{start_date}} | [end date] | Project Brief, Research Plan |
-      | Collaboration Cycle | 5 days | [start date] | [end date] | Stakeholder Alignment |
-      | Recruiting | 10 days | [start date] | [end date] | Participant Selection |
-      | Research | 7 days | [start date] | [end date] | Data Collection |
-      | Analysis | 3 days | [start date] | [end date] | Insights Synthesis |
-      | Reporting | 2 days | [start date] | [end date] | Final Report |
+      Output ONLY these rows:
+      | Planning and stakeholder alignment | [duration] | {{start_date}} | [end date] | [duration] |
+      | Recruitment | [duration] | [start] | [end] | [duration] |
+      | Fieldwork (sessions) | [duration] | [start] | [end] | [duration] |
+      | Analysis | [duration] | [start] | [end] | [duration] |
+      | Reporting | [duration] | [start] | [end] | [duration] |
 
-  # Risk Assessment
+  # Deliverables — methodology-driven static list
+  - task_id: "deliverables"
+    prompt: |
+      List the expected deliverables for {{methodology}} research.
+
+      Use EXACTLY the list for the matching methodology:
+
+      Usability Testing:
+      - **Session summaries** (one per participant) — within 48 hours of each session
+      - **Affinity map** — themes from cross-participant analysis
+      - **Journey map** — stage-by-stage user experience with pain points (if behavioral patterns warrant)
+      - **Research readout** — primary stakeholder document with findings and recommendations
+      - **Design recommendations** — specific implementable changes tied to findings
+
+      User Interviews:
+      - **Session summaries** (one per participant) — within 48 hours of each session
+      - **Affinity map** — themes from cross-participant analysis
+      - **Personas** — behavioral archetypes (if archetype patterns warrant)
+      - **Research readout** — primary stakeholder document with findings and recommendations
+
+      Survey Research:
+      - **Survey synthesis** — thematic analysis of open-ended responses
+      - **Research readout** — primary stakeholder document with findings and recommendations
+
+      Card Sorting:
+      - **Card sort analysis** — clustering and similarity analysis
+      - **Information architecture recommendations** — restructuring proposals
+      - **Research readout** — primary stakeholder document with findings and recommendations
+
+      Concept Testing:
+      - **Session summaries** — concept reactions and preference analysis
+      - **Concept reaction synthesis** — aggregated feedback and viability assessment
+      - **Research readout** — primary stakeholder document with findings and recommendations
+      - **Design recommendations** — specific changes based on concept feedback
+
+      Mixed Methods:
+      - **Session summaries** (one per participant) — within 48 hours of each session
+      - **Affinity map** — themes from cross-participant analysis
+      - **Journey map** — stage-by-stage user experience with pain points
+      - **Research readout** — primary stakeholder document with findings and recommendations
+      - **Design recommendations** — specific implementable changes tied to findings
+      - **Decision matrix** — prioritized recommendations with effort estimates
+
+      Contextual Inquiry:
+      - **Session summaries** — contextual observations and workflows documented
+      - **Affinity map** — themes from cross-participant analysis
+      - **Journey map** — workflow mapping with contextual pain points
+      - **Research readout** — primary stakeholder document with findings and recommendations
+
+      Tree Test:
+      - **Tree test analysis** — task completion rates and pathways
+      - **Information architecture recommendations** — restructuring proposals
+      - **Research readout** — primary stakeholder document with findings and recommendations
+
+      If the methodology doesn't match any above, use:
+      - **Session summaries** — per-participant analysis
+      - **Research readout** — primary stakeholder document with findings and recommendations
+      - **Design recommendations** — specific implementable changes tied to findings
+
+      Output ONLY the bulleted list for {{methodology}}. Nothing else.
+
+  # Risks — generate 3 study-specific risks
   - task_id: "risks"
     prompt: |
-      Identify top 4 risks for {{methodology}} research on {{product_area}}:
+      Identify 3 risks for {{methodology}} research on {{project_title}}
+      with {{participant_count}} participants ({{target_participants}}):
 
-      **Recruitment Challenges:** [Risk related to finding {{target_participants}} for {{product_area}} research]
-      - **Likelihood:** High/Medium/Low
-      - **Mitigation:** [Specific action to address recruitment issues]
+      Format as table rows ONLY (no header):
+      | [Risk description] | [High/Medium/Low] | [Specific mitigation] |
+      | [Risk description] | [High/Medium/Low] | [Specific mitigation] |
+      | [Risk description] | [High/Medium/Low] | [Specific mitigation] |
 
-      **Execution Issues:** [Risk related to {{methodology}} implementation for {{product_area}}]
-      - **Likelihood:** High/Medium/Low
-      - **Mitigation:** [Specific action to ensure quality execution]
-
-      **Timeline Risks:** [Risk related to {{timeline_preference}} affecting {{product_area}} decisions]
-      - **Likelihood:** High/Medium/Low
-      - **Mitigation:** [Specific action to stay on schedule]
-
-      **Quality Concerns:** [Risk related to data validity for {{product_area}} recommendations]
-      - **Likelihood:** High/Medium/Low
-      - **Mitigation:** [Specific action to ensure research quality]
-
-      Make each risk and mitigation specific to this research project.
-
-  # Next Steps
-  - task_id: "next_steps"
-    prompt: |
-      Create actionable next steps for {{product_area}} research implementation:
-
-      Format as:
-
-      ```diff
-      + IMMEDIATE (Week 1 post-research)
-      ```
-      - [Specific action with owner and timeline for {{product_area}} decisions]
-      - [Specific action for stakeholder engagement with timeline]
-
-      ```diff
-      ! SHORT-TERM (Weeks 2-4)
-      ```
-      - [Implementation planning step for {{product_area}} improvements]
-      - [Decision milestone for {{product_area}} changes]
-
-      ```diff
-      - LONGER-TERM (Month 2+)
-      ```
-      **Success Metrics:**
-      - [How {{product_area}} improvements will be measured]
-      - [Follow-up assessment plan for {{product_area}} success]
-
-      Include the exact color-coded diff blocks in your response.
-
-  # Detailed Research Protocols
-  - task_id: "detailed_protocols"
-    prompt: |
-      Generate specific research protocols for {{methodology}} studying {{product_area}}.
-
-      CRITICAL INSTRUCTIONS:
-      1. The selected methodology is: {{methodology}}
-      2. ONLY output protocols for {{methodology}} - do not include any other methodology
-      3. Do NOT generate protocols for methodologies that weren't selected (no Eye Tracking, no A/B Testing, etc.)
-      4. Make all task examples specific to {{product_area}} and VA telehealth context
-
-      Generate ONLY the section that matches {{methodology}}:
-
-      If {{methodology}} is "Usability Testing", output:
-      **For Usability Testing:**
-      - **Task Scenarios:**
-        1. [First specific task with {{product_area}}]
-        2. [Second specific task with {{product_area}}]
-        3. [Third specific task with {{product_area}}]
-        4. [Fourth specific task with {{product_area}}]
-      - **Think-Aloud Protocol:** [Instructions for facilitating concurrent verbalization]
-      - **Data Collection:** [Screen recording setup, observation notes template, timing protocols]
-      - **Post-Session Interviews:** [Key follow-up questions about {{product_area}} experience]
-
-      If {{methodology}} is "User Interviews", output:
-      **For User Interviews:**
-      - **Interview Guide Structure:** [Opening, main topics, probing questions about {{product_area}}]
-      - **Question Types:** [Behavioral, attitudinal, and contextual questions]
-      - **Recording Protocols:** [Audio/video setup and consent procedures]
-      - **Analysis Approach:** [Thematic analysis, affinity mapping, coding framework]
-
-      If {{methodology}} is "Card Sorting", output:
-      **For Card Sorting:**
-      - **Card Preparation:** [How to create cards from {{product_area}} content/features]
-      - **Sorting Methodology:** [Open vs. closed sort, hybrid approaches]
-      - **Analysis Procedures:** [Statistical measures, dendrograms, similarity matrices]
-      - **Results Interpretation:** [How to translate findings into {{product_area}} recommendations]
-
-      If {{methodology}} is "Survey Research", output:
-      **For Survey Research:**
-      - **Question Design:** [Scale types, validation approaches for {{product_area}} metrics]
-      - **Sampling Strategy:** [Target demographics, sample size calculations]
-      - **Distribution Methods:** [Platform selection, timing, reminder protocols]
-      - **Statistical Analysis:** [Descriptive statistics, significance testing, reporting standards]
-
-      If {{methodology}} is "Concept Testing", output:
-      **For Concept Testing:**
-      - **Concept Presentation:** [Prototype fidelity, scenario setup for {{product_area}}]
-      - **Testing Protocol:** [Task completion, feedback collection, preference ranking]
-      - **Measurement Criteria:** [Usability metrics, comprehension testing, appeal assessment]
-      - **Iteration Framework:** [How to incorporate feedback into {{product_area}} design]
-
-      If {{methodology}} is "Competitive Analysis", output:
-      **For Competitive Analysis:**
-      - **Evaluation Framework:** [Heuristics, feature comparison matrices for {{product_area}}]
-      - **Documentation Standards:** [Screenshots, interaction flows, usability notes]
-      - **Analysis Criteria:** [Strengths/weaknesses identification, best practice extraction]
-      - **Synthesis Approach:** [How to translate competitive insights into {{product_area}} recommendations]
-
-      REMEMBER: Only output the ONE section that matches {{methodology}}. Do not make up other methodologies.
+      Risks should be specific to this study — not generic project management.
+      Consider: recruitment difficulty for this population, technical setup for
+      {{methodology}}, timeline constraints for {{timeline_preference}} schedule.
 
 # ═══════════════════════════════════════════════════════════
 # OUTPUT
 # ═══════════════════════════════════════════════════════════
 output_template: |
-  # Research Plan — {{project_title}}
+  # Research Plan: {{project_title}}
 
-  **Product Area:** {{ai_generated.product_description}}
+  **Study:** {{selected_study}} &nbsp; | &nbsp; **Researcher:** {{lead_researcher}} &nbsp; | &nbsp; **Date:** {{current_date}} &nbsp; | &nbsp; **Status:** Draft
 
-  **Lead Researcher:** {{lead_researcher}} · {{team_office}}
+  ---
 
-  **Date:** {{current_date}} · **Timeline:** {{timeline_preference}}
+  ## Summary
+
+  {{ai_generated.summary}}
+
+  | | |
+  |---|---|
+  | **Method** | {{methodology}} |
+  | **Participants** | {{participant_count}} |
+  | **Timeline** | {{timeline_preference}} starting {{start_date}} |
+  | **Deliverables** | Research readout, design recommendations |
 
   ---
 
@@ -441,142 +328,121 @@ output_template: |
 
   ---
 
-  ## OCTO Priorities
+  ## Objectives
 
-  {{ai_generated.octo_priorities}}
+  What we aim to learn through this research:
 
-  ---
-
-  ## User Journey
-
-  {{ai_generated.user_journey}}
+  {{ai_generated.objectives}}
 
   ---
 
-  ## Research Goals
+  ## Research questions
 
-  {{ai_generated.research_goals}}
-
-  ---
-
-  ## Success Criteria & Deliverables
-
-  ### Success Criteria
-  {{ai_generated.success_criteria}}
-
-  ### Key Deliverables
-  {{ai_generated.deliverables}}
+  {{ai_generated.research_questions}}
 
   ---
 
-  ## Methodology
+  ## Method
 
-  {{ai_generated.methodology_details}}
-
-  <details>
-  <summary><strong>Detailed Research Protocols</strong> <kbd>Click to expand</kbd></summary>
-
-  > **What this covers:** Complete methodology implementation details and session protocols
-
-  {{ai_generated.detailed_protocols}}
-
-  </details>
+  {{ai_generated.method}}
 
   ---
 
-  ## Recruitment
+  ## Participants
 
-  ### Target Participants
-  {{ai_generated.formatted_participants}}
-
-  **Total Participants:** {{participant_count}}
-
-  ### Demographics
-  {{ai_generated.demographics}}
+  {{ai_generated.participants}}
 
   ---
 
-  ## Project Timeline
+  ## Timeline
 
-  ```diff
-  + Phase 1: Planning & Setup
-  ! Phase 2: Data Collection
-  - Phase 3: Analysis & Reporting
-  ```
-
-  | Phase | Duration | Start Date | End Date | Key Deliverables |
-  |-------|----------|------------|----------|------------------|
+  | Phase | Dates | Duration |
+  |-------|-------|---------:|
   {{ai_generated.timeline}}
 
-  > **Note:** Timeline begins after stakeholder approval
+  > [!NOTE]
+  > Timeline begins after stakeholder approval of this plan. Recruitment may extend if participant diversity requires additional outreach.
 
   ---
 
-  ## Risk Management
+  ## Deliverables
 
-  > [!WARNING]
-  > **High-Risk Areas Requiring Immediate Mitigation**
+  {{ai_generated.deliverables}}
 
-  > [!CAUTION]
-  > **Medium-Risk Areas to Monitor Closely**
+  All artifacts will be stored in the study's research folder for ongoing reference.
 
+  ---
+
+  ## Team and roles
+
+  | Role | Person |
+  |------|--------|
+  | Lead researcher | {{lead_researcher}} |
+  | Note-taker | To be assigned |
+  | Observer | To be assigned |
+  | Stakeholder reviewer | TBD |
+
+  ---
+
+  ## Risks and mitigations
+
+  | Risk | Likelihood | Mitigation |
+  |------|:----------:|------------|
   {{ai_generated.risks}}
 
   ---
 
-  ## Implementation Plan
+  ## Approval
 
-  {{ai_generated.next_steps}}
-
-  ---
-
-  ## Research Team
-
-  | Team Member | Role |
-  |-------------|------|
-  | {{lead_researcher}} | Lead Researcher |
-  | *To be assigned* | Note-taker |
-  | *To be assigned* | Observer |
-
-processing_workflow:
-  1. validate_inputs
-  2. execute_ai_generation_tasks
-  3. validate_generated_content
-  4. populate_template
-  5. save_to_outputs
+  - [ ] Reviewed by lead researcher
+  - [ ] Approved by product stakeholder
+  - [ ] Recruitment criteria validated
+  - [ ] Privacy review complete (if required)
 
 output_options:
-  filename: "research_plan_{{project_title}}_{{current_date}}.md"
   path: "01-planning/"
-
-  delivery:
-    github:
-      enabled: true
-      repo: "your-research-repo"
-      commit_message: "Add research plan: {{project_title}}"
-
-    slack:
-      enabled: true
-      channel: "#research-planning"
-      message: |
-        **Research Plan Generated**
-        **Project:** {{project_title}}
-        **Timeline:** {{timeline_preference}}
-        **Ready for stakeholder review.**
-
-      actions:
-        - text: "View Plan"
-          style: "primary"
-          url: "{{github_file_url}}"
-        - text: "Create Discussion Guide"
-          style: "default"
-          action: "trigger_discussion_guide"
+  filename: "research-plan-{{project_title}}-{{current_date_iso}}.md"
 
 # ═══════════════════════════════════════════════════════════
-# METADATA
+# METADATA (documentation only — not read by backend)
 # ═══════════════════════════════════════════════════════════
-slack_ui:
-  modal:
-    title: "Create Research Plan"
-    submit_label: "Generate Plan"
-    close_label: "Cancel"
+processing_workflow:
+  1. validate_modal_inputs
+  2. execute_ai_tasks
+  3. render_output_template_with_deliverables
+  4. save_to_planning_folder
+
+notify:
+  - role: team
+    action: "Research plan generated"
+    channel: "{{study_channel}}"
+    message: "Research plan for {{project_title}} is ready for review."
+
+notes: |
+  v4.6 Changes (Design Language Translation):
+  - Translated locked design from docs/design-references/research_plan_reference.md
+  - Pattern C: document-level footer only (backend buildTraceabilityFooter)
+  - Modal simplified: 14 fields → 8. Removed session_duration, incentive,
+    researcher_title, researcher_email, team_office, product_area (merged into
+    decision_context as "business context"). Methodology changed from multi to
+    single select. Start date defaults to next Monday. Lead researcher auto-fills
+    from study or Slack profile.
+  - AI tasks: 15 → 7. Removed octo_priorities, user_journey, clean_product_area,
+    product_description, success_criteria, deliverables (static), demographics,
+    next_steps, detailed_protocols, formatted_participants.
+  - Output: ~292 lines → ~145 lines. Removed OCTO Priorities, User Journey,
+    Success Criteria, Detailed Protocols, Implementation Plan, demographic
+    sub-tables. Added Summary, Research Questions, Deliverables (methodology-
+    mapped static), Approval checkboxes, Status: Draft in masthead.
+  - Handler: updated extract() calls to match simplified modal. Added Slack
+    profile fallback for lead_researcher.
+  - Filename: research-plan-{{project_title}}-{{current_date_iso}}.md
+
+  v4.5: Standards Polish (canonical structure, dead config removal)
+  v4.4: Timeline start_date fix
+  v4.0: Single task architecture (from multi-task)
+
+output_use: |
+  Generate stakeholder-ready research plans from modal input. Lean format
+  focused on methodology, participants, timeline, and deliverables.
+  Pattern C treatment — no findings traceability (planning document).

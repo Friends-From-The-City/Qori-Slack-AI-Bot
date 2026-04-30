@@ -1149,7 +1149,7 @@ slackApp.action('create_research_plan', async ({ ack, body, client }) => {
     const userId = body.user.id;
     const studies = await getStudiesByUser(userId);
 
-    // Fetch study to get lead researcher
+    // Fetch lead researcher: study record → Slack profile fallback
     let leadResearcher = null;
     try {
       const study = await getResearchStudyWithRoles(preselectStudyName);
@@ -1158,6 +1158,14 @@ slackApp.action('create_research_plan', async ({ ack, body, client }) => {
       }
     } catch (error) {
       console.warn('Could not fetch study for lead researcher:', error.message);
+    }
+    if (!leadResearcher) {
+      try {
+        const userInfo = await client.users.info({ user: userId });
+        leadResearcher = userInfo.user.real_name || userInfo.user.profile?.display_name || userInfo.user.name || '';
+      } catch (err) {
+        console.warn('Could not fetch Slack profile for lead researcher:', err.message);
+      }
     }
 
     // Start with the modal's blocks
@@ -1241,36 +1249,18 @@ slackApp.view('research_plan_modal', async ({ ack, body, view, client }) => {
     return null;
   };
 
-  // Extract all form values matching the new researchPlanGeneratorModal structure
+  // Extract form values from simplified modal
   const data = {
-    // Basic Information Section
-    product_area: extract('product_area_block', 'product_area_input'),
     project_title: extract('study_title_block', 'study_title_input'),
-    
-    // Research Context Section
+    selected_study: studyName,
     decision_context: extract('decision_block', 'decision_input'),
     research_goal: extract('research_goal_block', 'research_goal_input'),
-    
-    // Methodology Section (multi_static_select - multiple selections)
-    methodology: extract('methodology_block', 'methodology_select') || [],
-    
-    // Participants Section
+    methodology: extract('methodology_block', 'methodology_select') || 'Usability Testing',
     target_participants: extract('target_participants_block', 'target_participants_input'),
     participant_count: extract('num_participants_block', 'num_participants_select'),
-    
-    // Session Settings Section
-    session_duration: extract('session_duration_block', 'session_duration_select'),
-    incentive: extract('incentive_block', 'incentive_select'),
-    
-    // Timeline Section
     start_date: extract('start_date_block', 'start_date_picker'),
     timeline_preference: extract('timeline_block', 'timeline_radio'),
-    
-    // Research Team Section
     lead_researcher: extract('lead_researcher_block', 'lead_researcher_input'),
-    researcher_title: extract('researcher_title_block', 'researcher_title_input'),
-    researcher_email: extract('researcher_email_block', 'researcher_email_input'),
-    team_office: extract('team_office_block', 'team_office_input'),
   };
   
   console.log('📋 Extracted research plan data:', JSON.stringify(data, null, 2));
