@@ -396,28 +396,30 @@ const handleLoadSynthesisFiles = async ({ ack, body, client }) => {
       console.error("❌ Error fetching session summaries:", error);
     }
 
-    // Fetch transcripts (both transcript=true and transcript=false) from study notes
+    // Fetch only actual transcripts (transcript=true) from study notes
     let transcripts = [];
     try {
       const allStudyNotes = await studyNotesService.getStudyNotesByStudyId(parseInt(studyId));
       console.log(`✅ Fetched ${allStudyNotes.length} study notes`);
-      
-      transcripts = allStudyNotes.map(note => ({
-        id: note.id,
-        filename: note.filename,
-        transcript: note.transcript || false,
-        file_path: note.file_path,
-        file_url: note.file_url,
-      }));
-      console.log(`✅ Formatted ${transcripts.length} transcripts`);
+
+      transcripts = allStudyNotes
+        .filter(note => note.transcript === true)
+        .map(note => ({
+          id: note.id,
+          filename: note.filename,
+          transcript: true,
+          file_path: note.file_path,
+          file_url: note.file_url,
+        }));
+      console.log(`✅ Formatted ${transcripts.length} transcripts (filtered from ${allStudyNotes.length} total notes)`);
     } catch (error) {
       console.error("❌ Error fetching transcripts:", error);
     }
 
     // Fetch stakeholder interview guides
     let stakeholderGuides = [];
+    const studies = await getStudiesByUser(body.user.id);
     try {
-      const studies = await getStudiesByUser(body.user.id);
       const selectedStudy = studies.find(s => s.id.toString() === studyId.toString());
       if (selectedStudy) {
         stakeholderGuides = await getStudyStakeholderGuide(selectedStudy.name);
@@ -427,18 +429,65 @@ const handleLoadSynthesisFiles = async ({ ack, body, client }) => {
       console.error("❌ Error fetching stakeholder guides:", error);
     }
 
-    // Get the studies list to pass back to the modal
-    const studies = await getStudiesByUser(body.user.id);
+    // Scan analysis-layer folders
+    let analysisFiles = [];
+    try {
+      const selectedStudy = studies.find(s => s.id.toString() === studyId.toString());
+      if (selectedStudy) {
+        const study = await getResearchStudyWithRoles(selectedStudy.name);
+        if (study?.path) {
+          const decodedPath = decodeURIComponent(study.path);
+          const analysisBase = `${decodedPath}/primary-research/04-analysis`;
+          const analysisScans = [
+            { folder: 'affinity-mapping', label: 'Affinity map' },
+            { folder: 'journey-mapping', label: 'Journey map' },
+            { folder: 'personas', label: 'Personas' },
+            { folder: 'usability-issues', label: 'Usability issues' },
+            { folder: 'jobs-to-be-done', label: 'Jobs to be done' },
+            { folder: 'design-opportunities', label: 'Design opportunities' },
+            { folder: 'service-blueprint', label: 'Service blueprint' },
+            { folder: 'survey-synthesis', label: 'Survey synthesis' },
+          ];
+          for (const scan of analysisScans) {
+            try {
+              const scanPath = `${analysisBase}/${scan.folder}`;
+              const files = await readFolderContents(scanPath, process.env.GITHUB_REPO);
+              const validFiles = files.filter(f => f.name !== 'readme.md' && f.name !== '.gitkeep');
+              const byBase = {};
+              for (const f of validFiles) {
+                const base = f.name.replace(/_[A-Z][a-z]+ \d{1,2},? \d{4}/, '');
+                if (!byBase[base] || f.name > byBase[base].name) {
+                  byBase[base] = f;
+                }
+              }
+              Object.values(byBase).forEach(f => {
+                analysisFiles.push({
+                  name: f.name,
+                  path: f.path,
+                  label: scan.label,
+                  relative_path: `04-analysis/${scan.folder}/${f.name}`,
+                });
+              });
+            } catch (err) {
+              // Folder doesn't exist — skip silently
+            }
+          }
+          console.log(`✅ Found ${analysisFiles.length} analysis-layer files (Load Files)`);
+        }
+      }
+    } catch (analysisError) {
+      console.error("⚠️ Analysis file scan failed:", analysisError.message);
+    }
 
-    // Update the modal with session summaries, transcripts, and stakeholder guides
-    const updatedModal = researchSynthesisModal(studies, studyId, sessionSummaries, transcripts, currentAnalysisMethod, stakeholderGuides);
+    // Update the modal with all file types
+    const updatedModal = researchSynthesisModal(studies, studyId, sessionSummaries, transcripts, currentAnalysisMethod, stakeholderGuides, analysisFiles);
 
     // Preserve existing private_metadata if any
     if (view.private_metadata) {
       updatedModal.private_metadata = view.private_metadata;
     }
 
-    console.log(`🚀 ~ Updating modal with ${sessionSummaries.length} summaries and ${transcripts.length} transcripts`);
+    console.log(`🚀 ~ Updating modal with ${sessionSummaries.length} summaries, ${transcripts.length} transcripts, ${analysisFiles.length} analysis files`);
 
     await client.views.update({
       view_id: view.id,
