@@ -4,12 +4,12 @@
 id: analyze_notes
 name: analyze_session_notes
 label: "📝 Analyze Notes"
-version: "v1.5"
+version: "v1.6"
 description: Analyze session notes and transcript to generate comprehensive session summary with pain points, opportunities, insights, and recommendations
 
 author: Qori R&D
 created: 2025-10-25
-last_updated: 2026-04-29
+last_updated: 2026-04-30
 
 # ═══════════════════════════════════════════════════════════
 # CONFIGURATION
@@ -82,7 +82,7 @@ ai_generation_tasks:
   - task_id: "analyze_and_extract"
     output_variable: "session_summary_output"
     prompt: |
-      You are analyzing a UX research session to create a comprehensive session summary using GitHub-flavored markdown for optimal readability.
+      You are analyzing a UX research session to create a comprehensive session summary.
 
       SESSION METADATA
       - Participant ID: {{participant_id}}
@@ -114,52 +114,52 @@ ai_generation_tasks:
       - Include timestamps if present
       - NEVER fabricate or paraphrase quotes
 
-      FORMATTING RULES:
-      - Use GitHub alert syntax for callouts where appropriate
-      - Use collapsible details sections for dense content
-      - Use tables for structured comparisons
-      - Use consistent emoji indicators for severity and status
+      CONFIDENCE ASSESSMENT (required for each pain point):
+      Assess evidence strength using three levels. Always include a parenthetical
+      explanation of WHY you assigned that level:
+      - Strong: Verbatim quote + observed behavior + clear task impact
+        Example: Strong (verbatim quote + observed three task attempts + complete abandonment)
+      - Moderate: Single observation but consistent with broader pattern
+        Example: Moderate (single observation, but consistent with broader VoiceOver labeling patterns)
+      - Limited: Observer interpretation without direct participant statement
+        Example: Limited (observer interpretation, no direct quote)
 
       ============================================================
       OUTPUT DOCUMENT
       ============================================================
 
-      Create the following document structure:
+      # Session Summary: {{participant_id}}
 
-      # Session Summary — {{participant_id}}
-
-      > **{{participant_count}} findings** from **{{study_name}}** | **{{participant_id}}**
+      **Study:** {{study_name}} &nbsp; | &nbsp; **Researcher:** {{researcher_contact}} &nbsp; | &nbsp; **Date:** {{session_date}}
 
       ---
 
-      ## Participant Context
+      ## Summary
 
-      | Attribute | Detail |
-      |:----------|:-------|
-      | **Background** | [Military service, disability status, relevant experience] |
-      | **App Usage** | [Frequency and primary tasks] |
-      | **Assistive Tech** | [Any AT or accessibility needs, or "None noted"] |
-      | **Key Context** | [Other relevant framing information] |
+      [2-3 sentence narrative synthesis of this participant's session. Reference: who they are (accessibility needs, usage pattern), what the session surfaced (number of pain points, key pattern), and the most significant behavioral observation. Ground every sentence in THIS session's data.]
 
-      [Follow with 1-2 sentence narrative summary that frames their feedback]
-
-      If insufficient context available, output the table with "Not documented" in cells and note: *Limited participant context available in sources.*
+      > [!IMPORTANT]
+      > **Most striking observation:** [Single most notable finding — the one thing a stakeholder should know from this session]
 
       ---
 
-      ## Findings at a Glance
+      ## Participant context
 
-      ```
-      ┌──────────────────────────────────────────────────────────────────┐
-      │  🔴 Pain Points: [X]    🟢 Successes: [X]    🟡 Opportunities: [X]  │
-      │  💬 Quotes: [X]         💡 Insights: [X]     ✅ Actions: [X]        │
-      └──────────────────────────────────────────────────────────────────┘
-      ```
-      [Replace [X] with actual counts]
+      **Background** — [Military service, disability status, relevant experience from sources]
+
+      **App usage** — [Frequency, primary tasks, duration of use]
+
+      **Assistive technology** — [Any AT or accessibility needs, or "None noted"]
+
+      **Calling pattern** — [If relevant: how often they call VA support instead of using the app]
+
+      [1-2 sentence narrative that frames their feedback — what lens they bring to the experience]
+
+      If insufficient context available, note: *Limited participant context available in sources.*
 
       ---
 
-      ## Pain Points
+      ## Pain points
 
       Extract the TOP 3-5 most critical issues the participant experienced.
 
@@ -170,85 +170,51 @@ ai_generation_tasks:
       - Accessibility barriers encountered
       - Workarounds participant had to use
 
-      Format using collapsible sections by severity:
+      ### 01 &nbsp;&nbsp; [Pain Point Title — Specific and Descriptive]
 
-      ### 🔴 Critical
+      [1-2 sentence description of what happened and its impact on the participant's task]
 
-      <details>
-      <summary><strong>[Brief Title]</strong></summary>
+      > "[Verbatim quote from sources]"
+      > — {{participant_id}}, [timestamp if available]
 
-      **Impact:** [What this blocked or prevented]
+      **Severity** — Critical &nbsp;|&nbsp; **Confidence** — Strong ([parenthetical reasoning])
 
-      [1-2 sentence description with specific evidence from sources]
+      ---
 
-      **Evidence:** [Quote or observation from source]
+      ### 02 &nbsp;&nbsp; [Pain Point Title]
 
-      </details>
+      [Same format as 01. Include description, quote, severity + confidence metadata line.]
 
-      ### 🟠 High
+      ---
 
-      <details>
-      <summary><strong>[Brief Title]</strong></summary>
-
-      **Impact:** [Significant struggle or repeated frustration]
-
-      [1-2 sentence description with specific evidence from sources]
-
-      </details>
-
-      ### 🟡 Medium
-
-      <details>
-      <summary><strong>[Brief Title]</strong></summary>
-
-      **Impact:** [Notable confusion or inefficiency]
-
-      [1-2 sentence description with specific evidence from sources]
-
-      </details>
+      [Continue for each pain point. Typically 3-5 pain points. Each follows the exact same format.]
 
       If no pain points found, output: *No clear pain points were documented in the available sources.*
 
       ---
 
-      ## What Worked Well
+      ## What worked
 
-      Identify 1-3 aspects of the experience that worked smoothly for the participant.
+      Identify 1-3 aspects of the experience that worked smoothly for the participant. Each gets its own subsection with a supporting quote.
 
-      | Success | Why It Matters |
-      |:--------|:---------------|
-      | ✅ **[Brief Title]** | [1-2 sentence description of what worked and why] |
-      | ✅ **[Brief Title]** | [1-2 sentence description of what worked and why] |
+      ### [What Worked — Descriptive Title]
+
+      [1-2 sentence description of what worked and why it matters]
+
+      > "[Supporting quote from sources]"
+      > — {{participant_id}}, [timestamp]
+
+      ### [Another Success]
+
+      [Description + quote]
 
       If no positive moments identified, output: *No explicit positive feedback was captured in the available sources.*
 
       ---
 
-      ## Opportunities
+      ## Key insights
 
-      Identify 2-4 DIVERSE opportunities for improvement based on participant struggles and requests.
-
-      IMPORTANT: Each opportunity should address a DIFFERENT aspect of the experience.
-
-      | Priority | Opportunity | Evidence Link |
-      |:---------|:------------|:--------------|
-      | 🔴 High Impact | **[Solution-Oriented Title]** | [Link to specific participant evidence] |
-      | 🟠 Medium Impact | **[Solution-Oriented Title]** | [Link to specific participant evidence] |
-      | 🟢 Quick Win | **[Solution-Oriented Title]** | [Link to specific participant evidence] |
-
-      Categories to ensure variety:
-      - Accessibility improvements
-      - Navigation and information architecture
-      - UI placement and visibility
-      - Content and labeling
-      - Feature gaps
-      - Standards and consistency
-
-      If genuinely no opportunities can be inferred, output: *No key opportunities were identified in the available sources.*
-
-      ---
-
-      ## Key Insights
+      These insights emerged from observing {{participant_id}}'s session and connect specific behaviors to broader patterns worth investigating across the participant pool.
 
       Identify 2-4 DIVERSE insights about user behavior, mental models, or patterns.
 
@@ -257,98 +223,35 @@ ai_generation_tasks:
       - Each insight should reveal something DIFFERENT
       - Include at least one insight about what WORKED WELL if present in sources
 
-      <table>
-      <tr>
-      <td width="50%">
+      ### [Insight Title — Descriptive, Focusing on the Behavioral Pattern]
 
-      ### 🔍 [Insight Type]
-      **[Descriptive Title]**
+      [1-2 sentence description of the insight and its design implications]
 
-      [1-2 sentence description of insight and design implications]
+      ### [Another Insight]
 
-      </td>
-      <td width="50%">
+      [Description. Include a supporting quote if one exists in the sources:]
 
-      ### 🔍 [Insight Type]
-      **[Descriptive Title]**
+      > "[Quote if relevant]"
+      > — {{participant_id}}, [timestamp]
 
-      [1-2 sentence description of insight and design implications]
-
-      </td>
-      </tr>
-      <tr>
-      <td>
-
-      ### 🔍 [Insight Type]
-      **[Descriptive Title]**
-
-      [1-2 sentence description of insight and design implications]
-
-      </td>
-      <td>
-
-      ### 🔍 [Insight Type]
-      **[Descriptive Title]**
-
-      [1-2 sentence description of insight and design implications]
-
-      </td>
-      </tr>
-      </table>
-
-      Insight types to use:
-      Mental Model, Behavior Pattern, User Expectations, Navigation Strategy, Accessibility Need, User Context, Expertise Level, Workflow Pattern, Success Pattern, Benchmarking
+      [Continue for each insight. Typically 2-4.]
 
       If genuinely no insights can be inferred, output: *No key insights were identified in the available sources.*
 
       ---
 
-      ## Verbatim Quotes
+      ## Recommended actions
 
-      Extract 4-6 of the most impactful VERBATIM participant quotes.
-
-      Use GitHub alert blocks to organize by sentiment:
-
-      > [!WARNING]
-      > **On Challenges & Frustrations**
-      >
-      > *"[Exact quote from sources]"* [timestamp if available]
-      >
-      > *"[Exact quote from sources]"* [timestamp if available]
-
-      > [!TIP]
-      > **On What Works & Preferences**
-      >
-      > *"[Exact quote from sources]"* [timestamp if available]
-
-      > [!IMPORTANT]
-      > **Stakeholder-Ready Quotes**
-      >
-      > *"[Exact quote that would resonate in presentations]"* [timestamp if available]
+      | Priority | Action | Addresses | Effort |
+      |:--------:|--------|-----------|:------:|
+      | 1 | [Specific, actionable recommendation] | Pain point 01 | [High/Medium/Low] |
+      | 2 | [Action] | Pain point 02 | [Effort] |
+      | 3 | [Action] | Pain point 03 | [Effort] |
 
       Requirements:
-      - Must appear exactly as written in sources
-      - Include timestamps in format [MM:SS] or [HH:MM:SS] if available
-      - NEVER fabricate or paraphrase
-
-      If no verbatim quotes exist, output: *No verbatim participant quotes were captured in the available sources.*
-
-      ---
-
-      ## Recommended Actions
-
-      Generate 3-5 prioritized action items based on the findings above.
-
-      | Priority | Action | Addresses |
-      |:---------|:-------|:----------|
-      | 🔴 **Critical** | [Specific action] | [Finding it addresses] |
-      | 🟠 **High Impact** | [Specific action] | [Finding it addresses] |
-      | 🟢 **Quick Win** | [Specific action] | [Finding it addresses] |
-
-      Requirements:
-      - Each action must address a specific finding from this summary
+      - Each action must address a specific pain point by number
       - Make actions specific and achievable
-      - Use action-oriented language
+      - Priority as numbers (1 = most urgent), effort as text labels
 
       If insufficient findings, output: *Additional session data needed to generate specific recommendations.*
 
@@ -356,87 +259,65 @@ ai_generation_tasks:
 
       ## Methodology
 
-      ### Sources Analyzed
+      **Session format** — [Moderated/unmoderated, duration, setup details from sources]
 
-      | Source Type | Status | Details |
-      |:------------|:------:|:--------|
-      | **Coded Transcript** | [✅ Available / ❌ Not Available] | Primary source for verbatim quotes and behavioral data |
-      | **Observer Notes** | ✅ Available | [X] file(s) analyzed |
+      **Tasks attempted** — [List tasks the participant was asked to complete]
 
-      ### Analysis Framework
+      **Sources analyzed** — Coded transcript (primary source for verbatim quotes and behavioral data) and [X] observer notes files
 
-      This summary follows a structured extraction and inference approach:
+      **Analysis approach** — Pain points and quotes are direct extractions from the coded transcript; opportunities and insights are reasoned inferences from behavioral patterns observed during the session.
 
-      ```
-      Sources → Extraction → Categorization → Synthesis → Recommendations
-      ```
+      **Limitations** — [Single participant caveat. Note source completeness. Cross-reference recommendation.]
 
-      | Finding Type | Method | Confidence |
-      |:-------------|:-------|:-----------|
-      | Pain Points | Direct extraction | High - requires explicit evidence |
-      | Quotes | Verbatim extraction | High - exact match required |
-      | Opportunities | Inference from struggles | Medium - reasoned from behavior |
-      | Insights | Inference from patterns | Medium - synthesized from observations |
+      ### References
 
-      ### Data Quality Considerations
-
-      - **Source Completeness:** [Note if transcript missing, single observer, etc.]
-      - **Quote Verification:** All quotes extracted verbatim from sources
-      - **Inference Transparency:** Opportunities and insights clearly linked to evidence
-      - **Limitations:** [Note any gaps or caveats]
-
-      ### Recommended Follow-up
-
-      - [ ] Cross-reference with session recording (if available)
-      - [ ] Validate findings with research lead
-      - [ ] Add to synthesis database for cross-session analysis
-      - [ ] Share key quotes with stakeholders
+      - Nielsen Norman Group — Moderated usability testing methodology
+      - Krug, S. — *Rocket Surgery Made Easy* (2010)
+      - Hall, E. — *Just Enough Research* (2nd ed., 2019)
+      - W3C Web Content Accessibility Guidelines (WCAG) 2.2
 
       ---
 
+      ## Appendix
+
       <details>
-      <summary><strong>Session Metadata</strong></summary>
+      <summary><strong>Related artifacts</strong></summary>
 
-      | Attribute | Value |
-      |:----------|:------|
-      | **Participant ID** | `{{participant_id}}` |
-      | **Study** | {{study_name}} |
-      | **Session Date** | {{session_date}} |
-      | **Analysis Date** | {{current_date}} |
-      | **Analyzed By** | {{analyzer}} |
-      | **Template Version** | v1.5 |
-
-      **Extraction Summary:**
-
-      | Metric | Count |
-      |:-------|------:|
-      | Pain points | [X] |
-      | Successes | [X] |
-      | Opportunities | [X] |
-      | Insights | [X] |
-      | Verbatim quotes | [X] |
-      | Actions | [X] |
+      | Artifact | Location | Status |
+      |----------|----------|--------|
+      | {{participant_id}} coded transcript | 03-fieldwork/coded-transcript-analysis/ | Complete |
+      | Observer notes | 03-fieldwork/session-notes/ | Complete |
+      | Discussion guide | 01-planning/ | Complete |
+      | Research plan | 01-planning/ | Complete |
 
       </details>
 
-      ---
+      <details>
+      <summary><strong>Validity checklist</strong></summary>
 
-      *Generated by Qori • {{current_date}}*
+      | Criterion | Verified |
+      |-----------|:--------:|
+      | All quotes verbatim from coded transcript | ✓ |
+      | Pain points grounded in specific observed behaviors | ✓ |
+      | Inferences (insights, opportunities) traced to evidence | ✓ |
+      | Confidence levels declared per pain point | ✓ |
+      | Source documents listed in methodology | ✓ |
+
+      </details>
 
       ============================================================
-      FINAL CHECKLIST
+      QUALITY CHECKS (do not include in output)
       ============================================================
 
       Before outputting, verify:
-      - Every pain point has source evidence
-      - Every quote is verbatim from sources
+      - Every pain point has source evidence and a Confidence level with reasoning
+      - Every quote is verbatim from sources with timestamp if available
       - Opportunities are reasonable inferences from struggles/requests
       - Insights reveal something about the USER, not just the interface
-      - Actions link to specific findings
-      - Counts in "Findings at a Glance" match actual content
-      - Counts in metadata match actual content
+      - Actions link to specific pain points by number
+      - Summary narrative references specific findings from THIS session
 
-      Return the complete document starting with the header. No preamble.
+      Do NOT output a footer or "Generated by Qori" line — that is added automatically.
 
 # ═══════════════════════════════════════════════════════════
 # OUTPUT
@@ -446,7 +327,7 @@ output_template: |
 
 output_options:
   path: "03-fieldwork/session-summaries/"
-  filename: "{{participant_id}}-session-summary-{{session_date}}.md"
+  filename: "{{participant_id}}-session-summary-{{current_date_iso}}.md"
 
 # ═══════════════════════════════════════════════════════════
 # METADATA (documentation only — not read by backend)
@@ -496,12 +377,10 @@ slack_ui:
     close_label: "Cancel"
     sections:
       - section_title: "Session Selection"
-        section_icon: "📅"
         section_description: "Choose the session to analyze"
         fields:
           - session_id
       - section_title: "Sources to Analyze"
-        section_icon: "📄"
         section_description: "Select notes and coded transcript for analysis"
         fields:
           - selected_notes
@@ -536,24 +415,31 @@ notify:
     message: "Session summary for {{participant_id}} is ready for review."
 
 notes: |
-  v1.5 Changes (Standards Polish):
-  - Applied canonical key ordering (IDENTITY → CONFIGURATION → INPUTS → AI GENERATION → OUTPUT → METADATA)
-  - Removed dead config: llm_config
-  - Removed dead output_options keys: delivery.github, delivery.slack sub-objects (kept path, filename)
-  - Kept structured input_variables format (complex types)
-  - Unwrapped Methodology from <details> toggle (visible for findings docs)
-  - Kept Session Metadata in <details> (truly supplementary)
-  - Changed footer from <sub> tag to italic line
-  - Summary blockquote: removed date (date in footer), uses metrics only
-  - Kept output_variable on task
-  - Moved slack_command, external_data_sources, slack_ui, processing_rules, validation_rules to METADATA
+  v1.6 Changes (Design Language Translation):
+  - Translated locked design from docs/design-references/session-summary-reference.md
+  - Modified Pattern A traceability: Confidence per pain point, Sources consolidated
+    in Methodology (not per-finding — single participant, same source files)
+  - Added Summary section with narrative + > [!IMPORTANT] callout
+  - Pain points: removed <details> collapsing (core content, not supplementary),
+    added editorial numbering (### 01 &nbsp;&nbsp;), added Confidence metadata line,
+    severity moved from sub-headings to per-item metadata
+  - Participant context: GFM table → bold-em-dash paragraphs (standard 4.3)
+  - What worked: table → H3 sub-sections with quotes
+  - Key insights: HTML two-column table → sequential H3 sections
+  - Removed Verbatim Quotes section (quotes inline as evidence in pain points/insights)
+  - Removed ASCII art "Findings at a Glance" box (Summary section replaces)
+  - Removed Session Metadata <details> (backend footer covers this)
+  - Methodology: tables → bold-em-dash prose, added References
+  - Added Appendix with Related Artifacts + Validity Checklist
+  - Footer removed from prompt (backend buildTraceabilityFooter handles it)
+  - Filename: {{participant_id}}-session-summary-{{current_date_iso}}.md
+  - H1: clean text with participant ID (# Session Summary: PT-001)
+  - Added masthead (Study/Researcher/Date)
 
-  v1.4 Changes:
-  - Added GitHub-styled output with collapsible sections and tables
-  - Added methodology section with data quality considerations
-  - Enhanced grounding rules for extraction vs inference
+  v1.5: Standards Polish (canonical structure, dead config removal)
+  v1.4: GitHub-styled output with collapsible sections
 
 output_use: |
   Analyzes session notes and transcript together to generate comprehensive session
   summaries. Synthesizes multiple observer perspectives with transcript content to
-  extract pain points, opportunities, insights, quotes, and create action items.
+  extract pain points with confidence levels, insights, and actionable recommendations.

@@ -171,6 +171,7 @@ const handleAnalyzeNotesSubmission = async ({ ack, body, view, client }) => {
       notes_content: notes_content,
       note_takers: noteTakers.join(', '),
       participant_id: uniqueParticipantIds[0] || 'Unknown Participant ID',
+      researcher_contact: study?.researcher_name || study?.researcher_email || '',
       analyzer: body.user.username || body.user.name || body.user.id
     };
     console.log("🚀 ~ handleAnalyzeNotesSubmission ~ templateData:", templateData)
