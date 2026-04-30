@@ -1424,7 +1424,6 @@ slackApp.action('create_research_brief', async ({ ack, body, client }) => {
 
     await client.views.update({
       view_id: body.view.id,
-      trigger_id: body.trigger_id,
       view: {
         ...researchBriefModal,
         blocks: modalBlocks,
@@ -1439,7 +1438,18 @@ slackApp.action('create_research_brief', async ({ ack, body, client }) => {
 
     console.log(`✅ Opened research brief modal for study: ${preselectStudyName}`);
   } catch (err) {
-    console.error('Error opening brief modal:', err.data || err);
+    console.error('Error opening brief modal:', err.data?.response_metadata?.messages || err.data || err.message || err);
+    // Notify user of the error
+    try {
+      const meta = JSON.parse(body.view?.private_metadata || '{}');
+      await client.chat.postEphemeral({
+        channel: meta.channelId || body.user.id,
+        user: body.user.id,
+        text: `❌ Error opening research brief: ${err.data?.error || err.message || 'Unknown error'}`
+      });
+    } catch (notifyErr) {
+      console.error('Could not notify user of error:', notifyErr.message);
+    }
   }
 });
 
