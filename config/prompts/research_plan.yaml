@@ -56,6 +56,10 @@ input_variables:
 # AI GENERATION
 # ═══════════════════════════════════════════════════════════
 ai_generation_tasks:
+  # GLOBAL FORMATTING RULE (applies to all tasks below):
+  # Always use markdown dash (-) for bullets, never Unicode bullets (•).
+  # Do not wrap text in quotes. Use display-friendly dates (Month DD, YYYY).
+
   # Summary — narrative synthesis of the plan
   - task_id: "summary"
     prompt: |
@@ -99,6 +103,7 @@ ai_generation_tasks:
       - **Document** [what we aim to record for future reference]
 
       Each objective should be one line, specific to this study.
+      Always use markdown dash (-) for bullets, never Unicode bullets (•).
       Do not wrap text in quotes.
 
   # Research questions — derive from objectives + context
@@ -173,7 +178,24 @@ ai_generation_tasks:
       **Compensation** — [Standard rate for this type of research, typically
       $50-$100 per participant for 60-90 minute sessions]
 
+      Always use markdown dash (-) for bullets, never Unicode bullets (•).
       Do not wrap text in quotes.
+
+  # Timeline display — format timeline preference for summary table
+  - task_id: "timeline_display"
+    prompt: |
+      Format this timeline preference as a display-friendly string:
+
+      Preference: {{timeline_preference}}
+      Start date: {{start_date}}
+
+      Rules:
+      - "standard" → "5 weeks, starting [Month DD, YYYY]"
+      - "accelerated" → "2 weeks, starting [Month DD, YYYY]"
+      - "extended" → "8 weeks, starting [Month DD, YYYY]"
+
+      Convert the start date to display format (e.g., "May 4, 2026").
+      Output ONLY the formatted string, nothing else.
 
   # Timeline — calculate dates from start_date + preference
   - task_id: "timeline"
@@ -215,13 +237,19 @@ ai_generation_tasks:
       - Format dates as: Month DD, YYYY
       - Do NOT output the header row — only data rows
       - Do NOT use placeholder dates
+      - Always use markdown dash (-) for bullets, never Unicode bullets (•)
 
-      Output ONLY these rows:
-      | Planning and stakeholder alignment | [duration] | {{start_date}} | [end date] | [duration] |
-      | Recruitment | [duration] | [start] | [end] | [duration] |
-      | Fieldwork (sessions) | [duration] | [start] | [end] | [duration] |
-      | Analysis | [duration] | [start] | [end] | [duration] |
-      | Reporting | [duration] | [start] | [end] | [duration] |
+      OUTPUT FORMAT: exactly 3 columns per row — Phase | Dates | Duration.
+      Dates column combines start and end as "Start – End, Year".
+
+      Example rows (DO NOT copy these dates — calculate from {{start_date}}):
+      | Planning and stakeholder alignment | May 18 – May 25, 2026 | 1 week |
+      | Recruitment | May 26 – June 4, 2026 | 1.5 weeks |
+      | Fieldwork (sessions) | June 5 – June 11, 2026 | 1 week |
+      | Analysis | June 12 – June 14, 2026 | 3 days |
+      | Reporting | June 15 – June 16, 2026 | 2 days |
+
+      Output ONLY 5 rows in this exact 3-column format. Calculate real dates from {{start_date}}.
 
   # Deliverables — methodology-driven static list
   - task_id: "deliverables"
@@ -317,7 +345,7 @@ output_template: |
   |---|---|
   | **Method** | {{methodology}} |
   | **Participants** | {{participant_count}} |
-  | **Timeline** | {{timeline_preference}} starting {{start_date}} |
+  | **Timeline** | {{ai_generated.timeline_display}} |
   | **Deliverables** | Research readout, design recommendations |
 
   ---
