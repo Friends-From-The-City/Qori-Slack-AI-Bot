@@ -94,7 +94,7 @@ const researchPlanGeneratorModal = {
         action_id: "decision_input",
         placeholder: {
           type: "plain_text",
-          text: "e.g., The VA mobile app's navigation produces a 45% task abandonment rate. We need to identify which pathways cause abandonment to inform the Q3 redesign.",
+          text: "e.g., VA mobile app navigation has 45% task abandonment. Identify causes to inform Q3 redesign.",
         },
         multiline: true,
       },
@@ -112,7 +112,7 @@ const researchPlanGeneratorModal = {
         action_id: "research_goal_input",
         placeholder: {
           type: "plain_text",
-          text: "e.g., Identify navigation barriers preventing task completion and understand veteran mental models for organizing health and benefits information",
+          text: "e.g., Identify navigation barriers and understand veteran mental models",
         },
         multiline: true,
       },
