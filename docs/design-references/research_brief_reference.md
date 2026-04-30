@@ -1,3 +1,9 @@
+# Research Brief Reference Document
+
+> **Inputs and rationale:** Research brief is a "first document" — no prior inputs exist. Required: study metadata (from selector), stakeholder name, problem statement, learning objectives, method, out of scope, decision deadline. Lead researcher auto-fills from Slack profile.
+
+---
+
 # Research Brief: Navigation Redesign Usability Study
 
 **Study:** va-mobile-nav-2026 &nbsp; | &nbsp; **Researcher:** Lapedra Tolson &nbsp; | &nbsp; **Requested by:** Sarah Chen, Product &nbsp; | &nbsp; **Date:** April 30, 2026 &nbsp; | &nbsp; **Status:** Pending approval
@@ -14,6 +20,7 @@ The VA Health & Benefits mobile app has a 45% task abandonment rate and 4.2/10 s
 | **Participants** | 8 Veterans, 50% using assistive technology |
 | **Timeline** | 6 weeks |
 | **Decision deadline** | June 30, 2026 |
+| **Budget** | $800 participant incentives |
 
 ---
 
@@ -80,7 +87,7 @@ The VA Health & Benefits mobile app's navigation produces a 45% task abandonment
 
 | Risk | Mitigation |
 |------|------------|
-| Recruiting assistive technology users historically takes 2× longer | Partner with VA disability services early; extend recruitment 1 week if needed; reduce to 6 participants as backup |
+| Recruiting assistive technology users historically takes 2x longer | Partner with VA disability services early; extend recruitment 1 week if needed; reduce to 6 participants as backup |
 | Stakeholder feedback delays compress analysis timeline | Schedule mid-fieldwork stakeholder check-in; prepare interim findings if review delays |
 
 ---

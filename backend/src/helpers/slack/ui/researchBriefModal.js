@@ -1,5 +1,12 @@
 /* eslint-disable max-len */
 /* eslint-disable quotes */
+
+/**
+ * Research Brief Modal v5.0
+ *
+ * Lean modal: 7 required fields + study selector
+ * Brief = approval gate. Plan = execution doc.
+ */
 const researchBriefModal = {
   type: "modal",
   callback_id: "research_brief_modal",
@@ -21,92 +28,57 @@ const researchBriefModal = {
       elements: [
         {
           type: "mrkdwn",
-          text: "Formalize the research scope, methodology, and participant criteria. This brief will be shared with stakeholders for approval.",
+          text: "Define the research scope for stakeholder approval. Brief approved → plan elaborates.",
         },
       ],
     },
     {
       type: "divider",
     },
-    {
-      type: "section",
-      text: {
-        type: "mrkdwn",
-        text: "*📁 Project Info*",
-      },
-    },
-    {
-      type: "section",
-      block_id: "request_link_block",
-      text: {
-        type: "mrkdwn",
-        text: "{{request_link_display}}",
-      },
-    },
+    // Study selector - required for file path scoping
     {
       type: "input",
-      block_id: "study_title_block",
+      block_id: "study_selection",
       label: {
         type: "plain_text",
-        text: "Study title *",
-      },
-      hint: {
-        type: "plain_text",
-        text: "Auto-filled from research request",
+        text: "Study *",
       },
       element: {
-        type: "plain_text_input",
-        action_id: "study_title_input",
-        initial_value: "{{study_title}}",
+        type: "static_select",
+        action_id: "study_select",
+        placeholder: {
+          type: "plain_text",
+          text: "Select a study...",
+        },
+        options: [
+          {
+            text: {
+              type: "plain_text",
+              text: "Loading studies...",
+            },
+            value: "loading",
+          },
+        ],
       },
     },
+    // Stakeholder who requested
     {
       type: "input",
       block_id: "stakeholder_block",
       label: {
         type: "plain_text",
-        text: "Stakeholder who requested *",
+        text: "Requested by *",
       },
       hint: {
         type: "plain_text",
-        text: "Auto-filled from research request",
+        text: "Stakeholder who will approve this brief",
       },
       element: {
         type: "plain_text_input",
         action_id: "stakeholder_input",
-        initial_value: "{{stakeholder_name}}",
-      },
-    },
-    {
-      type: "input",
-      block_id: "lead_researcher_block",
-      label: {
-        type: "plain_text",
-        text: "Lead researcher *",
-      },
-      element: {
-        type: "plain_text_input",
-        action_id: "lead_researcher_input",
         placeholder: {
           type: "plain_text",
-          text: "e.g., Jordan Smith",
-        },
-      },
-    },
-    {
-      type: "input",
-      block_id: "research_team_block",
-      optional: true,
-      label: {
-        type: "plain_text",
-        text: "Research team",
-      },
-      element: {
-        type: "plain_text_input",
-        action_id: "research_team_input",
-        placeholder: {
-          type: "plain_text",
-          text: "e.g., Alex (notes), Casey (observer)",
+          text: "e.g., Sarah Chen, Product",
         },
       },
     },
@@ -117,116 +89,71 @@ const researchBriefModal = {
       type: "section",
       text: {
         type: "mrkdwn",
-        text: "*🎯 Research Scope*",
+        text: "*Research Scope*",
       },
     },
+    // Problem statement (was business_context)
     {
       type: "input",
-      block_id: "business_context_block",
+      block_id: "problem_statement_block",
       label: {
         type: "plain_text",
-        text: "Business context *",
+        text: "Problem statement *",
       },
       hint: {
         type: "plain_text",
-        text: "What's the problem and why does it matter? Include metrics if available.",
+        text: "What problem are we solving? Include metrics if available.",
       },
       element: {
         type: "plain_text_input",
-        action_id: "business_context_input",
+        action_id: "problem_statement_input",
         placeholder: {
           type: "plain_text",
-          text: "e.g., 45% task abandonment on claims status flow...",
+          text: "e.g., 45% task abandonment rate on claims status flow, 4.2/10 satisfaction...",
         },
         multiline: true,
       },
     },
+    // What we'll learn (consolidates objectives + questions)
     {
       type: "input",
-      block_id: "objectives_block",
+      block_id: "learning_objectives_block",
       label: {
         type: "plain_text",
-        text: "Research objectives *",
+        text: "What we'll learn *",
       },
       hint: {
         type: "plain_text",
-        text: "Start with: Where veterans..., Which..., Why..., How...",
+        text: "4-6 bullets: what questions will this research answer?",
       },
       element: {
         type: "plain_text_input",
-        action_id: "objectives_input",
+        action_id: "learning_objectives_input",
         placeholder: {
           type: "plain_text",
-          text: "e.g., Where veterans encounter navigation barriers...",
+          text: "- Where veterans expect to find [feature]\n- How veterans mentally categorize...\n- Which navigation pattern enables faster...",
         },
         multiline: true,
       },
     },
+    // Out of scope
     {
       type: "input",
-      block_id: "research_questions_block",
+      block_id: "out_of_scope_block",
       label: {
         type: "plain_text",
-        text: "Primary research questions *",
+        text: "Out of scope *",
+      },
+      hint: {
+        type: "plain_text",
+        text: "What this research will NOT cover",
       },
       element: {
         type: "plain_text_input",
-        action_id: "research_questions_input",
+        action_id: "out_of_scope_input",
         placeholder: {
           type: "plain_text",
-          text: "e.g., What barriers prevent veterans from completing...?",
-        },
-        multiline: true,
-      },
-    },
-    {
-      type: "input",
-      block_id: "user_journeys_block",
-      label: {
-        type: "plain_text",
-        text: "User journeys/flows in scope *",
-      },
-      element: {
-        type: "plain_text_input",
-        action_id: "user_journeys_input",
-        placeholder: {
-          type: "plain_text",
-          text: "e.g., Login → Dashboard → Claims status → Claim details",
-        },
-        multiline: true,
-      },
-    },
-    {
-      type: "input",
-      block_id: "target_barriers_block",
-      label: {
-        type: "plain_text",
-        text: "Target barriers to investigate *",
-      },
-      element: {
-        type: "plain_text_input",
-        action_id: "target_barriers_input",
-        placeholder: {
-          type: "plain_text",
-          text: "e.g., Navigation hierarchy, unclear labels, loading times...",
-        },
-        multiline: true,
-      },
-    },
-    {
-      type: "input",
-      block_id: "hypotheses_block",
-      optional: true,
-      label: {
-        type: "plain_text",
-        text: "Team hypotheses",
-      },
-      element: {
-        type: "plain_text_input",
-        action_id: "hypotheses_input",
-        placeholder: {
-          type: "plain_text",
-          text: "e.g., We believe veterans abandon because...",
+          text: "e.g., Visual design, onboarding flow, web app...",
         },
         multiline: true,
       },
@@ -238,15 +165,16 @@ const researchBriefModal = {
       type: "section",
       text: {
         type: "mrkdwn",
-        text: "*🔬 Methodology*",
+        text: "*Method & Timeline*",
       },
     },
+    // Research method
     {
       type: "input",
       block_id: "research_method_block",
       label: {
         type: "plain_text",
-        text: "Primary research method *",
+        text: "Research method *",
       },
       element: {
         type: "static_select",
@@ -257,101 +185,41 @@ const researchBriefModal = {
         },
         options: [
           {
-            text: {
-              type: "plain_text",
-              text: "Usability Testing",
-            },
+            text: { type: "plain_text", text: "Usability Testing" },
             value: "usability_testing",
           },
           {
-            text: {
-              type: "plain_text",
-              text: "User Interviews",
-            },
+            text: { type: "plain_text", text: "User Interviews" },
             value: "user_interviews",
           },
           {
-            text: {
-              type: "plain_text",
-              text: "Contextual Inquiry",
-            },
+            text: { type: "plain_text", text: "Contextual Inquiry" },
             value: "contextual_inquiry",
           },
           {
-            text: {
-              type: "plain_text",
-              text: "Concept Testing",
-            },
+            text: { type: "plain_text", text: "Concept Testing" },
             value: "concept_testing",
           },
           {
-            text: {
-              type: "plain_text",
-              text: "Survey",
-            },
+            text: { type: "plain_text", text: "Survey Research" },
             value: "survey",
           },
           {
-            text: {
-              type: "plain_text",
-              text: "Card Sorting",
-            },
+            text: { type: "plain_text", text: "Card Sorting" },
             value: "card_sorting",
           },
           {
-            text: {
-              type: "plain_text",
-              text: "Tree Testing",
-            },
+            text: { type: "plain_text", text: "Tree Testing" },
             value: "tree_testing",
           },
           {
-            text: {
-              type: "plain_text",
-              text: "Diary Study",
-            },
-            value: "diary_study",
-          },
-          {
-            text: {
-              type: "plain_text",
-              text: "A/B Testing",
-            },
-            value: "ab_testing",
-          },
-          {
-            text: {
-              type: "plain_text",
-              text: "Competitive Analysis",
-            },
-            value: "competitive_analysis",
-          },
-          {
-            text: {
-              type: "plain_text",
-              text: "Mixed Methods",
-            },
+            text: { type: "plain_text", text: "Mixed Methods" },
             value: "mixed_methods",
           },
         ],
       },
     },
-    {
-      type: "input",
-      block_id: "sample_size_block",
-      label: {
-        type: "plain_text",
-        text: "Target sample size *",
-      },
-      element: {
-        type: "plain_text_input",
-        action_id: "sample_size_input",
-        placeholder: {
-          type: "plain_text",
-          text: "e.g., 8-10 participants",
-        },
-      },
-    },
+    // Why this method (rationale)
     {
       type: "input",
       block_id: "method_rationale_block",
@@ -364,101 +232,99 @@ const researchBriefModal = {
         action_id: "method_rationale_input",
         placeholder: {
           type: "plain_text",
-          text: "e.g., Need to observe real-time task completion and identify friction points...",
+          text: "e.g., Task-based observation lets us see where users get stuck in real time...",
         },
         multiline: true,
       },
     },
-    {
-      type: "divider",
-    },
-    {
-      type: "section",
-      text: {
-        type: "mrkdwn",
-        text: "*👥 Participants*",
-      },
-    },
-    {
-      type: "input",
-      block_id: "participant_criteria_block",
-      label: {
-        type: "plain_text",
-        text: "Participant criteria *",
-      },
-      hint: {
-        type: "plain_text",
-        text: "Include must-haves, nice-to-haves, and exclusions.",
-      },
-      element: {
-        type: "plain_text_input",
-        action_id: "participant_criteria_input",
-        placeholder: {
-          type: "plain_text",
-          text: "e.g., Veterans who used the mobile app in past 90 days...",
-        },
-        multiline: true,
-      },
-    },
-    {
-      type: "divider",
-    },
-    {
-      type: "section",
-      text: {
-        type: "mrkdwn",
-        text: "*⏱️ Timeline & Constraints*",
-      },
-    },
+    // Timeline preference (same as research_plan)
     {
       type: "input",
       block_id: "timeline_block",
       label: {
         type: "plain_text",
-        text: "Estimated timeline *",
+        text: "Timeline *",
       },
       element: {
-        type: "plain_text_input",
-        action_id: "timeline_input",
-        placeholder: {
-          type: "plain_text",
-          text: "e.g., 4 weeks",
-        },
+        type: "radio_buttons",
+        action_id: "timeline_radio",
+        options: [
+          {
+            text: { type: "plain_text", text: "Standard (5 weeks)" },
+            value: "standard",
+          },
+          {
+            text: { type: "plain_text", text: "Accelerated (2 weeks)" },
+            value: "accelerated",
+          },
+          {
+            text: { type: "plain_text", text: "Extended (8 weeks)" },
+            value: "extended",
+          },
+        ],
       },
     },
+    // Start date
     {
       type: "input",
-      block_id: "deadline_block",
-      optional: true,
+      block_id: "start_date_block",
       label: {
         type: "plain_text",
-        text: "Hard deadline",
+        text: "Start date *",
       },
       element: {
         type: "datepicker",
-        action_id: "deadline_picker",
+        action_id: "start_date_picker",
         placeholder: {
           type: "plain_text",
-          text: "Select a date",
+          text: "Select start date",
+        },
+      },
+    },
+    // Decision deadline
+    {
+      type: "input",
+      block_id: "decision_deadline_block",
+      label: {
+        type: "plain_text",
+        text: "Decision deadline *",
+      },
+      hint: {
+        type: "plain_text",
+        text: "When do stakeholders need findings by?",
+      },
+      element: {
+        type: "datepicker",
+        action_id: "decision_deadline_picker",
+        placeholder: {
+          type: "plain_text",
+          text: "Select deadline",
         },
       },
     },
     {
+      type: "divider",
+    },
+    // Budget (optional)
+    {
       type: "input",
-      block_id: "constraints_block",
+      block_id: "budget_block",
       optional: true,
       label: {
         type: "plain_text",
-        text: "Constraints and risks",
+        text: "Budget",
+      },
+      hint: {
+        type: "plain_text",
+        text: "Participant incentives, tooling, etc.",
       },
       element: {
         type: "plain_text_input",
-        action_id: "constraints_input",
+        action_id: "budget_input",
         placeholder: {
           type: "plain_text",
-          text: "e.g., Limited recruitment pool, tight timeline...",
+          text: "e.g., $800 participant incentives",
         },
-        multiline: true,
       },
     },
   ],

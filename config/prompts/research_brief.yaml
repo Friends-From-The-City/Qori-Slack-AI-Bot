@@ -3,472 +3,291 @@
 # ═══════════════════════════════════════════════════════════
 id: research_brief
 name: create_research_brief
-label: "📋 Research Brief"
-version: v4.2
+label: "Research Brief"
+version: "v5.0"
+
 description: |
-  Researcher tool to create formal research briefs from stakeholder requests.
-  Translates business problems into research scope, objectives, and methodology.
-  Used after reviewing a research request to formalize the research approach.
+  Stakeholder approval document for research scope.
+  Brief = approval gate. Plan = execution doc.
+  First document in a study — no prior inputs exist.
 
 author: Qori R&D
 created: 2025-06-26
-last_updated: 2026-04-29
+last_updated: 2026-04-30
 
 # ═══════════════════════════════════════════════════════════
 # CONFIGURATION
 # ═══════════════════════════════════════════════════════════
-input_type: text
-input_processing: summarize_if_long
+input_type: structured
+input_processing: direct
 
 # ═══════════════════════════════════════════════════════════
 # INPUTS
 # ═══════════════════════════════════════════════════════════
 input_variables:
-  # Link to original request (optional - can create brief without request)
-  - name: research_request_link
-    type: string
-    required: false
-    label: "Link to research request (if applicable)"
-    placeholder: "e.g., GitHub link to the research request file"
-
-  # Researcher info
-  - name: lead_researcher
-    type: string
-    required: true
-    label: "Lead researcher"
-    placeholder: "e.g., Jordan Smith"
-
-  - name: research_team
-    type: string
-    required: false
-    label: "Research team members"
-    placeholder: "e.g., Alex (note-taker), Casey (observer)"
-
-  # Project info
-  - name: project_title
-    type: string
-    required: true
-    label: "Project/study title"
-    placeholder: "e.g., VA Mobile App Navigation Usability Study"
-
-  - name: requestor_name
-    type: string
-    required: true
-    label: "Stakeholder who requested this"
-    placeholder: "e.g., Sarah Chen, PM"
-
-  # Research scope - Researcher determines these
-  - name: business_context
-    type: textarea
-    required: true
-    label: "Business context"
-    placeholder: "What's the problem and why does it matter? Include key metrics if available."
-    hint: "Pull from the research request, add any additional context from intake conversation."
-
-  - name: research_objectives
-    type: textarea
-    required: true
-    label: "Research objectives"
-    placeholder: "What do we want to learn? (3-4 objectives)"
-    hint: "Start with: Where veterans..., Which..., Why..., How..."
-
-  - name: research_questions
-    type: textarea
-    required: true
-    label: "Primary research questions"
-    placeholder: "Specific questions this research will answer (3-5 questions)"
-
-  - name: user_journeys_in_scope
-    type: textarea
-    required: true
-    label: "User journeys/flows in scope"
-    placeholder: "Which user flows or touchpoints will we evaluate?"
-
-  - name: target_barriers
-    type: textarea
-    required: true
-    label: "Target barriers to investigate"
-    placeholder: "What barriers or friction points are we looking for?"
-
-  - name: hypotheses
-    type: textarea
-    required: false
-    label: "Team hypotheses"
-    placeholder: "What does the team currently believe? (These will be tested)"
-
-  # Methodology - Researcher specifies
-  - name: research_method
-    type: select
-    required: true
-    label: "Primary research method"
-    options:
-      - value: "usability_testing"
-        label: "Usability Testing"
-      - value: "user_interviews"
-        label: "User Interviews"
-      - value: "contextual_inquiry"
-        label: "Contextual Inquiry"
-      - value: "survey"
-        label: "Survey"
-      - value: "diary_study"
-        label: "Diary Study"
-      - value: "card_sorting"
-        label: "Card Sorting"
-      - value: "tree_testing"
-        label: "Tree Testing"
-      - value: "concept_testing"
-        label: "Concept Testing"
-      - value: "mixed_methods"
-        label: "Mixed Methods"
-
-  - name: method_rationale
-    type: textarea
-    required: true
-    label: "Why this method?"
-    placeholder: "Brief rationale for methodology choice"
-
-  # Participants
-  - name: participant_criteria
-    type: textarea
-    required: true
-    label: "Participant criteria"
-    placeholder: "Who should we recruit? Include must-haves and nice-to-haves."
-
-  - name: sample_size
-    type: string
-    required: true
-    label: "Target sample size"
-    placeholder: "e.g., 8-10 participants"
-
-  # Timeline
-  - name: timeline_weeks
-    type: string
-    required: true
-    label: "Estimated timeline (weeks)"
-    placeholder: "e.g., 4 weeks"
-
-  - name: deadline
-    type: date
-    required: false
-    label: "Hard deadline (if any)"
-
-  # Constraints
-  - name: constraints
-    type: textarea
-    required: false
-    label: "Constraints & risks"
-    placeholder: "Budget, access limitations, recruitment challenges, etc."
+  - selected_study:
+      type: "select"
+      required: true
+  - lead_researcher:
+      type: "text"
+      required: true
+  - requestor_name:
+      type: "text"
+      required: true
+  - problem_statement:
+      type: "textarea"
+      required: true
+  - learning_objectives:
+      type: "textarea"
+      required: true
+  - out_of_scope:
+      type: "textarea"
+      required: true
+  - methodology:
+      type: "select"
+      required: true
+  - method_rationale:
+      type: "textarea"
+      required: true
+  - timeline_preference:
+      type: "radio"
+      required: true
+  - start_date:
+      type: "date"
+      required: true
+  - decision_deadline:
+      type: "date"
+      required: true
+  - budget:
+      type: "text"
+      required: false
 
 # ═══════════════════════════════════════════════════════════
 # AI GENERATION
 # ═══════════════════════════════════════════════════════════
 ai_generation_tasks:
-  - task_id: "project_scope"
+  # GLOBAL FORMATTING RULE (applies to all tasks below):
+  # Always use markdown dash (-) for bullets, never Unicode bullets (•).
+  # Do not wrap text in quotes. Use display-friendly dates (Month DD, YYYY).
+
+  # Summary — narrative synthesis of the brief
+  - task_id: "summary"
     prompt: |
-      Based on the project title "{{project_title}}" and business context "{{business_context}}", identify the VA domain area.
+      Write a 2-3 sentence summary of this research brief:
 
-      Choose from:
-      - Digital Services
-      - Benefits Claims
-      - Healthcare Services
-      - Education Services
-      - Career Services
-      - Financial Services
+      Study: {{selected_study}}
+      Problem: {{problem_statement}}
+      What we'll learn: {{learning_objectives}}
+      Method: {{methodology}}
+      Deadline: {{decision_deadline}}
 
-      Output only the domain (e.g., "Digital Services").
+      The summary should explain: what problem we're solving, what method we'll use,
+      and what decision the findings will inform. Be specific and concise.
+      Do not use quotes around text.
 
-  - task_id: "formatted_objectives"
+  # Formatted learning objectives — clean bullet list
+  - task_id: "formatted_learning"
     prompt: |
-      Format these research objectives into a consistent structure:
-      "{{research_objectives}}"
+      Format these learning objectives into a clean bulleted list:
+      "{{learning_objectives}}"
 
       Rules:
-      - Each objective should start with a bold verb: **Where**, **Which**, **Why**, or **How**
-      - Keep to 3-4 objectives maximum
-      - Each should be one clear sentence
+      - Each objective should be a clear, specific question or goal
+      - Start each with a verb or "Where/How/Which/What"
+      - Keep to 4-6 bullets maximum
       - Preserve the researcher's original intent
+      - Always use markdown dash (-) for bullets, never Unicode bullets (•)
 
-      Output format:
-      - **Where** veterans [encounter/experience/face] [specific issue]
-      - **Which** [elements/factors/features] [cause/contribute to] [outcome]
-      - **Why** veterans [behavior/experience] [specific context]
-      - **How** veterans [currently do something] [relevant to research]
+      Output only the bulleted list, no preamble.
 
-      Output only the formatted bullet points, no preamble.
-
-  - task_id: "formatted_questions"
+  # Formatted out of scope — clean bullet list
+  - task_id: "formatted_out_of_scope"
     prompt: |
-      Format these research questions into a clean numbered list:
-      "{{research_questions}}"
+      Format these out-of-scope items into a clean bulleted list:
+      "{{out_of_scope}}"
 
       Rules:
-      - Number each question (1, 2, 3, etc.)
-      - Ensure each is phrased as a question (ends with ?)
-      - Questions should be specific and answerable through research
-      - Keep to 3-5 questions maximum
-      - Preserve the researcher's original intent
+      - Each item should be concise (one line)
+      - Keep to 3-5 bullets maximum
+      - Preserve the researcher's original boundaries
+      - Always use markdown dash (-) for bullets, never Unicode bullets (•)
 
-      Output only the numbered questions, no preamble.
+      Output only the bulleted list, no preamble.
 
-  - task_id: "formatted_journeys"
+  # Timeline — calculate dates from start_date + preference
+  - task_id: "timeline"
     prompt: |
-      Format these user journeys into a consistent numbered list with arrow notation:
-      "{{user_journeys_in_scope}}"
+      Create a timeline table for {{timeline_preference}} research starting {{start_date}}.
+
+      CRITICAL: Output EXACTLY 2 columns per row. No more, no less.
+      The 2 columns are: Phase | Dates
+      The Dates column combines start AND end into ONE cell: "May 18 – May 25, 2026"
+
+      Phase durations for {{timeline_preference}}:
+      - standard: Planning 10d, Fieldwork 7d, Analysis 7d, Findings 4d
+      - accelerated: Planning 4d, Fieldwork 4d, Analysis 4d, Findings 2d
+      - extended: Planning 14d, Fieldwork 14d, Analysis 14d, Findings 7d
 
       Rules:
-      - Number each journey (1, 2, 3, etc.)
-      - Use arrows (→) to show flow between steps
-      - Keep each journey to one line
-      - Use concise step names
-      - Preserve the researcher's original scope
+      - Start from {{start_date}}. Each phase starts the day after the previous ends.
+      - Do NOT output a header row — only the 4 data rows.
+      - No blank lines between rows.
 
-      Example format:
-      1. App onboarding → account creation → initial feature discovery
-      2. Dashboard → claims status → claim details → document upload
+      YOUR OUTPUT MUST LOOK EXACTLY LIKE THIS (but with dates calculated from {{start_date}}):
+      | Planning and recruitment | May 4 – May 17, 2026 |
+      | Fieldwork | May 18 – May 24, 2026 |
+      | Analysis | May 25 – June 2, 2026 |
+      | Findings presentation | June 3 – June 5, 2026 |
 
-      Output only the numbered journeys, no preamble.
-
-  - task_id: "formatted_barriers"
+  # Timeline display — format timeline preference for summary table
+  - task_id: "timeline_display"
     prompt: |
-      Format these target barriers into a categorized table:
-      "{{target_barriers}}"
+      Format this timeline preference as a display-friendly string:
+
+      Preference: {{timeline_preference}}
 
       Rules:
-      - Group similar barriers into categories
-      - Categories might include: Navigation, Information Architecture, Visual Design, Labeling, Onboarding, Mobile Usability, Accessibility
-      - Keep barrier descriptions concise but specific
-      - Preserve the researcher's original barriers
+      - "standard" → "6 weeks"
+      - "accelerated" → "2 weeks"
+      - "extended" → "8 weeks"
 
-      Output as markdown table:
-      | Category | Barrier |
-      |:---------|:--------|
-      | [Category] | [Specific barrier description] |
+      Output ONLY the formatted string, nothing else.
 
-      Output only the table, no preamble.
-
-  - task_id: "formatted_participants"
+  # Risks — generate 2 study-specific risks
+  - task_id: "risks"
     prompt: |
-      Organize these participant criteria into a structured format:
-      "{{participant_criteria}}"
+      Identify 2 risks for {{methodology}} research on {{selected_study}}:
 
-      Rules:
-      - Separate into three sections: Must-haves, Nice-to-haves, Exclude
-      - If exclusion criteria aren't mentioned, add standard ones (VA employees, recent research participants)
-      - Use bullet points within each section
-      - Preserve the researcher's original criteria
+      Problem context: {{problem_statement}}
+      Timeline: {{timeline_preference}}
+      Deadline: {{decision_deadline}}
 
-      Output format:
-      **Must-haves:**
-      - [Criterion]
-      - [Criterion]
+      Format as table rows ONLY (no header):
+      | [Risk description] | [Specific mitigation] |
+      | [Risk description] | [Specific mitigation] |
 
-      **Nice-to-haves:**
-      - [Criterion]
-      - [Criterion]
+      Risks should be specific to this study — not generic project management.
+      Consider: recruitment difficulty, technical setup for {{methodology}},
+      timeline constraints, stakeholder feedback delays.
 
-      **Exclude:**
-      - [Criterion]
-
-      Output only the formatted sections, no preamble.
-
-  - task_id: "success_criteria"
-    prompt: |
-      Based on these research objectives and questions, define success criteria:
-      Objectives: {{research_objectives}}
-      Questions: {{research_questions}}
-
-      Generate 3-4 success criteria that describe how we'll know the research succeeded.
-
-      Format as bullet points starting with "We will have succeeded if..."
-
-      Make criteria specific and measurable where possible.
-
-      Output only the bullet points, no preamble.
-
-  - task_id: "expected_outcomes"
-    prompt: |
-      Based on the business context and objectives, describe expected outcomes:
-      Context: {{business_context}}
-      Objectives: {{research_objectives}}
-
-      Generate 3 bullet points describing how this research will be used.
-
-      Format as:
-      Research will inform:
-      - **[Area]** — [specific application of findings]
-      - **[Area]** — [specific application of findings]
-      - **[Area]** — [specific application of findings]
-
-      Output only "Research will inform:" followed by the bullet points, no other preamble.
+      CRITICAL: Output rows with NO blank lines between them.
 
 # ═══════════════════════════════════════════════════════════
 # OUTPUT
 # ═══════════════════════════════════════════════════════════
-processing_workflow:
-  1. validate_inputs
-  2. execute_ai_generation_tasks
-  3. validate_generated_content
-  4. populate_template
-  5. save_to_outputs
-
 output_template: |
-  # Research Brief: {{project_title}}
+  # Research Brief: {{selected_study}}
 
-  **Lead Researcher:** {{lead_researcher}} | **Date:** {{current_date}} | **Project Area:** {{ai_generated.project_scope}}
-
-  **Requested by:** {{requestor_name}} | **Timeline:** {{timeline_weeks}} weeks
+  **Study:** {{selected_study}} &nbsp; | &nbsp; **Researcher:** {{lead_researcher}} &nbsp; | &nbsp; **Requested by:** {{requestor_name}} &nbsp; | &nbsp; **Date:** {{current_date}} &nbsp; | &nbsp; **Status:** Pending approval
 
   ---
 
-  ## Business Context
+  ## Summary
 
-  {{business_context}}
+  {{ai_generated.summary}}
 
-  ---
-
-  ## Research Objectives
-
-  {{ai_generated.formatted_objectives}}
-
-  ---
-
-  ## Research Questions
-
-  {{ai_generated.formatted_questions}}
+  | | |
+  |---|---|
+  | **Method** | {{methodology}} |
+  | **Timeline** | {{ai_generated.timeline_display}} |
+  | **Decision deadline** | {{decision_deadline}} |
+  {{#if budget}}| **Budget** | {{budget}} |{{/if}}
 
   ---
 
-  ## User Journeys in Scope
+  ## Problem
 
-  {{ai_generated.formatted_journeys}}
-
-  ---
-
-  ## Target Barriers
-
-  {{ai_generated.formatted_barriers}}
+  {{problem_statement}}
 
   ---
 
-  ## Hypotheses
+  ## What we'll learn
 
-  {{hypotheses}}
-
-  ---
-
-  ## Methodology
-
-  | Aspect | Details |
-  |:-------|:--------|
-  | **Method** | {{research_method}} |
-  | **Rationale** | {{method_rationale}} |
-  | **Sample Size** | {{sample_size}} |
+  {{ai_generated.formatted_learning}}
 
   ---
 
-  ## Participant Criteria
+  ## Method
 
-  {{ai_generated.formatted_participants}}
+  **Approach** — {{methodology}}
+
+  **Why this method** — {{method_rationale}}
 
   ---
 
   ## Timeline
 
-  | Phase | Duration |
-  |:------|:---------|
-  | **Planning & Recruitment** | Week 1-2 |
-  | **Fieldwork** | Week 2-3 |
-  | **Analysis & Synthesis** | Week 3-4 |
-  | **Findings Presentation** | Week 4 |
+  | Phase | Dates |
+  |-------|-------|
+  {{ai_generated.timeline}}
 
-  **Hard deadline:** {{deadline}}
+  **Hard deadline:** {{decision_deadline}}
 
   ---
 
-  ## Success Criteria
+  ## Out of scope
 
-  {{ai_generated.success_criteria}}
-
-  ---
-
-  ## Expected Outcomes
-
-  {{ai_generated.expected_outcomes}}
+  {{ai_generated.formatted_out_of_scope}}
 
   ---
 
-  ## Constraints & Risks
+  ## Risks
 
-  {{constraints}}
-
-  ---
-
-  ## Team
-
-  | Role | Name |
-  |:-----|:-----|
-  | **Lead Researcher** | {{lead_researcher}} |
-  | **Team** | {{research_team}} |
-  | **Stakeholder** | {{requestor_name}} |
+  | Risk | Mitigation |
+  |------|------------|
+  {{ai_generated.risks}}
 
   ---
 
-  ## Next Steps
+  ## Approval
 
-  | Action | Owner | By When |
-  |:-------|:------|:--------|
-  | Stakeholder review of brief | {{requestor_name}} | +3 days |
-  | Finalize recruitment criteria | {{lead_researcher}} | +5 days |
-  | Begin participant recruitment | Research team | +7 days |
-  | Create discussion guide | {{lead_researcher}} | +10 days |
+  - [ ] Stakeholder approves scope and method
+  - [ ] Stakeholder approves timeline and deadline
+  - [ ] Budget confirmed
+  - [ ] Recruitment criteria validated
 
-  ---
-
-  > **Status:** Pending stakeholder approval
-
-  *Created by {{lead_researcher}} • {{current_date}}*
+  Once approved, the lead researcher will produce a detailed research plan covering session protocols, recruitment, and analysis approach.
 
 output_options:
-  filename: "{{project_title}}_research_brief_{{current_date}}.md"
   path: "01-planning/"
-
-  delivery:
-    github:
-      enabled: true
-      commit_message: "Add research brief: {{project_title}}"
-
-    slack:
-      enabled: true
-      channel: "#research-planning"
-      message: "{{lead_researcher}} created a research brief for *{{project_title}}*"
-      include_preview: false
-      actions:
-        - text: "View Brief"
-          url: "{{github_file_link}}"
-        - text: "Create Research Plan"
-          action: "run_research_plan"
+  filename: "{{selected_study}}-research-brief-{{current_date_iso}}.md"
 
 # ═══════════════════════════════════════════════════════════
-# METADATA
+# METADATA (documentation only — not read by backend)
 # ═══════════════════════════════════════════════════════════
-auto_variables:
-  - current_date: new Date().toISOString().split('T')[0]
-  - brief_version: generate_version_number() || "v1.0"
-  - github_file_link: generate_github_link(project_title, current_date)
+processing_workflow:
+  1. validate_modal_inputs
+  2. execute_ai_tasks
+  3. render_output_template
+  4. save_to_planning_folder
 
 notify:
-  - role: research_team
-    action: "Research brief created"
-    channel: "#research-planning"
-    message: "{{lead_researcher}} created a research brief for *{{project_title}}*. Method: {{research_method}}, Timeline: {{timeline_weeks}} weeks."
+  - role: team
+    action: "Research brief generated"
+    channel: "{{study_channel}}"
+    message: "Research brief for {{selected_study}} is ready for stakeholder approval."
 
-  - role: stakeholder
-    action: "Brief ready for review"
-    channel: "DM"
-    to: "{{requestor_name}}"
-    message: "Your research brief for *{{project_title}}* is ready for review. Please review and approve within 3 business days."
+notes: |
+  v5.0 Changes (Design Language Translation):
+  - Translated locked design from docs/design-references/research_brief_reference.md
+  - Brief = approval gate. Plan = execution doc. Brief approved → plan elaborates.
+  - Pattern C: document-level footer only (backend buildTraceabilityFooter)
+  - Exception: Approval section included (brief IS the approval gate)
+  - Modal simplified: 15 fields → 7 + study selector
+  - Removed: hypotheses, success_criteria, expected_outcomes, next_steps,
+    user_journeys, target_barriers, team_table, participant_criteria (all
+    belong in research plan)
+  - Added: study selector (fixes Scenario A bug), out_of_scope, timeline
+    presets (standard/accelerated/extended), decision_deadline
+  - AI tasks: 8 → 5 (summary, formatted_learning, formatted_out_of_scope,
+    timeline, risks)
+  - Handler: removed isFromRequest branching, added Slack profile lookup,
+    methodology label mapping
+  - Filename: {{selected_study}}-research-brief-{{current_date_iso}}.md
+
+  v4.2: Pre-translation version
 
 output_use: |
-  Researchers use this tool to create formal research briefs after reviewing
-  stakeholder requests. Captures research scope, methodology, participant
-  criteria, and timeline. Outputs to 00-planning/ for the study repository.
+  Stakeholder approval document for research scope. First document in a study
+  lifecycle — no prior inputs exist. Brief approved → plan elaborates.
+  Pattern C treatment with Approval section exception.

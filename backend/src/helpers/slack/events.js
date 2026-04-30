@@ -1314,16 +1314,17 @@ slackApp.view('request_changes_plan_modal', async ({ ack, view, body, client }) 
 
 // Button click handler for "Create Research Brief"
 slackApp.action('create_research_brief', async ({ ack, body, client }) => {
-  await ack();
   try {
+    await ack();
+
     const meta = JSON.parse(body.view.private_metadata || '{}');
-    // Get selected study from the input block
+    // Get selected study from the parent view's study selector
     const selectedFromView = body.view?.state?.values?.study_selection?.study_select?.selected_option || null;
-    const studyName = selectedFromView?.text?.text || meta.studyName || null;
-    const studyId = selectedFromView?.value || meta.studyId || null;
-    
+    const preselectStudyName = selectedFromView?.text?.text || meta.studyName || null;
+    const preselectStudyId = selectedFromView?.value || meta.studyId || null;
+
     // Validate that study is selected
-    if (!studyName || studyId === 'loading' || studyId === 'no_studies') {
+    if (!preselectStudyName || preselectStudyId === 'loading' || preselectStudyId === 'no_studies') {
       await client.chat.postEphemeral({
         channel: meta.channelId || body.user.id,
         user: body.user.id,
@@ -1332,51 +1333,64 @@ slackApp.action('create_research_brief', async ({ ack, body, client }) => {
       return;
     }
 
-    // Fetch study to get lead researcher and study name
+    // Fetch studies for the user to populate the dropdown
+    const userId = body.user.id;
+    const studies = await getStudiesByUser(userId);
+
+    // Build study options for the dropdown
+    const studyOptions = studies.length > 0
+      ? studies.map(s => ({
+          text: { type: 'plain_text', text: s.study_name },
+          value: s.id.toString(),
+        }))
+      : [{ text: { type: 'plain_text', text: 'No studies available' }, value: 'no_studies' }];
+
+    // Find the pre-selected study option
+    const initialOption = studyOptions.find(opt => opt.text.text === preselectStudyName) || studyOptions[0];
+
+    // Fetch lead researcher: study record → Slack profile fallback
     let leadResearcher = null;
     try {
-      const study = await getResearchStudyWithRoles(studyName);
+      const study = await getResearchStudyWithRoles(preselectStudyName);
       if (study && study.researcher_name) {
         leadResearcher = study.researcher_name;
       }
     } catch (error) {
       console.warn('Could not fetch study for lead researcher:', error.message);
     }
+    if (!leadResearcher) {
+      try {
+        const userInfo = await client.users.info({ user: userId });
+        leadResearcher = userInfo.user.real_name || userInfo.user.profile?.display_name || userInfo.user.name || '';
+      } catch (err) {
+        console.warn('Could not fetch Slack profile for lead researcher:', err.message);
+      }
+    }
 
-    // Clone modal blocks and conditionally show/hide fields
+    // Clone modal blocks
     const modalBlocks = JSON.parse(JSON.stringify(researchBriefModal.blocks));
-    
-    // Check if request link is available
-    const requestUrl = meta.requestData?.requestUrl || null;
-    const requestLinkIndex = modalBlocks.findIndex(
-      block => block.block_id === 'request_link_block'
+
+    // Populate the study selector with real studies and pre-select
+    const studySelectionIndex = modalBlocks.findIndex(
+      block => block.block_id === 'study_selection'
     );
-    
-    // Remove request link block if not available
-    if (requestLinkIndex !== -1 && !requestUrl) {
-      modalBlocks.splice(requestLinkIndex, 1);
-    } else if (requestLinkIndex !== -1 && requestUrl) {
-      // Update request link display with actual link
-      modalBlocks[requestLinkIndex] = {
-        ...modalBlocks[requestLinkIndex],
-        text: {
-          type: "mrkdwn",
-          text: `:link: <${requestUrl}|View original research request on GitHub>`,
+    if (studySelectionIndex !== -1) {
+      modalBlocks[studySelectionIndex] = {
+        ...modalBlocks[studySelectionIndex],
+        element: {
+          ...modalBlocks[studySelectionIndex].element,
+          options: studyOptions,
+          initial_option: initialOption,
         },
       };
     }
-    
-    // Check if stakeholder name is available
+
+    // Pre-fill stakeholder name if available from request
     const stakeholderName = meta.requestData?.prepared_by || null;
     const stakeholderIndex = modalBlocks.findIndex(
       block => block.block_id === 'stakeholder_block'
     );
-    
-    // Remove stakeholder block if not available
-    if (stakeholderIndex !== -1 && !stakeholderName) {
-      modalBlocks.splice(stakeholderIndex, 1);
-    } else if (stakeholderIndex !== -1 && stakeholderName) {
-      // Pre-fill stakeholder name
+    if (stakeholderIndex !== -1 && stakeholderName) {
       modalBlocks[stakeholderIndex] = {
         ...modalBlocks[stakeholderIndex],
         element: {
@@ -1385,41 +1399,29 @@ slackApp.action('create_research_brief', async ({ ack, body, client }) => {
         }
       };
     }
-    
-    // Pre-fill study title with study name
-    const studyTitleIndex = modalBlocks.findIndex(
-      block => block.block_id === 'study_title_block'
+
+    // Calculate default start date (next Monday)
+    const today = new Date();
+    const dayOfWeek = today.getDay();
+    const daysUntilMonday = dayOfWeek === 0 ? 1 : (8 - dayOfWeek);
+    const nextMonday = new Date(today);
+    nextMonday.setDate(today.getDate() + daysUntilMonday);
+    const defaultStartDate = nextMonday.toISOString().split('T')[0];
+
+    // Set default start date
+    const startDateIndex = modalBlocks.findIndex(
+      block => block.block_id === 'start_date_block'
     );
-    
-    if (studyTitleIndex !== -1 && studyName) {
-      modalBlocks[studyTitleIndex] = {
-        ...modalBlocks[studyTitleIndex],
+    if (startDateIndex !== -1) {
+      modalBlocks[startDateIndex] = {
+        ...modalBlocks[startDateIndex],
         element: {
-          ...modalBlocks[studyTitleIndex].element,
-          initial_value: studyName
-        },
-        hint: {
-          type: "plain_text",
-          text: "Auto-filled from selected study",
+          ...modalBlocks[startDateIndex].element,
+          initial_date: defaultStartDate,
         },
       };
     }
-    
-    // Pre-fill lead researcher
-    const leadResearcherIndex = modalBlocks.findIndex(
-      block => block.block_id === 'lead_researcher_block'
-    );
-    
-    if (leadResearcherIndex !== -1 && leadResearcher) {
-      modalBlocks[leadResearcherIndex] = {
-        ...modalBlocks[leadResearcherIndex],
-        element: {
-          ...modalBlocks[leadResearcherIndex].element,
-          initial_value: leadResearcher
-        }
-      };
-    }
-    
+
     await client.views.update({
       view_id: body.view.id,
       trigger_id: body.trigger_id,
@@ -1428,11 +1430,14 @@ slackApp.action('create_research_brief', async ({ ack, body, client }) => {
         blocks: modalBlocks,
         private_metadata: JSON.stringify({
           ...meta,
-          studyName,
-          studyId,
+          studyName: preselectStudyName,
+          studyId: preselectStudyId,
+          leadResearcher, // Pass through for use in submission
         })
       }
     });
+
+    console.log(`✅ Opened research brief modal for study: ${preselectStudyName}`);
   } catch (err) {
     console.error('Error opening brief modal:', err.data || err);
   }
@@ -1442,163 +1447,97 @@ slackApp.view('research_brief_modal', async ({ ack, body, view, client }) => {
   await ack(); // Always acknowledge
 
   const values = view.state.values;
-  const meta = JSON.parse(view.private_metadata);
-  const { channelId, studyName, isFromRequest } = meta;
+  const meta = JSON.parse(view.private_metadata || '{}');
+  const { channelId } = meta;
 
   // Helper function to extract values from different input types
   const extract = (blockId, actionId) => {
     const block = values[blockId];
-    if (!block) return '';
-    
+    if (!block) return null;
     const action = block[actionId];
-    if (!action) return '';
-    
+    if (!action) return null;
     // Handle different input types
-    if (action.value !== undefined) return action.value;
-    if (action.selected_option !== undefined) return action.selected_option.value;
+    if (action.value !== undefined) return action.value?.trim() || null;
+    if (action.selected_option !== undefined) return action.selected_option;
     if (action.selected_date !== undefined) return action.selected_date;
-    
-    return '';
+    if (action.selected_options !== undefined) return action.selected_options.map(opt => opt.value);
+    return null;
   };
 
-  // Extract request link from metadata if available (since it's now a display-only section)
-  const requestLink = meta.requestData?.requestUrl || '';
+  // Extract study from the modal's study selector
+  const selectedStudy = extract('study_selection', 'study_select');
+  const studyName = selectedStudy?.text?.text || meta.studyName;
 
-  // Extract all form values and map to YAML template input variables
+  if (!studyName) {
+    console.error('No study selected for research brief');
+    return;
+  }
+
+  console.log("🚀 ~ Research Brief ~ studyName:", studyName);
+
+  // Fetch the full study with roles
+  const study = await getResearchStudyWithRoles(studyName);
+
+  // Methodology label mapping
+  const methodologyLabels = {
+    usability_testing: 'Moderated usability testing',
+    user_interviews: 'User interviews',
+    contextual_inquiry: 'Contextual inquiry',
+    concept_testing: 'Concept testing',
+    survey: 'Survey research',
+    card_sorting: 'Card sorting',
+    tree_testing: 'Tree testing',
+    mixed_methods: 'Mixed methods',
+  };
+
+  // Extract form values and map to YAML template input variables
+  const methodValue = extract('research_method_block', 'research_method_select')?.value || 'usability_testing';
+  const methodLabel = methodologyLabels[methodValue] || methodValue;
+
+  // Get lead researcher from metadata (set during modal open)
+  const leadResearcher = meta.leadResearcher || body.user.name || '';
+
   const data = {
-    // Link to original request (optional) - get from metadata since it's now display-only
-    research_request_link: requestLink,
-    
-    // Researcher info
-    lead_researcher: extract('lead_researcher_block', 'lead_researcher_input'),
-    research_team: extract('research_team_block', 'research_team_input'),
-    
-    // Project info
-    project_title: extract('study_title_block', 'study_title_input'),
-    requestor_name: extract('stakeholder_block', 'stakeholder_input'),
-    
+    // Study info
+    selected_study: studyName,
+
+    // Researcher info (auto from Slack profile via metadata)
+    lead_researcher: leadResearcher,
+
+    // Stakeholder
+    requestor_name: extract('stakeholder_block', 'stakeholder_input') || '',
+
     // Research scope
-    business_context: extract('business_context_block', 'business_context_input'),
-    research_objectives: extract('objectives_block', 'objectives_input'),
-    research_questions: extract('research_questions_block', 'research_questions_input'),
-    user_journeys_in_scope: extract('user_journeys_block', 'user_journeys_input'),
-    target_barriers: extract('target_barriers_block', 'target_barriers_input'),
-    hypotheses: extract('hypotheses_block', 'hypotheses_input'),
-    
+    problem_statement: extract('problem_statement_block', 'problem_statement_input') || '',
+    learning_objectives: extract('learning_objectives_block', 'learning_objectives_input') || '',
+    out_of_scope: extract('out_of_scope_block', 'out_of_scope_input') || '',
+
     // Methodology
-    research_method: extract('research_method_block', 'research_method_select'),
-    method_rationale: extract('method_rationale_block', 'method_rationale_input'),
-    
-    // Participants
-    participant_criteria: extract('participant_criteria_block', 'participant_criteria_input'),
-    sample_size: extract('sample_size_block', 'sample_size_input'),
-    
+    methodology: methodLabel,
+    methodology_value: methodValue,
+    method_rationale: extract('method_rationale_block', 'method_rationale_input') || '',
+
     // Timeline
-    timeline_weeks: extract('timeline_block', 'timeline_input'),
-    deadline: extract('deadline_block', 'deadline_picker'),
-    
-    // Constraints
-    constraints: extract('constraints_block', 'constraints_input'),
+    timeline_preference: extract('timeline_block', 'timeline_radio')?.value || 'standard',
+    start_date: extract('start_date_block', 'start_date_picker') || '',
+    decision_deadline: extract('decision_deadline_block', 'decision_deadline_picker') || '',
+
+    // Budget (optional)
+    budget: extract('budget_block', 'budget_input') || '',
   };
+
+  console.log('📋 Extracted research brief data:', JSON.stringify(data, null, 2));
 
   const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, "research_brief.yaml");
+  const renderedYaml = await processYamlTemplate(file.content, data, study.path);
 
-  let renderedYaml;
-  let url;
-  let displayStudyName = studyName;
-
-  // Handle brief creation from request (no study exists yet)
-  if (isFromRequest) {
-    // Derive a content-repo path from the project title (no study object exists yet)
-    const sanitizedTitle = (data.project_title || 'research-request')
-      .toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-    renderedYaml = await processYamlTemplate(file.content, data, sanitizedTitle, "01-planning");
-    url = renderedYaml.result.url;
-    displayStudyName = data.project_title || 'Research Request';
-  } else {
-    // Normal flow: study exists
-    const study = await getResearchStudyWithRoles(studyName);
-    renderedYaml = await processYamlTemplate(file.content, data, study.path);
-    url = renderedYaml.result.url;
-  }
-
-  // For requests, we might not have a study object, so create a minimal one for display
-  let study = null;
-  if (!isFromRequest) {
-    study = await getResearchStudyWithRoles(studyName);
-  }
-
-  // For research briefs, send to stakeholder (requestor) for approval
-  // Extract requestor information
-  const requestorName = data.requestor_name || '';
-  let requestorUserId = null;
-
-  // Try to find requestor user ID from requestData if available
-  if (meta.requestData && meta.requestData.requestedBy) {
-    requestorUserId = meta.requestData.requestedBy;
-  } else if (requestorName) {
-    // Try to lookup user by name from Slack
-    try {
-      const usersList = await client.users.list();
-      // Try to find user by real_name or name
-      const foundUser = usersList.members.find(u => 
-        (u.profile?.real_name && u.profile.real_name.toLowerCase().includes(requestorName.toLowerCase())) ||
-        (u.name && u.name.toLowerCase().includes(requestorName.toLowerCase()))
-      );
-      if (foundUser) {
-        requestorUserId = foundUser.id;
-        console.log(`✅ Found user ID ${requestorUserId} for requestor name "${requestorName}"`);
-      } else {
-        console.log(`⚠️ Could not find user ID for requestor name "${requestorName}"`);
-      }
-    } catch (error) {
-      console.error('Error looking up requestor user:', error);
-    }
-  }
+  const url = renderedYaml.result.url;
 
   // Generate blocks with approval buttons
-  // Note: briefData removed from button value to avoid exceeding Slack's 2000 char limit
-  // The approval handler uses fallback logic with studyName + url
-  const blocks = generateStudyResultBlocks(displayStudyName, study, url, channelId, 'brief');
+  const blocks = generateStudyResultBlocks(studyName, study, url, channelId, 'brief');
 
-  // For research briefs from requests, send to stakeholder (requestor) for approval
-  if (isFromRequest) {
-    // Get requestor user ID from requestData
-    const requestorId = meta.requestData?.requestedBy || requestorUserId || null;
-    
-    if (requestorId) {
-      try {
-        // Send DM to the stakeholder who requested the research
-        const im = await client.conversations.open({
-          users: requestorId
-        });
-        await client.chat.postMessage({
-          channel: im.channel.id,
-          text: `📄 *Research Brief for ${displayStudyName}*\n\nPlease review and approve or request changes.`,
-          blocks,
-        });
-        console.log(`✅ Sent research brief approval request to stakeholder: ${requestorId}`);
-      } catch (error) {
-        console.error('Failed to send DM to requestor:', error);
-        // Fallback to channel
-        await client.chat.postMessage({
-          channel: channelId,
-          text: `📄 *Research Brief for ${displayStudyName}*\n\nPlease review and approve or request changes.`,
-          blocks,
-        });
-      }
-    } else {
-      // If no requestor ID, send to channel
-      await client.chat.postMessage({
-        channel: channelId,
-        text: `📄 *Research Brief for ${displayStudyName}*\n\nPlease review and approve or request changes.`,
-        blocks,
-      });
-    }
-  } else {
-    // For briefs with existing studies, use the normal flow (send to study team)
-    await sendStudyResultMessage(client, channelId, displayStudyName, blocks, 'brief');
-  }
+  // Send to study team via standard flow
+  await sendStudyResultMessage(client, channelId, studyName, blocks, 'brief');
 
   // Also notify the researcher who created the brief
   try {
@@ -1607,14 +1546,7 @@ slackApp.view('research_brief_modal', async ({ ack, body, view, client }) => {
     });
     await client.chat.postMessage({
       channel: im.channel.id,
-      text: `✅ *Research Brief Created*\n\n*Study:* ${displayStudyName}\n\nThe brief has been sent to the stakeholder for approval.`,
-      // blocks: [{
-      //   type: 'section',
-      //   text: {
-      //     type: 'mrkdwn',
-      //     text: `<${url}|:github: View Brief on GitHub>`,
-      //   },
-      // }],
+      text: `✅ *Research Brief Created*\n\n*Study:* ${studyName}\n*View:* <${url}|GitHub>\n\nThe brief has been sent to the study team for approval.`,
     });
   } catch (error) {
     console.error('Failed to send confirmation to researcher:', error);
@@ -1622,13 +1554,13 @@ slackApp.view('research_brief_modal', async ({ ack, body, view, client }) => {
 
   // Add study status for created file
   await addStudyStatus({
-    study_name: displayStudyName,
+    study_name: studyName,
     path: url,
     status: 'created',
     created_by: body.user?.id || body.user_id || null,
-    // Store brief data for later use in approval flow
-    // file_name: url ? url.split('/').pop() : null
   });
+
+  console.log(`✅ Research brief created for study: ${studyName}`);
 });
 
 slackApp.action('approve_brief', async ({ ack, body, client }) => {
