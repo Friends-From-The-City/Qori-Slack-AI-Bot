@@ -1337,13 +1337,20 @@ slackApp.action('create_research_brief', async ({ ack, body, client }) => {
     const userId = body.user.id;
     const studies = await getStudiesByUser(userId);
 
-    // Build study options for the dropdown
+    // Build study options for the dropdown (guard against undefined study_name)
     const studyOptions = studies.length > 0
-      ? studies.map(s => ({
-          text: { type: 'plain_text', text: s.study_name },
-          value: s.id.toString(),
-        }))
-      : [{ text: { type: 'plain_text', text: 'No studies available' }, value: 'no_studies' }];
+      ? studies
+          .filter(s => s.study_name) // Filter out studies with no name
+          .map(s => ({
+            text: { type: 'plain_text', text: s.study_name },
+            value: s.id.toString(),
+          }))
+      : [];
+
+    // Ensure we have at least one option
+    if (studyOptions.length === 0) {
+      studyOptions.push({ text: { type: 'plain_text', text: 'No studies available' }, value: 'no_studies' });
+    }
 
     // Find the pre-selected study option
     const initialOption = studyOptions.find(opt => opt.text.text === preselectStudyName) || studyOptions[0];
