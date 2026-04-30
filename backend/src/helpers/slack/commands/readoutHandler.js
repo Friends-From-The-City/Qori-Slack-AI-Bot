@@ -1,6 +1,6 @@
 const { buildReadoutModal } = require('../ui/readoutModal');
 const { getResearchStudyWithRoles, getStudiesByUser } = require('../../../services/research_study.service');
-const { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo, fetchFileFromRepoByPath, readFolders, parseGitHubIssues, createGitHubIssues } = require('../../github');
+const { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo, fetchFileFromRepoByPath, readFolders, readFolderContents, parseGitHubIssues, createGitHubIssues } = require('../../github');
 const { processYamlTemplate } = require('../../yamlProcessor');
 const researchPlanService = require('../../../services/research_plan.service');
 const sessionSummaryService = require('../../../services/session-summary.service');
@@ -280,17 +280,59 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }) => {
 
       // Wait for all content to be fetched
       const allContentResults = await Promise.all(contentPromises);
-      
+
       // Filter out null results (failed fetches) and flatten
       contentArray = allContentResults.filter(item => item !== null);
-      
-      // Create detected files list
+
+      // Build detected files list with relative paths (relative to primary-research/)
+      // so the LLM can construct ../path links from the 05-findings/ output folder
+      const decodedPath = decodeURIComponent(folderPath);
+      const primaryResearchBase = `${decodedPath}/primary-research/`;
+
       researchPlans.forEach(plan => {
-        if (plan.filename) detectedFiles.push(plan.filename);
+        if (plan.file_path) {
+          const relativePath = plan.file_path.includes('primary-research/')
+            ? plan.file_path.split('primary-research/')[1]
+            : plan.filename;
+          detectedFiles.push(relativePath);
+        }
       });
       sessionSummaries.forEach(summary => {
-        if (summary.filename) detectedFiles.push(summary.filename);
+        if (summary.file_path) {
+          const relativePath = summary.file_path.includes('primary-research/')
+            ? summary.file_path.split('primary-research/')[1]
+            : summary.filename;
+          detectedFiles.push(relativePath);
+        }
       });
+
+      // Scan analysis-layer folders for additional artifacts
+      const analysisScans = [
+        { folder: '03-fieldwork/coded-transcript-analysis', label: 'coded transcripts' },
+        { folder: '04-analysis/affinity-mapping', label: 'affinity mapping' },
+        { folder: '04-analysis/journey-mapping', label: 'journey mapping' },
+        { folder: '04-analysis/personas', label: 'personas' },
+        { folder: '04-analysis/usability-issues', label: 'usability issues' },
+        { folder: '04-analysis/jobs-to-be-done', label: 'jobs to be done' },
+        { folder: '04-analysis/design-opportunities', label: 'design opportunities' },
+        { folder: '04-analysis/service-blueprint', label: 'service blueprint' },
+      ];
+
+      for (const scan of analysisScans) {
+        try {
+          const scanPath = `${primaryResearchBase}${scan.folder}`;
+          const files = await readFolderContents(scanPath, process.env.GITHUB_REPO);
+          files.forEach(f => {
+            if (f.name !== 'README.md' && f.name !== '.gitkeep') {
+              detectedFiles.push(`${scan.folder}/${f.name}`);
+            }
+          });
+        } catch (err) {
+          // Folder doesn't exist — skip silently
+        }
+      }
+
+      console.log('Detected files with paths:', detectedFiles);
     }
 
     console.log('Total content items fetched:', contentArray.length);
@@ -351,9 +393,9 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }) => {
 
     const teamMembers = teamMemberNames.join(', ') || '@team-lead';
 
-    // Create list of detected files for the prompt
-    const detectedFilesList = detectedFiles.length > 0 
-      ? detectedFiles.join(', ') 
+    // Create list of detected files for the prompt (one per line for LLM clarity)
+    const detectedFilesList = detectedFiles.length > 0
+      ? detectedFiles.map(f => `- ${f}`).join('\n')
       : 'No files detected';
 
     // Create data object based on report type

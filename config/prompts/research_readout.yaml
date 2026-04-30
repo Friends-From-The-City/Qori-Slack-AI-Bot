@@ -4,7 +4,7 @@
 id: research_readout
 name: run_research_readout
 label: "📊 Research Report"
-version: "v5.4"
+version: "v5.4.1"
 
 description: |
   Generate comprehensive, stakeholder-ready research reports from session summaries
@@ -74,14 +74,15 @@ ai_generation_tasks:
         Example: Limited (observer interpretation, no direct quote)
 
       SOURCE CITATION (required for each finding):
-      For each finding, list the specific source documents that support it.
-      Use relative paths from the study's primary-research folder:
-      - Session summaries: ../03-fieldwork/session-summaries/[PT-ID]-session-summary.md
-      - Coded transcripts: ../03-fieldwork/coded-transcript-analysis/[pt-id]-coded-transcript-analysis.md
-      - Analysis outputs: ../04-analysis/[analysis-type]/[filename]
+      For each finding, cite the specific source documents that support it.
 
-      The participant IDs in the source filenames must match the IDs cited in the finding.
-      Use middle-dot (·) between sources.
+      AVAILABLE SOURCE FILES (use ONLY these — do not construct paths from patterns):
+      {{detected_files}}
+
+      Format: **Sources** — [Display name](../relative-path-from-list-above) · [Display name](../path)
+      Prepend ../ to each path since the output file is in 05-findings/.
+      Use middle-dot (·) between sources. Cite only files that actually support
+      the finding. NEVER construct a path that isn't in the list above.
 
       ============================================================
       SOURCE DATA
@@ -302,16 +303,23 @@ ai_generation_tasks:
       <details>
       <summary><strong>Related artifacts</strong></summary>
 
+      RELATED ARTIFACTS:
+      Populate this table with ALL artifacts from {{detected_files}}, organized by type.
+      Use exact paths from the detected files list. Prepend ../ to each path.
+
+      Categories to include (when files are present in the list):
+      - Planning: research plan, research brief, discussion guide
+      - Fieldwork: session summaries (one row per file), coded transcripts
+      - Analysis: affinity map, journey map, personas, usability issues, etc.
+      - Reference: participant tracker
+
+      If a category has no files in the list, omit those rows.
+      Do NOT invent files. Use ONLY paths from the detected files list.
+
       | Artifact | Location | Status |
       |----------|----------|--------|
-      | [PT-001 session summary] | [03-fieldwork/session-summaries/PT-001-session-summary.md](../03-fieldwork/session-summaries/PT-001-session-summary.md) | Complete |
-      | [PT-002 session summary] | [link] | Complete |
-      | [PT-003 session summary] | [link] | Complete |
-      | Coded transcripts | [03-fieldwork/coded-transcript-analysis/](../03-fieldwork/coded-transcript-analysis/) | Complete |
-      | [Analysis artifact if used] | [link] | [Status] |
-      | Research plan | [01-planning/research_plan.md](../01-planning/research_plan.md) | Complete |
-
-      Populate with REAL paths using participant IDs from the data. Do not use placeholders.
+      | [Display name] | [path from detected_files](../path-from-detected-files) | Complete |
+      | ... | ... | ... |
 
       </details>
 
@@ -404,6 +412,17 @@ notify:
     message: "Research report for {{study_name}} is ready for review."
 
 notes: |
+  v5.4.1 Changes (Source Path Grounding):
+  - Sources lines now use {{detected_files}} as source of truth instead of
+    LLM-constructed path patterns. Prevents 404s from filename mismatches
+    (e.g., trailing hyphens in session summary filenames).
+  - Backend (readoutHandler.js) now scans analysis-layer folders:
+    coded-transcript-analysis, affinity-mapping, journey-mapping, personas,
+    usability-issues, jobs-to-be-done, design-opportunities, service-blueprint
+  - detected_files now includes relative paths (not just bare filenames)
+  - Related Artifacts instruction updated to populate from {{detected_files}}
+    organized by category (Planning/Fieldwork/Analysis/Reference)
+
   v5.4 Changes (Design Language Translation):
   - Translated locked design from docs/design-references/research_readout_traceable.md
   - Pentagram-style design: masthead, editorial numbered findings, editorial restraint
