@@ -55,6 +55,8 @@ ai_generation_tasks:
       4. If the source data is empty or insufficient, say so — do not fabricate
       5. Use participant IDs in PT-### format (e.g., PT-001, PT-002)
       6. Counts must be accurate (if 3 participants, say 3 — not 10 or 20)
+      7. NEVER use participant real names — use participant ID only. If the source
+         data contains real names, replace them with the participant ID in your output.
 
       FORBIDDEN (hallucination indicators):
       - "checkout process" / "conversion rates" / "e-commerce" (unless in source)

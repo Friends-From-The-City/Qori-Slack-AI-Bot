@@ -314,6 +314,7 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }) => {
 
       // Scan analysis-layer folders for additional artifacts
       const analysisScans = [
+        { folder: '03-fieldwork/transcripts', label: 'transcripts' },
         { folder: '03-fieldwork/coded-transcript-analysis', label: 'coded transcripts' },
         { folder: '04-analysis/affinity-mapping', label: 'affinity mapping' },
         { folder: '04-analysis/journey-mapping', label: 'journey mapping' },
