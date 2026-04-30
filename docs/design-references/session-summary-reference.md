@@ -1,18 +1,34 @@
 <!--
 This is a locked design reference for the session_summary template.
-The visual design, structure, and modified Pattern A traceability shown here
-represent the agreed-upon "ideal state" output for this template.
 
 Status: Locked April 30, 2026
-Reference template: research_readout v5.4.1 (full Pattern A)
-Modifications for session summary:
-  - Pattern A is modified — Confidence per pain point but no per-finding Sources lines
-    (every finding sources from the same files; consolidated into Methodology instead)
-  - Pain points use H3 numbering (### 01 &nbsp;&nbsp;) since they're sub-elements
-    within the document, not top-level sections
+Pattern: A modified (Confidence per pain point, no per-finding Sources lines)
+         per Section 6 of standards
 
-Next step: Translate this design into config/prompts/session_summary.yaml
+Inputs and rationale (see Section 7 of standards doc):
+  - Required: Session transcript (raw or coded) — primary source for all findings
+  - Recommended: Observer notes — behavioral observations the participant doesn't articulate
+  - Excluded: Discussion guide — transcript already reflects what was asked
+  - Excluded: Research plan — provides study context but not session-level data
+  - Excluded: Participant tracker — scheduling/demographics, not analysis input
+  - Excluded: Coded transcripts — removed from research flow; raw transcript
+    fed directly to /qori-analyze which handles coding + summarization in one pass
+
+Note: Session summary template was already implemented per the previous translation
+      plan prior to this reference being locked. The input rationale captured here
+      serves as documentation of intent and should be cross-referenced when reviewing
+      the deployed template for any gaps.
+
+Drift check (April 30, 2026):
+  - Deployed v1.6 appendix shows "Sources analyzed" (transcript + observer notes only)
+    — matches input rationale. Reference file still lists discussion guide and research
+    plan in Related Artifacts — deployed template is CORRECT in excluding them.
+  - Reference Methodology says "coded transcript" in analysis approach — stale language.
+    Deployed template correctly says "session transcript."
+  - Reference footer shows "Participant" row — deployed backend footer doesn't include
+    this. Accepted gap — masthead has the participant ID.
 -->
+
 # Session Summary: PT-001
 
 **Study:** va-mobile-nav-2026 &nbsp; | &nbsp; **Researcher:** Lapedra Tolson &nbsp; | &nbsp; **Date:** May 19, 2026
@@ -145,7 +161,7 @@ Every screen requires additional swipes to navigate past headers, banners, and n
 
 **Tasks attempted** — Schedule appointment, refill prescription, send secure message, locate benefits information, update contact information
 
-**Sources analyzed** — Coded transcript (primary source for verbatim quotes and behavioral data) and 3 observer notes files
+**Sources analyzed** — Raw session notes or transcript (primary source for verbatim quotes and behavioral data) and 3 observer notes files
 
 **Analysis approach** — Pain points and quotes are direct extractions from the coded transcript; opportunities and insights are reasoned inferences from behavioral patterns observed during the session.
 
@@ -167,9 +183,8 @@ Every screen requires additional swipes to navigate past headers, banners, and n
 
 | Artifact | Location | Status |
 |----------|----------|--------|
-| PT-001 coded transcript | [03-fieldwork/coded-transcript-analysis/pt-001-coded-transcript-analysis.md](../../03-fieldwork/coded-transcript-analysis/pt-001-coded-transcript-analysis.md) | Complete |
+| PT-001 session notes / transcript | [03-fieldwork/session-notes/pt-001-session-notes.md](../../03-fieldwork/session-notes/pt-001-session-notes.md) | Complete |
 | PT-001 observer notes | [03-fieldwork/observer-notes/pt-001-observer-notes.md](../../03-fieldwork/observer-notes/pt-001-observer-notes.md) | Complete |
-| PT-001 session notes | [03-fieldwork/session-notes/pt-001-session-notes.md](../../03-fieldwork/session-notes/pt-001-session-notes.md) | Complete |
 | Discussion guide | [01-planning/discussion-guide.md](../../01-planning/discussion-guide.md) | Complete |
 | Research plan | [01-planning/research-plan.md](../../01-planning/research-plan.md) | Complete |
 
@@ -180,7 +195,7 @@ Every screen requires additional swipes to navigate past headers, banners, and n
 
 | Criterion | Verified |
 |-----------|:--------:|
-| All quotes verbatim from coded transcript | ✓ |
+| All quotes verbatim from session notes / transcript | ✓ |
 | Pain points grounded in specific observed behaviors | ✓ |
 | Inferences (insights, opportunities) traced to evidence | ✓ |
 | Confidence levels declared per pain point | ✓ |
