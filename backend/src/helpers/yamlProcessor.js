@@ -161,6 +161,7 @@ async function processYamlTemplate(rawYamlContent, inputValues, baseFolderEncode
   // 8. EXTRACT PHASE: Runs AFTER document is written — fully non-blocking
   // User already has their document. Extract + variable write happen in background.
   if (yamlConfig.emits && yamlConfig.emits.length > 0) {
+    console.log(`🔄 Extract: Starting extraction for ${yamlConfig.id} (${yamlConfig.emits.length} variables)`);
     (async () => {
       try {
         const extractionResult = await extractVariables(outputTemplate, yamlConfig.emits, inputValues);
@@ -168,6 +169,7 @@ async function processYamlTemplate(rawYamlContent, inputValues, baseFolderEncode
           console.warn(`⚠️ Extract phase returned null for ${yamlConfig.id}`);
           return;
         }
+        console.log(`🔄 Extract: Got ${Object.keys(extractionResult).length} variables for ${yamlConfig.id}`);
 
         // Write extracted variables to study-variables.json
         const studyVars = await readStudyVariables(baseFolder);

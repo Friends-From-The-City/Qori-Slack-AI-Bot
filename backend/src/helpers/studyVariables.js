@@ -15,7 +15,8 @@ async function readStudyVariables(studyBasePath) {
     return JSON.parse(file.content);
   } catch (error) {
     // File doesn't exist yet — return empty structure
-    if (error.status === 404 || error.message?.includes('Not Found')) {
+    // fetchFileFromRepoByPath wraps 404s as "Could not fetch file ..." so check for that too
+    if (error.status === 404 || error.message?.includes('Not Found') || error.message?.includes('Could not fetch file')) {
       return createEmptyVariablesFile(studyBasePath);
     }
     throw error;
