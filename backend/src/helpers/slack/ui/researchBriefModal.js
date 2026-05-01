@@ -80,6 +80,28 @@ const researchBriefModal = {
     {
       type: "divider",
     },
+    // Discovery context — populated dynamically by buildBriefEntryModal
+    {
+      type: "section",
+      block_id: "discovery_header_block",
+      text: {
+        type: "mrkdwn",
+        text: "*Discovery to inform this brief*",
+      },
+    },
+    {
+      type: "context",
+      block_id: "discovery_status_block",
+      elements: [
+        {
+          type: "mrkdwn",
+          text: "Loading discovery artifacts...",
+        },
+      ],
+    },
+    {
+      type: "divider",
+    },
     {
       type: "section",
       text: {

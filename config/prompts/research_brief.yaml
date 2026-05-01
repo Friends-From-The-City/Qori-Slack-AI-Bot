@@ -67,27 +67,27 @@ input_variables:
 # ═══════════════════════════════════════════════════════════
 consumes:
   - key: discovered_barriers
-    source: desk_research
+    source: discovery_selection
     required: false
     inject_as: context
-    description: "Known barriers from prior research"
+    description: "Known barriers from prior discovery research (desk research artifacts)"
   - key: knowledge_gaps
-    source: desk_research
+    source: discovery_selection
     required: false
     inject_as: context
     description: "What desk research couldn't answer"
   - key: stakeholder_constraints
-    source: stakeholder_synthesis
+    source: discovery_selection
     required: false
     inject_as: context
-    description: "Technical/policy/resource constraints from stakeholders"
+    description: "Technical/policy/resource constraints from stakeholder interviews"
   - key: stakeholder_priorities
-    source: stakeholder_synthesis
+    source: discovery_selection
     required: false
     inject_as: context
     description: "What stakeholders consider highest priority"
   - key: stakeholder_questions_for_users
-    source: stakeholder_synthesis
+    source: discovery_selection
     required: false
     inject_as: context
     description: "Questions stakeholders want answered by user research"

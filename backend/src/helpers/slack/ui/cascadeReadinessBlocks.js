@@ -40,10 +40,10 @@ const TEMPLATE_CONSUMES = {
 
   // Planning modals
   research_brief: [
-    { key: 'discovered_barriers', required: false, label: 'Discovered barriers', source_hint: 'Run desk research first' },
-    { key: 'knowledge_gaps', required: false, label: 'Knowledge gaps', source_hint: 'Run desk research first' },
-    { key: 'stakeholder_constraints', required: false, label: 'Stakeholder constraints', source_hint: 'Run stakeholder synthesis first' },
-    { key: 'stakeholder_priorities', required: false, label: 'Stakeholder priorities', source_hint: 'Run stakeholder synthesis first' },
+    { key: 'discovered_barriers', required: false, label: 'Discovered barriers', source_hint: 'Run /qori-discover (desk research) first' },
+    { key: 'knowledge_gaps', required: false, label: 'Knowledge gaps', source_hint: 'Run /qori-discover (desk research) first' },
+    { key: 'stakeholder_constraints', required: false, label: 'Stakeholder constraints', source_hint: 'Run /qori-discover (stakeholder) first' },
+    { key: 'stakeholder_priorities', required: false, label: 'Stakeholder priorities', source_hint: 'Run /qori-discover (stakeholder) first' },
   ],
   research_plan: [
     { key: 'research_objectives', required: false, label: 'Research objectives', source_hint: 'Create research brief first' },

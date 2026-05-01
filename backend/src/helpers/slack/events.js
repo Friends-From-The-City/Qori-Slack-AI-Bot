@@ -982,7 +982,7 @@ slackApp.command('/qori-brief', async ({ ack, body, client, command }) => {
       leadResearcher = userInfo.user.real_name || userInfo.user.profile?.display_name || userInfo.user.name || '';
     } catch (err) { /* ignore */ }
 
-    const view = buildBriefEntryModal(leadResearcher, channelId);
+    const view = await buildBriefEntryModal(leadResearcher, channelId);
 
     await client.views.open({
       trigger_id: body.trigger_id,
@@ -1620,6 +1620,27 @@ slackApp.view('research_brief_modal', async ({ ack, body, view, client }) => {
     decision_deadline: extract('decision_deadline_block', 'decision_deadline_picker') || '',
     budget: extract('budget_block', 'budget_input') || '',
   };
+
+  // Extract selected discovery artifacts and inject upstream variables
+  const discoverySelections = extract('discovery_selection_block', 'discovery_selection') || [];
+  if (discoverySelections.length > 0) {
+    const { loadDiscoveryArtifacts, aggregateDiscoveryVariables } = require('../../helpers/discoveryLoader');
+    const team = meta.team || process.env.QORI_TEAM_SLUG || 'friends-lab';
+    try {
+      const allArtifacts = await loadDiscoveryArtifacts(team);
+      // Filter to selected artifacts (values are "type::slug")
+      const selectedSlugs = new Set(discoverySelections);
+      const selectedArtifacts = allArtifacts.filter(a => selectedSlugs.has(`${a.type}::${a.slug}`));
+
+      if (selectedArtifacts.length > 0) {
+        const upstreamVars = aggregateDiscoveryVariables(selectedArtifacts);
+        Object.assign(data, upstreamVars);
+        console.log(`✅ Injected ${Object.keys(upstreamVars).length} upstream variables from ${selectedArtifacts.length} discovery artifact(s)`);
+      }
+    } catch (error) {
+      console.warn('⚠️ Failed to load discovery variables for brief, proceeding without:', error.message);
+    }
+  }
 
   console.log('📋 Extracted research brief data:', JSON.stringify(data, null, 2));
 
