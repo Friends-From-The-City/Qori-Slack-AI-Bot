@@ -395,7 +395,7 @@ output_template: |
 
 output_options:
   path: "01-planning/"
-  filename: "research-plan-{{project_title}}-{{current_date_iso}}.md"
+  filename: "{{selected_study}}-research-plan-{{current_date_iso}}.md"
 
 # ═══════════════════════════════════════════════════════════
 # METADATA (documentation only — not read by backend)

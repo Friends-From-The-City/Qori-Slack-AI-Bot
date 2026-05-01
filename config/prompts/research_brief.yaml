@@ -4,7 +4,7 @@
 id: research_brief
 name: create_research_brief
 label: "Research Brief"
-version: "v5.0"
+version: "v5.0.1"
 
 description: |
   Stakeholder approval document for research scope.
@@ -13,7 +13,7 @@ description: |
 
 author: Qori R&D
 created: 2025-06-26
-last_updated: 2026-04-30
+last_updated: 2026-05-01
 
 # ═══════════════════════════════════════════════════════════
 # CONFIGURATION
@@ -69,6 +69,30 @@ ai_generation_tasks:
   # GLOBAL FORMATTING RULE (applies to all tasks below):
   # Always use markdown dash (-) for bullets, never Unicode bullets (•).
   # Do not wrap text in quotes. Use display-friendly dates (Month DD, YYYY).
+
+  # Descriptive title — human-readable study name for H1
+  - task_id: "descriptive_title"
+    prompt: |
+      Convert this study slug into a short, descriptive title for a research brief:
+
+      Study slug: {{selected_study}}
+      Problem context: {{problem_statement}}
+
+      Rules:
+      - Title case, 3-8 words
+      - Describe the research subject, not the method (e.g., "Navigation Redesign Usability Study" not "Usability Testing Study")
+      - Do not include "Research Brief" — that's already in the H1 prefix
+      - Output only the title, nothing else
+
+  # Display date — human-readable date for masthead
+  - task_id: "display_date"
+    prompt: |
+      Format this ISO date as a display-friendly date:
+
+      Date: {{current_date_iso}}
+
+      Format: Month DD, YYYY (e.g., "May 1, 2026")
+      Output only the formatted date, nothing else.
 
   # Summary — narrative synthesis of the brief
   - task_id: "summary"
@@ -176,9 +200,9 @@ ai_generation_tasks:
 # OUTPUT
 # ═══════════════════════════════════════════════════════════
 output_template: |
-  # Research Brief: {{selected_study}}
+  # Research Brief: {{ai_generated.descriptive_title}}
 
-  **Study:** {{selected_study}} &nbsp; | &nbsp; **Researcher:** {{lead_researcher}} &nbsp; | &nbsp; **Requested by:** {{requestor_name}} &nbsp; | &nbsp; **Date:** {{current_date}} &nbsp; | &nbsp; **Status:** Pending approval
+  **Study:** {{selected_study}} &nbsp; | &nbsp; **Researcher:** {{lead_researcher}} &nbsp; | &nbsp; **Requested by:** {{requestor_name}} &nbsp; | &nbsp; **Date:** {{ai_generated.display_date}} &nbsp; | &nbsp; **Status:** Pending approval
 
   ---
 

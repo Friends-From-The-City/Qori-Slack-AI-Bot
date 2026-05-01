@@ -528,7 +528,7 @@ output_template: |
 
 output_options:
   path: "01-planning/"
-  filename: "discussion-guide-{{selected_study}}-{{current_date_iso}}.md"
+  filename: "{{selected_study}}-discussion-guide-{{current_date_iso}}.md"
 
 # ═══════════════════════════════════════════════════════════
 # METADATA (documentation only — not read by backend)
