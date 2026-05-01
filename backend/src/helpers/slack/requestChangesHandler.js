@@ -55,86 +55,78 @@ const handleApproveSubmission = async (ack, view, body, client) => {
 
   // Special handling for research brief approval
   if (type === 'brief') {
-    // Get research team channel ID (use channelId as fallback, or get from config)
     const researchTeamChannelId = process.env.RESEARCH_TEAM_CHANNEL_ID || channelId;
 
-    // Prepare brief data for "Create Research Study" button
-    const briefDataForStudy = briefData || {
-      project_title: studyName,
-      brief_url: url,
-    };
+    // Check if study already exists — determines CTA
+    const existingStudy = await getResearchStudyWithRoles(studyName);
+    const studyExists = !!(existingStudy && existingStudy.path);
 
-    // Send approval message to research team channel with "Create Research Study" button
+    // Build the CTA button based on whether study exists
+    let ctaButton;
+    if (studyExists) {
+      // Study exists (normal /qori-plan flow) — next step is research plan
+      ctaButton = {
+        type: 'button',
+        text: { type: 'plain_text', text: 'Create Research Plan', emoji: true },
+        style: 'primary',
+        action_id: 'create_research_plan_from_brief',
+        value: JSON.stringify({ studyName, briefUrl: url, channelId: researchTeamChannelId }),
+      };
+    } else {
+      // No study yet (from-request flow) — need to create study first
+      const briefDataForStudy = briefData || { project_title: studyName, brief_url: url };
+      ctaButton = {
+        type: 'button',
+        text: { type: 'plain_text', text: 'Create Research Study', emoji: true },
+        style: 'primary',
+        action_id: 'create_study_from_brief',
+        value: JSON.stringify({ studyName, briefUrl: url, briefData: briefDataForStudy, channelId: researchTeamChannelId }),
+      };
+    }
+
+    const nextStepText = studyExists
+      ? 'The research brief has been approved. Next step: create the research plan.'
+      : 'The research brief has been approved. Next step: create the research study.';
+
     try {
       await client.chat.postMessage({
         channel: researchTeamChannelId,
-        text: `✅ *Research Brief Approved*\n\n*Study:* ${studyName}\n*Approved by:* <@${user}>\n\nThe brief has been approved and is ready for study creation.`,
+        text: `✅ *Research Brief Approved*\n\n*Study:* ${studyName}\n*Approved by:* <@${user}>`,
         blocks: [
           {
             type: 'header',
-            text: {
-              type: 'plain_text',
-              text: `✅ Research Brief Approved - ${studyName}`,
-              emoji: true,
-            },
+            text: { type: 'plain_text', text: `Research Brief Approved — ${studyName}`, emoji: true },
           },
           {
             type: 'section',
-            text: {
-              type: 'mrkdwn',
-              text: `*Approved by:* <@${user}>\n*Brief URL:* <${url}|View on GitHub>`,
-            },
+            text: { type: 'mrkdwn', text: `*Approved by:* <@${user}>\n*Brief:* <${url}|View on GitHub>` },
           },
           {
             type: 'section',
-            text: {
-              type: 'mrkdwn',
-              text: 'The research brief has been approved. You can now create the research study.',
-            },
+            text: { type: 'mrkdwn', text: nextStepText },
           },
           {
             type: 'actions',
-            elements: [
-              {
-                type: 'button',
-                text: {
-                  type: 'plain_text',
-                  text: '📋 Create Research Study',
-                  emoji: true,
-                },
-                style: 'primary',
-                action_id: 'create_study_from_brief',
-                value: JSON.stringify({
-                  studyName,
-                  briefUrl: url,
-                  briefData: briefDataForStudy,
-                  channelId: researchTeamChannelId,
-                }),
-              },
-            ],
+            elements: [ctaButton],
           },
         ],
       });
     } catch (error) {
       console.error('Failed to send approval message to research team:', error);
-      // Fallback: send to original channel
       await client.chat.postMessage({
         channel: channelId,
         text: `✅ *${studyName}* ${typeLabels[type]} approved by <@${user}>!`,
       });
     }
 
-    // Also notify the researcher who created the brief
-    const study = await getResearchStudyWithRoles(studyName);
-    if (study && study.created_by) {
+    // Notify the researcher who created the brief
+    if (existingStudy && existingStudy.created_by) {
       try {
-        const im = await client.conversations.open({
-          users: study.created_by
-        });
-        await client.chat.postMessage({
-          channel: im.channel.id,
-          text: `✅ *${studyName}* research brief approved by <@${user}>!\n\nThe research team has been notified to create the study.`,
-        });
+        const im = await client.conversations.open({ users: existingStudy.created_by });
+        const dmText = studyExists
+          ? `✅ *${studyName}* research brief approved by <@${user}>! You can now create the research plan.`
+          : `✅ *${studyName}* research brief approved by <@${user}>! The research team has been notified to create the study.`;
+        await client.chat.postMessage({ channel: im.channel.id, text: dmText });
       } catch (error) {
         console.error('Failed to send DM to study creator:', error);
       }

@@ -35,30 +35,25 @@ const researchBriefModal = {
     {
       type: "divider",
     },
-    // Study selector - required for file path scoping
+    // Study name - text input (study created on brief submission if it doesn't exist)
     {
       type: "input",
-      block_id: "study_selection",
+      block_id: "study_name_block",
       label: {
         type: "plain_text",
-        text: "Study *",
+        text: "Study name *",
+      },
+      hint: {
+        type: "plain_text",
+        text: "Use kebab-case (e.g., va-mobile-nav-2026). Study folder will be created automatically.",
       },
       element: {
-        type: "static_select",
-        action_id: "study_select",
+        type: "plain_text_input",
+        action_id: "study_name_input",
         placeholder: {
           type: "plain_text",
-          text: "Select a study...",
+          text: "e.g., va-mobile-nav-2026",
         },
-        options: [
-          {
-            text: {
-              type: "plain_text",
-              text: "Loading studies...",
-            },
-            value: "loading",
-          },
-        ],
       },
     },
     // Stakeholder who requested

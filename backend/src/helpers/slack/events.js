@@ -1339,92 +1339,46 @@ slackApp.action('create_research_brief', async ({ ack, body, client }) => {
     await ack();
 
     const meta = JSON.parse(body.view.private_metadata || '{}');
-    // Get selected study from the parent view's study selector
+    // Get study name from parent view's study selector (if coming from /qori-plan)
     const selectedFromView = body.view?.state?.values?.study_selection?.study_select?.selected_option || null;
-    const preselectStudyName = selectedFromView?.text?.text || meta.studyName || null;
+    const preselectStudyName = selectedFromView?.text?.text || meta.studyName || '';
     const preselectStudyId = selectedFromView?.value || meta.studyId || null;
-
-    // Validate that study is selected
-    if (!preselectStudyName || preselectStudyId === 'loading' || preselectStudyId === 'no_studies') {
-      await client.chat.postEphemeral({
-        channel: meta.channelId || body.user.id,
-        user: body.user.id,
-        text: "❌ Please select a study before creating a research brief."
-      });
-      return;
-    }
-
-    // Fetch studies for the user to populate the dropdown
     const userId = body.user.id;
-    const studies = await getStudiesByUser(userId);
-
-    // Build study options for the dropdown (guard against undefined study_name)
-    const studyOptions = studies.length > 0
-      ? studies
-          .filter(s => s.study_name) // Filter out studies with no name
-          .map(s => ({
-            text: { type: 'plain_text', text: s.study_name },
-            value: s.id.toString(),
-          }))
-      : [];
-
-    // Ensure we have at least one option
-    if (studyOptions.length === 0) {
-      studyOptions.push({ text: { type: 'plain_text', text: 'No studies available' }, value: 'no_studies' });
-    }
-
-    // Find the pre-selected study option
-    const initialOption = studyOptions.find(opt => opt.text.text === preselectStudyName) || studyOptions[0];
 
     // Fetch lead researcher: study record → Slack profile fallback
     let leadResearcher = null;
-    try {
-      const study = await getResearchStudyWithRoles(preselectStudyName);
-      if (study && study.researcher_name) {
-        leadResearcher = study.researcher_name;
-      }
-    } catch (error) {
-      console.warn('Could not fetch study for lead researcher:', error.message);
+    if (preselectStudyName) {
+      try {
+        const study = await getResearchStudyWithRoles(preselectStudyName);
+        if (study?.researcher_name) leadResearcher = study.researcher_name;
+      } catch (error) { /* study may not exist yet — that's OK */ }
     }
     if (!leadResearcher) {
       try {
         const userInfo = await client.users.info({ user: userId });
         leadResearcher = userInfo.user.real_name || userInfo.user.profile?.display_name || userInfo.user.name || '';
-      } catch (err) {
-        console.warn('Could not fetch Slack profile for lead researcher:', err.message);
-      }
+      } catch (err) { /* ignore */ }
     }
 
-    // Clone modal blocks
+    // Clone modal blocks and pre-fill
     const modalBlocks = JSON.parse(JSON.stringify(researchBriefModal.blocks));
 
-    // Populate the study selector with real studies and pre-select
-    const studySelectionIndex = modalBlocks.findIndex(
-      block => block.block_id === 'study_selection'
-    );
-    if (studySelectionIndex !== -1) {
-      modalBlocks[studySelectionIndex] = {
-        ...modalBlocks[studySelectionIndex],
-        element: {
-          ...modalBlocks[studySelectionIndex].element,
-          options: studyOptions,
-          initial_option: initialOption,
-        },
+    // Pre-fill study name (text input)
+    const studyNameIndex = modalBlocks.findIndex(b => b.block_id === 'study_name_block');
+    if (studyNameIndex !== -1 && preselectStudyName) {
+      modalBlocks[studyNameIndex] = {
+        ...modalBlocks[studyNameIndex],
+        element: { ...modalBlocks[studyNameIndex].element, initial_value: preselectStudyName },
       };
     }
 
     // Pre-fill stakeholder name if available from request
     const stakeholderName = meta.requestData?.prepared_by || null;
-    const stakeholderIndex = modalBlocks.findIndex(
-      block => block.block_id === 'stakeholder_block'
-    );
+    const stakeholderIndex = modalBlocks.findIndex(b => b.block_id === 'stakeholder_block');
     if (stakeholderIndex !== -1 && stakeholderName) {
       modalBlocks[stakeholderIndex] = {
         ...modalBlocks[stakeholderIndex],
-        element: {
-          ...modalBlocks[stakeholderIndex].element,
-          initial_value: stakeholderName
-        }
+        element: { ...modalBlocks[stakeholderIndex].element, initial_value: stakeholderName },
       };
     }
 
@@ -1435,53 +1389,44 @@ slackApp.action('create_research_brief', async ({ ack, body, client }) => {
     const nextMonday = new Date(today);
     nextMonday.setDate(today.getDate() + daysUntilMonday);
     const defaultStartDate = nextMonday.toISOString().split('T')[0];
-
-    // Set default start date
-    const startDateIndex = modalBlocks.findIndex(
-      block => block.block_id === 'start_date_block'
-    );
+    const startDateIndex = modalBlocks.findIndex(b => b.block_id === 'start_date_block');
     if (startDateIndex !== -1) {
       modalBlocks[startDateIndex] = {
         ...modalBlocks[startDateIndex],
-        element: {
-          ...modalBlocks[startDateIndex].element,
-          initial_date: defaultStartDate,
-        },
+        element: { ...modalBlocks[startDateIndex].element, initial_date: defaultStartDate },
       };
     }
 
-    // Cascade readiness — inject upstream variable status
-    try {
-      const studyForCascade = await getResearchStudyWithRoles(preselectStudyName);
-      if (studyForCascade?.path) {
-        const studyVars = await readStudyVariables(decodeURIComponent(studyForCascade.path));
-        if (Object.keys(studyVars.variables).length > 0) {
-          const cascadeData = buildCascadeReadiness(studyVars, 'research_brief');
-          const cascadeBlocks = buildCascadeBlocks(cascadeData);
-          const firstDivider = modalBlocks.findIndex(b => b.type === 'divider');
-          if (firstDivider !== -1) {
-            modalBlocks.splice(firstDivider, 0, ...cascadeBlocks);
+    // Cascade readiness (if study already exists and has upstream vars)
+    if (preselectStudyName) {
+      try {
+        const studyForCascade = await getResearchStudyWithRoles(preselectStudyName);
+        if (studyForCascade?.path) {
+          const studyVars = await readStudyVariables(decodeURIComponent(studyForCascade.path));
+          if (Object.keys(studyVars.variables).length > 0) {
+            const cascadeData = buildCascadeReadiness(studyVars, 'research_brief');
+            const cascadeBlocks = buildCascadeBlocks(cascadeData);
+            const firstDivider = modalBlocks.findIndex(b => b.type === 'divider');
+            if (firstDivider !== -1) {
+              modalBlocks.splice(firstDivider, 0, ...cascadeBlocks);
+            }
           }
         }
-      }
-    } catch (err) {
-      console.warn('⚠️ Cascade readiness failed for research brief:', err.message);
+      } catch (err) { /* no cascade data yet — that's fine for briefs */ }
     }
-
-    const viewPayload = {
-      ...researchBriefModal,
-      blocks: modalBlocks,
-      private_metadata: JSON.stringify({
-        ...meta,
-        studyName: preselectStudyName,
-        studyId: preselectStudyId,
-        leadResearcher,
-      })
-    };
 
     await client.views.update({
       view_id: body.view.id,
-      view: viewPayload
+      view: {
+        ...researchBriefModal,
+        blocks: modalBlocks,
+        private_metadata: JSON.stringify({
+          ...meta,
+          studyName: preselectStudyName,
+          studyId: preselectStudyId,
+          leadResearcher,
+        }),
+      },
     });
 
     console.log(`✅ Opened research brief modal for study: ${preselectStudyName}`);
@@ -1522,19 +1467,74 @@ slackApp.view('research_brief_modal', async ({ ack, body, view, client }) => {
     return null;
   };
 
-  // Extract study from the modal's study selector
-  const selectedStudy = extract('study_selection', 'study_select');
-  const studyName = selectedStudy?.text?.text || meta.studyName;
+  // Extract study name from text input (or fall back to metadata from pre-fill)
+  const studyNameRaw = extract('study_name_block', 'study_name_input') || meta.studyName;
+  // Slugify: lowercase, spaces/underscores → hyphens, strip special chars
+  const studyName = studyNameRaw
+    ? studyNameRaw.toLowerCase().replace(/[\s_]+/g, '-').replace(/[^a-z0-9-]/g, '').replace(/-+/g, '-').replace(/^-|-$/g, '')
+    : null;
 
   if (!studyName) {
-    console.error('No study selected for research brief');
+    console.error('No study name provided for research brief');
     return;
   }
 
   console.log("🚀 ~ Research Brief ~ studyName:", studyName);
 
-  // Fetch the full study with roles
-  const study = await getResearchStudyWithRoles(studyName);
+  // Fetch the full study — or create it if it doesn't exist yet
+  // Brief is the first cascade document. It triggers study creation.
+  let study = await getResearchStudyWithRoles(studyName);
+
+  if (!study || !study.path) {
+    console.log('📁 Study does not exist yet — creating from brief submission');
+    try {
+      // Get user profile for study record
+      const userInfo = await client.users.info({ user: body.user.id });
+      const userEmail = userInfo.user.profile?.email || `${body.user.id}@slack.com`;
+      const userName = userInfo.user.real_name || userInfo.user.profile?.display_name || body.user.id;
+
+      // Get channel config for folder path
+      const channelConfig = await getChannelConfigByChannelId(channelId);
+      if (!channelConfig) {
+        throw new Error('No channel config found — run /qori-repo first to link a repository folder');
+      }
+
+      // Create GitHub folder structure from templates
+      const templateFiles = await readFolders('config/templates', getConfigRepo());
+      const folderResult = await copyFilesToFolder(
+        templateFiles,
+        `${channelConfig.sub_folder_name}/research`,
+        studyName,
+        process.env.GITHUB_REPO,
+        channelConfig.product_folder_name
+      );
+
+      // Create study DB record
+      await addResearchStudyWithRoles({
+        name: studyName,
+        description: `Created from research brief`,
+        created_by: body.user.id,
+        researcher_name: userName,
+        researcher_email: userEmail,
+        link: folderResult.url,
+        path: folderResult.path,
+        channel_name: channelId,
+        assignments: [],
+      });
+
+      // Re-fetch the study now that it exists
+      study = await getResearchStudyWithRoles(studyName);
+      console.log(`✅ Study "${studyName}" created from brief, path: ${study.path}`);
+    } catch (createError) {
+      console.error('❌ Failed to create study from brief:', createError);
+      await client.chat.postEphemeral({
+        channel: body.user.id,
+        user: body.user.id,
+        text: `❌ Could not create study folder: ${createError.message}`,
+      });
+      return;
+    }
+  }
 
   // Methodology label mapping
   const methodologyLabels = {
@@ -1628,6 +1628,69 @@ slackApp.action('approve_brief', async ({ ack, body, client }) => {
 
 slackApp.view('confirm_approve_brief', async ({ ack, view, body, client }) => {
   await handleApproveSubmission(ack, view, body, client);
+});
+
+// Handle “Create Research Plan” CTA from approved brief
+slackApp.action('create_research_plan_from_brief', async ({ ack, body, client }) => {
+  await ack();
+  try {
+    const { studyName, channelId } = JSON.parse(body.actions[0].value);
+    const study = await getResearchStudyWithRoles(studyName);
+
+    // Fetch lead researcher
+    let leadResearcher = study?.researcher_name || '';
+    if (!leadResearcher) {
+      try {
+        const userInfo = await client.users.info({ user: body.user.id });
+        leadResearcher = userInfo.user.real_name || userInfo.user.profile?.display_name || '';
+      } catch (err) { /* ignore */ }
+    }
+
+    // Build plan modal blocks with study pre-filled
+    let blocks = [...researchPlanGeneratorModal.blocks];
+    const studyFolderIndex = blocks.findIndex(b => b.block_id === 'study_folder_block');
+    if (studyFolderIndex !== -1 && studyName) {
+      blocks[studyFolderIndex] = {
+        ...blocks[studyFolderIndex],
+        element: { ...blocks[studyFolderIndex].element, initial_value: studyName },
+      };
+    }
+    const leadIdx = blocks.findIndex(b => b.block_id === 'lead_researcher_block');
+    if (leadIdx !== -1 && leadResearcher) {
+      blocks[leadIdx] = {
+        ...blocks[leadIdx],
+        element: { ...blocks[leadIdx].element, initial_value: leadResearcher },
+      };
+    }
+
+    // Inject cascade readiness
+    try {
+      if (study?.path) {
+        const studyVars = await readStudyVariables(decodeURIComponent(study.path));
+        if (Object.keys(studyVars.variables).length > 0) {
+          const cascadeData = buildCascadeReadiness(studyVars, 'research_plan');
+          const cascadeBlocks = buildCascadeBlocks(cascadeData);
+          const firstDivider = blocks.findIndex(b => b.type === 'divider');
+          if (firstDivider !== -1) {
+            blocks.splice(firstDivider, 0, ...cascadeBlocks);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('⚠️ Cascade readiness failed:', err.message);
+    }
+
+    await client.views.open({
+      trigger_id: body.trigger_id,
+      view: {
+        ...researchPlanGeneratorModal,
+        blocks,
+        private_metadata: JSON.stringify({ studyName, studyId: study?.id?.toString(), channelId }),
+      },
+    });
+  } catch (err) {
+    console.error('Error opening research plan from brief approval:', err.data || err);
+  }
 });
 
 // 5) Handle the “Request Changes” button click by opening an input modal
