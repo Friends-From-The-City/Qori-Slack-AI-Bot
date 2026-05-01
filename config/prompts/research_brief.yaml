@@ -215,6 +215,7 @@ ai_generation_tasks:
       Problem: {{problem_statement}}
       What we'll learn: {{learning_objectives}}
       Method: {{methodology}}
+      Participants: {{participant_approach}}
       Deadline: {{decision_deadline}}
 
       {% if upstream_discovered_barriers %}
@@ -335,6 +336,7 @@ output_template: |
   | | |
   |---|---|
   | **Method** | {{methodology}} |
+  | **Participants** | {{participant_approach}} |
   | **Timeline** | {{ai_generated.timeline_display}} |
   | **Decision deadline** | {{decision_deadline}} |
   {{#if budget}}| **Budget** | {{budget}} |{{/if}}
@@ -357,7 +359,11 @@ output_template: |
 
   **Approach** — {{methodology}}
 
-  **Why this method** — {{method_rationale}}
+  ---
+
+  ## Participants
+
+  {{participant_approach}}
 
   ---
 
