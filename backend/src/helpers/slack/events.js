@@ -1527,10 +1527,13 @@ slackApp.view('research_brief_modal', async ({ ack, body, view, client }) => {
       console.log(`✅ Study "${studyName}" created from brief, path: ${study.path}`);
     } catch (createError) {
       console.error('❌ Failed to create study from brief:', createError);
+      const errMsg = createError.message?.includes('<!DOCTYPE')
+        ? 'GitHub is temporarily unavailable. Please try again in a moment.'
+        : createError.message;
       await client.chat.postEphemeral({
         channel: body.user.id,
         user: body.user.id,
-        text: `❌ Could not create study folder: ${createError.message}`,
+        text: `❌ Could not create study folder: ${errMsg}`,
       });
       return;
     }
