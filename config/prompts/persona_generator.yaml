@@ -158,6 +158,30 @@ ai_generation_tasks:
       design-leveraged single finding instead. NEVER write a generic "personas
       represent different needs" statement here.
 
+      {% if upstream_atomic_nuggets %}
+      ============================================================
+      UPSTREAM CONTEXT (structured variables from cascade)
+      ============================================================
+
+      ATOMIC NUGGETS (typed observations from session summaries):
+      {{upstream_atomic_nuggets}}
+
+      {% if upstream_validated_themes %}
+      VALIDATED THEMES (from affinity mapping — use to validate groupings):
+      {{upstream_validated_themes}}
+      {% endif %}
+
+      {% if upstream_participant_metadata %}
+      PARTICIPANT METADATA (structured demographics):
+      {{upstream_participant_metadata}}
+      {% endif %}
+
+      Use structured nuggets and themes to ground persona groupings.
+      Participants who cluster under the same themes should tend to appear
+      in the same persona. If your groupings contradict the validated themes,
+      explain why in the methodology section.
+      {% endif %}
+
       ============================================================
       INPUT DATA
       ============================================================

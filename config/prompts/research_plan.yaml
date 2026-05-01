@@ -139,6 +139,16 @@ ai_generation_tasks:
       Method: {{methodology}}
       Participants: {{participant_count}} — {{target_participants}}
 
+      {% if upstream_research_objectives %}
+      UPSTREAM CONTEXT (from approved research brief):
+      Research objectives: {{upstream_research_objectives}}
+      {% if upstream_target_barriers %}Target barriers: {{upstream_target_barriers}}{% endif %}
+      {% if upstream_methodology_selection %}Approved method: {{upstream_methodology_selection}}{% endif %}
+
+      The plan elaborates the approved brief. Ground the summary in the
+      brief's objectives and barriers when available.
+      {% endif %}
+
       The summary should explain: what the study will do, how many participants
       and what method, and what decision the findings will inform. Be specific
       and concise. Do not use quotes around text.
@@ -150,6 +160,10 @@ ai_generation_tasks:
       paragraph (3-4 sentences):
 
       {{decision_context}}
+
+      {% if upstream_research_objectives %}
+      Research objectives from approved brief: {{upstream_research_objectives}}
+      {% endif %}
 
       Include: what the product/feature is, what problem exists, what decision
       this research will inform, and why it matters now. Use direct language.

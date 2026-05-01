@@ -134,6 +134,24 @@ ai_generation_tasks:
       - Study Name: {{study_name}}
       - Session Date: {{session_date}}
 
+      {% if upstream_target_barriers %}
+      ============================================================
+      UPSTREAM CONTEXT (from research brief — use to validate)
+      ============================================================
+
+      TARGET BARRIERS TO VALIDATE:
+      {{upstream_target_barriers}}
+
+      {% if upstream_research_questions %}
+      RESEARCH QUESTIONS TO ADDRESS:
+      {{upstream_research_questions}}
+      {% endif %}
+
+      When analyzing this session, note which target barriers were confirmed
+      or refuted by the participant's experience. Link pain points to specific
+      barriers when the connection is clear.
+      {% endif %}
+
       PRIMARY SOURCE - Session Transcript:
       {{coded_transcript_content}}
 

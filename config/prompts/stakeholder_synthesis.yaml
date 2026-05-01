@@ -250,6 +250,24 @@ ai_generation_tasks:
       Do not stop early. If running low on space, compress content in
       earlier sections rather than omitting later ones.
 
+      {% if upstream_discovered_barriers %}
+      ============================================================
+      UPSTREAM CONTEXT (from desk research — use to contextualize)
+      ============================================================
+
+      KNOWN BARRIERS FROM PRIOR RESEARCH:
+      {{upstream_discovered_barriers}}
+
+      {% if upstream_knowledge_gaps %}
+      KNOWLEDGE GAPS (what desk research couldn't answer):
+      {{upstream_knowledge_gaps}}
+      {% endif %}
+
+      When stakeholders mention constraints or issues, note whether they
+      align with or contradict barriers discovered in prior research.
+      Knowledge gaps can inform your "Questions for user research" section.
+      {% endif %}
+
       ============================================================
       INPUT DATA
       ============================================================

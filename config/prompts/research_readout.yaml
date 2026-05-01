@@ -189,6 +189,75 @@ ai_generation_tasks:
       Use middle-dot (·) between sources. Cite only files that actually support
       the finding. NEVER construct a path that isn't in the list above.
 
+      {% if upstream_atomic_nuggets %}
+      ============================================================
+      UPSTREAM CONTEXT (structured variables from cascade)
+      ============================================================
+
+      {% if upstream_research_objectives %}
+      RESEARCH OBJECTIVES (from research brief):
+      {{upstream_research_objectives}}
+      {% endif %}
+
+      {% if upstream_research_questions %}
+      RESEARCH QUESTIONS (from research brief):
+      {{upstream_research_questions}}
+      {% endif %}
+
+      {% if upstream_target_barriers %}
+      TARGET BARRIERS (from research brief — report which were validated):
+      {{upstream_target_barriers}}
+      {% endif %}
+
+      {% if upstream_business_context %}
+      BUSINESS CONTEXT (from research brief — frames "Why we conducted this research"):
+      {{upstream_business_context}}
+      {% endif %}
+
+      ATOMIC NUGGETS (typed observations from session summaries):
+      {{upstream_atomic_nuggets}}
+
+      {% if upstream_participant_metadata %}
+      PARTICIPANT METADATA:
+      {{upstream_participant_metadata}}
+      {% endif %}
+
+      {% if upstream_barrier_validations %}
+      BARRIER VALIDATIONS (which target barriers were confirmed/refuted):
+      {{upstream_barrier_validations}}
+      {% endif %}
+
+      {% if upstream_validated_themes %}
+      VALIDATED THEMES (from affinity mapping):
+      {{upstream_validated_themes}}
+      {% endif %}
+
+      {% if upstream_prioritized_issues %}
+      PRIORITIZED ISSUES (from usability issues analysis):
+      {{upstream_prioritized_issues}}
+      {% endif %}
+
+      {% if upstream_personas %}
+      PERSONAS (behavioral archetypes):
+      {{upstream_personas}}
+      {% endif %}
+
+      {% if upstream_stakeholder_constraints %}
+      STAKEHOLDER CONSTRAINTS (for recommendation feasibility):
+      {{upstream_stakeholder_constraints}}
+      {% endif %}
+
+      {% if upstream_alignment_gaps %}
+      ALIGNMENT GAPS (stated vs. actual priorities — frames urgency):
+      {{upstream_alignment_gaps}}
+      {% endif %}
+
+      Use upstream variables to ground findings in the full cascade context.
+      Research objectives and questions frame the "Why we conducted this research"
+      section. Barrier validations inform which findings confirm or refute
+      hypotheses. Stakeholder constraints inform recommendation feasibility.
+      {% endif %}
+
       ============================================================
       SOURCE DATA
       ============================================================

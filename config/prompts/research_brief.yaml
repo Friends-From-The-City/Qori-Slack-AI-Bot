@@ -187,6 +187,16 @@ ai_generation_tasks:
       Method: {{methodology}}
       Deadline: {{decision_deadline}}
 
+      {% if upstream_discovered_barriers %}
+      UPSTREAM CONTEXT (from discovery stream):
+      Known barriers from desk research: {{upstream_discovered_barriers}}
+      {% if upstream_stakeholder_constraints %}Stakeholder constraints: {{upstream_stakeholder_constraints}}{% endif %}
+      {% if upstream_knowledge_gaps %}Knowledge gaps: {{upstream_knowledge_gaps}}{% endif %}
+
+      Incorporate upstream context when it strengthens the summary — reference
+      known barriers or stakeholder constraints that motivate this research.
+      {% endif %}
+
       The summary should explain: what problem we're solving, what method we'll use,
       and what decision the findings will inform. Be specific and concise.
       Do not use quotes around text.

@@ -110,6 +110,24 @@ ai_generation_tasks:
       ✅ SPECIFIC: "Unlabeled Buttons Block Screen Reader Navigation"
       ✅ SPECIFIC: "Claim Status Shows 'None' Despite Active Filing"
 
+      {% if upstream_atomic_nuggets %}
+      ============================================================
+      UPSTREAM CONTEXT (structured variables from cascade)
+      ============================================================
+
+      ATOMIC NUGGETS (typed observations from session summaries):
+      {{upstream_atomic_nuggets}}
+
+      {% if upstream_target_barriers %}
+      TARGET BARRIERS (from research brief — validate these against themes):
+      {{upstream_target_barriers}}
+      {% endif %}
+
+      Use these structured observations to ground your theme clustering.
+      Nuggets with severity 3-4 should receive priority attention. When a
+      theme aligns with or contradicts a target barrier, note the connection.
+      {% endif %}
+
       ============================================================
       YOUR TASK
       ============================================================
