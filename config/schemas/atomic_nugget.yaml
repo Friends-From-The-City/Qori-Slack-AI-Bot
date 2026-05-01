@@ -1,0 +1,55 @@
+# Atomic nugget — self-contained typed observation from a research session
+# Emitted by: session_summary
+# Consumed by: affinity_mapping, journey_mapping, persona_generator,
+#              usability_issues, jobs_to_be_done, design_opportunities
+type: object
+properties:
+  id:
+    type: string
+    pattern: "nugget-{participant}-{seq}"
+    description: "Unique nugget ID"
+  nugget_type:
+    type: string
+    enum:
+      - task_success
+      - task_failure
+      - pain_point
+      - workaround
+      - quote
+      - positive
+      - surprise
+      - accessibility_issue
+      - behavioral_pattern
+      - mental_model
+    description: "Observation type classification"
+  severity:
+    type: integer
+    minimum: 0
+    maximum: 4
+    description: "Nielsen severity scale (0=cosmetic, 4=catastrophic)"
+  text:
+    type: string
+    description: "The observation text"
+  participant:
+    type: string
+    pattern: "PT-###"
+    description: "Participant ID"
+  session:
+    type: string
+    description: "Session identifier"
+  timestamp:
+    type: string
+    nullable: true
+    description: "HH:MM:SS timestamp if available"
+  linked_barrier:
+    type: string
+    nullable: true
+    description: "Reference to target_barriers key, if this nugget validates/refutes a barrier"
+  linked_question:
+    type: string
+    nullable: true
+    description: "Reference to research_questions key, if this nugget addresses a question"
+  confidence:
+    type: string
+    enum: [Strong, Moderate, Limited]
+    description: "Evidence confidence for this nugget"

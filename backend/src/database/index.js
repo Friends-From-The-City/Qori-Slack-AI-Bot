@@ -12,6 +12,7 @@ const SessionObserver = require("./models/session_observer")
 const StudyNotes = require("./models/study_notes")
 const ResearchPlan = require("./models/research_plan")
 const SessionSummary = require("./models/session_summary")
+const StudyVariable = require("./models/study_variable")
 
 
 // Set environment and configuration
@@ -33,6 +34,7 @@ const modelDefiners = [
   StudyNotes,
   ResearchPlan,
   SessionSummary,
+  StudyVariable,
 ];
 
 // Register all models with Sequelize and pass DataTypes

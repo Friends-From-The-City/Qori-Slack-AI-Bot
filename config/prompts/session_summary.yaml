@@ -76,6 +76,51 @@ input_variables:
       derived_from: "slack_user_display_name"
 
 # ═══════════════════════════════════════════════════════════
+# CASCADE CONTRACT
+# ═══════════════════════════════════════════════════════════
+consumes:
+  - key: target_barriers
+    source: research_brief
+    required: false
+    inject_as: context
+    description: "Barriers to validate against session observations"
+
+  - key: research_questions
+    source: research_brief
+    required: false
+    inject_as: context
+    description: "Questions that frame what to look for in sessions"
+
+emits:
+  - key: atomic_nuggets
+    pool: true
+    pool_strategy: append
+    schema:
+      $ref: schemas/atomic_nugget.yaml
+    extract_from: "Pain points, quotes, what worked, key insights, task observations"
+
+  - key: participant_metadata
+    pool: true
+    pool_strategy: append
+    schema:
+      $ref: schemas/participant_metadata.yaml
+    extract_from: "Participant context section"
+
+  - key: task_completion_records
+    pool: true
+    pool_strategy: append
+    schema:
+      $ref: schemas/task_completion_record.yaml
+    extract_from: "Task completion observations, recommended actions table"
+
+  - key: barrier_validations
+    pool: true
+    pool_strategy: append
+    schema:
+      $ref: schemas/barrier_validation.yaml
+    extract_from: "Pain points that confirm or refute target barriers"
+
+# ═══════════════════════════════════════════════════════════
 # AI GENERATION
 # ═══════════════════════════════════════════════════════════
 ai_generation_tasks:

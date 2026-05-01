@@ -1,0 +1,17 @@
+# Task completion record — per-task success/failure from a session
+# Emitted by: session_summary
+# Consumed by: usability_issues, research_readout
+type: object
+properties:
+  participant:
+    type: string
+    pattern: "PT-###"
+  task:
+    type: string
+    description: "Task name or description"
+  success:
+    type: boolean
+    description: "Whether participant completed the task"
+  notes:
+    type: string
+    description: "What happened during the task attempt"

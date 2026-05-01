@@ -1,0 +1,17 @@
+# Barrier validation — whether a target barrier was confirmed or refuted
+# Emitted by: session_summary
+# Consumed by: affinity_mapping, research_readout
+type: object
+properties:
+  barrier_ref:
+    type: string
+    description: "Reference to the target_barriers key this validates"
+  participant:
+    type: string
+    pattern: "PT-###"
+  validated:
+    type: boolean
+    description: "true if barrier was confirmed, false if refuted"
+  evidence:
+    type: string
+    description: "What the participant did or said that validates/refutes"
