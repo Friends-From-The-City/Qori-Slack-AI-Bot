@@ -1307,18 +1307,16 @@ slackApp.view('research_plan_modal', async ({ ack, body, view, client }) => {
     return null;
   };
 
-  // Extract form values from simplified modal
+  // Extract form values — plan only collects execution details
+  // Scope (objectives, method, participants, context) comes from cascade
   const data = {
-    project_title: extract('study_title_block', 'study_title_input'),
     selected_study: studyName,
-    decision_context: extract('decision_block', 'decision_input'),
-    research_goal: extract('research_goal_block', 'research_goal_input'),
-    methodology: extract('methodology_block', 'methodology_select') || 'Usability Testing',
-    target_participants: extract('target_participants_block', 'target_participants_input'),
-    participant_count: extract('num_participants_block', 'num_participants_select'),
-    start_date: extract('start_date_block', 'start_date_picker'),
-    timeline_preference: extract('timeline_block', 'timeline_radio'),
+    project_title: studyName,
     lead_researcher: extract('lead_researcher_block', 'lead_researcher_input'),
+    note_taker: extract('note_taker_block', 'note_taker_input') || '',
+    observer: extract('observer_block', 'observer_input') || '',
+    recruitment_sources: extract('recruitment_source_block', 'recruitment_source_input') || '',
+    operational_risks: extract('operational_risks_block', 'operational_risks_input') || '',
   };
   
   console.log('📋 Extracted research plan data:', JSON.stringify(data, null, 2));
@@ -1610,17 +1608,15 @@ slackApp.view('research_brief_modal', async ({ ack, body, view, client }) => {
     learning_objectives: extract('learning_objectives_block', 'learning_objectives_input') || '',
     out_of_scope: extract('out_of_scope_block', 'out_of_scope_input') || '',
 
-    // Methodology
+    // Method & participants
     methodology: methodLabel,
     methodology_value: methodValue,
-    method_rationale: extract('method_rationale_block', 'method_rationale_input') || '',
+    participant_approach: extract('participant_approach_block', 'participant_approach_input') || '',
 
-    // Timeline
+    // Timeline & budget
     timeline_preference: extract('timeline_block', 'timeline_radio')?.value || 'standard',
     start_date: extract('start_date_block', 'start_date_picker') || '',
     decision_deadline: extract('decision_deadline_block', 'decision_deadline_picker') || '',
-
-    // Budget (optional)
     budget: extract('budget_block', 'budget_input') || '',
   };
 

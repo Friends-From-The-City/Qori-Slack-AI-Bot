@@ -47,9 +47,11 @@ const TEMPLATE_CONSUMES = {
   ],
   research_plan: [
     { key: 'research_objectives', required: false, label: 'Research objectives', source_hint: 'Create research brief first' },
-    { key: 'research_questions', required: false, label: 'Research questions', source_hint: 'Create research brief first' },
-    { key: 'target_barriers', required: false, label: 'Target barriers', source_hint: 'Create research brief first' },
     { key: 'methodology_selection', required: false, label: 'Methodology', source_hint: 'Create research brief first' },
+    { key: 'participant_approach', required: false, label: 'Participant approach', source_hint: 'Create research brief first' },
+    { key: 'timeline_preference', required: false, label: 'Timeline', source_hint: 'Create research brief first' },
+    { key: 'start_date', required: false, label: 'Start date', source_hint: 'Create research brief first' },
+    { key: 'decision_deadline', required: false, label: 'Decision deadline', source_hint: 'Create research brief first' },
   ],
   discussion_guide: [
     { key: 'research_objectives', required: false, label: 'Research objectives', source_hint: 'Create research brief first' },

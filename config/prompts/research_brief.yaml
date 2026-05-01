@@ -143,6 +143,36 @@ emits:
     schema:
       type: string
     extract_from: "Problem section — full paragraph"
+  - key: timeline_preference
+    pool: false
+    pool_strategy: replace
+    schema:
+      type: string
+    extract_from: "Timeline table or timeline metadata"
+  - key: start_date
+    pool: false
+    pool_strategy: replace
+    schema:
+      type: string
+    extract_from: "Timeline section — start date"
+  - key: decision_deadline
+    pool: false
+    pool_strategy: replace
+    schema:
+      type: string
+    extract_from: "Timeline section — decision deadline"
+  - key: budget
+    pool: false
+    pool_strategy: replace
+    schema:
+      type: string
+    extract_from: "Summary metadata table — budget line"
+  - key: participant_approach
+    pool: false
+    pool_strategy: replace
+    schema:
+      type: string
+    extract_from: "Participants section — composition and count"
 
 # ═══════════════════════════════════════════════════════════
 # AI GENERATION

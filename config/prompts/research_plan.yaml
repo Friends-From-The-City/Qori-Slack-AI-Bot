@@ -56,11 +56,12 @@ input_variables:
 # CASCADE CONTRACT
 # ═══════════════════════════════════════════════════════════
 consumes:
+  # Scope from brief (approval-level)
   - key: research_objectives
     source: research_brief
     required: false
     inject_as: context
-    description: "Approved objectives from brief — plan elaborates these"
+    description: "Approved objectives — plan elaborates these"
   - key: research_questions
     source: research_brief
     required: false
@@ -81,6 +82,42 @@ consumes:
     required: false
     inject_as: context
     description: "Who to recruit — plan specifies recruitment"
+  - key: business_context
+    source: research_brief
+    required: false
+    inject_as: context
+    description: "Problem framing from brief"
+  - key: out_of_scope
+    source: research_brief
+    required: false
+    inject_as: context
+    description: "What research won't cover"
+  # Timeline + budget from brief
+  - key: timeline_preference
+    source: research_brief
+    required: false
+    inject_as: context
+    description: "Standard/accelerated/extended — drives phase date calculation"
+  - key: start_date
+    source: research_brief
+    required: false
+    inject_as: context
+    description: "When planning begins — drives phase dates"
+  - key: decision_deadline
+    source: research_brief
+    required: false
+    inject_as: context
+    description: "Hard deadline for findings"
+  - key: budget
+    source: research_brief
+    required: false
+    inject_as: context
+    description: "Budget envelope from brief"
+  - key: participant_approach
+    source: research_brief
+    required: false
+    inject_as: context
+    description: "Composition and count from brief"
 
 emits:
   - key: study_timeline
