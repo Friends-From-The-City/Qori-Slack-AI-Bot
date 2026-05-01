@@ -23,11 +23,16 @@ last_updated: 2026-05-01
 # ═══════════════════════════════════════════════════════════
 input_type: slack_modal_form
 input_processing: direct
+discovery_scope: true
 
 # ═══════════════════════════════════════════════════════════
 # INPUTS
 # ═══════════════════════════════════════════════════════════
 input_variables:
+  - name: topic
+    type: string
+    required: true
+    description: "Researcher-provided topic — slugified for filename and variable store path"
   - name: selected_study
     type: string
     required: true
@@ -554,8 +559,8 @@ processing_workflow:
   - save_to_outputs
 
 output_options:
-  path: "01-planning/stakeholder-interviews/"
-  filename: "{{selected_study}}-stakeholder-synthesis-{{current_date_iso}}.md"
+  path: "_discovery/stakeholder-interviews/"
+  filename: "{{topic_slug}}-stakeholder-synthesis-{{current_date_iso}}.md"
 
   delivery:
     github:
@@ -573,6 +578,9 @@ output_template: |
 # ═══════════════════════════════════════════════════════════
 # METADATA
 # ═══════════════════════════════════════════════════════════
+derived_variables:
+  - topic_slug: "{{topic | slugify}}"
+
 validation_rules:
   - rule: "all_stakeholders_represented"
     description: "Output must include insights from every stakeholder in input"

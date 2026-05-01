@@ -173,3 +173,23 @@ Every template translation now requires an "Inputs and rationale" pass — expli
 ### Discussion guide v6.3 follow-up (noted April 30, 2026)
 
 **Research plan integration:** When a research plan exists for the study, the discussion guide should auto-ground its warm-up and retrospective questions in the plan's objectives. Pattern would mirror the synthesis modal's analysis-layer file inputs — a modal checkbox: "Pull objectives from research plan if available." Estimated effort: M. Not implemented in v6.2 to keep scope manageable.
+
+### Discovery workspace separation (May 1, 2026)
+
+Discovery research (desk research, stakeholder interviews, survey synthesis) moved to `_discovery/` folder in qori-studies, separate from active studies. Discovery is pre-study work (industry standard) that informs briefs and accumulates as organizational memory across studies.
+
+**Folder structure in qori-studies** (created on first artifact write, not via `config/templates/` scaffold):
+```
+_discovery/
+  desk-research/.variables/discovery-variables.json
+  stakeholder-interviews/.variables/discovery-variables.json
+  survey-synthesis/.variables/discovery-variables.json
+```
+
+**YAML changes:** `desk_research.yaml`, `stakeholder_synthesis.yaml`, `survey_synthesis.yaml` now declare `discovery_scope: true`, output paths point to `_discovery/{type}/`, filenames use `{{topic_slug}}` instead of `{{selected_study}}`, and all three have a `topic` input variable (slugified for filenames).
+
+**Variable store:** `studyVariables.js` exports new discovery-scoped functions (`readDiscoveryVariables`, `writeDiscoveryVariables`, `mergeDiscoveryVariables`, `readUpstreamDiscoveryVariables`). Discovery variables are stored at `_discovery/{type}/.variables/discovery-variables.json`, keyed by `discovery_artifact_id` (the topic slug) instead of study path. Cascade contracts unchanged — same variables emitted, different store location.
+
+**Existing study-scoped discovery files preserved as-is.** No migration. Studies that already ran desk_research have files in their study folders — those remain untouched.
+
+**Handler wiring deferred to Step 2** (`/qori-discover` command). Current handlers still pass `study.path` as the base path — they'll be updated when the new slash command is built.

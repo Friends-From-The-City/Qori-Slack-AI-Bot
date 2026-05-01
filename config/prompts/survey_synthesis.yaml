@@ -20,11 +20,17 @@ last_updated: 2026-04-29
 # ═══════════════════════════════════════════════════════════
 input_type: slack_modal_form
 input_processing: form_based
+discovery_scope: true
 
 # ═══════════════════════════════════════════════════════════
 # INPUTS
 # ═══════════════════════════════════════════════════════════
 input_variables:
+  - name: topic
+    type: text
+    required: true
+    description: "Researcher-provided topic — slugified for filename and variable store path"
+
   - name: selected_study
     type: select
     required: true
@@ -290,8 +296,11 @@ output_template: |
   {{ai_generated.survey_synthesis_complete}}
 
 output_options:
-  path: "04-analysis/survey-synthesis/"
-  filename: "{{selected_study}}_survey_synthesis_{{current_date}}.md"
+  path: "_discovery/survey-synthesis/"
+  filename: "{{topic_slug}}-survey-synthesis-{{current_date_iso}}.md"
+
+derived_variables:
+  - topic_slug: "{{topic | slugify}}"
 
 # ═══════════════════════════════════════════════════════════
 # METADATA (documentation only — not read by backend)

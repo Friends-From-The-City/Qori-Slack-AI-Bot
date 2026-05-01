@@ -20,6 +20,7 @@ last_updated: 2026-04-29
 # ═══════════════════════════════════════════════════════════
 input_type: structured
 input_processing: direct
+discovery_scope: true
 
 # ═══════════════════════════════════════════════════════════
 # INPUTS
@@ -51,13 +52,20 @@ input_variables:
       placeholder: "e.g., Competitive analysis from Q3, industry reports on telehealth"
       description: "Optional context about the uploaded documents"
 
+  # Discovery topic (required for /qori-discover; added to modal in Step 2)
+  - topic:
+      type: "text"
+      required: true
+      placeholder: "e.g., Veteran telehealth adoption barriers"
+      description: "Researcher-provided topic — slugified for filename and variable store path"
+
   # Optional refinement
   - research_topic:
       type: "text"
       required: false
       placeholder: "e.g., Veteran telehealth adoption barriers"
-      description: "Optional focus area. Defaults to study name if not provided."
-      default: "{{study_name}}"
+      description: "Optional focus area. Defaults to topic if not provided."
+      default: "{{topic}}"
 
 # ═══════════════════════════════════════════════════════════
 # AI GENERATION
@@ -389,8 +397,8 @@ output_template: |
   </div>
 
 output_options:
-  filename: "desk_research_{{selected_study}}_{{current_date}}.md"
-  path: "00-desk-research/"
+  filename: "{{topic_slug}}-desk-research-{{current_date_iso}}.md"
+  path: "_discovery/desk-research/"
 
   delivery:
     github:
@@ -421,7 +429,8 @@ output_options:
 # METADATA
 # ═══════════════════════════════════════════════════════════
 derived_variables:
-  - effective_topic: "{{research_topic | default: study_name}}"
+  - effective_topic: "{{research_topic | default: topic}}"
+  - topic_slug: "{{topic | slugify}}"
 
 validation_rules:
   - rule: "document_content_not_empty"
