@@ -54,6 +54,7 @@ const { requestResearchHandler, handleRequestResearchSubmission, handleCreateBri
 const { startResearchHandler, handleAddTeamMember, handleCreateStudySubmission } = require("./commands/createStudyHandler");
 const { parseDocuments, validateDocuments, createDocumentSummary } = require('../documentParser');
 const { createStudyModal } = require("./ui/createStudyModal");
+const { discoverHandler, handleDiscoverSubmission } = require("./commands/discoverHandler");
 // Create an Express router for Slack routes
 const slackExpressRouter = express.Router();
 
@@ -2778,6 +2779,10 @@ slackApp.view('upload_desk_research_modal', async ({ ack, view, body, client }) 
     });
   }
 });
+
+// discovery research (pre-study)
+slackApp.command("/qori-discover", discoverHandler);
+slackApp.view('discover_modal', handleDiscoverSubmission);
 
 // participant outreach
 slackApp.command("/qori-outreach", participantOutreachHandler);

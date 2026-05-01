@@ -6,7 +6,7 @@ const path = require('path');
 const { createOrUpdateFileOnGitHub } = require('./github');
 const { executeAiGenerationTasks } = require('./langchain');
 const { extractVariables } = require('./variableExtractor');
-const { readStudyVariables, writeStudyVariables, mergeVariables, readUpstreamVariables } = require('./studyVariables');
+const { readStudyVariables, writeStudyVariables, mergeVariables, readUpstreamVariables, readDiscoveryVariables, writeDiscoveryVariables, mergeDiscoveryVariables, readUpstreamDiscoveryVariables } = require('./studyVariables');
 
 // Slugify a filename: lowercase, hyphens, no spaces or special chars, preserve extension
 function slugifyFilename(filename) {
@@ -94,9 +94,16 @@ async function processYamlTemplate(rawYamlContent, inputValues, baseFolderEncode
   }
 
   // 3.5 TRANSFORM PHASE: Read upstream variables if consumes spec exists
+  const isDiscoveryScope = yamlConfig.discovery_scope === true;
   if (yamlConfig.consumes && yamlConfig.consumes.length > 0) {
     try {
-      const upstream = await readUpstreamVariables(baseFolder, yamlConfig.consumes);
+      const upstream = isDiscoveryScope
+        ? await readUpstreamDiscoveryVariables(
+            inputValues._discovery_type || '',
+            inputValues.topic_slug || '',
+            yamlConfig.consumes,
+          )
+        : await readUpstreamVariables(baseFolder, yamlConfig.consumes);
       if (Object.keys(upstream).length > 0) {
         // Inject upstream variables into inputValues so they're available to Generate prompts
         inputValues.upstream_variables = upstream;
@@ -171,16 +178,29 @@ async function processYamlTemplate(rawYamlContent, inputValues, baseFolderEncode
         }
         console.log(`🔄 Extract: Got ${Object.keys(extractionResult).length} variables for ${yamlConfig.id}`);
 
-        // Write extracted variables to study-variables.json
-        const studyVars = await readStudyVariables(baseFolder);
-        const merged = mergeVariables(
-          studyVars,
-          extractionResult,
-          yamlConfig.id,
-          yamlConfig.version
-        );
-        await writeStudyVariables(baseFolder, merged);
-        console.log(`✅ Extract: Wrote variables for ${yamlConfig.id} to study-variables.json`);
+        // Write extracted variables — discovery or study scoped
+        if (isDiscoveryScope && inputValues.topic_slug && inputValues._discovery_type) {
+          const discoveryVars = await readDiscoveryVariables(inputValues._discovery_type);
+          const merged = mergeDiscoveryVariables(
+            discoveryVars,
+            extractionResult,
+            inputValues.topic_slug,
+            yamlConfig.id,
+            yamlConfig.version
+          );
+          await writeDiscoveryVariables(inputValues._discovery_type, merged);
+          console.log(`✅ Extract: Wrote discovery variables for ${yamlConfig.id} to _discovery/${inputValues._discovery_type}`);
+        } else {
+          const studyVars = await readStudyVariables(baseFolder);
+          const merged = mergeVariables(
+            studyVars,
+            extractionResult,
+            yamlConfig.id,
+            yamlConfig.version
+          );
+          await writeStudyVariables(baseFolder, merged);
+          console.log(`✅ Extract: Wrote variables for ${yamlConfig.id} to study-variables.json`);
+        }
 
         // Upsert Postgres index (best effort)
         try {
