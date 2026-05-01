@@ -248,6 +248,16 @@ Use for findings documents with discrete numbered claims:
 
 **Canonical example:** `research_readout.yaml` v5.4.1
 
+#### Pattern A modified: per-section confidence
+
+Variant of Pattern A where confidence is assessed per *section* rather than per *finding*, and Sources lines are replaced by inline attribution (e.g., SH-XXX role IDs for stakeholder synthesis, PT-XXX participant IDs for personas). No separate `**Sources**` line — citations are woven into the document body.
+
+Use when the document makes section-level claims rather than discrete per-finding claims:
+- Stakeholder synthesis (SH-XXX role-only attribution, confidence measures interpretation accuracy)
+- Persona generator (PT-XXX attribution, confidence measures aggregation quality)
+
+**Canonical examples:** `stakeholder_synthesis.yaml` v4.0, `persona_generator.yaml` v4.3
+
 ### Pattern B: Inline citation
 
 Evidence is structured into the document body itself — typically in tables that cite participant ID and timestamp inline. No separate Sources or Confidence lines needed because the evidence structure IS the citation.
@@ -343,5 +353,6 @@ Each translation plan and design reference must include an "Inputs and rationale
 
 | Date | Change |
 |------|--------|
+| May 1, 2026 | Added §4.9 Filename convention. Renumbered §4.10-4.12. Added Pattern A modified sub-section under §6 with stakeholder_synthesis v4.0 and persona_generator v4.3 as canonical examples. |
 | April 30, 2026 | Added Section 4.9 (markdown table formatting rule). Added Section 7 (Inputs and Rationale). Traceability patterns A/B/C defined. H1 emoji removed. Canonical examples: research_readout v5.4.1, affinity_mapping v3.2. research_plan v4.6 as Pattern C reference. |
 | April 29, 2026 | Initial version. Locked design language for Pentagram-style documents. |

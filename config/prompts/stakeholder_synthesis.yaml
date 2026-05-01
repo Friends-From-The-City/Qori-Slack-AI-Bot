@@ -3,19 +3,20 @@
 # ═══════════════════════════════════════════════════════════
 id: stakeholder_synthesis
 name: synthesize_stakeholder_interviews
-label: "🏛️ Stakeholder Synthesis"
-version: "v3.3"
+label: "Stakeholder Synthesis"
+version: "v4.0"
 
-description: >
-  Synthesize findings from internal stakeholder interviews into comprehensive,
-  service blueprint-ready documentation. Aggregates constraints, priorities,
-  backstage processes, and generates questions for user research. Produces
-  visual sequence diagrams for process maps with failure modes suitable for
-  service design work. Renders as interactive diagrams on GitHub.
+description: |
+  Synthesize internal stakeholder interviews into findings-grade
+  documentation with role-only attribution. Pattern A modified:
+  confidence per section, inline SH-XXX citation, no per-finding
+  Sources lines. Produces maximum 2 sequence diagrams for system
+  dynamics. Raw system observations preserved in Appendix for
+  downstream service blueprint synthesis.
 
 author: Qori R&D
 created: 2026-01-08
-last_updated: 2026-04-29
+last_updated: 2026-05-01
 
 # ═══════════════════════════════════════════════════════════
 # CONFIGURATION
@@ -68,39 +69,95 @@ input_variables:
 # AI GENERATION
 # ═══════════════════════════════════════════════════════════
 ai_generation_tasks:
-
-  # -------------------------------------------------------------------------
-  # TASK 1: Overview, Stakeholders, Constraints
-  # -------------------------------------------------------------------------
-  - task_id: "section_1_overview_constraints"
+  - task_id: "synthesis_complete"
     prompt: |
-      You are synthesizing internal stakeholder interviews. This is TASK 1 of 4.
-
-      Generate ONLY these sections:
-      1. Title and Overview table
-      2. Stakeholders Interviewed table
-      3. Constraints & Blockers (Technical, Policy, Resource)
+      You are synthesizing internal stakeholder interviews into a findings-grade document.
 
       ============================================================
-      RULES
+      CRITICAL RULES — READ BEFORE ANYTHING ELSE
       ============================================================
 
-      RULE 1: PROCESS ALL STAKEHOLDERS
-      - Count ALL stakeholders in the input
-      - Extract insights from EACH stakeholder
-      - If you see Engineering Lead, Design Lead, and Policy SME, that's 3 stakeholders
+      RULE 1: ROLE-ONLY ATTRIBUTION (NON-NEGOTIABLE)
 
-      RULE 2: CONSTRAINT TRIANGULATION
-      When multiple stakeholders mention the same constraint, show ALL perspectives:
-      - Engineering says: [technical angle]
-      - Design says: [UX impact angle]
-      - Policy says: [compliance/legal angle]
+      NEVER use real names from stakeholder transcripts. Map each stakeholder
+      to a role identifier:
+      - SH-001 = Role/title (e.g., "Product Owner")
+      - SH-002 = Role/title (e.g., "Engineering Lead")
+      - SH-003 = Role/title (e.g., "Accessibility Specialist")
 
-      RULE 3: QUANTIFY EVERYTHING
-      Include ALL numbers: drop-off rates, incident counts, time durations, team sizes
+      Quote attribution format:
+      > "quote text"
+      > — SH-XXX
 
-      RULE 4: CITE BY ROLE
-      Use "Engineering Lead," "Design Lead," "Policy SME" — not personal names
+      If a stakeholder's role would identify them within their organization
+      (e.g., only one Director of X exists), use a more generic role label.
+
+      The "Stakeholders interviewed" table is the ONLY place where role-to-ID
+      mapping appears. Never use real names ANYWHERE in the document.
+
+      When multiple stakeholders are cited as source, use middle-dot separator:
+      SH-001 · SH-003 (not comma-separated).
+
+      RULE 2: NO HALLUCINATION
+
+      You are an EXTRACTOR, not a GENERATOR.
+      - Every constraint must come from the interview data
+      - Every quote must be verbatim from the data (with name replaced by SH-XXX)
+      - Every priority must be attributed to a specific stakeholder
+      - If you can't find evidence, DON'T INCLUDE IT
+
+      RULE 3: CONFIDENCE PER SECTION
+
+      Every numbered section (01-07) ends with a Confidence line. Use the
+      STAKEHOLDER INTERPRETATION rubric (not user-research evidence rubric):
+
+      - Strong: Multiple stakeholders independently surfaced the same claim
+        AND claim is verifiable against external evidence (codebase, metrics, policy)
+        Example: "Strong (multiple stakeholders independently surfaced constraints;
+        technical claims verifiable against codebase)"
+      - Moderate: Single stakeholder source OR partial triangulation OR claim
+        plausible but not independently verified
+        Example: "Moderate (process described by SH-003; SH-001 acknowledged
+        the pattern but offered no countervailing evidence)"
+      - Limited: Unverified stakeholder claim, single perspective, or inference
+        required from limited context
+        Example: "Limited (single stakeholder perspective, claim not verified
+        against other sources)"
+
+      This measures confidence in INTERPRETATION — how confident are we that
+      what stakeholders told us reflects reality? Not just that they said it.
+
+      RULE 4: MAXIMUM 2 SEQUENCE DIAGRAMS
+
+      Generate AT MOST 2 Mermaid sequence diagrams. Choose flows where:
+      1. The diagram reveals failure modes that text description alone cannot
+         convey (invisible system hops, cascading failures, timing dependencies)
+      2. Multiple stakeholders described the same flow from different angles
+      3. The flow has quantifiable failure points (drop-off rates, latency,
+         error frequencies)
+
+      DO NOT diagram:
+      - Working flows that can be described in prose
+      - Flows mentioned by only one stakeholder with no failure points
+      - Organizational processes (those belong in the Appendix observations)
+
+      If only one flow meets the criteria, generate only one diagram.
+      If no flows meet the criteria, skip diagrams entirely and note why
+      in a single sentence.
+
+      Every diagram MUST:
+      - End with a closing ``` (triple backtick)
+      - Be followed by a "Where it breaks" line (single sentence)
+      - Use -->> (dashed arrows) for responses and failure paths
+      - Use Note blocks for drop-off rates, wait times, delays
+      - Keep to 8-12 steps maximum
+      - Be valid Mermaid syntax
+
+      RULE 5: COMPLETE ALL SECTIONS
+
+      You MUST complete ALL sections including Methodology and Appendix.
+      Do not stop early. If running low on space, compress content in
+      earlier sections rather than omitting later ones.
 
       ============================================================
       INPUT DATA
@@ -113,547 +170,268 @@ ai_generation_tasks:
       {{combined_file_content}}
 
       ============================================================
-      GENERATE OUTPUT (Sections 1-3 only)
+      OUTPUT FORMAT — FOLLOW EXACTLY
       ============================================================
 
       # Stakeholder Synthesis: {{study_name}}
 
-      > **[X] stakeholders** | **[Teams represented]**
+      **Study:** {{selected_study}} &nbsp; | &nbsp; **Researcher:** {{researcher_contact}} &nbsp; | &nbsp; **Date:** {{current_date}} &nbsp; | &nbsp; **Status:** Draft
 
       ---
 
-      ## Overview
+      ## Summary
+
+      [2-3 sentence narrative: how many stakeholders, what teams, what the synthesis reveals. Ground in THIS study's data. Identify the central tension or convergence.]
 
       | | |
       |---|---|
-      | **Stakeholders Interviewed** | [Count ALL stakeholders from input] |
-      | **Teams Represented** | [List ALL teams] |
-      | **Key Constraint** | [Biggest blocker — be specific with numbers if available] |
-      | **Key Insight** | [Most important backstage revelation] |
-      | **Critical Gap** | [What's missing or broken systemically] |
+      | **Stakeholders interviewed** | [count] |
+      | **Teams represented** | [list teams] |
+      | **Interview duration** | [if available, otherwise omit row] |
+      | **Key tension** | [single most important tension or alignment gap] |
+
+      > [!IMPORTANT]
+      > **Most actionable insight:** [Identify the most consequential cross-stakeholder pattern. Prioritize: (1) diagnostic disagreements — stakeholders agree on the problem but disagree on the cause; (2) alignment gaps — stated priorities vs. actual behavior; (3) invisible dependencies — where one team's decision blocks another team's work. If none apply, identify the finding with the highest organizational leverage. NEVER write a generic "stakeholders have different views" statement.]
 
       ---
 
-      ## Stakeholders Interviewed
+      ## Stakeholders interviewed
 
-      | Role | Team | Tenure | Focus Areas |
-      |------|------|--------|-------------|
-      | [Role from input] | [Team] | [If mentioned] | [Topics they covered] |
-
-      ---
-
-      ## Constraints & Blockers
-
-      ### Technical Constraints
-
-      > "[Most impactful quote about technical limitation]" — [Role]
-
-      > "[Supporting quote from different stakeholder if available]" — [Role]
-
-      | Constraint | Impact | Downstream Effect | Source(s) |
-      |------------|--------|-------------------|-----------|
-      | [Constraint with specifics] | [Quantified impact if possible] | [What users experience] | [All roles who mentioned] |
-
-      ### Policy Constraints
-
-      > "[Quote about policy limitation]" — [Role]
-
-      > "[Supporting quote from different stakeholder]" — [Role]
-
-      | Constraint | Impact | User Experience Effect | Source(s) |
-      |------------|--------|------------------------|-----------|
-      | [Policy constraint with regulation/directive name] | [What it requires] | [How users experience it] | [Source(s)] |
-
-      ### Resource Constraints
-
-      > "[Quote about resource limitation]" — [Role]
-
-      | Constraint | Impact | Systemic Effect | Source(s) |
-      |------------|--------|-----------------|-----------|
-      | [Resource constraint with numbers] | [Quantified impact] | [Organizational effect] | [Source(s)] |
-
-      [END OF SECTION 1-3 — Do not generate beyond this point]
-
-  # -------------------------------------------------------------------------
-  # TASK 2: Strategic Priorities + Backstage Processes
-  # -------------------------------------------------------------------------
-  - task_id: "section_2_priorities_processes"
-    prompt: |
-      You are synthesizing internal stakeholder interviews. This is TASK 2 of 4.
-
-      Generate ONLY these sections:
-      1. Strategic Priorities
-      2. Backstage Processes (ALL major processes with detailed breakdowns)
-
-      ============================================================
-      RULES
-      ============================================================
-
-      RULE 1: DETAILED PROCESS MAPPING
-      For each major process, create a Mermaid sequence diagram showing:
-      - User actions (frontstage)
-      - System interactions (backstage, invisible to user)
-      - Failure points with markers and failure rates
-      - Wait times and delays using Note blocks
-      - Actual system names from interviews as participants
-      Plus a failure table and systems list after each diagram
-
-      RULE 2: QUANTIFY EVERYTHING
-      Include ALL numbers: drop-off rates, latency times, incident counts
-
-      RULE 3: CITE BY ROLE
-      Use "Engineering Lead," "Design Lead," "Policy SME" — not personal names
-
-      RULE 4: INCLUDE ALL PROCESSES
-      Document EVERY major process mentioned in the interviews.
-      If the interviews reference 4+ processes, prioritize by user impact and
-      ensure every diagram is COMPLETE before starting the next one.
-
-      RULE 5: COMPLETE EVERY DIAGRAM — NEVER TRUNCATE
-      Each Mermaid sequence diagram MUST:
-      - End with a closing ``` (triple backtick)
-      - Be followed by its "Where It Breaks Down" table
-      - Be followed by its "Systems Involved" line
-      If you are running low on output space, SIMPLIFY the remaining diagrams
-      (fewer steps, combine system hops) rather than leaving ANY diagram
-      incomplete. A complete 6-step diagram is better than a truncated 15-step one.
-
-      RULE 6: IDENTIFY POSITIVE DESIGN PATTERNS
-      When stakeholders describe solutions that ARE working well (e.g., optimistic
-      UI, background refresh, caching, progressive loading), call these out in a
-      "Working Pattern" callout after the failure table. Format:
-
-      > **Working Pattern — [Pattern Name]:** [Brief description of what the
-      > team is doing well and why it works, with stakeholder attribution]
-
-      This ensures the synthesis captures what's succeeding, not just what's broken.
-
-      RULE 7: HIGH-LEVEL OVERVIEW DIAGRAM
-      BEFORE the individual process sections, generate a single Mermaid flowchart
-      that maps the veteran's journey across all backstage processes. This gives
-      readers an orientation map before diving into detailed sequences. Format:
-
-      ```mermaid
-      flowchart LR
-          A[Touchpoint 1] -->|dependency| B[Touchpoint 2]
-          B -->|dependency| C[Touchpoint 3]
-      ```
-
-      Keep this overview to ONE level of detail — touchpoints and the systems
-      connecting them. The detailed sequence diagrams below handle the rest.
-
-      ============================================================
-      INPUT DATA
-      ============================================================
-
-      **Study:** {{study_name}}
-
-      **Stakeholder Interview Data:**
-
-      {{combined_file_content}}
-
-      ============================================================
-      GENERATE OUTPUT (Sections 4-5 only)
-      ============================================================
-
-      ## Strategic Priorities
-
-      > "[Quote about prioritization]" — [Role]
-
-      | Priority | Driver | Timeline | Aligns With User Needs? | Source |
-      |----------|--------|----------|:-----------------------:|--------|
-      | [What gets prioritized] | [Why] | [When] | / / | [Role] |
-
-      **Critical Alignment Gap:** [Document any conflicts between stated priorities and user needs]
+      | ID | Role | Team | Focus area |
+      |----|------|------|------------|
+      | SH-001 | [Role from input — NOT real name] | [Team] | [Topics they covered] |
+      | SH-002 | [Role] | [Team] | [Topics] |
 
       ---
 
-      ## Backstage Processes
+      ## 01 &nbsp;&nbsp; Constraints
 
-      > This section maps the invisible systems behind each veteran-facing
-      > touchpoint. The overview diagram below shows how processes connect;
-      > detailed sequence diagrams follow for each.
+      > "[Most impactful quote about a constraint]"
+      > — SH-XXX
 
-      ### System Overview
+      | Type | Constraint | Impact | Source |
+      |------|------------|--------|--------|
+      | Technical | [Specific constraint] | [Quantified impact if possible] | SH-XXX |
+      | Technical | [Constraint] | [Impact] | SH-XXX · SH-XXX |
+      | Policy | [Constraint with regulation/directive name] | [What it requires] | SH-XXX |
+      | Resource | [Constraint with numbers] | [Quantified impact] | SH-XXX |
 
-      ```mermaid
-      flowchart LR
-          subgraph Veteran Touchpoints
-              A[Download & Onboard]
-              B[Check Claims]
-              C[View Health Records]
-              D[Refill Prescriptions]
-          end
-
-          A -->|"ID.me / Login.gov"| AUTH[Auth Services]
-          AUTH -->|"Token exchange"| B
-          AUTH -->|"Session mgmt"| C
-          AUTH -->|"Session mgmt"| D
-          B -->|"4-5 system hops"| VBA[VBA Backend Systems]
-          C -->|"EHR query"| VHA[VHA Health Systems]
-          D -->|"Rx routing"| PHARM[VA Pharmacy Systems]
-
-          style A fill:#fff3e0,stroke:#e65100
-          style B fill:#e3f2fd,stroke:#1565c0
-          style C fill:#e8f5e9,stroke:#2e7d32
-          style D fill:#f3e5f5,stroke:#7b1fa2
-      ```
-
-      > **How to read this section:** The overview above shows the veteran
-      > journey and system dependencies at a glance. Each process below expands
-      > into a detailed sequence diagram showing every system hop, failure point,
-      > and delay. Adapt the overview to match the ACTUAL processes found in the
-      > interview data — the example above is illustrative.
+      **Confidence** — [Strong/Moderate/Limited] ([reasoning])
 
       ---
 
-      ### [First Major Process Name]
+      ## 02 &nbsp;&nbsp; Strategic priorities and alignment
 
-      > "[Quote explaining this process]" — [Role]
+      | Priority | Stated by | Aligns with user need? | Notes |
+      |----------|-----------|:---:|-------|
+      | [What gets prioritized] | SH-XXX | [mark] | [Context — driver, timeline] |
 
-      > "[Additional perspective]" — [Different Role]
+      For the "Aligns with user need?" column:
+      - ✓ — Priority directly addresses a user-facing problem or improves user task completion
+      - ⚠ — Path from priority to user benefit requires assumptions
+      - ✗ — Evidence that priority diverts resources from user-facing work (rare)
+      Mark ✓ when the connection to user task completion is direct and obvious.
+      The column should produce a mix — if all priorities are ⚠, you haven't differentiated.
 
-      **Process Flow:**
+      > [!WARNING]
+      > **Alignment gap:** [Document the most significant conflict between stated priorities and actual behavior. If all stakeholders rate something as P1 but it gets deprioritized, say so. If no gap exists, omit this callout.]
+
+      **Confidence** — [Strong/Moderate/Limited] ([reasoning])
+
+      ---
+
+      ## 03 &nbsp;&nbsp; System dynamics
+
+      > [1-2 sentences framing what follows. Example: "Two flows where stakeholder input revealed invisible failure modes. Detailed system observations from all interviews are preserved in the Appendix as raw input for service blueprint synthesis."]
+
+      ### [Flow Name]
+
+      > "[Quote explaining this flow]"
+      > — SH-XXX
 
       ```mermaid
       sequenceDiagram
           actor User
-          participant Frontend as Frontend/UI
-          participant Backend as Backend System
-          participant Legacy as Legacy/External
-          participant Staff as Staff/Manual
+          participant Frontend as [Actual system name from interviews]
+          participant Backend as [Actual system name]
+          participant Legacy as [Actual system name]
 
           User->>Frontend: [First user action]
           Frontend->>Backend: [API call or system request]
+          Note over Frontend,Backend: [Drop-off rate or delay if available]
           Backend->>Legacy: [Backend process step]
-          Note over User,Frontend: [Drop-off rate if available, e.g. "40% drop-off here"]
-          Legacy-->>Backend: [Response — note failures like "Timeout (X% failure rate)"]
+          Legacy-->>Backend: [Response — note failures]
           Backend-->>Frontend: [What gets returned]
-          Note over Backend,Staff: [Invisible delays, e.g. "Manual review — avg 3 days"]
-          Staff->>Legacy: [Manual intervention step]
-          Legacy-->>User: [Final notification/result]
+          Frontend-->>User: [What user sees]
       ```
 
-      **Where It Breaks Down:**
+      **Where it breaks** — [Single sentence: the core failure mechanism and its user-facing consequence.]
 
-      | Failure Point | What Happens | User Experience | Frequency/Severity |
-      |---------------|--------------|-----------------|-------------------|
-      | [Specific failure] | [Technical explanation] | [What user sees/feels] | [Quantify if possible] |
-
-      > **Working Pattern — [Name]:** [If stakeholders described a successful
-      > mitigation for this process, document it here. If none mentioned, omit
-      > this callout entirely — don't fabricate patterns.]
-
-      **Systems Involved:** [List all systems, APIs, databases, vendors]
+      **Confidence** — [Strong/Moderate/Limited] ([reasoning])
 
       ---
 
-      ### [Second Major Process Name]
+      ### [Second Flow Name — only if it meets the criteria in Rule 4]
 
-      > "[Quote]" — [Role]
-
-      **Process Flow:**
-
-      ```mermaid
-      sequenceDiagram
-          actor User
-          participant Frontend as Frontend/UI
-          participant Backend as Backend System
-          participant Legacy as Legacy/External
-          participant Staff as Staff/Manual
-
-          [Map the process steps as above — adapt participants to match actual systems mentioned]
-      ```
-
-      **Where It Breaks Down:**
-
-      | Failure Point | What Happens | User Experience | Frequency/Severity |
-      |---------------|--------------|-----------------|-------------------|
-      | [Specific failure] | [Technical explanation] | [What user sees/feels] | [Quantify if possible] |
-
-      **Systems Involved:** [List all systems, APIs, databases, vendors]
+      [Same format: quote, diagram, "Where it breaks", Confidence]
 
       ---
 
-      [Continue for ALL major processes mentioned in interviews — each gets its own sequence diagram]
+      ## 04 &nbsp;&nbsp; Stakeholders believe / Reality / Opportunity
 
-      IMPORTANT RULES FOR SEQUENCE DIAGRAMS:
-      - Adapt the participant names to match ACTUAL systems mentioned in interviews (e.g. "VA.gov", "VistA", "VBMS")
-      - Use Note blocks for drop-off rates, wait times, and invisible delays
-      - Use -->> (dashed arrows) for responses and failure paths
-      - Keep diagrams to 8-15 steps max — split complex processes into sub-diagrams if needed
-      - Every diagram MUST be valid Mermaid syntax — no unclosed blocks
-      - EVERY diagram MUST end with closing ``` followed by its failure table
-      - If running low on space: simplify remaining diagrams, never truncate them
-      - Include Working Pattern callouts only when stakeholders explicitly described a successful approach — do NOT fabricate patterns
+      | Stakeholders believe | Reality from research and data | Opportunity |
+      |---|---|---|
+      | [Mental model stated by stakeholders] | [What data or evidence shows] | [Design or research opportunity to bridge the gap] |
 
-      [END OF SECTION 4-5 — Do not generate beyond this point]
-
-  # -------------------------------------------------------------------------
-  # TASK 3: Service Blueprint + Research Questions
-  # -------------------------------------------------------------------------
-  - task_id: "section_3_blueprint_questions"
-    prompt: |
-      You are synthesizing internal stakeholder interviews. This is TASK 3 of 4.
-
-      Generate ONLY these sections:
-      1. Service Blueprint Implications
-      2. Questions for User Research
-
-      ============================================================
-      RULES
-      ============================================================
-
-      RULE 1: SERVICE BLUEPRINT FOCUS — NO REDUNDANCY
-      The backstage process maps (Task 2) already document detailed system
-      interactions and failure points. This section should ADD NEW INSIGHT,
-      not repeat what's already documented. Specifically:
-
-      - "Frontstage Moments That Depend on Fragile Backstage": Focus on the
-        RELATIONSHIP between what users see and what's invisible — not the
-        technical details (those are in the sequence diagrams). Reference the
-        process diagrams: "See [Process Name] flow above" where helpful.
-
-      - "Support Processes Currently Manual": Document processes that are NOT
-        covered in the sequence diagrams — the organizational/operational
-        processes that support the technical systems (e.g., how API change
-        requests get filed, how accessibility bugs get triaged, how releases
-        get coordinated across platforms).
-
-      - "Line of Visibility Gaps": This is the unique value of this section.
-        Focus on the PERCEPTION gaps — what users believe vs. what's actually
-        happening. This should read as insights for design, not as a re-summary
-        of the backstage processes.
-
-      RULE 2: ACTIONABLE RESEARCH QUESTIONS
-      For each question, include:
-      - The stakeholder insight that prompted it
-      - Specific research question
-      - Recommended method
-
-      RULE 3: CONSISTENT PRIORITY INDICATORS
-      Use the SAME priority framework across all sections of this document:
-      - Red = Blocking or critical — must address before design decisions
-      - Yellow = Important but not blocking — address during study
-      - Green = Validation — test assumptions, confirm direction
-
-      ============================================================
-      INPUT DATA
-      ============================================================
-
-      **Study:** {{study_name}}
-
-      **Stakeholder Interview Data:**
-
-      {{combined_file_content}}
-
-      ============================================================
-      GENERATE OUTPUT (Sections 6-7 only)
-      ============================================================
-
-      ## Service Blueprint Implications
-
-      > Organizational and perception-layer insights that complement the
-      > detailed process maps in Backstage Processes above.
-
-      ### Frontstage / Backstage Disconnect
-
-      > Where the user's mental model diverges from the system reality.
-      > For detailed system flows, see the sequence diagrams in Backstage
-      > Processes above.
-
-      | What the User Experiences | What's Actually Happening | Design Implication |
-      |---------------------------|---------------------------|-------------------|
-      | [User-facing moment] | [Backstage reality — brief, reference diagram if applicable] | [What this means for design decisions] |
-
-      ### Support Processes Outside the Product
-
-      > Organizational processes that keep the product running but aren't
-      > captured in the technical system flows above.
-
-      | Process | Current State | Risk | Affects |
-      |---------|---------------|------|---------|
-      | [Operational/org process] | [How it works now] | [What could go wrong] | [Which user-facing experience] |
-
-      ### Line of Visibility Gaps
-
-      > The most impactful gaps between what users see and what they
-      > don't — written as design insights, not technical summaries.
-
-      | Users Believe | Reality | Opportunity |
-      |---------------|---------|-------------|
-      | [User's mental model] | [Actual system behavior] | [Design opportunity to bridge the gap] |
+      **Confidence** — [Mixed if needed. Example: "'IA mismatch' is Strong (data + stakeholder alignment). 'User feedback channel' is Moderate (single source)."]
 
       ---
 
-      ## Questions for User Research
+      ## 05 &nbsp;&nbsp; Questions for user research
 
-      > Based on stakeholder input, explore these with participants.
+      ### Blocking — must answer before design decisions
 
-      ### Blocking Questions
+      | Stakeholder insight | Research question | Suggested method |
+      |---|---|---|
+      | SH-XXX: [specific insight] | [Question to ask/observe] | [Method] |
 
-      > Must answer before making design decisions
+      ### Important — informs but doesn't block
 
-      | Stakeholder Insight | Research Question | Method |
-      |---------------------|-------------------|--------|
-      | [Specific insight from interviews] | [What to ask/observe] | [Interview/usability test/etc.] |
+      | Stakeholder insight | Research question | Suggested method |
+      |---|---|---|
+      | SH-XXX: [insight] | [Question] | [Method] |
 
-      ### Important Questions
+      ### Validation — test stakeholder assumptions with users
 
-      > Address during study — informs but doesn't block
+      - [Assumption] (SH-XXX) — [how to test]
+      - [Assumption] (SH-XXX) — [how to test]
 
-      | Stakeholder Insight | Research Question | Method |
-      |---------------------|-------------------|--------|
-      | [Insight] | [Question] | [Method] |
+      ---
 
-      ### Assumption Validation
+      ## 06 &nbsp;&nbsp; Open questions
 
-      > Test stakeholder assumptions with real users
+      Questions stakeholders couldn't answer — flag for follow-up.
 
-      | Stakeholder Assumption | Validate With Users |
-      |------------------------|---------------------|
-      | [Assumption stated by stakeholder] | [How to test if true] |
-
-      [END OF SECTION 6-7 — Do not generate beyond this point]
-
-  # -------------------------------------------------------------------------
-  # TASK 4: Open Questions + Recommendations + Next Steps
-  # -------------------------------------------------------------------------
-  - task_id: "section_4_recommendations"
-    prompt: |
-      You are synthesizing internal stakeholder interviews. This is TASK 4 of 4.
-
-      Generate ONLY these sections:
-      1. Open Questions
-      2. Recommendations
-      3. Methodology
-      4. Recommended Next Interviews
-      5. References
-
-      ============================================================
-      RULES
-      ============================================================
-
-      RULE 1: CAPTURE UNANSWERED QUESTIONS
-      Document questions that couldn't be answered from the interviews
-      Note who might know the answer
-
-      RULE 2: ACTIONABLE RECOMMENDATIONS
-      Each recommendation should:
-      - Address a specific constraint
-      - Have a feasibility indicator
-      - Have a suggested owner
-
-      RULE 3: DOCUMENT RECOMMENDED CONTACTS
-      Stakeholders often mention colleagues who know more — capture these
-
-      RULE 4: CONSISTENT PRIORITY INDICATORS
-      Use the SAME priority framework across all sections of this document:
-      - Red = Blocking or critical — must address immediately
-      - Yellow = Important — needs attention but not blocking
-      - Green = Strategic — long-term or low-urgency
-
-      ============================================================
-      INPUT DATA
-      ============================================================
-
-      **Study:** {{study_name}}
-
-      **Stakeholder Interview Data:**
-
-      {{combined_file_content}}
-
-      ============================================================
-      GENERATE OUTPUT (Sections 8-12 only)
-      ============================================================
-
-      ## Open Questions
-
-      > Questions that couldn't be answered — need follow-up interviews or data.
-
-      ### Immediate Follow-Up Needed
-
-      | Question | Who Might Know | Why It Matters |
+      | Question | Who might know | Why it matters |
       |----------|----------------|----------------|
-      | [Unanswered question] | [Specific person/role if mentioned] | [Impact on research/design] |
-
-      ### Needs Clarification
-
-      | Question | Who Might Know | Why It Matters |
-      |----------|----------------|----------------|
-      | [Policy/legal/technical question] | [Role] | [Impact] |
-
-      ### Requires Cross-Team Coordination
-
-      | Question | Teams Involved | Why It Matters |
-      |----------|----------------|----------------|
-      | [Cross-cutting question] | [Teams] | [Impact] |
+      | [Unanswered question] | [Role or team] | [Impact on research/design] |
 
       ---
 
-      ## Recommendations
+      ## 07 &nbsp;&nbsp; Recommendations
 
-      ### Immediate Actions (High Priority)
+      ### Immediate
 
-      | Action | Constraint Addressed | Feasibility | Owner |
-      |--------|---------------------|-------------|-------|
-      | [Specific action] | [Which constraint] | [indicator] | [Team] |
+      | Action | Constraint addressed | Owner |
+      |--------|---------------------|-------|
+      | [Specific action] | [Which constraint from §01] | [Team] |
 
-      ### Near-Term Actions (Medium Priority)
+      ### Near-term
 
-      | Action | Constraint Addressed | Feasibility | Owner |
-      |--------|---------------------|-------------|-------|
-      | [Action] | [Constraint] | [indicator] | [Team] |
+      | Action | Constraint addressed | Owner |
+      |--------|---------------------|-------|
+      | [Action] | [Constraint] | [Team] |
 
-      ### Strategic Actions (Long-Term)
+      ### Strategic
 
-      | Action | Constraint Addressed | Feasibility | Owner |
-      |--------|---------------------|-------------|-------|
-      | [Action] | [Constraint] | [indicator] | [Team] |
+      | Action | Constraint addressed | Owner |
+      |--------|---------------------|-------|
+      | [Action] | [Constraint] | [Team] |
 
       ---
 
       ## Methodology
 
-      **Framework:** Stakeholder Research Synthesis for Service Design
+      **Framework** — Stakeholder research synthesis for service design
 
-      **Approach:** Aggregated findings from [X] internal stakeholder interviews, organized by constraint type, priority alignment, and backstage process mapping. Cross-referenced insights across [list teams] perspectives to identify systemic patterns and root causes.
+      **Approach** — Aggregated [X] internal stakeholder interviews, organized by constraint type, priority alignment, and system dynamics. Cross-referenced insights across [list teams] perspectives to identify systemic patterns. Used role-only attribution to enable diplomatic surfacing of organizational tensions.
 
-      **Key Synthesis Methods:**
-      - Constraint triangulation (same issue from technical, design, and policy angles)
-      - Process mapping with failure mode identification
-      - Design pattern recognition (documenting what works, not just what's broken)
-      - Priority alignment analysis (stated priorities vs. user needs)
-      - Open question documentation for follow-up
+      **Synthesis methods** — Constraint triangulation; alignment gap analysis; system dynamics mapping with failure-mode identification; stakeholder belief vs. reality framing.
 
-      **Data Sources:**
-      - [List each stakeholder role and interview duration if available]
+      **Sources analyzed** — SH-001 ([Role], [duration if available]), SH-002 ([Role], [duration]), SH-003 ([Role], [duration])
 
-      ---
+      **Limitations** — [Sample size, which perspectives are missing, what the model may underrepresent. Be specific: "Health team PM and Design System lead were not interviewed."]
 
-      ## Recommended Next Interviews
+      ### References
 
-      | Name/Role | Team | Focus Area | Priority |
-      |-----------|------|------------|----------|
-      | [Name if mentioned by stakeholders] | [Team] | [What they'd contribute] | [Priority level] |
+      - Sam Ladner — *Mixed Methods* (stakeholder research framework)
+      - Steve Portigal — *Interviewing Users* (stakeholder interview techniques)
+      - Kim Goodwin — *Designing for the Digital Age* (stakeholder alignment)
+      - Stickdorn & Schneider — *This Is Service Design Thinking* (systems mapping)
 
       ---
+
+      ## Appendix
 
       <details>
-      <summary>References</summary>
+      <summary><strong>System and process observations (raw input for service blueprint)</strong></summary>
 
-      This analysis follows established stakeholder research and service design methods:
+      These observations were captured for downstream service blueprint synthesis.
+      They are preserved here in raw form rather than synthesized.
 
-      - **Steve Portigal** — "Interviewing Users" (stakeholder interview techniques)
-      - **Kim Goodwin** — "Designing for the Digital Age" (stakeholder alignment)
-      - **Stickdorn & Schneider** — "This Is Service Design Thinking" (backstage process mapping)
-      - **Kalbach** — "Mapping Experiences" (service blueprint methodology)
+      Extract 3-5 system or process observations from the interviews. For each:
+      - Give it a descriptive sub-heading (e.g., "Prescription refill (working pattern)")
+      - Include the stakeholder's direct quote describing the system/process
+      - Describe the system flow in plain prose (e.g., "User → Frontend → Cache → API → Backend → Confirmation")
+      - Note whether it's a working pattern, broken pattern, organizational pattern, or resource pattern
+      - DO NOT synthesize or draw conclusions — these are raw inputs
+
+      #### [Observation title (pattern type)]
+
+      > "[Stakeholder quote about this system/process]" — SH-XXX
+
+      [System flow description in plain prose.]
+
+      [Pattern label: Working pattern / Broken pattern / Organizational pattern / Resource pattern]
 
       </details>
 
-      ---
+      <details>
+      <summary><strong>Validity checklist</strong></summary>
 
-      *Generated by Qori • {{current_date}}*
+      | Criterion | Verified |
+      |-----------|:---:|
+      | Quotes verbatim from interview transcripts | ✓ |
+      | Role-only attribution preserved (no real names) | ✓ |
+      | Confidence declared per section | ✓ |
+      | Constraints triangulated across stakeholder perspectives where possible | ✓ |
+      | Alignment gaps explicitly surfaced | ✓ |
+      | Open questions documented for follow-up | ✓ |
+      | Recommendations connect to specific constraints | ✓ |
+
+      </details>
+
+      <details>
+      <summary><strong>Related artifacts</strong></summary>
+
+      Populate this table with artifacts from {{detected_files}} when available.
+      Use exact paths from the detected files list. Prepend ../ to each path.
+      If a file isn't in the list, omit the row. Do NOT invent files.
+
+      | Artifact | Location |
+      |----------|----------|
+      | [Stakeholder interview transcript] | [path from detected_files](../path) |
+
+      </details>
+
+      ============================================================
+      QUALITY CHECK BEFORE OUTPUT (do not include in output)
+      ============================================================
+
+      1. NO real names appear anywhere in the document — only SH-XXX role IDs
+      2. All stakeholder quotes use SH-XXX attribution format
+      3. Confidence levels follow stakeholder rubric (interpretation
+         confidence, not evidence strength)
+      4. Maximum 2 sequence diagrams (or zero if no flows meet criteria)
+      5. System observations Appendix preserves raw observations only
+         (no synthesis, no conclusions)
+      6. "Aligns with user need?" column has a mix of marks, not all ⚠
+      7. All sections present including Methodology and Appendix
+      8. Tables have consistent column counts, no blank lines between rows
+      9. Every Mermaid code block is properly closed with ```
+      10. Numbered sections use ## 01 &nbsp;&nbsp; format
+
+      Do NOT output a footer or "Generated by Qori" line — that is added automatically.
 
 # ═══════════════════════════════════════════════════════════
 # OUTPUT
@@ -662,15 +440,13 @@ processing_workflow:
   - validate_inputs
   - verify_all_files_loaded
   - execute_ai_generation_tasks
-  - concatenate_task_outputs
   - validate_all_stakeholders_represented
-  - validate_all_diagrams_complete
   - populate_template
   - save_to_outputs
 
 output_options:
   path: "01-planning/stakeholder-interviews/"
-  filename: "{{selected_study}}_stakeholder_synthesis_{{current_date}}.md"
+  filename: "{{selected_study}}-stakeholder-synthesis-{{current_date_iso}}.md"
 
   delivery:
     github:
@@ -683,19 +459,7 @@ output_options:
       message: "{{researcher_contact}} completed stakeholder synthesis for {{study_name}}."
 
 output_template: |
-  {{ai_generated.section_1_overview_constraints}}
-
-  ---
-
-  {{ai_generated.section_2_priorities_processes}}
-
-  ---
-
-  {{ai_generated.section_3_blueprint_questions}}
-
-  ---
-
-  {{ai_generated.section_4_recommendations}}
+  {{ai_generated.synthesis_complete}}
 
 # ═══════════════════════════════════════════════════════════
 # METADATA
@@ -704,27 +468,24 @@ validation_rules:
   - rule: "all_stakeholders_represented"
     description: "Output must include insights from every stakeholder in input"
     check: "count stakeholders in output >= count stakeholders in input"
+  - rule: "role_only_attribution"
+    description: "No real names appear anywhere — only SH-XXX role identifiers"
+    check: "no real names from input transcripts appear in output"
   - rule: "constraint_triangulation"
     description: "Major constraints should show multiple stakeholder perspectives"
     check: "constraints section includes multiple source attributions"
-  - rule: "process_detail"
-    description: "Process maps must include Mermaid sequence diagrams with failure points"
-    check: "backstage processes section contains 'sequenceDiagram' and 'Where It Breaks Down'"
+  - rule: "confidence_per_section"
+    description: "Every numbered section has a Confidence line"
+    check: "sections 01-07 each contain 'Confidence' indicator"
+  - rule: "diagram_limit"
+    description: "Maximum 2 sequence diagrams"
+    check: "count of 'sequenceDiagram' <= 2"
   - rule: "diagram_completeness"
     description: "Every Mermaid code block must be properly closed"
-    check: "count of opening ``` equals count of closing ``` in backstage section"
-  - rule: "overview_diagram_present"
-    description: "High-level flowchart must appear before individual process diagrams"
-    check: "backstage processes section contains 'flowchart' before first 'sequenceDiagram'"
-  - rule: "quantification"
-    description: "Include numbers and metrics where available"
-    check: "output contains numeric data from input"
+    check: "count of opening ``` equals count of closing ``` in system dynamics section"
   - rule: "all_sections_present"
-    description: "All 4 task outputs must be present"
-    check: "output contains Overview, Constraints, Priorities, Processes, Blueprint, Questions, Recommendations"
-  - rule: "priority_indicator_consistency"
-    description: "Priority indicators must use the same meaning across all sections"
-    check: "priority indicators follow Blocking/Important/Strategic framework throughout"
+    description: "All required sections present"
+    check: "output contains Constraints, Priorities, System dynamics, Believe/Reality, Questions, Open questions, Recommendations, Methodology, Appendix"
 
 notify:
   - role: research_team
@@ -738,39 +499,41 @@ auto_variables:
   github_file_link: "generate_github_link(selected_study, current_date)"
 
 notes: |
-  v3.3 Update — Canonical structure alignment:
-  - Reordered keys to canonical section order (IDENTITY/CONFIGURATION/INPUTS/AI GENERATION/OUTPUT/METADATA)
-  - Removed dead config: llm_config, system_limits, auto_file_discovery
-  - Removed redundant github_file_template (was identical to output_template)
-  - Removed dead output_options keys (default_delivery, slack_format, file_format)
-  - Removed decorative emoji from H2 headings in prompt output format
-  - Removed emoji from summary blockquote (kept metrics only)
-  - Methodology section kept visible (findings document, not planning)
+  v4.0 Update — Design Language Translation:
+  - Translated locked design from docs/design-references/stakeholder_synthesis_reference.md
+  - Pattern A modified: Confidence per section (interpretation confidence, not evidence
+    strength), no per-finding Sources lines, inline SH-XXX citation
+  - CRITICAL: Role-only attribution — NEVER use real names from transcripts
+  - 4 AI tasks → 1 comprehensive task (same pattern as persona v4.3, discussion guide v6.2)
+  - Added masthead with Status field (Draft)
+  - Added Summary section with narrative + metadata table + "Most actionable insight" callout
+  - Added editorial numbering (## 01 through ## 07)
+  - Removed: Service Blueprint Implications (belongs in service_blueprint template),
+    Recommended Next Interviews (researcher-only content), three separate constraint
+    tables (collapsed to single table with Type column), unlimited sequence diagrams
+    (capped at 2), overview flowchart, per-diagram breakdown tables, decorative emoji,
+    in-prompt footer
+  - Added: "Stakeholders believe / Reality / Opportunity" section (elevated from
+    removed Blueprint Implications), System observations Appendix (raw input for
+    downstream service blueprint), Validity checklist with stakeholder-specific rows,
+    Related artifacts from {{detected_files}}
+  - Stakeholder confidence rubric: Strong requires multi-stakeholder convergence +
+    external verifiability. Moderate = single source or partial triangulation.
+    Limited = unverified single perspective.
+  - Sequence diagram selection criteria: reveals invisible failure modes, multi-stakeholder
+    described, quantifiable failure points. Zero diagrams permitted if nothing meets criteria.
+  - Filename: {{selected_study}}-stakeholder-synthesis-{{current_date_iso}}.md
+  - Footer removed from prompt — backend buildTraceabilityFooter handles it
 
-  v3.2 Update — Overview Diagrams, Anti-Truncation, Pattern Recognition:
-  - Added high-level Mermaid flowchart at top of Backstage Processes as
-    orientation map before detailed sequence diagrams
-  - Fixed truncation: RULE 5 instructs AI to simplify remaining diagrams
-    rather than truncate — a complete 6-step diagram beats a cut-off 15-step one
-  - Added RULE 6: Working Pattern recognition — captures what's succeeding,
-    not just what's broken (e.g., optimistic UI, background refresh)
-  - Reduced redundancy: Service Blueprint section now explicitly avoids
-    re-describing process details already in sequence diagrams. Three sub-sections
-    refocused: "Frontstage / Backstage Disconnect" (perception gaps),
-    "Support Processes Outside the Product" (org-level, not technical),
-    "Line of Visibility Gaps" (design insights with Opportunity column)
-  - Aligned priority indicators consistently across Open Questions, Research
-    Questions, and Recommendations
-  - Added diagram_completeness and overview_diagram_present validation rules
-  - Added validate_all_diagrams_complete to processing workflow
-  - Added "Design pattern recognition" to Methodology synthesis methods
+  v3.3: Canonical structure alignment, dead config removal
+  v3.2: Overview diagrams, anti-truncation, pattern recognition
+  v3.1: Priority indicator alignment
+  v3.0: Initial 4-task architecture
 
 output_use: |
-  Synthesize internal stakeholder interviews into comprehensive, service
-  blueprint-ready documentation. Uses 4 sequential AI tasks to ensure
-  complete output without truncation. Produces a high-level service overview
-  flowchart plus detailed Mermaid sequence diagrams for backstage process
-  flows with failure modes and working pattern recognition. Features
-  constraint triangulation across stakeholder perspectives, quantified
-  insights, and consistent priority indicators across all sections.
-  Process diagrams render visually on GitHub.
+  Synthesize internal stakeholder interviews with role-only attribution.
+  Pattern A modified: confidence per section, inline SH-XXX citation.
+  Maximum 2 sequence diagrams for system dynamics. Raw system observations
+  preserved in Appendix for downstream service blueprint synthesis.
+  Constraint triangulation, alignment gap analysis, stakeholder belief
+  vs. reality framing.
