@@ -1,0 +1,30 @@
+# Validated theme — cross-participant pattern from affinity analysis
+# Emitted by: affinity_mapping
+# Consumed by: journey_mapping, persona_generator, usability_issues,
+#              jobs_to_be_done, design_opportunities, research_readout
+type: object
+properties:
+  id:
+    type: string
+    pattern: "theme-{seq}"
+    description: "Unique theme ID"
+  label:
+    type: string
+    description: "Theme name"
+  evidence_count:
+    type: integer
+    description: "Number of supporting observations"
+  participants:
+    type: array
+    items:
+      type: string
+    description: "Participant IDs who contributed evidence"
+  confidence:
+    type: string
+    enum: [Strong, Moderate, Limited]
+  nugget_refs:
+    type: array
+    items:
+      type: string
+    nullable: true
+    description: "References to atomic_nuggets that support this theme"

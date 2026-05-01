@@ -37,6 +37,109 @@ input_variables:
   - detected_files              # List of detected source files
 
 # ═══════════════════════════════════════════════════════════
+# CASCADE CONTRACT
+# ═══════════════════════════════════════════════════════════
+consumes:
+  # From research_brief (framing context)
+  - key: research_objectives
+    source: research_brief
+    required: false
+    inject_as: context
+    description: "What the study set out to learn — frames 'Why we conducted this research'"
+  - key: research_questions
+    source: research_brief
+    required: false
+    inject_as: context
+    description: "Specific questions the study aimed to answer"
+  - key: target_barriers
+    source: research_brief
+    required: false
+    inject_as: grounding
+    description: "Hypothesized barriers — validates which were confirmed/refuted"
+  - key: business_context
+    source: research_brief
+    required: false
+    inject_as: context
+    description: "Problem framing and decision context"
+
+  # From session_summary pool (primary evidence)
+  - key: atomic_nuggets
+    source: session_summary
+    required: true
+    inject_as: reference
+    description: "Cross-participant observation pool — primary evidence for findings"
+  - key: participant_metadata
+    source: session_summary
+    required: true
+    inject_as: reference
+    description: "Participant demographics and context for Participants section"
+  - key: task_completion_records
+    source: session_summary
+    required: false
+    inject_as: reference
+    description: "Per-task success/failure data for findings quantification"
+  - key: barrier_validations
+    source: session_summary
+    required: false
+    inject_as: grounding
+    description: "Which target barriers were confirmed/refuted by sessions"
+
+  # From analysis layer (Cycle 7 — enriches findings)
+  - key: validated_themes
+    source: affinity_mapping
+    required: false
+    inject_as: reference
+    description: "Cross-participant patterns validated by affinity analysis"
+  - key: prioritized_issues
+    source: usability_issues
+    required: false
+    inject_as: reference
+    description: "Severity-rated issues for findings prioritization"
+  - key: personas
+    source: persona_generator
+    required: false
+    inject_as: reference
+    description: "Behavioral archetypes — informs who is affected per finding"
+
+  # From stakeholder stream (decision context)
+  - key: stakeholder_constraints
+    source: stakeholder_synthesis
+    required: false
+    inject_as: context
+    description: "Technical/policy/resource constraints for recommendation feasibility"
+  - key: alignment_gaps
+    source: stakeholder_synthesis
+    required: false
+    inject_as: context
+    description: "Stated vs. actual priority gaps — frames recommendation urgency"
+
+emits:
+  - key: prioritized_findings
+    pool: false
+    pool_strategy: replace
+    schema:
+      $ref: schemas/prioritized_finding.yaml
+    extract_from: "Numbered findings sections (## 01 through ## 05)"
+  - key: prioritized_recommendations
+    pool: false
+    pool_strategy: replace
+    schema:
+      $ref: schemas/prioritized_recommendation.yaml
+    extract_from: "Recommended actions section (Immediate, Short-term, Future)"
+  - key: decision_inputs
+    pool: false
+    pool_strategy: replace
+    schema:
+      $ref: schemas/decision_input.yaml
+    extract_from: "Summary bottom line callout and Follow-up research checklist"
+  - key: study_methodology
+    pool: false
+    pool_strategy: replace
+    schema:
+      $ref: schemas/study_methodology.yaml
+    extract_from: "Methodology section"
+
+# ═══════════════════════════════════════════════════════════
 # AI GENERATION
 # ═══════════════════════════════════════════════════════════
 ai_generation_tasks:

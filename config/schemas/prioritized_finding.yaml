@@ -1,0 +1,32 @@
+# Prioritized finding — discrete research finding with evidence chain
+# Emitted by: research_readout
+# Consumed by: targeted_readouts, github_issues_generator
+type: object
+properties:
+  finding_number:
+    type: integer
+    description: "Editorial number (1-5)"
+  title:
+    type: string
+    description: "Finding title — specific and descriptive"
+  severity:
+    type: string
+    enum: [Critical, High, Medium]
+  affected_count:
+    type: string
+    description: "X of Y participants"
+  confidence:
+    type: string
+    enum: [Strong, Moderate, Limited]
+  confidence_reasoning:
+    type: string
+    description: "Parenthetical explanation of confidence level"
+  recommendation:
+    type: string
+    description: "Recommended action"
+  recommended_owner:
+    type: string
+    description: "Team or role responsible"
+  effort:
+    type: string
+    enum: [High, Medium, Low]

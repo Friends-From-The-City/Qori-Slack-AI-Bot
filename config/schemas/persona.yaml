@@ -1,0 +1,36 @@
+# Persona — behavioral archetype from research data
+# Emitted by: persona_generator
+# Consumed by: design_opportunities, research_readout
+type: object
+properties:
+  id:
+    type: string
+    pattern: "persona-{seq}"
+    description: "Unique persona ID"
+  archetype_name:
+    type: string
+    description: "e.g., The Assisted Navigator"
+  based_on:
+    type: array
+    items:
+      type: string
+    description: "Participant IDs aggregated into this persona"
+  key_need:
+    type: string
+    description: "One-line core need"
+  goals:
+    type: array
+    items:
+      type: string
+    description: "Goals derived from research"
+  frustrations:
+    type: array
+    items:
+      type: string
+    description: "Key frustrations from research"
+  design_implication:
+    type: string
+    description: "Specific design recommendation for this persona"
+  confidence:
+    type: string
+    enum: [Strong, Moderate, Limited]

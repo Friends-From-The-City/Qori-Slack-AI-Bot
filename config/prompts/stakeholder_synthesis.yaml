@@ -66,6 +66,97 @@ input_variables:
     description: "Current date for filename and output"
 
 # ═══════════════════════════════════════════════════════════
+# CASCADE CONTRACT
+# ═══════════════════════════════════════════════════════════
+consumes:
+  - key: discovered_barriers
+    source: desk_research
+    required: false
+    inject_as: context
+    description: "Known barriers — helps contextualize stakeholder claims"
+  - key: knowledge_gaps
+    source: desk_research
+    required: false
+    inject_as: context
+    description: "What desk research couldn't answer — informs stakeholder questions"
+
+emits:
+  - key: stakeholder_constraints
+    pool: false
+    pool_strategy: replace
+    schema:
+      $ref: schemas/stakeholder_constraint.yaml
+    extract_from: "Constraints section (## 01) table"
+  - key: stakeholder_priorities
+    pool: false
+    pool_strategy: replace
+    schema:
+      type: array
+      items:
+        type: object
+        properties:
+          priority:
+            type: string
+          stated_by:
+            type: string
+          aligns_with_user_need:
+            type: string
+            enum: ["✓", "⚠", "✗"]
+    extract_from: "Strategic priorities table (## 02)"
+  - key: alignment_gaps
+    pool: false
+    pool_strategy: replace
+    schema:
+      $ref: schemas/alignment_gap.yaml
+    extract_from: "Alignment gap callout (## 02) and Believe/Reality table (## 04)"
+  - key: backstage_observations
+    pool: false
+    pool_strategy: replace
+    schema:
+      type: array
+      items:
+        type: object
+        properties:
+          title:
+            type: string
+          pattern_type:
+            type: string
+            enum: [working, broken, organizational, resource]
+          description:
+            type: string
+    extract_from: "System and process observations appendix"
+  - key: system_failure_modes
+    pool: false
+    pool_strategy: replace
+    schema:
+      type: array
+      items:
+        type: object
+        properties:
+          flow_name:
+            type: string
+          failure:
+            type: string
+          confidence:
+            type: string
+    extract_from: "System dynamics section (## 03) — Where it breaks lines"
+  - key: stakeholder_questions_for_users
+    pool: false
+    pool_strategy: replace
+    schema:
+      type: array
+      items:
+        type: object
+        properties:
+          insight:
+            type: string
+          question:
+            type: string
+          method:
+            type: string
+    extract_from: "Questions for user research section (## 05)"
+
+# ═══════════════════════════════════════════════════════════
 # AI GENERATION
 # ═══════════════════════════════════════════════════════════
 ai_generation_tasks:

@@ -1,0 +1,26 @@
+# Study methodology — research method, sample, and limitations
+# Emitted by: research_readout
+# Consumed by: targeted_readouts
+type: object
+properties:
+  research_type:
+    type: string
+    description: "e.g., Moderated usability testing"
+  approach:
+    type: string
+    description: "Brief description of protocol"
+  session_count:
+    type: integer
+    description: "Number of sessions conducted"
+  session_duration:
+    type: string
+    description: "e.g., 60 minutes each"
+  sample_size:
+    type: integer
+    description: "Number of participants"
+  sample_composition:
+    type: string
+    description: "Key demographics — e.g., 2 of 3 use assistive technology"
+  limitations:
+    type: string
+    description: "Caveats about sample, methodology, or representativeness"

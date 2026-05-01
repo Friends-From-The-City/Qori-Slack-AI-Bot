@@ -63,6 +63,88 @@ input_variables:
       required: false
 
 # ═══════════════════════════════════════════════════════════
+# CASCADE CONTRACT
+# ═══════════════════════════════════════════════════════════
+consumes:
+  - key: discovered_barriers
+    source: desk_research
+    required: false
+    inject_as: context
+    description: "Known barriers from prior research"
+  - key: knowledge_gaps
+    source: desk_research
+    required: false
+    inject_as: context
+    description: "What desk research couldn't answer"
+  - key: stakeholder_constraints
+    source: stakeholder_synthesis
+    required: false
+    inject_as: context
+    description: "Technical/policy/resource constraints from stakeholders"
+  - key: stakeholder_priorities
+    source: stakeholder_synthesis
+    required: false
+    inject_as: context
+    description: "What stakeholders consider highest priority"
+  - key: stakeholder_questions_for_users
+    source: stakeholder_synthesis
+    required: false
+    inject_as: context
+    description: "Questions stakeholders want answered by user research"
+
+emits:
+  - key: research_objectives
+    pool: false
+    pool_strategy: replace
+    schema:
+      type: array
+      items:
+        type: string
+    extract_from: "What we'll learn section"
+  - key: research_questions
+    pool: false
+    pool_strategy: replace
+    schema:
+      type: array
+      items:
+        type: string
+    extract_from: "What we'll learn section (reframed as questions)"
+  - key: target_barriers
+    pool: false
+    pool_strategy: replace
+    schema:
+      type: array
+      items:
+        type: string
+    extract_from: "Problem section — barriers identified for testing"
+  - key: methodology_selection
+    pool: false
+    pool_strategy: replace
+    schema:
+      type: string
+    extract_from: "Method section — Approach line"
+  - key: participant_criteria
+    pool: false
+    pool_strategy: replace
+    schema:
+      type: string
+    extract_from: "Participants section"
+  - key: out_of_scope
+    pool: false
+    pool_strategy: replace
+    schema:
+      type: array
+      items:
+        type: string
+    extract_from: "Out of scope section"
+  - key: business_context
+    pool: false
+    pool_strategy: replace
+    schema:
+      type: string
+    extract_from: "Problem section — full paragraph"
+
+# ═══════════════════════════════════════════════════════════
 # AI GENERATION
 # ═══════════════════════════════════════════════════════════
 ai_generation_tasks:

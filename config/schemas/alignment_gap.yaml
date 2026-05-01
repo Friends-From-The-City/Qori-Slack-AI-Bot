@@ -1,0 +1,17 @@
+# Alignment gap — stated priority vs. actual behavior mismatch
+# Emitted by: stakeholder_synthesis
+# Consumed by: research_brief, research_readout
+type: object
+properties:
+  priority:
+    type: string
+    description: "The stated priority"
+  stated_by:
+    type: string
+    description: "SH-XXX who stated it"
+  gap_description:
+    type: string
+    description: "How actual behavior diverges from stated priority"
+  evidence:
+    type: string
+    description: "Supporting quote or observation"

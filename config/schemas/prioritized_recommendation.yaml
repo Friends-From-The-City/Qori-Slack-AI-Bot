@@ -1,0 +1,21 @@
+# Prioritized recommendation — actionable next step from research
+# Emitted by: research_readout
+# Consumed by: targeted_readouts, github_issues_generator
+type: object
+properties:
+  timeframe:
+    type: string
+    enum: [immediate, short_term, future]
+    description: "Implementation horizon"
+  action:
+    type: string
+    description: "Specific action to take"
+  addresses_finding:
+    type: string
+    description: "Which finding number or 'Working well' this addresses"
+  owner:
+    type: string
+    description: "Team or role responsible"
+  effort:
+    type: string
+    enum: [High, Medium, Low]

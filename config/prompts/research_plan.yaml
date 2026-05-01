@@ -53,6 +53,74 @@ input_variables:
       required: true
 
 # ═══════════════════════════════════════════════════════════
+# CASCADE CONTRACT
+# ═══════════════════════════════════════════════════════════
+consumes:
+  - key: research_objectives
+    source: research_brief
+    required: false
+    inject_as: context
+    description: "Approved objectives from brief — plan elaborates these"
+  - key: research_questions
+    source: research_brief
+    required: false
+    inject_as: context
+    description: "Approved questions from brief"
+  - key: target_barriers
+    source: research_brief
+    required: false
+    inject_as: context
+    description: "Barriers to test — informs task design"
+  - key: methodology_selection
+    source: research_brief
+    required: false
+    inject_as: context
+    description: "Approved method — plan details the execution"
+  - key: participant_criteria
+    source: research_brief
+    required: false
+    inject_as: context
+    description: "Who to recruit — plan specifies recruitment"
+
+emits:
+  - key: study_timeline
+    pool: false
+    pool_strategy: replace
+    schema:
+      type: array
+      items:
+        type: object
+        properties:
+          phase:
+            type: string
+          dates:
+            type: string
+    extract_from: "Timeline table"
+  - key: risks
+    pool: false
+    pool_strategy: replace
+    schema:
+      type: array
+      items:
+        type: object
+        properties:
+          risk:
+            type: string
+          likelihood:
+            type: string
+          mitigation:
+            type: string
+    extract_from: "Risks and mitigations table"
+  - key: deliverables
+    pool: false
+    pool_strategy: replace
+    schema:
+      type: array
+      items:
+        type: string
+    extract_from: "Deliverables section"
+
+# ═══════════════════════════════════════════════════════════
 # AI GENERATION
 # ═══════════════════════════════════════════════════════════
 ai_generation_tasks:

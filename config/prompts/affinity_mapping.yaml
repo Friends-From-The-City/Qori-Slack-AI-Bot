@@ -34,6 +34,37 @@ input_variables:
   - quality_assessment          # Initial quality score (GENERATED)
 
 # ═══════════════════════════════════════════════════════════
+# CASCADE CONTRACT
+# ═══════════════════════════════════════════════════════════
+consumes:
+  - key: atomic_nuggets
+    source: session_summary
+    required: true
+    inject_as: reference
+    description: "Cross-participant observation pool — primary input for theme clustering"
+  - key: target_barriers
+    source: research_brief
+    required: false
+    inject_as: grounding
+    description: "Hypothesized barriers — themes to validate against"
+
+emits:
+  - key: validated_themes
+    pool: false
+    pool_strategy: replace
+    schema:
+      $ref: schemas/validated_theme.yaml
+    extract_from: "Theme sections with evidence tables"
+  - key: unexpected_patterns
+    pool: false
+    pool_strategy: replace
+    schema:
+      type: array
+      items:
+        type: string
+    extract_from: "Themes not anticipated by target barriers"
+
+# ═══════════════════════════════════════════════════════════
 # AI GENERATION
 # ═══════════════════════════════════════════════════════════
 ai_generation_tasks:

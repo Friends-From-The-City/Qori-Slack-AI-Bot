@@ -48,6 +48,58 @@ input_variables:
       required: true
 
 # ═══════════════════════════════════════════════════════════
+# CASCADE CONTRACT
+# ═══════════════════════════════════════════════════════════
+consumes:
+  - key: research_objectives
+    source: research_brief
+    required: false
+    inject_as: context
+    description: "Grounds warm-up and retrospective questions"
+  - key: research_questions
+    source: research_brief
+    required: false
+    inject_as: context
+    description: "Questions that tasks should explore"
+  - key: target_barriers
+    source: research_brief
+    required: false
+    inject_as: grounding
+    description: "Barriers that inform probing strategy"
+  - key: methodology_selection
+    source: research_brief
+    required: false
+    inject_as: context
+    description: "Determines guide structure (usability vs. interview vs. card sort)"
+
+emits:
+  - key: task_scenarios
+    pool: false
+    pool_strategy: replace
+    schema:
+      type: array
+      items:
+        type: object
+        properties:
+          task_number:
+            type: integer
+          name:
+            type: string
+          scenario:
+            type: string
+          success_criteria:
+            type: string
+    extract_from: "Task sections (## 03 Tasks)"
+  - key: probing_questions
+    pool: false
+    pool_strategy: replace
+    schema:
+      type: array
+      items:
+        type: string
+    extract_from: "Probe sub-sections within each task"
+
+# ═══════════════════════════════════════════════════════════
 # AI GENERATION
 # ═══════════════════════════════════════════════════════════
 ai_generation_tasks:

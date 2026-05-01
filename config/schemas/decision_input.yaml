@@ -1,0 +1,13 @@
+# Decision input — what stakeholders need to decide from research
+# Emitted by: research_readout
+# Consumed by: targeted_readouts
+type: object
+properties:
+  bottom_line:
+    type: string
+    description: "Single-sentence critical insight from Summary"
+  follow_up_research:
+    type: array
+    items:
+      type: string
+    description: "Research gaps identified for future investigation"

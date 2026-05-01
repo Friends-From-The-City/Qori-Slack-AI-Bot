@@ -1,0 +1,17 @@
+# Stakeholder constraint — technical, policy, or resource limitation
+# Emitted by: stakeholder_synthesis
+# Consumed by: research_brief, design_opportunities, service_blueprint, research_readout
+type: object
+properties:
+  type:
+    type: string
+    enum: [Technical, Policy, Resource]
+  constraint:
+    type: string
+    description: "Specific constraint description"
+  impact:
+    type: string
+    description: "Quantified impact if available"
+  source:
+    type: string
+    description: "SH-XXX role ID(s) who surfaced this"

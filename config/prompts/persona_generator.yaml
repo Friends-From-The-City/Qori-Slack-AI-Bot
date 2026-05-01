@@ -32,6 +32,47 @@ input_variables:
   - combined_file_content       # Auto-combined content from selected files (GENERATED)
 
 # ═══════════════════════════════════════════════════════════
+# CASCADE CONTRACT
+# ═══════════════════════════════════════════════════════════
+consumes:
+  - key: atomic_nuggets
+    source: session_summary
+    required: true
+    inject_as: reference
+    description: "Observation pool for behavioral pattern identification"
+  - key: validated_themes
+    source: affinity_mapping
+    required: false
+    inject_as: reference
+    description: "Cross-participant themes — validates persona groupings"
+  - key: participant_metadata
+    source: session_summary
+    required: true
+    inject_as: reference
+    description: "Demographics and context for persona attributes"
+
+emits:
+  - key: personas
+    pool: false
+    pool_strategy: replace
+    schema:
+      $ref: schemas/persona.yaml
+    extract_from: "Numbered persona sections (## 01, ## 02)"
+  - key: persona_design_implications
+    pool: false
+    pool_strategy: replace
+    schema:
+      type: array
+      items:
+        type: object
+        properties:
+          persona_ref:
+            type: string
+          implication:
+            type: string
+    extract_from: "Design implication sub-section of each persona"
+
+# ═══════════════════════════════════════════════════════════
 # AI GENERATION
 # ═══════════════════════════════════════════════════════════
 ai_generation_tasks:
