@@ -15,6 +15,7 @@ const { getResearchStudyWithRoles, getStudiesByUser, addResearchStudyWithRoles, 
 const { studySetupModal, studySetupModalPlanStudy, studySetupModalStartResearch } = require("./ui/studySetupModal");
 const { researchPlanGeneratorModal } = require("./ui/researchPlanGeneratorModal");
 const { researchBriefModal } = require("./ui/researchBriefModal");
+const { buildBriefEntryModal } = require("./ui/researchBriefEntryModal");
 const { uploadDeskResearchModal } = require("./ui/uploadDeskResearchModal");
 const { researchShareoutModal } = require("./ui/researchShareoutModal");
 const { processYamlTemplate } = require("../yamlProcessor");
@@ -149,7 +150,14 @@ slackApp.command('/qori', async ({ ack, command, client }) => {
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: '*`/qori-plan`* → Create study plan'
+        text: '*`/qori-brief`* → Create research brief (starts a new study)'
+      }
+    },
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: '*`/qori-plan`* → Create plan, guide, or upload files for an existing study'
       }
     },
     {
@@ -960,6 +968,35 @@ slackApp.view('research-shareout-submit', async ({ ack, body, view, client }) =>
   });
 });
 
+// /qori-brief — standalone command to create a research brief (starts a new study)
+slackApp.command('/qori-brief', async ({ ack, body, client, command }) => {
+  await ack();
+  try {
+    const channelId = command.channel_id;
+
+    // Get lead researcher from Slack profile
+    let leadResearcher = '';
+    try {
+      const userInfo = await client.users.info({ user: body.user_id });
+      leadResearcher = userInfo.user.real_name || userInfo.user.profile?.display_name || userInfo.user.name || '';
+    } catch (err) { /* ignore */ }
+
+    const view = buildBriefEntryModal(leadResearcher, channelId);
+
+    await client.views.open({
+      trigger_id: body.trigger_id,
+      view,
+    });
+  } catch (error) {
+    console.error('Error opening /qori-brief modal:', error);
+    await client.chat.postEphemeral({
+      channel: body.user_id,
+      user: body.user_id,
+      text: `❌ Failed to open research brief: ${error.message}`,
+    });
+  }
+});
+
 // 1️⃣ Define your role enum
 // Slash command to open the modal
 // New command to start research directly with studySetupModal
@@ -1004,7 +1041,7 @@ slackApp.command('/qori-plan', async ({ ack, body, client, command }) => {
           {
             text: {
               type: "plain_text",
-              text: "No studies found - create one with /qori-start",
+              text: "No studies found — start with /qori-brief",
             },
             value: "no_studies",
           },

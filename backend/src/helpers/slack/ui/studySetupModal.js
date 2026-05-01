@@ -18,60 +18,17 @@ const studySetupModalPlanStudy = {
     text: "Close",
   },
   blocks: [
-    // ─── START A NEW STUDY ───
-    {
-      type: "section",
-      text: {
-        type: "mrkdwn",
-        text: "*Start a new study*",
-      },
-    },
     {
       type: "context",
       elements: [
         {
           type: "mrkdwn",
-          text: "The brief is the first step. It defines scope for stakeholder approval and creates the study folder automatically.",
+          text: "Select a study, then create documents or upload files. Start a new study with `/qori-brief`.",
         },
       ],
-    },
-    {
-      type: "section",
-      text: {
-        type: "mrkdwn",
-        text: "*Research brief*\nDefine scope, objectives, and methodology for approval",
-      },
-      accessory: {
-        type: "button",
-        text: {
-          type: "plain_text",
-          text: "Create",
-        },
-        style: "primary",
-        action_id: "create_research_brief",
-        value: "research_brief",
-      },
     },
     {
       type: "divider",
-    },
-
-    // ─── CONTINUE AN EXISTING STUDY ───
-    {
-      type: "section",
-      text: {
-        type: "mrkdwn",
-        text: "*Continue an existing study*",
-      },
-    },
-    {
-      type: "context",
-      elements: [
-        {
-          type: "mrkdwn",
-          text: "Select a study to create planning documents or upload files.",
-        },
-      ],
     },
     {
       type: "input",
