@@ -22,6 +22,8 @@ const { addStudyStatus } = require("../../services/study-status.service");
 const { requestStudyChangesModal } = require("./ui/requestStudyChangesModal");
 const { discussionGuideModal } = require("./ui/discussionGuideModal");
 const { stakeholderInterviewGuideModal } = require("./ui/stakeholderInterviewGuideModal");
+const { buildCascadeReadiness, buildCascadeBlocks } = require("./ui/cascadeReadinessBlocks");
+const { readStudyVariables } = require("../../helpers/studyVariables");
 const { uploadStakeholderNotesModal } = require("./ui/uploadStakeholderNotesModal");
 const { uploadSurveyDataModal } = require("./ui/uploadSurveyDataModal");
 const { handleMarkChangesCompleteAction, handleMarkChangesCompleteModal, handleApproveChanges } = require("./markChangesCompleteHandler");
@@ -1202,6 +1204,25 @@ slackApp.action('create_research_plan', async ({ ack, body, client }) => {
       console.log(`✅ Pre-populated lead researcher: ${leadResearcher}`);
     }
 
+    // Cascade readiness — inject upstream variable status
+    try {
+      const studyForCascade = await getResearchStudyWithRoles(preselectStudyName);
+      if (studyForCascade?.path) {
+        const studyVars = await readStudyVariables(decodeURIComponent(studyForCascade.path));
+        if (Object.keys(studyVars.variables).length > 0) {
+          const cascadeData = buildCascadeReadiness(studyVars, 'research_plan');
+          const cascadeBlocks = buildCascadeBlocks(cascadeData);
+          // Insert cascade blocks after the first divider
+          const firstDivider = blocks.findIndex(b => b.type === 'divider');
+          if (firstDivider !== -1) {
+            blocks.splice(firstDivider, 0, ...cascadeBlocks);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('⚠️ Cascade readiness failed for research plan:', err.message);
+    }
+
     await client.views.update({
       view_id: body.view.id,
       trigger_id: body.trigger_id,
@@ -1429,6 +1450,24 @@ slackApp.action('create_research_brief', async ({ ack, body, client }) => {
       };
     }
 
+    // Cascade readiness — inject upstream variable status
+    try {
+      const studyForCascade = await getResearchStudyWithRoles(preselectStudyName);
+      if (studyForCascade?.path) {
+        const studyVars = await readStudyVariables(decodeURIComponent(studyForCascade.path));
+        if (Object.keys(studyVars.variables).length > 0) {
+          const cascadeData = buildCascadeReadiness(studyVars, 'research_brief');
+          const cascadeBlocks = buildCascadeBlocks(cascadeData);
+          const firstDivider = modalBlocks.findIndex(b => b.type === 'divider');
+          if (firstDivider !== -1) {
+            modalBlocks.splice(firstDivider, 0, ...cascadeBlocks);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('⚠️ Cascade readiness failed for research brief:', err.message);
+    }
+
     const viewPayload = {
       ...researchBriefModal,
       blocks: modalBlocks,
@@ -1436,11 +1475,9 @@ slackApp.action('create_research_brief', async ({ ack, body, client }) => {
         ...meta,
         studyName: preselectStudyName,
         studyId: preselectStudyId,
-        leadResearcher, // Pass through for use in submission
+        leadResearcher,
       })
     };
-
-    console.log('📋 Research brief modal view payload:', JSON.stringify(viewPayload, null, 2).substring(0, 2000));
 
     await client.views.update({
       view_id: body.view.id,
@@ -1671,6 +1708,24 @@ slackApp.action('create_discussion_guide', async ({ ack, body, client }) => {
       };
     }
 
+    // Cascade readiness — inject upstream variable status
+    try {
+      const studyForCascade = await getResearchStudyWithRoles(studyName);
+      if (studyForCascade?.path) {
+        const studyVars = await readStudyVariables(decodeURIComponent(studyForCascade.path));
+        if (Object.keys(studyVars.variables).length > 0) {
+          const cascadeData = buildCascadeReadiness(studyVars, 'discussion_guide');
+          const cascadeBlocks = buildCascadeBlocks(cascadeData);
+          const firstDivider = blocks.findIndex(b => b.type === 'divider');
+          if (firstDivider !== -1) {
+            blocks.splice(firstDivider, 0, ...cascadeBlocks);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('⚠️ Cascade readiness failed for discussion guide:', err.message);
+    }
+
     await client.views.update({
       view_id: body.view.id,
       trigger_id: body.trigger_id,
@@ -1681,7 +1736,7 @@ slackApp.action('create_discussion_guide', async ({ ack, body, client }) => {
       }
     });
   } catch (err) {
-    console.error('Error opening brief modal:', err.data || err);
+    console.error('Error opening discussion guide modal:', err.data || err);
   }
 });
 
@@ -1892,6 +1947,24 @@ slackApp.action('create_stakeholder_guide', async ({ ack, body, client }) => {
           initial_value: studyName
         }
       };
+    }
+
+    // Cascade readiness — inject upstream variable status
+    try {
+      const studyForCascade = await getResearchStudyWithRoles(studyName);
+      if (studyForCascade?.path) {
+        const studyVars = await readStudyVariables(decodeURIComponent(studyForCascade.path));
+        if (Object.keys(studyVars.variables).length > 0) {
+          const cascadeData = buildCascadeReadiness(studyVars, 'stakeholder_interview_guide');
+          const cascadeBlocks = buildCascadeBlocks(cascadeData);
+          const firstDivider = modalBlocks.findIndex(b => b.type === 'divider');
+          if (firstDivider !== -1) {
+            modalBlocks.splice(firstDivider, 0, ...cascadeBlocks);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('⚠️ Cascade readiness failed for stakeholder guide:', err.message);
     }
 
     await client.views.push({

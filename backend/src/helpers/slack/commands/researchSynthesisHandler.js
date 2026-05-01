@@ -5,6 +5,8 @@ const sessionSummaryService = require("../../../services/session-summary.service
 const { getStudyStakeholderGuide } = require("../../../services/study-status.service");
 const { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepoByPath, fetchFileFromRepo, readFolderContents } = require("../../../helpers/github");
 const { processYamlTemplate, extractAiResponsesFromYaml } = require("../../../helpers/yamlProcessor");
+const { readStudyVariables } = require("../../../helpers/studyVariables");
+const { buildCascadeReadiness } = require("../ui/cascadeReadinessBlocks");
 
 // Command handler to open the research synthesis modal
 const researchSynthesisHandler = async ({ ack, body, client, command }) => {
@@ -472,8 +474,29 @@ const handleLoadSynthesisFiles = async ({ ack, body, client }) => {
       console.error("⚠️ Analysis file scan failed:", analysisError.message);
     }
 
-    // Update the modal with all file types
-    const updatedModal = researchSynthesisModal(studies, studyId, sessionSummaries, transcripts, currentAnalysisMethod, stakeholderGuides, analysisFiles);
+    // Read cascade variables for this study
+    let cascadeData = null;
+    try {
+      const selectedStudy = studies.find(s => s.id.toString() === studyId.toString());
+      if (selectedStudy) {
+        const study = await getResearchStudyWithRoles(selectedStudy.name);
+        if (study?.path) {
+          const decodedPath = decodeURIComponent(study.path);
+          const studyVars = await readStudyVariables(decodedPath);
+          if (studyVars && Object.keys(studyVars.variables).length > 0) {
+            // Build cascade readiness based on what variables exist
+            cascadeData = buildCascadeReadiness(studyVars, currentAnalysisMethod);
+            console.log(`✅ Cascade: ${cascadeData.available.length} variables available, ${cascadeData.missing.length} missing`);
+          }
+        }
+      }
+    } catch (cascadeError) {
+      // Non-blocking — cascade readiness is informational
+      console.warn('⚠️ Could not read cascade variables:', cascadeError.message);
+    }
+
+    // Update the modal with all file types + cascade data
+    const updatedModal = researchSynthesisModal(studies, studyId, sessionSummaries, transcripts, currentAnalysisMethod, stakeholderGuides, analysisFiles, cascadeData);
 
     // Preserve existing private_metadata if any
     if (view.private_metadata) {

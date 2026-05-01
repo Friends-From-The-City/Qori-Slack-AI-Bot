@@ -1,3 +1,5 @@
+const { buildCascadeBlocks } = require('./cascadeReadinessBlocks');
+
 // Simple helper to extract date string from Date object or string
 const getDateString = (dateValue) => {
   if (!dateValue) return '';
@@ -13,7 +15,8 @@ const researchSynthesisModal = (
   transcripts = [],
   selectedAnalysisMethod = null,
   stakeholderGuides = [],
-  analysisFiles = []
+  analysisFiles = [],
+  cascadeData = null
 ) => {
   // Helper function to get analysis method display name
   const getAnalysisMethodName = (method) => {
@@ -209,10 +212,13 @@ const researchSynthesisModal = (
         };
       })(),
 
+      // Cascade Readiness Section (shared helper — only shown when cascade data exists)
+      ...buildCascadeBlocks(cascadeData),
+
       { type: "divider" },
 
        // Data Sources Section
-       { type: "section", text: { type: "mrkdwn", text: "📄 *Data Sources*" } },
+       { type: "section", text: { type: "mrkdwn", text: "*Data Sources*" } },
        { type: "context", elements: [ { type: "mrkdwn", text: "Select files to include" } ] },
 
       // Load Files Button (always show when studies are available)
