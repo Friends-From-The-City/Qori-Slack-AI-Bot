@@ -203,12 +203,14 @@ async function processYamlTemplate(rawYamlContent, inputValues, baseFolderEncode
                 stale: false,
                 extracted_at: new Date(),
                 updated_at: new Date(),
+              }, {
+                conflictFields: ['study_name', 'variable_key'],
               });
             }
             console.log(`✅ Extract: Upserted Postgres index for ${yamlConfig.id}`);
           }
         } catch (dbError) {
-          console.warn(`⚠️ Postgres index upsert failed (non-blocking):`, dbError.message);
+          console.warn(`⚠️ Postgres index upsert failed (non-blocking):`, dbError.message, dbError.errors?.[0]?.message || '');
         }
       } catch (error) {
         console.error(`❌ Failed to write study variables for ${yamlConfig.id}:`, error.message);
