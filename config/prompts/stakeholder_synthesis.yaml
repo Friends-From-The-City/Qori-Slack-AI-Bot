@@ -559,7 +559,7 @@ processing_workflow:
   - save_to_outputs
 
 output_options:
-  path: "_discovery/stakeholder-interviews/"
+  path: "{{team}}/_discovery/stakeholder-interviews/"
   filename: "{{topic_slug}}-stakeholder-synthesis-{{current_date_iso}}.md"
 
   delivery:

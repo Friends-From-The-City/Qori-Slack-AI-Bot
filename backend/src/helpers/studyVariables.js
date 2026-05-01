@@ -40,25 +40,27 @@ async function writeStudyVariables(studyBasePath, variablesData) {
 
 /**
  * Build the GitHub path for a discovery variables file.
+ * @param {string} team - team slug, e.g., 'friends-lab'
  * @param {string} discoveryType - e.g., 'desk-research', 'stakeholder-interviews', 'survey-synthesis'
  */
-function discoveryVariablesPath(discoveryType) {
-  return `_discovery/${discoveryType}/${VARIABLES_DIR}/${DISCOVERY_VARIABLES_FILE}`;
+function discoveryVariablesPath(team, discoveryType) {
+  return `${team}/_discovery/${discoveryType}/${VARIABLES_DIR}/${DISCOVERY_VARIABLES_FILE}`;
 }
 
 /**
  * Read discovery variables from GitHub.
  * Returns parsed JSON or a fresh empty structure if file doesn't exist.
+ * @param {string} team - team slug
  * @param {string} discoveryType - e.g., 'desk-research'
  */
-async function readDiscoveryVariables(discoveryType) {
-  const filePath = discoveryVariablesPath(discoveryType);
+async function readDiscoveryVariables(team, discoveryType) {
+  const filePath = discoveryVariablesPath(team, discoveryType);
   try {
     const file = await fetchFileFromRepoByPath(process.env.GITHUB_REPO, filePath);
     return JSON.parse(file.content);
   } catch (error) {
     if (error.status === 404 || error.message?.includes('Not Found') || error.message?.includes('Could not fetch file')) {
-      return createEmptyDiscoveryVariablesFile(discoveryType);
+      return createEmptyDiscoveryVariablesFile(team, discoveryType);
     }
     throw error;
   }
@@ -66,11 +68,12 @@ async function readDiscoveryVariables(discoveryType) {
 
 /**
  * Write discovery variables to GitHub.
+ * @param {string} team - team slug
  * @param {string} discoveryType - e.g., 'desk-research'
  * @param {object} variablesData - the variables structure to write
  */
-async function writeDiscoveryVariables(discoveryType, variablesData) {
-  const filePath = discoveryVariablesPath(discoveryType);
+async function writeDiscoveryVariables(team, discoveryType, variablesData) {
+  const filePath = discoveryVariablesPath(team, discoveryType);
   variablesData.last_updated = new Date().toISOString();
   const content = JSON.stringify(variablesData, null, 2);
   return createOrUpdateFileOnGitHub(filePath, content);
@@ -78,12 +81,14 @@ async function writeDiscoveryVariables(discoveryType, variablesData) {
 
 /**
  * Create an empty discovery variables structure.
+ * @param {string} team - team slug
  * @param {string} discoveryType - e.g., 'desk-research'
  */
-function createEmptyDiscoveryVariablesFile(discoveryType) {
+function createEmptyDiscoveryVariablesFile(team, discoveryType) {
   return {
     schema_version: '1.0',
     scope: 'discovery',
+    team,
     discovery_type: discoveryType,
     last_updated: new Date().toISOString(),
     artifacts: {},
@@ -132,11 +137,12 @@ function mergeDiscoveryVariables(existing, extracted, discoveryArtifactId, sourc
 
 /**
  * Read upstream discovery variables for a template's consumes spec.
+ * @param {string} team - team slug
  * @param {string} discoveryType - e.g., 'stakeholder-interviews'
  * @param {string} discoveryArtifactId - the topic slug
  * @param {Array} consumesSpec - consumes spec from YAML
  */
-async function readUpstreamDiscoveryVariables(discoveryType, discoveryArtifactId, consumesSpec) {
+async function readUpstreamDiscoveryVariables(team, discoveryType, discoveryArtifactId, consumesSpec) {
   if (!consumesSpec || consumesSpec.length === 0) return {};
 
   // Discovery consumes may come from a different discovery type
@@ -145,7 +151,7 @@ async function readUpstreamDiscoveryVariables(discoveryType, discoveryArtifactId
 
   for (const spec of consumesSpec) {
     const sourceType = spec.source_discovery_type || discoveryType;
-    const discoveryVars = await readDiscoveryVariables(sourceType);
+    const discoveryVars = await readDiscoveryVariables(team, sourceType);
     const artifactVars = discoveryVars.artifacts?.[discoveryArtifactId] || {};
     const variable = artifactVars[spec.key];
 
@@ -155,7 +161,7 @@ async function readUpstreamDiscoveryVariables(discoveryType, discoveryArtifactId
         source: variable.source,
       };
     } else if (spec.required) {
-      console.warn(`⚠️ Required upstream discovery variable "${spec.key}" not found for artifact ${discoveryArtifactId} in ${sourceType}`);
+      console.warn(`⚠️ Required upstream discovery variable "${spec.key}" not found for artifact ${discoveryArtifactId} in ${team}/${sourceType}`);
     }
   }
 

@@ -178,17 +178,20 @@ Every template translation now requires an "Inputs and rationale" pass — expli
 
 Discovery research (desk research, stakeholder interviews, survey synthesis) moved to `_discovery/` folder in qori-studies, separate from active studies. Discovery is pre-study work (industry standard) that informs briefs and accumulates as organizational memory across studies.
 
-**Folder structure in qori-studies** (created on first artifact write, not via `config/templates/` scaffold):
+**Folder structure in qori-studies** (created on first artifact write, not via `config/templates/` scaffold). Discovery is team-scoped — `QORI_TEAM_SLUG` env var, defaults to `friends-lab`:
 ```
-_discovery/
+{team}/_discovery/
+  README.md
   desk-research/.variables/discovery-variables.json
   stakeholder-interviews/.variables/discovery-variables.json
   survey-synthesis/.variables/discovery-variables.json
 ```
 
-**YAML changes:** `desk_research.yaml`, `stakeholder_synthesis.yaml`, `survey_synthesis.yaml` now declare `discovery_scope: true`, output paths point to `_discovery/{type}/`, filenames use `{{topic_slug}}` instead of `{{selected_study}}`, and all three have a `topic` input variable (slugified for filenames).
+**YAML changes:** `desk_research.yaml`, `stakeholder_synthesis.yaml`, `survey_synthesis.yaml` now declare `discovery_scope: true`, output paths point to `{{team}}/_discovery/{type}/`, filenames use `{{topic_slug}}` instead of `{{selected_study}}`, and all three have a `topic` input variable (slugified for filenames).
 
-**Variable store:** `studyVariables.js` exports new discovery-scoped functions (`readDiscoveryVariables`, `writeDiscoveryVariables`, `mergeDiscoveryVariables`, `readUpstreamDiscoveryVariables`). Discovery variables are stored at `_discovery/{type}/.variables/discovery-variables.json`, keyed by `discovery_artifact_id` (the topic slug) instead of study path. Cascade contracts unchanged — same variables emitted, different store location.
+**Variable store:** `studyVariables.js` exports new discovery-scoped functions (`readDiscoveryVariables`, `writeDiscoveryVariables`, `mergeDiscoveryVariables`, `readUpstreamDiscoveryVariables`). All take `team` as first parameter. Discovery variables are stored at `{team}/_discovery/{type}/.variables/discovery-variables.json`, keyed by `discovery_artifact_id` (the topic slug) instead of study path. Cascade contracts unchanged — same variables emitted, different store location.
+
+**Team scoping:** Discovery is organizational memory at the team level. `QORI_TEAM_SLUG` env var (default: `friends-lab`) determines which team's discovery space to use. When multi-team onboarding happens, each team gets their own `{team}/_discovery/` namespace. Set per deployment in Railway.
 
 **Existing study-scoped discovery files preserved as-is.** No migration. Studies that already ran desk_research have files in their study folders — those remain untouched.
 

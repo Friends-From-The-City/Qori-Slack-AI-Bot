@@ -13,6 +13,11 @@ const { processYamlTemplate } = require('../../yamlProcessor');
 const { processSlackFiles } = require('../../pdfProcessor');
 const { parseDocuments, validateDocuments } = require('../../documentParser');
 
+const DEFAULT_TEAM = 'friends-lab';
+function getTeamSlug() {
+  return process.env.QORI_TEAM_SLUG || DEFAULT_TEAM;
+}
+
 // Discovery type → YAML filename + folder slug
 const DISCOVERY_TYPES = {
   desk_research: {
@@ -72,24 +77,26 @@ function slugifyTopic(topic) {
 }
 
 /**
- * Scaffold _discovery/ folders in qori-studies if they don't exist.
+ * Scaffold {team}/_discovery/ folders in qori-studies if they don't exist.
  * Uses the README as a marker — if it exists, scaffolding is done.
  * GitHub API creates intermediate dirs automatically.
+ * @param {string} team - team slug
  */
-async function scaffoldDiscoveryFolders() {
+async function scaffoldDiscoveryFolders(team) {
+  const readmePath = `${team}/_discovery/README.md`;
   try {
-    await fetchFileFromRepoByPath(process.env.GITHUB_REPO, '_discovery/README.md');
+    await fetchFileFromRepoByPath(process.env.GITHUB_REPO, readmePath);
     // README exists — scaffolding already done
     return;
   } catch (error) {
     if (error.status === 404 || error.message?.includes('Not Found') || error.message?.includes('Could not fetch file')) {
       // README doesn't exist — scaffold now
-      console.log('📁 Scaffolding _discovery/ folders in qori-studies...');
-      await createOrUpdateFileOnGitHub('_discovery/README.md', DISCOVERY_README);
-      console.log('✅ _discovery/README.md created');
+      console.log(`📁 Scaffolding ${team}/_discovery/ folders in qori-studies...`);
+      await createOrUpdateFileOnGitHub(readmePath, DISCOVERY_README);
+      console.log(`✅ ${readmePath} created`);
     } else {
       // Unexpected error — log but don't block the flow
-      console.warn('⚠️ Could not check _discovery/README.md, proceeding anyway:', error.message);
+      console.warn(`⚠️ Could not check ${readmePath}, proceeding anyway:`, error.message);
     }
   }
 }
@@ -190,12 +197,13 @@ async function handleDiscoverSubmission({ ack, view, body, client }) {
   }
 
   const typeConfig = DISCOVERY_TYPES[discoveryType];
+  const team = getTeamSlug();
   let topicSlug = slugifyTopic(topic);
 
   // Duplicate handling: if file already exists for this slug+date, append -HHMM
   const dateIso = format(new Date(), 'yyyy-MM-dd');
   const expectedFilename = `${topicSlug}-${typeConfig.fileSlug}-${dateIso}.md`;
-  const expectedPath = `_discovery/${typeConfig.folder}/${expectedFilename}`;
+  const expectedPath = `${team}/_discovery/${typeConfig.folder}/${expectedFilename}`;
   try {
     await fetchFileFromRepoByPath(process.env.GITHUB_REPO, expectedPath);
     // File exists — append timestamp to avoid overwrite
@@ -206,7 +214,7 @@ async function handleDiscoverSubmission({ ack, view, body, client }) {
     // File doesn't exist — proceed with original slug
   }
 
-  console.log(`🔍 Discovery: type=${discoveryType}, topic="${topic}", slug="${topicSlug}", files=${uploadedFiles.length}`);
+  console.log(`🔍 Discovery: team=${team}, type=${discoveryType}, topic="${topic}", slug="${topicSlug}", files=${uploadedFiles.length}`);
 
   // Send processing message
   await client.chat.postMessage({
@@ -215,8 +223,8 @@ async function handleDiscoverSubmission({ ack, view, body, client }) {
   });
 
   try {
-    // Scaffold _discovery/ if first use
-    await scaffoldDiscoveryFolders();
+    // Scaffold {team}/_discovery/ if first use
+    await scaffoldDiscoveryFolders(team);
 
     // Process uploaded files
     const processedFiles = await processSlackFiles(uploadedFiles, process.env.SLACK_BOT_TOKEN);
@@ -243,11 +251,13 @@ async function handleDiscoverSubmission({ ack, view, body, client }) {
     const data = {
       topic,
       topic_slug: topicSlug,
+      team,
       description: description || topic,
       document_content: formattedDocumentContent,
       combined_file_content: formattedDocumentContent,
       // Internal: used by yamlProcessor to route variable storage
       _discovery_type: typeConfig.folder,
+      _discovery_team: team,
       // These fields exist for backward compat with YAML templates that still reference them
       selected_study: `discovery-${topicSlug}`,
       study_name: topic,
@@ -308,7 +318,7 @@ async function handleDiscoverSubmission({ ack, view, body, client }) {
           elements: [
             {
               type: 'mrkdwn',
-              text: `Discovery artifact stored in \`_discovery/${typeConfig.folder}/\``,
+              text: `Discovery artifact stored in \`${team}/_discovery/${typeConfig.folder}/\``,
             },
           ],
         },

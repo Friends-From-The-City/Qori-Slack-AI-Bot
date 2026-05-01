@@ -99,6 +99,7 @@ async function processYamlTemplate(rawYamlContent, inputValues, baseFolderEncode
     try {
       const upstream = isDiscoveryScope
         ? await readUpstreamDiscoveryVariables(
+            inputValues._discovery_team || '',
             inputValues._discovery_type || '',
             inputValues.topic_slug || '',
             yamlConfig.consumes,
@@ -179,8 +180,9 @@ async function processYamlTemplate(rawYamlContent, inputValues, baseFolderEncode
         console.log(`🔄 Extract: Got ${Object.keys(extractionResult).length} variables for ${yamlConfig.id}`);
 
         // Write extracted variables — discovery or study scoped
-        if (isDiscoveryScope && inputValues.topic_slug && inputValues._discovery_type) {
-          const discoveryVars = await readDiscoveryVariables(inputValues._discovery_type);
+        if (isDiscoveryScope && inputValues.topic_slug && inputValues._discovery_type && inputValues._discovery_team) {
+          const team = inputValues._discovery_team;
+          const discoveryVars = await readDiscoveryVariables(team, inputValues._discovery_type);
           const merged = mergeDiscoveryVariables(
             discoveryVars,
             extractionResult,
@@ -188,8 +190,8 @@ async function processYamlTemplate(rawYamlContent, inputValues, baseFolderEncode
             yamlConfig.id,
             yamlConfig.version
           );
-          await writeDiscoveryVariables(inputValues._discovery_type, merged);
-          console.log(`✅ Extract: Wrote discovery variables for ${yamlConfig.id} to _discovery/${inputValues._discovery_type}`);
+          await writeDiscoveryVariables(team, inputValues._discovery_type, merged);
+          console.log(`✅ Extract: Wrote discovery variables for ${yamlConfig.id} to ${team}/_discovery/${inputValues._discovery_type}`);
         } else {
           const studyVars = await readStudyVariables(baseFolder);
           const merged = mergeVariables(

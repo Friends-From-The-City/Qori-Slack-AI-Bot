@@ -6,8 +6,11 @@ Discovery is an industry-standard phase that happens **before** a study is scope
 
 ## Folder Structure (in qori-studies repo)
 
+Discovery is **team-scoped**. Each team gets its own discovery namespace:
+
 ```
-_discovery/
+{team}/_discovery/
+  README.md
   desk-research/
     .variables/          <- discovery-variables.json per artifact
     {topic-slug}-desk-research-{date}.md
@@ -19,16 +22,23 @@ _discovery/
     {topic-slug}-survey-synthesis-{date}.md
 ```
 
+For the friends-lab team: `friends-lab/_discovery/desk-research/...`
+
+## Team Resolution
+
+The team slug comes from the `QORI_TEAM_SLUG` environment variable, defaulting to `friends-lab`. Set per deployment in Railway. When multi-team onboarding arrives, each team gets a separate deployment with its own value.
+
 ## How It Works
 
-- Discovery artifacts are **not scoped to a study**. They live at the repo root under `_discovery/`.
+- Discovery artifacts are **not scoped to a study**. They live under `{team}/_discovery/`.
 - Each artifact is identified by a `topic_slug` (researcher-provided, slugified).
 - Variables are stored per discovery type in `.variables/discovery-variables.json`, tagged with `discovery_artifact_id` (the slug) instead of `study_id`.
 - Discovery outputs feed downstream into `/qori-brief` and `/qori-plan` via the cascade contract -- briefs consume discovery variables to ground approval decisions in prior research.
+- Duplicate filenames within the same date are handled by appending `-HHMM` timestamp.
 
 ## Folder Creation
 
-The `_discovery/` folder structure in qori-studies is **not** part of the per-study template scaffold (`config/templates/`). It is created automatically by the backend when the first discovery artifact is written -- GitHub's `createOrUpdateFileContents` API creates intermediate directories as needed.
+The `{team}/_discovery/` folder structure in qori-studies is **not** part of the per-study template scaffold (`config/templates/`). It is created automatically by the `/qori-discover` command on first use -- a `README.md` is written as a scaffold marker, and GitHub's `createOrUpdateFileContents` API creates intermediate directories as needed.
 
 ## Relationship to Studies
 

@@ -296,7 +296,7 @@ output_template: |
   {{ai_generated.survey_synthesis_complete}}
 
 output_options:
-  path: "_discovery/survey-synthesis/"
+  path: "{{team}}/_discovery/survey-synthesis/"
   filename: "{{topic_slug}}-survey-synthesis-{{current_date_iso}}.md"
 
 derived_variables:
