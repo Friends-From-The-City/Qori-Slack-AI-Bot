@@ -102,10 +102,30 @@ function aggregateDiscoveryVariables(selectedArtifacts) {
     }
   }
 
-  // Stringify non-string values for template injection
+  // Format non-string values as plain text for template injection.
+  // IMPORTANT: Cannot use JSON.stringify — curly braces break LangChain's
+  // f-string parser (INVALID_PROMPT_INPUT). Format as markdown bullet lists instead.
   for (const [key, value] of Object.entries(aggregated)) {
-    if (typeof value !== 'string') {
-      aggregated[key] = JSON.stringify(value, null, 2);
+    if (typeof value === 'string') continue;
+    if (Array.isArray(value)) {
+      aggregated[key] = value.map(item => {
+        if (typeof item === 'string') return `- ${item}`;
+        if (typeof item === 'object' && item !== null) {
+          // Format object as "- key: val, key: val"
+          const parts = Object.entries(item)
+            .filter(([, v]) => v != null)
+            .map(([k, v]) => `${k}: ${v}`);
+          return `- ${parts.join(', ')}`;
+        }
+        return `- ${String(item)}`;
+      }).join('\n');
+    } else if (typeof value === 'object' && value !== null) {
+      aggregated[key] = Object.entries(value)
+        .filter(([, v]) => v != null)
+        .map(([k, v]) => `${k}: ${v}`)
+        .join('\n');
+    } else {
+      aggregated[key] = String(value);
     }
   }
 
