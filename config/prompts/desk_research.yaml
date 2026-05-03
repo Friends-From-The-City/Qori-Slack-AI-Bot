@@ -428,6 +428,60 @@ output_options:
 # ═══════════════════════════════════════════════════════════
 # METADATA
 # ═══════════════════════════════════════════════════════════
+emits:
+  - key: discovered_barriers
+    pool: true
+    pool_strategy: append
+    schema:
+      type: array
+      items:
+        type: string
+    extract_from: "Themes section, key findings, pain points identified in source documents"
+
+  - key: discovered_journeys
+    pool: true
+    pool_strategy: append
+    schema:
+      type: array
+      items:
+        type: string
+    extract_from: "User journey patterns or task flows referenced in source documents"
+
+  - key: discovered_metrics
+    pool: true
+    pool_strategy: append
+    schema:
+      type: array
+      items:
+        type: object
+        properties:
+          metric: string
+          value: string
+          source: string
+    extract_from: "Quantitative findings, percentages, statistics, baseline measurements from source documents"
+
+  - key: knowledge_gaps
+    pool: true
+    pool_strategy: append
+    schema:
+      type: array
+      items:
+        type: string
+    extract_from: "Further Research Needed section, gaps identified, what documents couldn't answer"
+
+  - key: source_artifacts
+    pool: true
+    pool_strategy: append
+    schema:
+      type: array
+      items:
+        type: object
+        properties:
+          title: string
+          source: string
+          date: string
+    extract_from: "Documents Analyzed section, References section"
+
 derived_variables:
   - effective_topic: "{{research_topic | default: topic}}"
   - topic_slug: "{{topic | slugify}}"
