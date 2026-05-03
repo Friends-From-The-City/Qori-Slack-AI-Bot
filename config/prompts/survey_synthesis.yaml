@@ -299,12 +299,8 @@ emits:
     schema:
       type: array
       items:
-        type: object
-        properties:
-          finding: string
-          metric: string
-          sample_size: string
-    extract_from: "Quantitative findings, response patterns, satisfaction scores"
+        $ref: schemas/survey_finding.yaml
+    extract_from: "Theme sections — each theme becomes a finding. Include frequency, sentiment with driver, representative respondent quotes (verbatim with R-IDs), and research implications."
 
   - key: discovered_barriers
     pool: true
@@ -312,8 +308,8 @@ emits:
     schema:
       type: array
       items:
-        type: string
-    extract_from: "Pain points, blockers, friction surfaced by survey responses"
+        $ref: schemas/discovered_barrier.yaml
+    extract_from: "Negative-sentiment themes, pain points. Include respondent quotes as verbatim_evidence, frequency as magnitude, and survey name as source_document."
 
   - key: sample_demographics
     pool: true
@@ -321,9 +317,17 @@ emits:
     schema:
       type: object
       properties:
-        total_responses: integer
-        demographics: string
-    extract_from: "Sample composition, respondent demographics, response rate"
+        total_responses:
+          type: integer
+        survey_name:
+          type: string
+        demographics:
+          type: string
+          description: "Respondent composition — who responded"
+        response_rate:
+          type: string
+          nullable: true
+    extract_from: "Overview section — sample size, survey name, respondent composition."
 
   - key: discovered_metrics
     pool: true
@@ -333,9 +337,18 @@ emits:
       items:
         type: object
         properties:
-          metric: string
-          value: string
-    extract_from: "Quantitative measurements, NPS scores, satisfaction ratings, baseline data"
+          metric:
+            type: string
+          value:
+            type: string
+          context:
+            type: string
+            nullable: true
+            description: "What the metric means — comparison, benchmark, trend"
+          survey_name:
+            type: string
+            nullable: true
+    extract_from: "All quantitative data — theme frequencies, sentiment percentages, priority ratings. Include survey name and contextual meaning."
 
   - key: knowledge_gaps
     pool: true
@@ -343,8 +356,17 @@ emits:
     schema:
       type: array
       items:
-        type: string
-    extract_from: "Open questions surveys couldn't address, follow-up research needs"
+        type: object
+        properties:
+          gap:
+            type: string
+          why_it_matters:
+            type: string
+            nullable: true
+          suggested_method:
+            type: string
+            nullable: true
+    extract_from: "Questions the survey couldn't answer, themes that need qualitative follow-up. Include why the gap matters and suggested method."
 
 # ═══════════════════════════════════════════════════════════
 # OUTPUT

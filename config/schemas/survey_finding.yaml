@@ -1,0 +1,40 @@
+# Survey finding — quantitative or thematic finding from survey synthesis
+# Emitted by: survey_synthesis
+# Consumed by: research_brief, research_plan
+type: object
+properties:
+  finding:
+    type: string
+    description: "The finding statement with full context"
+  metric:
+    type: string
+    nullable: true
+    description: "Quantitative measure — percentage, score, count"
+  sample_size:
+    type: string
+    nullable: true
+    description: "Number of respondents, e.g. 'n=30' or '76 responses'"
+  sentiment:
+    type: string
+    nullable: true
+    description: "Sentiment direction and driver — e.g. 'Negative — navigation frustration'"
+  representative_quotes:
+    type: array
+    items:
+      type: object
+      properties:
+        quote:
+          type: string
+        respondent:
+          type: string
+          description: "R001, R002, etc."
+    nullable: true
+    description: "Verbatim respondent quotes illustrating this finding"
+  theme:
+    type: string
+    nullable: true
+    description: "Which theme this finding belongs to"
+  research_implication:
+    type: string
+    nullable: true
+    description: "What this means for follow-up research design"

@@ -8,10 +8,26 @@ properties:
     enum: [Technical, Policy, Resource]
   constraint:
     type: string
-    description: "Specific constraint description"
+    description: "Specific constraint description with full context"
   impact:
     type: string
-    description: "Quantified impact if available"
+    description: "Quantified impact — include numbers, timelines, scope"
   source:
     type: string
-    description: "SH-XXX role ID(s) who surfaced this"
+    description: "SH-XXX with role context, e.g. 'SH-002 Engineering Lead, Mobile Team'"
+  verbatim_quote:
+    type: string
+    nullable: true
+    description: "Direct quote from stakeholder illustrating this constraint"
+  related_pattern:
+    type: string
+    nullable: true
+    description: "Broader system or organizational pattern this constraint is part of"
+  research_implication:
+    type: string
+    nullable: true
+    description: "What this means for study design — recruitment, task selection, protocol"
+  implementation_implication:
+    type: string
+    nullable: true
+    description: "What this means for the build — technical boundaries, timeline constraints"

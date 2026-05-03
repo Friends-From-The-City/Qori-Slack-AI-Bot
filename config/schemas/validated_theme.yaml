@@ -11,6 +11,10 @@ properties:
   label:
     type: string
     description: "Theme name"
+  description:
+    type: string
+    nullable: true
+    description: "What this theme captures — the pattern in plain language"
   evidence_count:
     type: integer
     description: "Number of supporting observations"
@@ -19,9 +23,31 @@ properties:
     items:
       type: string
     description: "Participant IDs who contributed evidence"
+  representative_quotes:
+    type: array
+    items:
+      type: object
+      properties:
+        quote:
+          type: string
+        participant:
+          type: string
+        context:
+          type: string
+          nullable: true
+    nullable: true
+    description: "Verbatim quotes that best illustrate this theme, with participant ID and context"
   confidence:
     type: string
     enum: [Strong, Moderate, Limited]
+  confidence_rationale:
+    type: string
+    nullable: true
+    description: "Why this confidence level — triangulation, sample coverage, contradictions"
+  implications:
+    type: string
+    nullable: true
+    description: "What this theme means for design, research, or implementation"
   nugget_refs:
     type: array
     items:

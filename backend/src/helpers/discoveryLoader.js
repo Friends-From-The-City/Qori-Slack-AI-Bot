@@ -69,6 +69,50 @@ async function loadDiscoveryArtifacts(team) {
 }
 
 /**
+ * Format a deeply-structured object as readable markdown (no curly braces).
+ * Preserves verbatim quotes, multi-field context, and nested arrays.
+ */
+function formatObjectAsMarkdown(obj, index) {
+  if (!obj || typeof obj !== 'object') return String(obj);
+
+  const lines = [];
+
+  // Find the primary field (first string field that isn't a metadata field)
+  const primaryKeys = ['barrier', 'finding', 'constraint', 'priority', 'gap', 'journey', 'theme', 'label', 'metric'];
+  const primaryKey = primaryKeys.find(k => obj[k]) || Object.keys(obj)[0];
+  const primaryValue = obj[primaryKey];
+
+  if (index) {
+    lines.push(`**${index}.** ${primaryValue}`);
+  } else {
+    lines.push(`- **${primaryValue}**`);
+  }
+
+  // Format remaining fields with indentation
+  for (const [k, v] of Object.entries(obj)) {
+    if (k === primaryKey || v == null) continue;
+
+    if (k === 'verbatim_quote' || k === 'verbatim_evidence') {
+      lines.push(`  > "${v}"`);
+    } else if (k === 'representative_quotes' && Array.isArray(v)) {
+      for (const q of v) {
+        if (typeof q === 'object' && q.quote) {
+          lines.push(`  > "${q.quote}" — ${q.respondent || q.participant || 'unknown'}`);
+        } else if (typeof q === 'string') {
+          lines.push(`  > "${q}"`);
+        }
+      }
+    } else if (Array.isArray(v)) {
+      lines.push(`  ${k}: ${v.join(', ')}`);
+    } else {
+      lines.push(`  ${k}: ${v}`);
+    }
+  }
+
+  return lines.join('\n');
+}
+
+/**
  * Aggregate variables from selected discovery artifacts into upstream_* format.
  * Merges arrays, keeps latest single values.
  *
@@ -104,26 +148,19 @@ function aggregateDiscoveryVariables(selectedArtifacts) {
 
   // Format non-string values as plain text for template injection.
   // IMPORTANT: Cannot use JSON.stringify — curly braces break LangChain's
-  // f-string parser (INVALID_PROMPT_INPUT). Format as markdown bullet lists instead.
+  // f-string parser (INVALID_PROMPT_INPUT). Format as rich markdown instead.
   for (const [key, value] of Object.entries(aggregated)) {
     if (typeof value === 'string') continue;
     if (Array.isArray(value)) {
-      aggregated[key] = value.map(item => {
+      aggregated[key] = value.map((item, i) => {
         if (typeof item === 'string') return `- ${item}`;
         if (typeof item === 'object' && item !== null) {
-          // Format object as "- key: val, key: val"
-          const parts = Object.entries(item)
-            .filter(([, v]) => v != null)
-            .map(([k, v]) => `${k}: ${v}`);
-          return `- ${parts.join(', ')}`;
+          return formatObjectAsMarkdown(item, i + 1);
         }
         return `- ${String(item)}`;
-      }).join('\n');
+      }).join('\n\n');
     } else if (typeof value === 'object' && value !== null) {
-      aggregated[key] = Object.entries(value)
-        .filter(([, v]) => v != null)
-        .map(([k, v]) => `${k}: ${v}`)
-        .join('\n');
+      aggregated[key] = formatObjectAsMarkdown(value);
     } else {
       aggregated[key] = String(value);
     }

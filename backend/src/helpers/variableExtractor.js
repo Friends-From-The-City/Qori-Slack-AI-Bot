@@ -53,14 +53,26 @@ ${schemaStr}
 
   return `You are extracting structured variables from a generated research document.
 
+EXTRACTION PHILOSOPHY:
+Extract with MAXIMUM SEMANTIC FIDELITY. The goal is to preserve the source
+document's evidentiary richness in structured form. If the document has 3
+paragraphs about a constraint, the extracted variable should reflect that
+depth across its schema fields — verbatim quotes, source attribution with
+role context, related patterns, downstream implications. Do not summarize
+or abbreviate when the schema has fields to capture the full context.
+
 RULES:
 1. Extract ONLY information that exists in the document. Do not invent data.
 2. Follow the schema exactly. Every field must be present (use null for missing optional fields).
 3. For pool variables (pool: true), extract an array of items.
 4. For non-pool variables, extract a single value or object.
-5. Participant IDs must use the PT-### format found in the document.
-6. Quotes must be verbatim from the document.
+5. Participant IDs must use the PT-### or SH-### format found in the document.
+6. Quotes MUST be verbatim from the document — do not paraphrase.
 7. If a variable cannot be extracted (no relevant content), use an empty array [] for pools or null for singles.
+8. For source/attribution fields, include role context when available (e.g., "SH-002 Engineering Lead" not just "SH-002").
+9. For nullable fields like verbatim_quote, research_implication, implementation_implication:
+   POPULATE them when the document contains relevant content. Only use null when truly absent.
+10. For metrics, include context (comparisons, trends, benchmarks) not just raw numbers.
 
 VARIABLES TO EXTRACT:
 
@@ -146,7 +158,7 @@ async function extractVariables(renderedOutput, emitsSpec, inputValues) {
 
   // Use Haiku for extraction — structured task, cheaper model
   const extractionModel = process.env.EXTRACTION_MODEL_NAME || 'claude-haiku-4-5-20251001';
-  const maxTokens = parseInt(process.env.EXTRACTION_MAX_TOKENS || '4096', 10);
+  const maxTokens = parseInt(process.env.EXTRACTION_MAX_TOKENS || '8192', 10);
 
   if (!process.env.ANTHROPIC_API_KEY) {
     console.warn('⚠️ ANTHROPIC_API_KEY not set — skipping variable extraction');

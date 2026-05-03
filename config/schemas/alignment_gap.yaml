@@ -5,13 +5,26 @@ type: object
 properties:
   priority:
     type: string
-    description: "The stated priority"
+    description: "The stated priority or belief"
   stated_by:
     type: string
-    description: "SH-XXX who stated it"
+    description: "SH-XXX with role context, e.g. 'SH-001 Product Owner, OCTO Mobile'"
   gap_description:
     type: string
-    description: "How actual behavior diverges from stated priority"
-  evidence:
+    description: "How actual behavior diverges from stated priority — be specific"
+  verbatim_quote:
     type: string
-    description: "Supporting quote or observation"
+    nullable: true
+    description: "Direct quote revealing the gap, attributed to speaker"
+  reality_evidence:
+    type: string
+    nullable: true
+    description: "Data or observation that contradicts the stated priority"
+  organizational_context:
+    type: string
+    nullable: true
+    description: "Why the gap exists — process, incentive, or resource explanation"
+  research_implication:
+    type: string
+    nullable: true
+    description: "What this gap means for study design — hypotheses to test, assumptions to validate"

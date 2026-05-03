@@ -435,8 +435,8 @@ emits:
     schema:
       type: array
       items:
-        type: string
-    extract_from: "Themes section, key findings, pain points identified in source documents"
+        $ref: schemas/discovered_barrier.yaml
+    extract_from: "Key Themes and Executive Summary sections — barriers, challenges, pain points. Include source document name, verbatim evidence quotes, magnitude/scope, affected population."
 
   - key: discovered_journeys
     pool: true
@@ -444,8 +444,23 @@ emits:
     schema:
       type: array
       items:
-        type: string
-    extract_from: "User journey patterns or task flows referenced in source documents"
+        type: object
+        properties:
+          journey:
+            type: string
+            description: "Task flow or journey pattern"
+          source_document:
+            type: string
+            nullable: true
+          pain_points:
+            type: string
+            nullable: true
+            description: "Where in the journey users struggle"
+          metrics:
+            type: string
+            nullable: true
+            description: "Completion rates, drop-off points, satisfaction scores for this journey"
+    extract_from: "User journey patterns or task flows. Include pain points within each journey and any metrics associated with journey steps."
 
   - key: discovered_metrics
     pool: true
@@ -455,10 +470,17 @@ emits:
       items:
         type: object
         properties:
-          metric: string
-          value: string
-          source: string
-    extract_from: "Quantitative findings, percentages, statistics, baseline measurements from source documents"
+          metric:
+            type: string
+          value:
+            type: string
+          source:
+            type: string
+          context:
+            type: string
+            nullable: true
+            description: "What the metric means in context — comparison, trend, benchmark"
+    extract_from: "All quantitative findings — percentages, scores, counts, rates. Include source document name and contextual meaning (e.g., 'up from 30% last quarter')."
 
   - key: knowledge_gaps
     pool: true
@@ -466,8 +488,20 @@ emits:
     schema:
       type: array
       items:
-        type: string
-    extract_from: "Further Research Needed section, gaps identified, what documents couldn't answer"
+        type: object
+        properties:
+          gap:
+            type: string
+            description: "What we don't know"
+          why_it_matters:
+            type: string
+            nullable: true
+            description: "Why filling this gap matters for decisions"
+          suggested_method:
+            type: string
+            nullable: true
+            description: "How to investigate — card sorting, interviews, A/B test"
+    extract_from: "Further Research Needed section, Confidence Assessment low-confidence areas, gaps in evidence. Include why the gap matters and suggested investigation method."
 
   - key: source_artifacts
     pool: true
@@ -477,10 +511,17 @@ emits:
       items:
         type: object
         properties:
-          title: string
-          source: string
-          date: string
-    extract_from: "Documents Analyzed section, References section"
+          title:
+            type: string
+          source:
+            type: string
+          date:
+            type: string
+          key_contribution:
+            type: string
+            nullable: true
+            description: "What this document uniquely contributed to the analysis"
+    extract_from: "Documents Analyzed section, References section. Include each document's key contribution."
 
 derived_variables:
   - effective_topic: "{{research_topic | default: topic}}"
