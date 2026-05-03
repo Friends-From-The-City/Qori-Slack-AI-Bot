@@ -46,6 +46,31 @@ blueprint_scope_options:
     description: "Focus on where service breaks down"
 
 # ═══════════════════════════════════════════════════════════
+# CASCADE CONTRACT
+# ═══════════════════════════════════════════════════════════
+consumes:
+  - key: atomic_nuggets
+    source: session_summary
+    required: true
+    inject_as: context
+    description: "Atomic observations — evidence for blueprint lanes"
+  - key: backstage_observations
+    source: stakeholder_synthesis
+    required: false
+    inject_as: context
+    description: "Raw system/process observations from stakeholder interviews — backstage lane input"
+  - key: system_failure_modes
+    source: stakeholder_synthesis
+    required: false
+    inject_as: context
+    description: "System dynamics failures — pain points to map in blueprint"
+  - key: stakeholder_constraints
+    source: stakeholder_synthesis
+    required: false
+    inject_as: context
+    description: "Technical/policy/resource constraints — support process boundaries"
+
+# ═══════════════════════════════════════════════════════════
 # AI GENERATION
 # ═══════════════════════════════════════════════════════════
 ai_generation_tasks:

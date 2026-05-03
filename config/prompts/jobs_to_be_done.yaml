@@ -33,6 +33,21 @@ input_variables:
   - quality_assessment          # Initial quality score (GENERATED)
 
 # ═══════════════════════════════════════════════════════════
+# CASCADE CONTRACT
+# ═══════════════════════════════════════════════════════════
+consumes:
+  - key: atomic_nuggets
+    source: session_summary
+    required: true
+    inject_as: context
+    description: "Atomic observations — primary input for JTBD extraction"
+  - key: validated_themes
+    source: affinity_mapping
+    required: false
+    inject_as: context
+    description: "Validated themes to anchor job categories"
+
+# ═══════════════════════════════════════════════════════════
 # AI GENERATION
 # ═══════════════════════════════════════════════════════════
 ai_generation_tasks:

@@ -32,6 +32,31 @@ input_variables:
   - combined_file_content       # Auto-combined content from selected files (GENERATED)
 
 # ═══════════════════════════════════════════════════════════
+# CASCADE CONTRACT
+# ═══════════════════════════════════════════════════════════
+consumes:
+  - key: atomic_nuggets
+    source: session_summary
+    required: true
+    inject_as: context
+    description: "Atomic observations — evidence base for opportunities"
+  - key: validated_themes
+    source: affinity_mapping
+    required: false
+    inject_as: context
+    description: "Validated themes to ground opportunities"
+  - key: personas
+    source: persona_generator
+    required: false
+    inject_as: context
+    description: "Personas to anchor opportunity framing (who benefits)"
+  - key: stakeholder_constraints
+    source: stakeholder_synthesis
+    required: false
+    inject_as: context
+    description: "Constraints that bound feasibility of opportunities"
+
+# ═══════════════════════════════════════════════════════════
 # AI GENERATION
 # ═══════════════════════════════════════════════════════════
 ai_generation_tasks:

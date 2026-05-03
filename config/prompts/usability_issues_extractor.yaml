@@ -31,6 +31,21 @@ input_variables:
 # ═══════════════════════════════════════════════════════════
 # AI GENERATION
 # ═══════════════════════════════════════════════════════════
+# CASCADE CONTRACT
+# ═══════════════════════════════════════════════════════════
+consumes:
+  - key: atomic_nuggets
+    source: session_summary
+    required: true
+    inject_as: context
+    description: "Atomic observations — primary input for usability issue extraction"
+  - key: validated_themes
+    source: affinity_mapping
+    required: false
+    inject_as: context
+    description: "Validated themes to categorize issues"
+
+# ═══════════════════════════════════════════════════════════
 # v3.0: Consolidated from 6 chained tasks into 1 comprehensive task.
 # The original 6-task architecture (v2.0) used {{ai_generated.*}} references
 # between tasks, but executeAiGenerationTasks runs all tasks via Promise.all

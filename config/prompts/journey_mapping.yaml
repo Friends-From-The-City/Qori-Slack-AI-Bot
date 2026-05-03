@@ -34,6 +34,21 @@ input_variables:
   - quality_assessment          # Initial quality score (GENERATED)
 
 # ═══════════════════════════════════════════════════════════
+# CASCADE CONTRACT
+# ═══════════════════════════════════════════════════════════
+consumes:
+  - key: atomic_nuggets
+    source: session_summary
+    required: true
+    inject_as: context
+    description: "Atomic observations from session summaries — primary input for journey construction"
+  - key: validated_themes
+    source: affinity_mapping
+    required: false
+    inject_as: context
+    description: "Cross-participant themes to organize journey stages"
+
+# ═══════════════════════════════════════════════════════════
 # AI GENERATION
 # ═══════════════════════════════════════════════════════════
 ai_generation_tasks:

@@ -65,32 +65,19 @@ input_variables:
 # ═══════════════════════════════════════════════════════════
 # CASCADE CONTRACT
 # ═══════════════════════════════════════════════════════════
-consumes:
-  - key: discovered_barriers
-    source: discovery_selection
-    required: false
-    inject_as: context
-    description: "Known barriers from prior discovery research (desk research artifacts)"
-  - key: knowledge_gaps
-    source: discovery_selection
-    required: false
-    inject_as: context
-    description: "What desk research couldn't answer"
-  - key: stakeholder_constraints
-    source: discovery_selection
-    required: false
-    inject_as: context
-    description: "Technical/policy/resource constraints from stakeholder interviews"
-  - key: stakeholder_priorities
-    source: discovery_selection
-    required: false
-    inject_as: context
-    description: "What stakeholders consider highest priority"
-  - key: stakeholder_questions_for_users
-    source: discovery_selection
-    required: false
-    inject_as: context
-    description: "Questions stakeholders want answered by user research"
+# NOTE: Brief does NOT use YAML consumes: for discovery injection.
+# Discovery variables are loaded manually by briefHandler.js based on
+# researcher's modal checkbox selection (which artifacts to include).
+# This is intentional — the researcher controls which discovery sources
+# inform the brief, not an automatic cascade lookup.
+#
+# Variables available to the brief when discovery is selected:
+#   upstream_discovered_barriers, upstream_knowledge_gaps,
+#   upstream_stakeholder_constraints, upstream_stakeholder_priorities,
+#   upstream_stakeholder_questions_for_users, upstream_discovered_metrics,
+#   upstream_survey_findings, upstream_discovered_journeys,
+#   upstream_source_artifacts, upstream_sample_demographics,
+#   discovery_count, discovery_sources
 
 emits:
   - key: research_objectives

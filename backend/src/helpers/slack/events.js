@@ -1,18 +1,13 @@
 // slack.js
 
 const express = require("express");
-const pathLib = require("node:path");
 const { App } = require("@slack/bolt"); // Slack Bolt SDK
-const { punchService, workspaceService, userService } = require("../../services");
+const { punchService } = require("../../services");
 const { getTeamInfo, getAllMembers } = require("../utils");
-const { getConfigRepo, YAML_TEMPLATE_PATH, readFolderContents, listAllTopLevelFolders, listOrgRepos, fetchFileFromRepo, readFolders, copyFilesToFolder, deleteStudyFolderFromGitHub } = require("../github");
-const { addChannelConfig, getChannelConfigByChannelId } = require("../../services/channel-config.service");
-const { runRAG, setupVectorStore } = require("../rag");
-const { indexRepoQueue } = require("../queue/indexRepo.queue");
-const { runRagV2 } = require("../ragV2");
-const { buildPromptFromYaml } = require("../yamlPrompt");
-const { getResearchStudyWithRoles, getStudiesByUser, addResearchStudyWithRoles, deleteResearchStudy } = require("../../services/research_study.service");
-const { studySetupModal, studySetupModalPlanStudy, studySetupModalStartResearch } = require("./ui/studySetupModal");
+const { getConfigRepo, YAML_TEMPLATE_PATH, readFolderContents, listAllTopLevelFolders, listOrgRepos, fetchFileFromRepo, readFolders, deleteStudyFolderFromGitHub } = require("../github");
+const { addChannelConfig } = require("../../services/channel-config.service");
+const { getResearchStudyWithRoles, getStudiesByUser, deleteResearchStudy } = require("../../services/research_study.service");
+const { studySetupModal, studySetupModalPlanStudy } = require("./ui/studySetupModal");
 const { researchPlanGeneratorModal } = require("./ui/researchPlanGeneratorModal");
 const { researchBriefModal } = require("./ui/researchBriefModal");
 const { buildBriefEntryModal } = require("./ui/researchBriefEntryModal");
@@ -40,21 +35,18 @@ const { sessionReminderModal } = require("./ui/outreach/sessionReminderModal");
 const { reschedulingRequestModal } = require("./ui/outreach/reschedulingRequestModal");
 const { followupModal } = require("./ui/outreach/followupModal");
 const { thankyouModal } = require("./ui/outreach/thankyouModal");
-const { processObserverYamlTemplate } = require("../observerYamlProcessor");
-const studyParticipantService = require("../../services/study_participant.service");
-const sessionObserverService = require("../../services/session_observer.service");
 const { uploadNotesHandler, handleTabManual, handleTabUpload, handleSessionSelectionChange, handleSessionNotesSubmission } = require("./commands/sessionNotesHandler");
 const { analyzeNotesHandler, handleAnalyzeNotesSubmission, handleStudySelectionChange: handleAnalyzeNotesStudyChange, handleSessionSelectionChange: handleAnalyzeNotesSessionChange } = require("./commands/analyzeNotesHandler");
 const { researchSynthesisHandler, handleResearchSynthesisSubmission, handleStudySelectionChange, handleFileCheckboxChange, handleLoadSynthesisFiles } = require("./commands/researchSynthesisHandler");
 const { openReadoutModal, handleReadoutModalInteraction, handleReadoutModalSubmission } = require("./commands/readoutHandler");
 const { processSlackFiles } = require("../pdfProcessor");
-const { buildSessionNotesView } = require("./ui/sessionNotesModal");
 const research_planService = require("../../services/research_plan.service");
 const { requestResearchHandler, handleRequestResearchSubmission, handleCreateBriefFromRequest, handleCreateStudyFromRequest } = require("./commands/requestResearchHandler");
 const { startResearchHandler, handleAddTeamMember, handleCreateStudySubmission } = require("./commands/createStudyHandler");
 const { parseDocuments, validateDocuments, createDocumentSummary } = require('../documentParser');
 const { createStudyModal } = require("./ui/createStudyModal");
 const { discoverHandler, handleDiscoverSubmission } = require("./commands/discoverHandler");
+const { handleBriefSubmission } = require("./commands/briefHandler");
 // Create an Express router for Slack routes
 const slackExpressRouter = express.Router();
 
@@ -1482,210 +1474,7 @@ slackApp.action('create_research_brief', async ({ ack, body, client }) => {
   }
 });
 
-slackApp.view('research_brief_modal', async ({ ack, body, view, client }) => {
-  await ack(); // Always acknowledge
-
-  const values = view.state.values;
-  const meta = JSON.parse(view.private_metadata || '{}');
-  const { channelId } = meta;
-
-  // Helper function to extract values from different input types
-  const extract = (blockId, actionId) => {
-    const block = values[blockId];
-    if (!block) return null;
-    const action = block[actionId];
-    if (!action) return null;
-    // Handle different input types
-    if (action.value !== undefined) return action.value?.trim() || null;
-    if (action.selected_option !== undefined) return action.selected_option;
-    if (action.selected_date !== undefined) return action.selected_date;
-    if (action.selected_options !== undefined) return action.selected_options.map(opt => opt.value);
-    return null;
-  };
-
-  // Extract study name from text input (or fall back to metadata from pre-fill)
-  const studyNameRaw = extract('study_name_block', 'study_name_input') || meta.studyName;
-  // Slugify: lowercase, spaces/underscores → hyphens, strip special chars
-  const studyName = studyNameRaw
-    ? studyNameRaw.toLowerCase().replace(/[\s_]+/g, '-').replace(/[^a-z0-9-]/g, '').replace(/-+/g, '-').replace(/^-|-$/g, '')
-    : null;
-
-  if (!studyName) {
-    console.error('No study name provided for research brief');
-    return;
-  }
-
-  console.log("🚀 ~ Research Brief ~ studyName:", studyName);
-
-  // Fetch the full study — or create it if it doesn't exist yet
-  // Brief is the first cascade document. It triggers study creation.
-  let study = await getResearchStudyWithRoles(studyName);
-
-  if (!study || !study.path) {
-    console.log('📁 Study does not exist yet — creating from brief submission');
-    try {
-      // Get user profile for study record
-      const userInfo = await client.users.info({ user: body.user.id });
-      const userEmail = userInfo.user.profile?.email || `${body.user.id}@slack.com`;
-      const userName = userInfo.user.real_name || userInfo.user.profile?.display_name || body.user.id;
-
-      // Get channel config for folder path
-      const channelConfig = await getChannelConfigByChannelId(channelId);
-      if (!channelConfig) {
-        throw new Error('No channel config found — run /qori-repo first to link a repository folder');
-      }
-
-      // Create GitHub folder structure from templates
-      const templateFiles = await readFolders('config/templates', getConfigRepo());
-      const folderResult = await copyFilesToFolder(
-        templateFiles,
-        `${channelConfig.sub_folder_name}/research`,
-        studyName,
-        process.env.GITHUB_REPO,
-        channelConfig.product_folder_name
-      );
-
-      // Create study DB record
-      await addResearchStudyWithRoles({
-        name: studyName,
-        description: `Created from research brief`,
-        created_by: body.user.id,
-        researcher_name: userName,
-        researcher_email: userEmail,
-        link: folderResult.url,
-        path: folderResult.path,
-        channel_name: channelId,
-        assignments: [],
-      });
-
-      // Re-fetch the study now that it exists
-      study = await getResearchStudyWithRoles(studyName);
-      console.log(`✅ Study "${studyName}" created from brief, path: ${study.path}`);
-    } catch (createError) {
-      console.error('❌ Failed to create study from brief:', createError);
-      const errMsg = createError.message?.includes('<!DOCTYPE')
-        ? 'GitHub is temporarily unavailable. Please try again in a moment.'
-        : createError.message;
-      await client.chat.postEphemeral({
-        channel: body.user.id,
-        user: body.user.id,
-        text: `❌ Could not create study folder: ${errMsg}`,
-      });
-      return;
-    }
-  }
-
-  // Methodology label mapping
-  const methodologyLabels = {
-    usability_testing: 'Moderated usability testing',
-    user_interviews: 'User interviews',
-    contextual_inquiry: 'Contextual inquiry',
-    concept_testing: 'Concept testing',
-    survey: 'Survey research',
-    card_sorting: 'Card sorting',
-    tree_testing: 'Tree testing',
-    mixed_methods: 'Mixed methods',
-  };
-
-  // Extract form values and map to YAML template input variables
-  const methodValue = extract('research_method_block', 'research_method_select')?.value || 'usability_testing';
-  const methodLabel = methodologyLabels[methodValue] || methodValue;
-
-  // Get lead researcher from metadata (set during modal open)
-  const leadResearcher = meta.leadResearcher || body.user.name || '';
-
-  const data = {
-    // Study info
-    selected_study: studyName,
-
-    // Researcher info (auto from Slack profile via metadata)
-    lead_researcher: leadResearcher,
-
-    // Stakeholder
-    requestor_name: extract('stakeholder_block', 'stakeholder_input') || '',
-
-    // Research scope
-    problem_statement: extract('problem_statement_block', 'problem_statement_input') || '',
-    learning_objectives: extract('learning_objectives_block', 'learning_objectives_input') || '',
-    out_of_scope: extract('out_of_scope_block', 'out_of_scope_input') || '',
-
-    // Method & participants
-    methodology: methodLabel,
-    methodology_value: methodValue,
-    participant_approach: extract('participant_approach_block', 'participant_approach_input') || '',
-
-    // Timeline & budget
-    timeline_preference: extract('timeline_block', 'timeline_radio')?.value || 'standard',
-    start_date: extract('start_date_block', 'start_date_picker') || '',
-    decision_deadline: extract('decision_deadline_block', 'decision_deadline_picker') || '',
-    budget: extract('budget_block', 'budget_input') || '',
-  };
-
-  // Extract selected discovery artifacts and inject upstream variables
-  const discoverySelections = extract('discovery_selection_block', 'discovery_selection') || [];
-  if (discoverySelections.length > 0) {
-    const { loadDiscoveryArtifacts, aggregateDiscoveryVariables } = require('../../helpers/discoveryLoader');
-    const team = meta.team || process.env.QORI_TEAM_SLUG || 'friends-lab';
-    try {
-      const allArtifacts = await loadDiscoveryArtifacts(team);
-      // Filter to selected artifacts (values are "type::slug")
-      const selectedSlugs = new Set(discoverySelections);
-      const selectedArtifacts = allArtifacts.filter(a => selectedSlugs.has(`${a.type}::${a.slug}`));
-
-      if (selectedArtifacts.length > 0) {
-        const upstreamVars = aggregateDiscoveryVariables(selectedArtifacts);
-        Object.assign(data, upstreamVars);
-
-        // Template variables for Discovery sources appendix
-        data.discovery_count = selectedArtifacts.length;
-        const typeLabels = { 'desk-research': 'Desk research', 'stakeholder-interviews': 'Stakeholder interviews', 'survey-synthesis': 'Survey synthesis' };
-        data.discovery_sources = selectedArtifacts
-          .map(a => `| ${a.slug} | ${typeLabels[a.type] || a.type} | ${a.variableCount} variables | ${a.date} |`)
-          .join('\n  ');
-
-        console.log(`✅ Injected ${Object.keys(upstreamVars).length} upstream variables from ${selectedArtifacts.length} discovery artifact(s)`);
-      }
-    } catch (error) {
-      console.warn('⚠️ Failed to load discovery variables for brief, proceeding without:', error.message);
-    }
-  }
-
-  console.log('📋 Extracted research brief data:', JSON.stringify(data, null, 2));
-
-  const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, "research_brief.yaml");
-  const renderedYaml = await processYamlTemplate(file.content, data, study.path);
-
-  const url = renderedYaml.result.url;
-
-  // Generate blocks with approval buttons
-  const blocks = generateStudyResultBlocks(studyName, study, url, channelId, 'brief');
-
-  // Send to study team via standard flow
-  await sendStudyResultMessage(client, channelId, studyName, blocks, 'brief');
-
-  // Also notify the researcher who created the brief
-  try {
-    const im = await client.conversations.open({
-      users: body.user.id
-    });
-    await client.chat.postMessage({
-      channel: im.channel.id,
-      text: `✅ *Research Brief Created*\n\n*Study:* ${studyName}\n*View:* <${url}|GitHub>\n\nThe brief has been sent to the study team for approval.`,
-    });
-  } catch (error) {
-    console.error('Failed to send confirmation to researcher:', error);
-  }
-
-  // Add study status for created file
-  await addStudyStatus({
-    study_name: studyName,
-    path: url,
-    status: 'created',
-    created_by: body.user?.id || body.user_id || null,
-  });
-
-  console.log(`✅ Research brief created for study: ${studyName}`);
-});
+slackApp.view('research_brief_modal', handleBriefSubmission);
 
 slackApp.action('approve_brief', async ({ ack, body, client }) => {
   await ack();
