@@ -206,7 +206,7 @@ ai_generation_tasks:
       Format: Month DD, YYYY (e.g., "May 1, 2026")
       Output only the formatted date, nothing else.
 
-  # Summary — narrative synthesis of the brief
+  # Summary — narrative synthesis weaving researcher input + discovery
   - task_id: "summary"
     prompt: |
       Write a 2-3 sentence summary of this research brief:
@@ -219,52 +219,90 @@ ai_generation_tasks:
       Deadline: {{decision_deadline}}
 
       {% if upstream_discovered_barriers %}
-      UPSTREAM CONTEXT (from discovery research):
-      Known barriers from desk research: {{upstream_discovered_barriers}}
+      DISCOVERY CONTEXT (synthesize into your narrative — do not list separately):
+      Known barriers: {{upstream_discovered_barriers}}
       {% if upstream_stakeholder_constraints %}Stakeholder constraints: {{upstream_stakeholder_constraints}}{% endif %}
       {% if upstream_survey_findings %}Survey findings: {{upstream_survey_findings}}{% endif %}
-      {% if upstream_discovered_metrics %}Metrics from discovery: {{upstream_discovered_metrics}}{% endif %}
-      {% if upstream_knowledge_gaps %}Knowledge gaps: {{upstream_knowledge_gaps}}{% endif %}
-
-      CITATION RULE: When referencing upstream discovery data, cite the source inline.
-      Format: "(per Q4 2025 analytics report)" or "(per stakeholder interview, Product Owner)"
-      or "(per survey, n=X)". Do NOT invent statistics — use only values present in
-      the upstream variables above. If a claim has no upstream support, write from
-      the researcher's input alone without fabricating citations.
-
-      Incorporate upstream context when it strengthens the summary — reference
-      known barriers or stakeholder constraints that motivate this research.
+      {% if upstream_discovered_metrics %}Metrics: {{upstream_discovered_metrics}}{% endif %}
       {% endif %}
+
+      SYNTHESIS RULE: Weave discovery data INTO the narrative as one voice.
+      Cite inline: "(per Q4 2025 analytics)" or "(per stakeholder interview, engineering lead)"
+      or "(per satisfaction survey, n=30)". Do NOT list discovery findings separately.
+      Do NOT invent statistics — use only values from the variables above.
+      If no upstream context exists, write from researcher input alone.
 
       The summary should explain: what problem we're solving, what method we'll use,
       and what decision the findings will inform. Be specific and concise.
       Do not use quotes around text.
 
-  # Formatted learning objectives — clean bullet list
+  # Problem — enrich researcher's framing with discovery evidence
+  - task_id: "problem"
+    prompt: |
+      Write a 2-4 sentence problem statement for a research brief:
+
+      Researcher's framing: {{problem_statement}}
+
+      {% if upstream_discovered_barriers %}
+      DISCOVERY EVIDENCE (weave into the problem statement — do not list):
+      Known barriers: {{upstream_discovered_barriers}}
+      {% if upstream_discovered_metrics %}Metrics: {{upstream_discovered_metrics}}{% endif %}
+      {% if upstream_survey_findings %}Survey data: {{upstream_survey_findings}}{% endif %}
+      {% if upstream_stakeholder_constraints %}Constraints: {{upstream_stakeholder_constraints}}{% endif %}
+
+      SYNTHESIS RULE: Enrich the researcher's framing with specific discovery evidence.
+      Cite inline: "(per Q4 2025 analytics)" or "(per stakeholder interview, engineering lead)"
+      or "(per satisfaction survey, n=30)". The result should read as one voice —
+      the researcher's problem statement backed by evidence, not a list of findings.
+      Do NOT invent statistics. Only use values from the variables above.
+      {% endif %}
+
+      If no discovery context exists, output the researcher's problem statement
+      as-is with light editorial cleanup (grammar, clarity).
+      Do not use quotes around text. Always use markdown dash (-) for bullets.
+
+  # Formatted learning objectives — sharpen with discovery context
   - task_id: "formatted_learning"
     prompt: |
       Format these learning objectives into a clean bulleted list:
       "{{learning_objectives}}"
+
+      {% if upstream_knowledge_gaps %}
+      DISCOVERY CONTEXT: These knowledge gaps were identified in prior research.
+      Where applicable, sharpen objectives to address specific gaps:
+      {{upstream_knowledge_gaps}}
+      {% endif %}
 
       Rules:
       - Each objective should be a clear, specific question or goal
       - Start each with a verb or "Where/How/Which/What"
       - Keep to 4-6 bullets maximum
       - Preserve the researcher's original intent
+      - If discovery gaps overlap with objectives, make the objective more specific
       - Always use markdown dash (-) for bullets, never Unicode bullets (•)
 
       Output only the bulleted list, no preamble.
 
-  # Formatted out of scope — clean bullet list
+  # Formatted out of scope — incorporate discovery context
   - task_id: "formatted_out_of_scope"
     prompt: |
       Format these out-of-scope items into a clean bulleted list:
       "{{out_of_scope}}"
 
+      {% if upstream_discovered_barriers %}
+      DISCOVERY CONTEXT: If any discovery findings are already well-established
+      and don't need re-investigation, note that briefly. For example, if desk
+      research already answered a question comprehensively, that topic can be
+      marked as out of scope with "(already addressed in desk research)".
+      Discovery barriers: {{upstream_discovered_barriers}}
+      {% if upstream_knowledge_gaps %}Knowledge gaps: {{upstream_knowledge_gaps}}{% endif %}
+      {% endif %}
+
       Rules:
       - Each item should be concise (one line)
       - Keep to 3-5 bullets maximum
       - Preserve the researcher's original boundaries
+      - Only add discovery-informed items if they clearly don't need re-investigation
       - Always use markdown dash (-) for bullets, never Unicode bullets (•)
 
       Output only the bulleted list, no preamble.
@@ -368,47 +406,11 @@ output_template: |
   | **Decision deadline** | {{decision_deadline}} |
   {{#if budget}}| **Budget** | {{budget}} |{{/if}}
 
-  {{#if upstream_discovered_barriers}}
-  ---
-
-  ## Informed by Discovery
-
-  This brief synthesizes {{discovery_count}} discovery source{{#unless discovery_single}}s{{/unless}}:
-
-  {{#if discovery_sources}}
-  | Source | Type | Date |
-  |--------|------|------|
-  {{discovery_sources}}
-  {{/if}}
-
-  ### Discovery findings applied to this brief
-
-  {{#if upstream_discovered_barriers}}
-  **Barriers identified:**
-  {{upstream_discovered_barriers}}
-  {{/if}}
-
-  {{#if upstream_stakeholder_constraints}}
-  **Stakeholder constraints:**
-  {{upstream_stakeholder_constraints}}
-  {{/if}}
-
-  {{#if upstream_survey_findings}}
-  **Survey findings:**
-  {{upstream_survey_findings}}
-  {{/if}}
-
-  {{#if upstream_knowledge_gaps}}
-  **Knowledge gaps remaining:**
-  {{upstream_knowledge_gaps}}
-  {{/if}}
-
-  {{/if}}
   ---
 
   ## Problem
 
-  {{problem_statement}}
+  {{ai_generated.problem}}
 
   ---
 
@@ -451,6 +453,22 @@ output_template: |
   | Risk | Mitigation |
   |------|------------|
   {{ai_generated.risks}}
+
+  ---
+
+  {{#if discovery_sources}}
+  ---
+
+  ## Discovery sources
+
+  This brief synthesized findings from {{discovery_count}} discovery sources:
+
+  | Source | Type | Findings extracted | Date |
+  |--------|------|-------------------|------|
+  {{discovery_sources}}
+
+  Full discovery artifacts: see `_discovery/` in study repository.
+  {{/if}}
 
   ---
 
