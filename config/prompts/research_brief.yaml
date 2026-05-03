@@ -4,16 +4,16 @@
 id: research_brief
 name: create_research_brief
 label: "Research Brief"
-version: "v5.0.1"
+version: "v6.0"
 
 description: |
-  Stakeholder approval document for research scope.
+  Cascade-aware stakeholder approval document for research scope.
   Brief = approval gate. Plan = execution doc.
-  First document in a study — no prior inputs exist.
+  Synthesizes upstream discovery variables into prose with citation markers.
 
 author: Qori R&D
 created: 2025-06-26
-last_updated: 2026-05-01
+last_updated: 2026-05-03
 
 # ═══════════════════════════════════════════════════════════
 # CONFIGURATION
@@ -46,9 +46,6 @@ input_variables:
   - methodology:
       type: "select"
       required: true
-  - method_rationale:
-      type: "textarea"
-      required: true
   - timeline_preference:
       type: "radio"
       required: true
@@ -65,19 +62,25 @@ input_variables:
 # ═══════════════════════════════════════════════════════════
 # CASCADE CONTRACT
 # ═══════════════════════════════════════════════════════════
-# NOTE: Brief does NOT use YAML consumes: for discovery injection.
-# Discovery variables are loaded manually by briefHandler.js based on
-# researcher's modal checkbox selection (which artifacts to include).
-# This is intentional — the researcher controls which discovery sources
-# inform the brief, not an automatic cascade lookup.
+# Brief uses MANUAL discovery loading via briefHandler.js (not YAML consumes).
+# Researcher selects which discovery artifacts to include via modal checkboxes.
+# This is intentional — researcher controls which sources inform the brief.
 #
-# Variables available to the brief when discovery is selected:
-#   upstream_discovered_barriers, upstream_knowledge_gaps,
-#   upstream_stakeholder_constraints, upstream_stakeholder_priorities,
-#   upstream_stakeholder_questions_for_users, upstream_discovered_metrics,
-#   upstream_survey_findings, upstream_discovered_journeys,
-#   upstream_source_artifacts, upstream_sample_demographics,
-#   discovery_count, discovery_sources
+# Deviation from spec: 05-cc-instruction.md assumed YAML consumes. Manual loading
+# is better for briefs because researcher-driven selection enables cherry-picking
+# discovery sources per study, rather than consuming everything automatically.
+#
+# Available upstream variables when discovery selected:
+#   DESK RESEARCH: upstream_discovered_barriers, upstream_discovered_metrics,
+#     upstream_discovered_journeys, upstream_methodology_recommendations,
+#     upstream_knowledge_gaps, upstream_source_artifacts
+#   STAKEHOLDER: upstream_stakeholder_constraints, upstream_stakeholder_priorities,
+#     upstream_alignment_gaps, upstream_stakeholder_questions_for_users,
+#     upstream_backstage_observations, upstream_system_failure_modes
+#   SURVEY: upstream_survey_themes, upstream_survey_findings,
+#     upstream_survey_recommendations, upstream_discovered_barriers (merged),
+#     upstream_discovered_metrics (merged), upstream_sample_demographics
+#   METADATA: discovery_count, discovery_sources, citation_convention
 
 emits:
   - key: research_objectives
@@ -135,7 +138,7 @@ emits:
     pool_strategy: replace
     schema:
       type: string
-    extract_from: "Timeline table or timeline metadata"
+    extract_from: "Timeline metadata"
   - key: start_date
     pool: false
     pool_strategy: replace
@@ -165,211 +168,161 @@ emits:
 # AI GENERATION
 # ═══════════════════════════════════════════════════════════
 ai_generation_tasks:
-  # GLOBAL FORMATTING RULE (applies to all tasks below):
-  # Always use markdown dash (-) for bullets, never Unicode bullets (•).
-  # Do not wrap text in quotes. Use display-friendly dates (Month DD, YYYY).
 
-  # Descriptive title — human-readable study name for H1
   - task_id: "descriptive_title"
     prompt: |
-      Convert this study slug into a short, descriptive title for a research brief:
-
+      Convert this study slug into a short, descriptive title:
       Study slug: {{selected_study}}
       Problem context: {{problem_statement}}
+      Rules: Title case, 3-8 words. Describe the subject, not the method.
+      Do not include "Research Brief". Output only the title.
 
-      Rules:
-      - Title case, 3-8 words
-      - Describe the research subject, not the method (e.g., "Navigation Redesign Usability Study" not "Usability Testing Study")
-      - Do not include "Research Brief" — that's already in the H1 prefix
-      - Output only the title, nothing else
-
-  # Display date — human-readable date for masthead
   - task_id: "display_date"
     prompt: |
-      Format this ISO date as a display-friendly date:
+      Format as Month DD, YYYY: {{current_date_iso}}
+      Output only the formatted date.
 
-      Date: {{current_date_iso}}
-
-      Format: Month DD, YYYY (e.g., "May 1, 2026")
-      Output only the formatted date, nothing else.
-
-  # Summary — narrative synthesis weaving researcher input + discovery
-  - task_id: "summary"
+  - task_id: "timeline_display"
     prompt: |
-      Write a 2-3 sentence summary of this research brief:
+      Format: {{timeline_preference}}
+      "standard" -> "6 weeks", "accelerated" -> "4 weeks", "extended" -> "8 weeks"
+      Output only the string.
 
-      Study: {{selected_study}}
-      Problem: {{problem_statement}}
-      What we'll learn: {{learning_objectives}}
-      Method: {{methodology}}
-      Participants: {{participant_approach}}
-      Deadline: {{decision_deadline}}
-
-      {% if upstream_discovered_barriers %}
-      DISCOVERY CONTEXT (synthesize into your narrative — do not list separately):
-      Known barriers: {{upstream_discovered_barriers}}
-      {% if upstream_stakeholder_constraints %}Stakeholder constraints: {{upstream_stakeholder_constraints}}{% endif %}
-      {% if upstream_survey_findings %}Survey findings: {{upstream_survey_findings}}{% endif %}
-      {% if upstream_discovered_metrics %}Metrics: {{upstream_discovered_metrics}}{% endif %}
-      {% endif %}
-
-      SYNTHESIS RULE: Weave discovery data INTO the narrative as one voice.
-      Cite inline: "(per Q4 2025 analytics)" or "(per stakeholder interview, engineering lead)"
-      or "(per satisfaction survey, n=30)". Do NOT list discovery findings separately.
-      Do NOT invent statistics — use only values from the variables above.
-      If no upstream context exists, write from researcher input alone.
-
-      The summary should explain: what problem we're solving, what method we'll use,
-      and what decision the findings will inform. Be specific and concise.
-      Do not use quotes around text.
-
-  # Problem — enrich researcher's framing with discovery evidence
-  - task_id: "problem"
-    prompt: |
-      Write a 2-4 sentence problem statement for a research brief:
-
-      Researcher's framing: {{problem_statement}}
-
-      {% if upstream_discovered_barriers %}
-      DISCOVERY EVIDENCE (weave into the problem statement — do not list):
-      Known barriers: {{upstream_discovered_barriers}}
-      {% if upstream_discovered_metrics %}Metrics: {{upstream_discovered_metrics}}{% endif %}
-      {% if upstream_survey_findings %}Survey data: {{upstream_survey_findings}}{% endif %}
-      {% if upstream_stakeholder_constraints %}Constraints: {{upstream_stakeholder_constraints}}{% endif %}
-
-      SYNTHESIS RULE: Enrich the researcher's framing with specific discovery evidence.
-      Cite inline: "(per Q4 2025 analytics)" or "(per stakeholder interview, engineering lead)"
-      or "(per satisfaction survey, n=30)". The result should read as one voice —
-      the researcher's problem statement backed by evidence, not a list of findings.
-      Do NOT invent statistics. Only use values from the variables above.
-      {% endif %}
-
-      If no discovery context exists, output the researcher's problem statement
-      as-is with light editorial cleanup (grammar, clarity).
-      Do not use quotes around text. Always use markdown dash (-) for bullets.
-
-  # Formatted learning objectives — sharpen with discovery context
-  - task_id: "formatted_learning"
-    prompt: |
-      Format these learning objectives into a clean bulleted list:
-      "{{learning_objectives}}"
-
-      {% if upstream_knowledge_gaps %}
-      DISCOVERY CONTEXT: These knowledge gaps were identified in prior research.
-      Where applicable, sharpen objectives to address specific gaps:
-      {{upstream_knowledge_gaps}}
-      {% endif %}
-
-      Rules:
-      - Each objective should be a clear, specific question or goal
-      - Start each with a verb or "Where/How/Which/What"
-      - Keep to 4-6 bullets maximum
-      - Preserve the researcher's original intent
-      - If discovery gaps overlap with objectives, make the objective more specific
-      - Always use markdown dash (-) for bullets, never Unicode bullets (•)
-
-      Output only the bulleted list, no preamble.
-
-  # Formatted out of scope — incorporate discovery context
-  - task_id: "formatted_out_of_scope"
-    prompt: |
-      Format these out-of-scope items into a clean bulleted list:
-      "{{out_of_scope}}"
-
-      {% if upstream_discovered_barriers %}
-      DISCOVERY CONTEXT: If any discovery findings are already well-established
-      and don't need re-investigation, note that briefly. For example, if desk
-      research already answered a question comprehensively, that topic can be
-      marked as out of scope with "(already addressed in desk research)".
-      Discovery barriers: {{upstream_discovered_barriers}}
-      {% if upstream_knowledge_gaps %}Knowledge gaps: {{upstream_knowledge_gaps}}{% endif %}
-      {% endif %}
-
-      Rules:
-      - Each item should be concise (one line)
-      - Keep to 3-5 bullets maximum
-      - Preserve the researcher's original boundaries
-      - Only add discovery-informed items if they clearly don't need re-investigation
-      - Always use markdown dash (-) for bullets, never Unicode bullets (•)
-
-      Output only the bulleted list, no preamble.
-
-  # Timeline — calculate dates from start_date + preference
   - task_id: "timeline"
     prompt: |
       Create a timeline table for {{timeline_preference}} research starting {{start_date}}.
+      Output EXACTLY 2 columns: Phase | Dates (range in one cell).
+      Durations for standard: Planning 10d, Fieldwork 14d, Analysis 9d, Findings 7d.
+      For accelerated: Planning 4d, Fieldwork 4d, Analysis 4d, Findings 2d.
+      For extended: Planning 14d, Fieldwork 14d, Analysis 14d, Findings 7d.
+      Start from {{start_date}}. Each phase starts day after previous ends.
+      No header row. No blank lines. Example:
+      | Planning and recruitment | May 4 - May 13, 2026 |
 
-      CRITICAL: Output EXACTLY 2 columns per row. No more, no less.
-      The 2 columns are: Phase | Dates
-      The Dates column combines start AND end into ONE cell: "May 18 – May 25, 2026"
-
-      Phase durations for {{timeline_preference}}:
-      - standard: Planning 10d, Fieldwork 7d, Analysis 7d, Findings 4d
-      - accelerated: Planning 4d, Fieldwork 4d, Analysis 4d, Findings 2d
-      - extended: Planning 14d, Fieldwork 14d, Analysis 14d, Findings 7d
-
-      Rules:
-      - Start from {{start_date}}. Each phase starts the day after the previous ends.
-      - Do NOT output a header row — only the 4 data rows.
-      - No blank lines between rows.
-
-      YOUR OUTPUT MUST LOOK EXACTLY LIKE THIS (but with dates calculated from {{start_date}}):
-      | Planning and recruitment | May 4 – May 17, 2026 |
-      | Fieldwork | May 18 – May 24, 2026 |
-      | Analysis | May 25 – June 2, 2026 |
-      | Findings presentation | June 3 – June 5, 2026 |
-
-  # Timeline display — format timeline preference for summary table
-  - task_id: "timeline_display"
+  - task_id: "brief_body"
     prompt: |
-      Format this timeline preference as a display-friendly string:
-
-      Preference: {{timeline_preference}}
-
-      Rules:
-      - "standard" → "6 weeks"
-      - "accelerated" → "2 weeks"
-      - "extended" → "8 weeks"
-
-      Output ONLY the formatted string, nothing else.
-
-  # Risks — generate 2 study-specific risks
-  - task_id: "risks"
-    prompt: |
-      Identify 2 risks for {{methodology}} research on {{selected_study}}:
-
-      Problem context: {{problem_statement}}
-      Timeline: {{timeline_preference}}
-      Deadline: {{decision_deadline}}
-
-      {% if upstream_stakeholder_constraints %}
-      STAKEHOLDER CONSTRAINTS (from discovery):
-      {{upstream_stakeholder_constraints}}
-
-      If any stakeholder constraints directly create study risks (e.g., resource
-      limitations, policy blockers, system access issues), cite them inline:
-      "(per stakeholder interview, [role])".
-      {% endif %}
+      You are generating the body of a cascade-aware research brief.
 
       {% if upstream_discovered_barriers %}
-      KNOWN BARRIERS (from discovery):
-      {{upstream_discovered_barriers}}
+      ============================================================
+      CASCADE-AWARE GENERATION
+      ============================================================
+
+      You have upstream discovery variables. SYNTHESIZE them into prose.
+      Do NOT list or dump variables. Weave them into each section naturally.
+
+      CITATION MARKERS: {{citation_convention}}
+      - Every claim from upstream gets a superscript: <sup>[D1]</sup>, <sup>[S2]</sup>, <sup>[V3]</sup>
+      - D = Desk research, S = Stakeholder synthesis, V = Survey (Voice of customer)
+      - Number in order of first appearance across entire document
+      - Multiple sources for one claim: <sup>[D2, V4]</sup>
+      - Use ONLY metrics from upstream. Do NOT invent statistics.
+      - Verbatim quotes sharpen prose: "quote" <sup>[marker]</sup>
+      - If a section has no upstream support, write from researcher input without markers
+
+      DESK RESEARCH:
+      Barriers: {{upstream_discovered_barriers}}
+      {% if upstream_discovered_metrics %}Metrics: {{upstream_discovered_metrics}}{% endif %}
+      {% if upstream_discovered_journeys %}Journeys: {{upstream_discovered_journeys}}{% endif %}
+      {% if upstream_methodology_recommendations %}Method recommendations: {{upstream_methodology_recommendations}}{% endif %}
+      {% if upstream_knowledge_gaps %}Knowledge gaps: {{upstream_knowledge_gaps}}{% endif %}
+
+      STAKEHOLDER SYNTHESIS:
+      {% if upstream_stakeholder_constraints %}Constraints: {{upstream_stakeholder_constraints}}{% endif %}
+      {% if upstream_stakeholder_priorities %}Priorities: {{upstream_stakeholder_priorities}}{% endif %}
+      {% if upstream_alignment_gaps %}Alignment gaps: {{upstream_alignment_gaps}}{% endif %}
+      {% if upstream_stakeholder_questions_for_users %}Questions for users: {{upstream_stakeholder_questions_for_users}}{% endif %}
+
+      SURVEY SYNTHESIS:
+      {% if upstream_survey_themes %}Themes: {{upstream_survey_themes}}{% endif %}
+      {% if upstream_survey_findings %}Findings: {{upstream_survey_findings}}{% endif %}
+      {% if upstream_survey_recommendations %}Recommendations: {{upstream_survey_recommendations}}{% endif %}
       {% endif %}
 
-      Format as table rows ONLY (no header):
-      | [Risk description] | [Specific mitigation] |
-      | [Risk description] | [Specific mitigation] |
+      ============================================================
+      RESEARCHER INPUT
+      ============================================================
 
-      Risks should be specific to this study — not generic project management.
-      Consider: recruitment difficulty, technical setup for {{methodology}},
-      timeline constraints, stakeholder feedback delays, and any constraints
-      surfaced by discovery research.
+      Study: {{selected_study}}
+      Problem: {{problem_statement}}
+      Learning objectives: {{learning_objectives}}
+      Method: {{methodology}}
+      Participants: {{participant_approach}}
+      Out of scope: {{out_of_scope}}
+      Decision deadline: {{decision_deadline}}
+      Budget: {{budget}}
 
-      CITATION RULE: Do NOT invent statistics or sources. Only cite upstream
-      data that is present above. If no upstream context exists, write risks
-      from the researcher's input alone.
+      ============================================================
+      GENERATE THESE SECTIONS
+      ============================================================
 
-      CRITICAL: Output rows with NO blank lines between them.
+      Output ALL sections below as continuous markdown. Do NOT stop early.
+
+      ## Summary
+
+      2-3 sentences weaving discovery metrics with researcher input as ONE voice.
+      Include what problem, what method, what decision this enables. Bold key metrics.
+      Citation markers on every upstream claim.
+
+      Then output a metadata table (no header):
+      | | |
+      |---|---|
+      | **Method** | {{methodology}} - recommended by N discovery sources |
+      | **Participants** | [count and key segments from participant_approach] |
+      | **Timeline** | [from timeline_preference] |
+      | **Decision deadline** | {{decision_deadline}} |
+      | **Budget** | {{budget}} |
+
+      ## Problem
+
+      2-3 paragraphs. Researcher's framing enriched with discovery evidence inline.
+      Bold key metrics. Show contrast (what works vs what fails). Include stakeholder
+      diagnosis of root cause. Citation markers on every upstream number.
+
+      ## What we'll learn
+
+      {% if upstream_stakeholder_questions_for_users %}
+      Use stakeholder questions as numbered research questions (they come pre-prioritized
+      Blocking/Important/Validation). Frame each with context from discovery.
+      Structure: blocking questions first, then important, note which are non-blocking.
+      {% else %}
+      Format researcher's learning objectives as numbered list.
+      {% endif %}
+
+      ## Method
+
+      State method. If methodology_recommendations exist, explain WHY with
+      "N discovery sources independently recommended..." and cite each source.
+      Note what this method answers and what follow-up would address remaining gaps.
+
+      ## Participants
+
+      Table format: Segment | Count | Rationale
+      Justify segments with discovery evidence (AT users if accessibility barriers found,
+      older veterans if age patterns). Add Demographics section with recruitment sources.
+
+      ## Out of scope
+
+      Bold title for each item. For discovery-established items:
+      "**Whether navigation is broken** -- Already demonstrated by 45% abandonment <sup>[D2, V2]</sup>"
+      Researcher items included as-is.
+
+      ## Risks
+
+      Table format: Risk | Source | Mitigation (3 columns)
+      Bold risk title. Use stakeholder constraints as risk sources with role attribution.
+      3-5 rows. Include specific mitigation strategies.
+
+      CRITICAL: Output ALL 7 sections. Do not truncate.
+
+  - task_id: "approval_items"
+    prompt: |
+      Generate 4 approval checkboxes for research brief about {{selected_study}}:
+      - [ ] Stakeholder approves scope and method
+      - [ ] Stakeholder approves timeline and deadline
+      - [ ] Budget confirmed
+      - [ ] [fourth item specific to this study, e.g., recruitment criteria]
+      Output only the checklist.
 
 # ═══════════════════════════════════════════════════════════
 # OUTPUT
@@ -381,41 +334,7 @@ output_template: |
 
   ---
 
-  ## Summary
-
-  {{ai_generated.summary}}
-
-  | | |
-  |---|---|
-  | **Method** | {{methodology}} |
-  | **Participants** | {{participant_approach}} |
-  | **Timeline** | {{ai_generated.timeline_display}} |
-  | **Decision deadline** | {{decision_deadline}} |
-  {{#if budget}}| **Budget** | {{budget}} |{{/if}}
-
-  ---
-
-  ## Problem
-
-  {{ai_generated.problem}}
-
-  ---
-
-  ## What we'll learn
-
-  {{ai_generated.formatted_learning}}
-
-  ---
-
-  ## Method
-
-  **Approach** — {{methodology}}
-
-  ---
-
-  ## Participants
-
-  {{participant_approach}}
+  {{ai_generated.brief_body}}
 
   ---
 
@@ -429,51 +348,32 @@ output_template: |
 
   ---
 
-  ## Out of scope
+  ## Approval
 
-  {{ai_generated.formatted_out_of_scope}}
+  {{ai_generated.approval_items}}
 
-  ---
-
-  ## Risks
-
-  | Risk | Mitigation |
-  |------|------------|
-  {{ai_generated.risks}}
-
-  ---
+  Once approved, the lead researcher will produce a detailed research plan covering session protocols, recruitment mechanics, and analysis approach.
 
   {{#if discovery_sources}}
   ---
 
   ## Discovery sources
 
-  This brief synthesized findings from {{discovery_count}} discovery sources:
+  This brief synthesized findings from {{discovery_count}} discovery sources. Citation markers throughout the document trace each claim to its source.
 
-  | Source | Type | Findings extracted | Date |
-  |--------|------|-------------------|------|
+  | Marker | Source | Type | Date | Findings used |
+  |--------|--------|------|------|---------------|
   {{discovery_sources}}
 
   Full discovery artifacts: see `_discovery/` in study repository.
   {{/if}}
-
-  ---
-
-  ## Approval
-
-  - [ ] Stakeholder approves scope and method
-  - [ ] Stakeholder approves timeline and deadline
-  - [ ] Budget confirmed
-  - [ ] Recruitment criteria validated
-
-  Once approved, the lead researcher will produce a detailed research plan covering session protocols, recruitment, and analysis approach.
 
 output_options:
   path: "01-planning/"
   filename: "{{selected_study}}-research-brief-{{current_date_iso}}.md"
 
 # ═══════════════════════════════════════════════════════════
-# METADATA (documentation only — not read by backend)
+# METADATA (documentation only -- not read by backend)
 # ═══════════════════════════════════════════════════════════
 processing_workflow:
   1. validate_modal_inputs
@@ -488,26 +388,28 @@ notify:
     message: "Research brief for {{selected_study}} is ready for stakeholder approval."
 
 notes: |
-  v5.0 Changes (Design Language Translation):
-  - Translated locked design from docs/design-references/research_brief_reference.md
-  - Brief = approval gate. Plan = execution doc. Brief approved → plan elaborates.
-  - Pattern C: document-level footer only (backend buildTraceabilityFooter)
-  - Exception: Approval section included (brief IS the approval gate)
-  - Modal simplified: 15 fields → 7 + study selector
-  - Removed: hypotheses, success_criteria, expected_outcomes, next_steps,
-    user_journeys, target_barriers, team_table, participant_criteria (all
-    belong in research plan)
-  - Added: study selector (fixes Scenario A bug), out_of_scope, timeline
-    presets (standard/accelerated/extended), decision_deadline
-  - AI tasks: 8 → 5 (summary, formatted_learning, formatted_out_of_scope,
-    timeline, risks)
-  - Handler: removed isFromRequest branching, added Slack profile lookup,
-    methodology label mapping
-  - Filename: {{selected_study}}-research-brief-{{current_date_iso}}.md
+  v6.0 Changes (Cascade-Aware Brief):
+  - CASCADE-AWARE GENERATION: single brief_body task generates all 7 body sections
+    with citation markers [D1-D7], [S1-S7], [V1-V7] woven through prose
+  - Discovery sources appendix at bottom maps markers to source artifacts
+  - Modal pre-populates cascade-driven fields with sparkle markers
+  - Auto-selects all discovery checkboxes (researcher unchecks to exclude)
+  - Manual discovery loading via briefHandler.js (not YAML consumes) -- researcher
+    controls which discovery sources inform the brief
+  - Deep schema extraction: barriers with id/title/evidence/confidence, constraints
+    with source_role/verbatim_quote/broader_pattern/implications, survey themes
+    with frequency/sentiment/verbatim_quotes
+  - AI tasks reduced: 9 tasks -> 5 (descriptive_title, display_date, timeline_display,
+    timeline, brief_body + approval_items). brief_body generates all prose sections
+    in one pass for citation marker consistency across document
+  - Version bump: v5.0.1 -> v6.0 per cascade-aware pattern adoption (Section 8)
 
+  v5.0.1: Pre-cascade version (brief output polish, discovery section)
+  v5.0: Design language translation
   v4.2: Pre-translation version
 
 output_use: |
-  Stakeholder approval document for research scope. First document in a study
-  lifecycle — no prior inputs exist. Brief approved → plan elaborates.
-  Pattern C treatment with Approval section exception.
+  Cascade-aware stakeholder approval document. Synthesizes upstream discovery
+  variables (desk research, stakeholder interviews, surveys) into prose with
+  citation markers. First document in study lifecycle. Researcher selects which
+  discovery sources to include. Brief approved -> plan elaborates.

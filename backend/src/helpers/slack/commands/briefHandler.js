@@ -150,9 +150,17 @@ async function handleBriefSubmission({ ack, body, view, client }) {
         // Template variables for Discovery sources appendix
         data.discovery_count = selectedArtifacts.length;
         const typeLabels = { 'desk-research': 'Desk research', 'stakeholder-interviews': 'Stakeholder interviews', 'survey-synthesis': 'Survey synthesis' };
+        const markerPrefixes = { 'desk-research': 'D', 'stakeholder-interviews': 'S', 'survey-synthesis': 'V' };
         data.discovery_sources = selectedArtifacts
-          .map(a => `| ${a.slug} | ${typeLabels[a.type] || a.type} | ${a.variableCount} variables | ${a.date} |`)
+          .map(a => {
+            const prefix = markerPrefixes[a.type] || '?';
+            return `| **${prefix}**1-${prefix}7 | ${a.slug} | ${typeLabels[a.type] || a.type} | ${a.date} | ${a.variableCount} variables |`;
+          })
           .join('\n  ');
+        // Pass marker convention to prompts for citation generation
+        data.citation_convention = selectedArtifacts
+          .map(a => `[${markerPrefixes[a.type] || '?'}N] = ${typeLabels[a.type] || a.type} (${a.slug})`)
+          .join('; ');
 
         console.log(`✅ Injected ${Object.keys(upstreamVars).length} upstream variables from ${selectedArtifacts.length} discovery artifact(s)`);
       }
