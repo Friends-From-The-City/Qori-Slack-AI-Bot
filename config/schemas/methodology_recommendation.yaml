@@ -1,0 +1,20 @@
+# Methodology recommendation — research method suggested by discovery source
+# Emitted by: desk_research
+# Consumed by: research_brief (drives method pre-population)
+type: object
+properties:
+  id:
+    type: string
+    description: "method-001, method-002, etc."
+  method:
+    type: string
+    description: "Recommended method — 'Card sorting + tree testing'"
+  addresses:
+    type: string
+    description: "What this method investigates — 'Veterans mental models for organizing VA services'"
+  rationale:
+    type: string
+    description: "Full sentence explaining why this method fits"
+  source_document:
+    type: string
+    description: "Name of the source document recommending this"

@@ -1,0 +1,32 @@
+# Stakeholder priority — what stakeholders consider highest priority
+# Emitted by: stakeholder_synthesis
+# Consumed by: research_brief
+type: object
+properties:
+  id:
+    type: string
+    description: "priority-001, priority-002, etc."
+  priority:
+    type: string
+    description: "The priority — 'Navigation overhaul'"
+  stated_by:
+    type: array
+    items:
+      type: string
+    description: "SH-XXX identifiers who stated this — ['SH-001', 'SH-002', 'SH-003']"
+  aligns_with_user_need:
+    type: string
+    enum: [Yes, No, Partial, Unknown]
+    description: "Whether this priority directly serves users"
+  driver:
+    type: string
+    nullable: true
+    description: "What's driving this priority — 'App store ratings, congressional inquiries'"
+  timeline:
+    type: string
+    nullable: true
+    description: "When — 'Q3 2026'"
+  effort_estimate:
+    type: string
+    nullable: true
+    description: "How much work — '6-8 sprints'"

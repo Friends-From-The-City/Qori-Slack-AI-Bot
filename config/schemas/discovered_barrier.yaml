@@ -1,28 +1,35 @@
-# Discovered barrier — pain point or obstacle identified in desk research
-# Emitted by: desk_research
+# Discovered barrier — pain point or obstacle from desk research or survey
+# Emitted by: desk_research, survey_synthesis
 # Consumed by: stakeholder_synthesis, research_brief, research_plan
 type: object
 properties:
-  barrier:
+  id:
     type: string
-    description: "The barrier with full context — what it is, who it affects, how"
-  source_document:
+    description: "barrier-001, barrier-002, etc."
+  title:
     type: string
-    nullable: true
-    description: "Name of the source document where this was found"
-  verbatim_evidence:
+    description: "Short descriptive title for the barrier"
+  summary:
     type: string
-    nullable: true
-    description: "Direct quote or data point from the source document"
+    description: "1-2 sentence description of the barrier"
   magnitude:
     type: string
     nullable: true
-    description: "Scope or severity — percentage affected, frequency, impact scale"
+    description: "Scope or severity — '30% QoQ increase' or '45% abandonment'"
+  evidence:
+    type: array
+    items:
+      type: string
+    nullable: true
+    description: "Supporting metrics or verbatim quotes from source"
   affected_population:
     type: string
     nullable: true
-    description: "Who is affected — user segment, role, demographic"
-  research_implication:
+    description: "Who is affected — '2.1M monthly users' or 'AT users (12% of sessions)'"
+  source_document:
     type: string
+    description: "Name of the source document where this was found"
+  confidence:
+    type: string
+    enum: [Strong, Moderate, Limited]
     nullable: true
-    description: "What this means for study design — tasks to test, populations to recruit"

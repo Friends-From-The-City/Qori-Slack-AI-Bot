@@ -3,28 +3,31 @@
 # Consumed by: research_brief, research_readout
 type: object
 properties:
-  priority:
+  id:
     type: string
-    description: "The stated priority or belief"
-  stated_by:
-    type: string
-    description: "SH-XXX with role context, e.g. 'SH-001 Product Owner, OCTO Mobile'"
+    description: "gap-001, gap-002, etc."
   gap_description:
     type: string
-    description: "How actual behavior diverges from stated priority — be specific"
+    description: "Short description — 'Accessibility stated P1 but sprint-deprioritized'"
+  stated_position:
+    type: string
+    description: "What stakeholders say — 'All stakeholders rate accessibility P1'"
+  actual_behavior:
+    type: string
+    description: "What actually happens — 'when push comes to shove, accessibility fixes get bumped'"
+  acknowledged_by:
+    type: string
+    nullable: true
+    description: "SH-XXX who acknowledged the gap"
   verbatim_quote:
     type: string
     nullable: true
-    description: "Direct quote revealing the gap, attributed to speaker"
-  reality_evidence:
+    description: "Direct quote revealing the gap"
+  consequence:
     type: string
     nullable: true
-    description: "Data or observation that contradicts the stated priority"
-  organizational_context:
-    type: string
+    description: "What this gap produces — '9-month-old open issue on tab bar accessibility'"
+  addressable_in_research:
+    type: boolean
     nullable: true
-    description: "Why the gap exists — process, incentive, or resource explanation"
-  research_implication:
-    type: string
-    nullable: true
-    description: "What this gap means for study design — hypotheses to test, assumptions to validate"
+    description: "Whether user research can help close this gap"

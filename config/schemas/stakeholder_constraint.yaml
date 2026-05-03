@@ -1,32 +1,43 @@
-# Stakeholder constraint — technical, policy, or resource limitation
+# Stakeholder constraint — technical, policy, resource, or organizational limitation
 # Emitted by: stakeholder_synthesis
 # Consumed by: research_brief, design_opportunities, service_blueprint, research_readout
 type: object
 properties:
+  id:
+    type: string
+    description: "constraint-001, constraint-002, etc."
   type:
     type: string
-    enum: [Technical, Policy, Resource]
+    enum: [Technical, Policy, Resource, Organizational]
   constraint:
     type: string
-    description: "Specific constraint description with full context"
+    description: "Specific constraint — 'React Navigation v6 nested navigators (4 levels deep)'"
   impact:
     type: string
-    description: "Quantified impact — include numbers, timelines, scope"
+    description: "Quantified impact — 'Deep linking breaks, inconsistent back button behavior'"
   source:
     type: string
-    description: "SH-XXX with role context, e.g. 'SH-002 Engineering Lead, Mobile Team'"
+    description: "SH-XXX identifier"
+  source_role:
+    type: string
+    nullable: true
+    description: "Role of the stakeholder — 'Engineering Lead'"
+  source_team:
+    type: string
+    nullable: true
+    description: "Team — 'OCTO Mobile Engineering'"
   verbatim_quote:
     type: string
     nullable: true
-    description: "Direct quote from stakeholder illustrating this constraint"
-  related_pattern:
+    description: "Full verbatim quote from stakeholder illustrating this constraint"
+  broader_pattern:
     type: string
     nullable: true
-    description: "Broader system or organizational pattern this constraint is part of"
+    description: "Related system or organizational pattern this constraint is part of"
   research_implication:
     type: string
     nullable: true
-    description: "What this means for study design — recruitment, task selection, protocol"
+    description: "What this means for study design — tasks to test, populations to recruit"
   implementation_implication:
     type: string
     nullable: true

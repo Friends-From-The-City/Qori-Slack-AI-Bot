@@ -1,0 +1,26 @@
+# Stakeholder question for users — question stakeholders want answered by research
+# Emitted by: stakeholder_synthesis
+# Consumed by: research_brief (drives research questions pre-population)
+type: object
+properties:
+  id:
+    type: string
+    description: "question-001, question-002, etc."
+  priority:
+    type: string
+    enum: [Blocking, Important, Validation]
+    description: "How critical this question is for decision-making"
+  question:
+    type: string
+    description: "The research question — 'Do veterans struggle with finding features (IA) or recognizing navigation elements (UI)?'"
+  asked_by:
+    type: string
+    description: "SH-XXX who raised this question"
+  stakeholder_insight:
+    type: string
+    nullable: true
+    description: "Context behind the question — 'those are different engineering problems'"
+  suggested_method:
+    type: string
+    nullable: true
+    description: "Recommended method — 'Task-based usability testing with think-aloud'"

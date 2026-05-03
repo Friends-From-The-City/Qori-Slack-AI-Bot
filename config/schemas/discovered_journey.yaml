@@ -1,0 +1,30 @@
+# Discovered journey — user task flow pattern from desk research
+# Emitted by: desk_research
+# Consumed by: research_brief, discussion_guide
+type: object
+properties:
+  id:
+    type: string
+    description: "journey-001, journey-002, etc."
+  journey_name:
+    type: string
+    description: "Name of the task flow — 'Prescription refill'"
+  success_pattern:
+    type: string
+    nullable: true
+    description: "What works — 'Direct, shallow navigation works'"
+  failure_pattern:
+    type: string
+    nullable: true
+    description: "What breaks — 'Multi-level navigation drops users'"
+  completion_rate:
+    type: string
+    nullable: true
+    description: "Task completion rate — '92%'"
+  satisfaction:
+    type: string
+    nullable: true
+    description: "Satisfaction score — '8.1/10'"
+  source_document:
+    type: string
+    description: "Name of the source document"

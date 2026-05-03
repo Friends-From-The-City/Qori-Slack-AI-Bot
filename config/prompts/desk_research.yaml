@@ -436,31 +436,7 @@ emits:
       type: array
       items:
         $ref: schemas/discovered_barrier.yaml
-    extract_from: "Key Themes and Executive Summary sections — barriers, challenges, pain points. Include source document name, verbatim evidence quotes, magnitude/scope, affected population."
-
-  - key: discovered_journeys
-    pool: true
-    pool_strategy: append
-    schema:
-      type: array
-      items:
-        type: object
-        properties:
-          journey:
-            type: string
-            description: "Task flow or journey pattern"
-          source_document:
-            type: string
-            nullable: true
-          pain_points:
-            type: string
-            nullable: true
-            description: "Where in the journey users struggle"
-          metrics:
-            type: string
-            nullable: true
-            description: "Completion rates, drop-off points, satisfaction scores for this journey"
-    extract_from: "User journey patterns or task flows. Include pain points within each journey and any metrics associated with journey steps."
+    extract_from: "Key Themes and Executive Summary — barriers, challenges, pain points. Assign sequential IDs (barrier-001). Include title, summary, magnitude with numbers, evidence as array of supporting quotes/metrics, affected_population, source_document name, confidence level."
 
   - key: discovered_metrics
     pool: true
@@ -468,19 +444,26 @@ emits:
     schema:
       type: array
       items:
-        type: object
-        properties:
-          metric:
-            type: string
-          value:
-            type: string
-          source:
-            type: string
-          context:
-            type: string
-            nullable: true
-            description: "What the metric means in context — comparison, trend, benchmark"
-    extract_from: "All quantitative findings — percentages, scores, counts, rates. Include source document name and contextual meaning (e.g., 'up from 30% last quarter')."
+        $ref: schemas/discovered_metric.yaml
+    extract_from: "All quantitative findings — percentages, scores, counts, rates, comparisons. Assign sequential IDs (metric-001). Include metric_name, value, context explaining what it means, baseline_or_target for comparisons, source_document name."
+
+  - key: discovered_journeys
+    pool: true
+    pool_strategy: append
+    schema:
+      type: array
+      items:
+        $ref: schemas/discovered_journey.yaml
+    extract_from: "User journey patterns and task flows. Assign sequential IDs (journey-001). Include success_pattern and failure_pattern where contrasts exist, completion_rate and satisfaction scores when available."
+
+  - key: methodology_recommendations
+    pool: true
+    pool_strategy: append
+    schema:
+      type: array
+      items:
+        $ref: schemas/methodology_recommendation.yaml
+    extract_from: "Recommendations section, Further Research Needed — any suggested research methods. Assign sequential IDs (method-001). Capture what the method addresses and why it's recommended."
 
   - key: knowledge_gaps
     pool: true
@@ -490,18 +473,19 @@ emits:
       items:
         type: object
         properties:
+          id:
+            type: string
           gap:
             type: string
-            description: "What we don't know"
-          why_it_matters:
+          why_matters:
             type: string
             nullable: true
-            description: "Why filling this gap matters for decisions"
-          suggested_method:
+          suggested_resolution:
             type: string
             nullable: true
-            description: "How to investigate — card sorting, interviews, A/B test"
-    extract_from: "Further Research Needed section, Confidence Assessment low-confidence areas, gaps in evidence. Include why the gap matters and suggested investigation method."
+          source_document:
+            type: string
+    extract_from: "Further Research Needed section, Confidence Assessment low-confidence areas. Assign sequential IDs (gap-001). Include why the gap matters and suggested resolution method."
 
   - key: source_artifacts
     pool: true
@@ -513,15 +497,17 @@ emits:
         properties:
           title:
             type: string
-          source:
+          source_org:
             type: string
           date:
             type: string
-          key_contribution:
+          type:
             type: string
             nullable: true
-            description: "What this document uniquely contributed to the analysis"
-    extract_from: "Documents Analyzed section, References section. Include each document's key contribution."
+          contribution:
+            type: string
+            nullable: true
+    extract_from: "Documents Analyzed section, References section. Include source organization, document type, and key contribution."
 
 derived_variables:
   - effective_topic: "{{research_topic | default: topic}}"

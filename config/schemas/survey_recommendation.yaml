@@ -1,0 +1,21 @@
+# Survey recommendation — action recommended based on survey themes
+# Emitted by: survey_synthesis
+# Consumed by: research_brief
+type: object
+properties:
+  id:
+    type: string
+    description: "rec-001, rec-002, etc."
+  action:
+    type: string
+    description: "The recommended action"
+  based_on_theme:
+    type: string
+    description: "Which theme_name this recommendation addresses"
+  priority:
+    type: string
+    enum: [High, Medium, Low]
+  suggested_owner:
+    type: string
+    nullable: true
+    description: "Who should own this — team or role"

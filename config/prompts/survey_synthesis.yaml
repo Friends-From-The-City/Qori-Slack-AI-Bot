@@ -293,6 +293,15 @@ ai_generation_tasks:
 # CASCADE CONTRACT
 # ═══════════════════════════════════════════════════════════
 emits:
+  - key: survey_themes
+    pool: true
+    pool_strategy: append
+    schema:
+      type: array
+      items:
+        $ref: schemas/survey_theme.yaml
+    extract_from: "Each Theme section (Theme 1, Theme 2, etc). Assign sequential IDs (theme-001). Include theme_name, frequency_count and frequency_percentage from Frequency line, sentiment from Sentiment line, priority from Theme Summary table, full pattern text, and verbatim_quotes array with quote text and respondent R-ID."
+
   - key: survey_findings
     pool: true
     pool_strategy: append
@@ -300,7 +309,16 @@ emits:
       type: array
       items:
         $ref: schemas/survey_finding.yaml
-    extract_from: "Theme sections — each theme becomes a finding. Include frequency, sentiment with driver, representative respondent quotes (verbatim with R-IDs), and research implications."
+    extract_from: "Quantitative findings across all themes. Assign sequential IDs (finding-001). Include metric_name, sample_size as integer, affected_segment if mentioned, supporting_quotes as array of strings, source_question if identifiable."
+
+  - key: survey_recommendations
+    pool: true
+    pool_strategy: append
+    schema:
+      type: array
+      items:
+        $ref: schemas/survey_recommendation.yaml
+    extract_from: "Recommendations table. Assign sequential IDs (rec-001). Include action, based_on_theme referencing theme_name, priority from emoji (High/Medium/Low), suggested_owner from Owner column."
 
   - key: discovered_barriers
     pool: true
@@ -309,25 +327,7 @@ emits:
       type: array
       items:
         $ref: schemas/discovered_barrier.yaml
-    extract_from: "Negative-sentiment themes, pain points. Include respondent quotes as verbatim_evidence, frequency as magnitude, and survey name as source_document."
-
-  - key: sample_demographics
-    pool: true
-    pool_strategy: append
-    schema:
-      type: object
-      properties:
-        total_responses:
-          type: integer
-        survey_name:
-          type: string
-        demographics:
-          type: string
-          description: "Respondent composition — who responded"
-        response_rate:
-          type: string
-          nullable: true
-    extract_from: "Overview section — sample size, survey name, respondent composition."
+    extract_from: "Negative-sentiment themes as barriers. Assign sequential IDs (barrier-001). Use theme pattern as summary, frequency as magnitude, respondent quotes as evidence array, survey name as source_document."
 
   - key: discovered_metrics
     pool: true
@@ -335,20 +335,24 @@ emits:
     schema:
       type: array
       items:
-        type: object
-        properties:
-          metric:
-            type: string
-          value:
-            type: string
-          context:
-            type: string
-            nullable: true
-            description: "What the metric means — comparison, benchmark, trend"
-          survey_name:
-            type: string
-            nullable: true
-    extract_from: "All quantitative data — theme frequencies, sentiment percentages, priority ratings. Include survey name and contextual meaning."
+        $ref: schemas/discovered_metric.yaml
+    extract_from: "All quantitative measurements — theme frequencies, sentiment percentages, response counts. Assign sequential IDs (metric-001). Include context and survey name as source_document."
+
+  - key: sample_demographics
+    pool: false
+    pool_strategy: replace
+    schema:
+      type: object
+      properties:
+        total_responses:
+          type: integer
+        composition:
+          type: string
+          description: "Respondent composition — who responded"
+        response_rate:
+          type: string
+          nullable: true
+    extract_from: "Overview section — total responses analyzed, respondent composition."
 
   - key: knowledge_gaps
     pool: true
@@ -358,15 +362,19 @@ emits:
       items:
         type: object
         properties:
+          id:
+            type: string
           gap:
             type: string
-          why_it_matters:
+          why_matters:
             type: string
             nullable: true
-          suggested_method:
+          suggested_resolution:
             type: string
             nullable: true
-    extract_from: "Questions the survey couldn't answer, themes that need qualitative follow-up. Include why the gap matters and suggested method."
+          source_document:
+            type: string
+    extract_from: "Questions the survey couldn't answer, themes needing qualitative follow-up. Assign sequential IDs (gap-001). Include why the gap matters and suggested resolution."
 
 # ═══════════════════════════════════════════════════════════
 # OUTPUT

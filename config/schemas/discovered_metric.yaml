@@ -1,0 +1,25 @@
+# Discovered metric — quantitative finding from desk research or survey
+# Emitted by: desk_research, survey_synthesis
+# Consumed by: research_brief, research_plan
+type: object
+properties:
+  id:
+    type: string
+    description: "metric-001, metric-002, etc."
+  metric_name:
+    type: string
+    description: "Name of the metric — 'Task abandonment rate'"
+  value:
+    type: string
+    description: "The measurement — '45%' or '2.1M'"
+  context:
+    type: string
+    nullable: true
+    description: "What the metric means — 'Overall, with appointments at 52% and benefits at 48%'"
+  baseline_or_target:
+    type: string
+    nullable: true
+    description: "Comparison — 'vs 92% completion for prescription refill'"
+  source_document:
+    type: string
+    description: "Name of the source document"

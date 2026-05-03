@@ -29,9 +29,30 @@ function loadSchema(ref) {
  * Takes the rendered markdown and the emits spec, produces a prompt
  * that instructs Haiku to extract structured JSON.
  */
+/**
+ * Recursively resolve $ref in a schema object.
+ * Handles both top-level $ref and nested $ref (e.g., schema.items.$ref).
+ */
+function resolveSchemaRefs(schema) {
+  if (!schema || typeof schema !== 'object') return schema;
+  if (schema.$ref) return loadSchema(schema.$ref);
+  const resolved = { ...schema };
+  if (resolved.items) {
+    resolved.items = resolveSchemaRefs(resolved.items);
+  }
+  if (resolved.properties) {
+    const resolvedProps = {};
+    for (const [key, prop] of Object.entries(resolved.properties)) {
+      resolvedProps[key] = resolveSchemaRefs(prop);
+    }
+    resolved.properties = resolvedProps;
+  }
+  return resolved;
+}
+
 function buildExtractionPrompt(renderedMarkdown, emitsSpec, inputValues) {
   const variableDescriptions = emitsSpec.map(emit => {
-    const schema = emit.schema?.$ref ? loadSchema(emit.schema.$ref) : emit.schema;
+    const schema = resolveSchemaRefs(emit.schema);
     return {
       key: emit.key,
       pool: emit.pool || false,
@@ -53,26 +74,33 @@ ${schemaStr}
 
   return `You are extracting structured variables from a generated research document.
 
-EXTRACTION PHILOSOPHY:
-Extract with MAXIMUM SEMANTIC FIDELITY. The goal is to preserve the source
-document's evidentiary richness in structured form. If the document has 3
-paragraphs about a constraint, the extracted variable should reflect that
-depth across its schema fields — verbatim quotes, source attribution with
-role context, related patterns, downstream implications. Do not summarize
-or abbreviate when the schema has fields to capture the full context.
+EXTRACTION FIDELITY REQUIREMENTS:
+Extract with maximum semantic fidelity. For each variable instance:
+- Capture verbatim quotes when present in source (copy exactly, do not paraphrase)
+- Capture source attribution with role context (not just "SH-001" but "SH-001" with
+  source_role: "Product Owner" and source_team: "OCTO Mobile Experience" from the
+  Stakeholders interviewed table)
+- Capture related broader patterns from the same document
+- Capture research and implementation implications when present
+- Do not summarize or abbreviate — if the source has 6 paragraphs about a constraint,
+  the extracted variable must reflect that depth across its schema fields
+- Assign sequential IDs as specified in extract_from hints (barrier-001, metric-001, etc.)
+
+Thin extraction is the failure mode to avoid. When a schema has nullable fields like
+verbatim_quote, broader_pattern, research_implication, implementation_implication —
+POPULATE them whenever the document contains relevant content. Only use null when
+the information is genuinely absent from the source document.
 
 RULES:
 1. Extract ONLY information that exists in the document. Do not invent data.
 2. Follow the schema exactly. Every field must be present (use null for missing optional fields).
 3. For pool variables (pool: true), extract an array of items.
 4. For non-pool variables, extract a single value or object.
-5. Participant IDs must use the PT-### or SH-### format found in the document.
+5. Participant/stakeholder IDs must use the PT-### or SH-### format found in the document.
 6. Quotes MUST be verbatim from the document — do not paraphrase.
 7. If a variable cannot be extracted (no relevant content), use an empty array [] for pools or null for singles.
-8. For source/attribution fields, include role context when available (e.g., "SH-002 Engineering Lead" not just "SH-002").
-9. For nullable fields like verbatim_quote, research_implication, implementation_implication:
-   POPULATE them when the document contains relevant content. Only use null when truly absent.
-10. For metrics, include context (comparisons, trends, benchmarks) not just raw numbers.
+8. For metrics, include context (comparisons, trends, benchmarks) not just raw numbers.
+9. When extract_from says "Assign sequential IDs", number items starting from 001.
 
 VARIABLES TO EXTRACT:
 

@@ -90,30 +90,38 @@ emits:
     pool: false
     pool_strategy: replace
     schema:
-      $ref: schemas/stakeholder_constraint.yaml
-    extract_from: "Constraints section (## 01) table"
+      type: array
+      items:
+        $ref: schemas/stakeholder_constraint.yaml
+    extract_from: "Constraints section (## 01) table and surrounding quotes. Assign sequential IDs (constraint-001). Include type (Technical/Policy/Resource/Organizational), full impact, source with SH-XXX, source_role and source_team from Stakeholders interviewed table, verbatim_quote from blockquotes, broader_pattern from related observations, research_implication, implementation_implication."
+
   - key: stakeholder_priorities
     pool: false
     pool_strategy: replace
     schema:
       type: array
       items:
-        type: object
-        properties:
-          priority:
-            type: string
-          stated_by:
-            type: string
-          aligns_with_user_need:
-            type: string
-            enum: ["✓", "⚠", "✗"]
-    extract_from: "Strategic priorities table (## 02)"
+        $ref: schemas/stakeholder_priority.yaml
+    extract_from: "Strategic priorities and alignment section (## 02) table. Assign sequential IDs (priority-001). stated_by as array of SH-XXX. Map alignment marks: ✓→Yes, ⚠→Partial, ✗→No. Include driver and timeline when mentioned."
+
   - key: alignment_gaps
     pool: false
     pool_strategy: replace
     schema:
-      $ref: schemas/alignment_gap.yaml
-    extract_from: "Alignment gap callout (## 02) and Believe/Reality table (## 04)"
+      type: array
+      items:
+        $ref: schemas/alignment_gap.yaml
+    extract_from: "Alignment gap WARNING callout (## 02) and Believe/Reality table (## 04). Assign sequential IDs (gap-001). Include stated_position vs actual_behavior, verbatim_quote, consequence, and whether addressable_in_research."
+
+  - key: stakeholder_questions_for_users
+    pool: false
+    pool_strategy: replace
+    schema:
+      type: array
+      items:
+        $ref: schemas/stakeholder_question.yaml
+    extract_from: "Questions for user research section (## 05) — Blocking, Important, and Validation tables. Assign sequential IDs (question-001). Map priority from section heading (Blocking/Important/Validation). Include asked_by (SH-XXX from insight column), stakeholder_insight, and suggested_method."
+
   - key: backstage_observations
     pool: false
     pool_strategy: replace
@@ -122,14 +130,25 @@ emits:
       items:
         type: object
         properties:
+          id:
+            type: string
           title:
             type: string
           pattern_type:
             type: string
             enum: [working, broken, organizational, resource]
-          description:
+          observation:
             type: string
-    extract_from: "System and process observations appendix"
+          verbatim_quote:
+            type: string
+            nullable: true
+          flow_description:
+            type: string
+            nullable: true
+          source:
+            type: string
+    extract_from: "System and process observations appendix. Assign sequential IDs (obs-001). Include full observation text, verbatim quote, flow description, and source SH-XXX."
+
   - key: system_failure_modes
     pool: false
     pool_strategy: replace
@@ -138,28 +157,23 @@ emits:
       items:
         type: object
         properties:
+          id:
+            type: string
           flow_name:
             type: string
-          failure:
+          where_it_breaks:
             type: string
-          confidence:
+          consequence:
             type: string
-    extract_from: "System dynamics section (## 03) — Where it breaks lines"
-  - key: stakeholder_questions_for_users
-    pool: false
-    pool_strategy: replace
-    schema:
-      type: array
-      items:
-        type: object
-        properties:
-          insight:
+          source:
             type: string
-          question:
+          verbatim_quote:
             type: string
-          method:
+            nullable: true
+          mermaid_diagram:
             type: string
-    extract_from: "Questions for user research section (## 05)"
+            nullable: true
+    extract_from: "System dynamics section (## 03) — flow name, Where it breaks line, consequence. Assign sequential IDs (failure-001). Include source SH-XXX, verbatim quote, and Mermaid diagram code if present."
 
 # ═══════════════════════════════════════════════════════════
 # AI GENERATION

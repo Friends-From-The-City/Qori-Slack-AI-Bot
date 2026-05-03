@@ -1,0 +1,38 @@
+# Survey theme — thematic pattern identified in survey responses
+# Emitted by: survey_synthesis
+# Consumed by: research_brief
+type: object
+properties:
+  id:
+    type: string
+    description: "theme-001, theme-002, etc."
+  theme_name:
+    type: string
+    description: "Name of the theme — 'Accessibility Barriers'"
+  frequency_count:
+    type: integer
+    description: "Number of responses mentioning this theme"
+  frequency_percentage:
+    type: integer
+    description: "Percentage of total responses"
+  sentiment:
+    type: string
+    enum: [Negative, Positive, Mixed, Neutral]
+  priority:
+    type: string
+    enum: [High, Medium, Low]
+  pattern:
+    type: string
+    description: "Full pattern description — what this theme means"
+  verbatim_quotes:
+    type: array
+    items:
+      type: object
+      properties:
+        quote:
+          type: string
+        respondent:
+          type: string
+          description: "R001, R002, etc."
+    nullable: true
+    description: "Representative respondent quotes illustrating this theme"

@@ -3,38 +3,31 @@
 # Consumed by: research_brief, research_plan
 type: object
 properties:
+  id:
+    type: string
+    description: "finding-001, finding-002, etc."
   finding:
     type: string
-    description: "The finding statement with full context"
-  metric:
+    description: "The finding statement — '73% of Veterans abandoned tasks due to navigation'"
+  metric_name:
     type: string
     nullable: true
-    description: "Quantitative measure — percentage, score, count"
+    description: "Name of the metric — 'Task Abandonment Rate'"
   sample_size:
+    type: integer
+    nullable: true
+    description: "Number of respondents"
+  affected_segment:
     type: string
     nullable: true
-    description: "Number of respondents, e.g. 'n=30' or '76 responses'"
-  sentiment:
-    type: string
-    nullable: true
-    description: "Sentiment direction and driver — e.g. 'Negative — navigation frustration'"
-  representative_quotes:
+    description: "Who this finding affects — 'older veterans (65+)' or 'AT users'"
+  supporting_quotes:
     type: array
     items:
-      type: object
-      properties:
-        quote:
-          type: string
-        respondent:
-          type: string
-          description: "R001, R002, etc."
+      type: string
     nullable: true
-    description: "Verbatim respondent quotes illustrating this finding"
-  theme:
+    description: "Verbatim respondent quotes supporting this finding"
+  source_question:
     type: string
     nullable: true
-    description: "Which theme this finding belongs to"
-  research_implication:
-    type: string
-    nullable: true
-    description: "What this means for follow-up research design"
+    description: "Which survey question yielded this finding"
