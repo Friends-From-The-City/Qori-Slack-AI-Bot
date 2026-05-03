@@ -219,10 +219,18 @@ ai_generation_tasks:
       Deadline: {{decision_deadline}}
 
       {% if upstream_discovered_barriers %}
-      UPSTREAM CONTEXT (from discovery stream):
+      UPSTREAM CONTEXT (from discovery research):
       Known barriers from desk research: {{upstream_discovered_barriers}}
       {% if upstream_stakeholder_constraints %}Stakeholder constraints: {{upstream_stakeholder_constraints}}{% endif %}
+      {% if upstream_survey_findings %}Survey findings: {{upstream_survey_findings}}{% endif %}
+      {% if upstream_discovered_metrics %}Metrics from discovery: {{upstream_discovered_metrics}}{% endif %}
       {% if upstream_knowledge_gaps %}Knowledge gaps: {{upstream_knowledge_gaps}}{% endif %}
+
+      CITATION RULE: When referencing upstream discovery data, cite the source inline.
+      Format: "(per Q4 2025 analytics report)" or "(per stakeholder interview, Product Owner)"
+      or "(per survey, n=X)". Do NOT invent statistics — use only values present in
+      the upstream variables above. If a claim has no upstream support, write from
+      the researcher's input alone without fabricating citations.
 
       Incorporate upstream context when it strengthens the summary — reference
       known barriers or stakeholder constraints that motivate this research.
@@ -309,13 +317,32 @@ ai_generation_tasks:
       Timeline: {{timeline_preference}}
       Deadline: {{decision_deadline}}
 
+      {% if upstream_stakeholder_constraints %}
+      STAKEHOLDER CONSTRAINTS (from discovery):
+      {{upstream_stakeholder_constraints}}
+
+      If any stakeholder constraints directly create study risks (e.g., resource
+      limitations, policy blockers, system access issues), cite them inline:
+      "(per stakeholder interview, [role])".
+      {% endif %}
+
+      {% if upstream_discovered_barriers %}
+      KNOWN BARRIERS (from discovery):
+      {{upstream_discovered_barriers}}
+      {% endif %}
+
       Format as table rows ONLY (no header):
       | [Risk description] | [Specific mitigation] |
       | [Risk description] | [Specific mitigation] |
 
       Risks should be specific to this study — not generic project management.
       Consider: recruitment difficulty, technical setup for {{methodology}},
-      timeline constraints, stakeholder feedback delays.
+      timeline constraints, stakeholder feedback delays, and any constraints
+      surfaced by discovery research.
+
+      CITATION RULE: Do NOT invent statistics or sources. Only cite upstream
+      data that is present above. If no upstream context exists, write risks
+      from the researcher's input alone.
 
       CRITICAL: Output rows with NO blank lines between them.
 
@@ -341,6 +368,42 @@ output_template: |
   | **Decision deadline** | {{decision_deadline}} |
   {{#if budget}}| **Budget** | {{budget}} |{{/if}}
 
+  {{#if upstream_discovered_barriers}}
+  ---
+
+  ## Informed by Discovery
+
+  This brief synthesizes {{discovery_count}} discovery source{{#unless discovery_single}}s{{/unless}}:
+
+  {{#if discovery_sources}}
+  | Source | Type | Date |
+  |--------|------|------|
+  {{discovery_sources}}
+  {{/if}}
+
+  ### Discovery findings applied to this brief
+
+  {{#if upstream_discovered_barriers}}
+  **Barriers identified:**
+  {{upstream_discovered_barriers}}
+  {{/if}}
+
+  {{#if upstream_stakeholder_constraints}}
+  **Stakeholder constraints:**
+  {{upstream_stakeholder_constraints}}
+  {{/if}}
+
+  {{#if upstream_survey_findings}}
+  **Survey findings:**
+  {{upstream_survey_findings}}
+  {{/if}}
+
+  {{#if upstream_knowledge_gaps}}
+  **Knowledge gaps remaining:**
+  {{upstream_knowledge_gaps}}
+  {{/if}}
+
+  {{/if}}
   ---
 
   ## Problem

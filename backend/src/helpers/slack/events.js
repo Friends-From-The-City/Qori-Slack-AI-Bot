@@ -1635,6 +1635,16 @@ slackApp.view('research_brief_modal', async ({ ack, body, view, client }) => {
       if (selectedArtifacts.length > 0) {
         const upstreamVars = aggregateDiscoveryVariables(selectedArtifacts);
         Object.assign(data, upstreamVars);
+
+        // Template variables for "Informed by Discovery" section
+        data.discovery_count = selectedArtifacts.length;
+        data.discovery_single = selectedArtifacts.length === 1;
+        // Build markdown table rows for discovery sources
+        const typeLabels = { 'desk-research': 'Desk research', 'stakeholder-interviews': 'Stakeholder interviews', 'survey-synthesis': 'Survey synthesis' };
+        data.discovery_sources = selectedArtifacts
+          .map(a => `| ${a.slug} | ${typeLabels[a.type] || a.type} | ${a.date} |`)
+          .join('\n  ');
+
         console.log(`✅ Injected ${Object.keys(upstreamVars).length} upstream variables from ${selectedArtifacts.length} discovery artifact(s)`);
       }
     } catch (error) {
