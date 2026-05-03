@@ -113,8 +113,10 @@ async function handleBriefSubmission({ ack, body, view, client }) {
     mixed_methods: 'Mixed methods',
   };
 
+  // Method: prioritize override text if filled, otherwise use radio selection
+  const methodOverride = extract('method_override_block', 'method_override_input');
   const methodValue = extract('research_method_block', 'research_method_select')?.value || 'usability_testing';
-  const methodLabel = methodologyLabels[methodValue] || methodValue;
+  const methodLabel = methodOverride || methodologyLabels[methodValue] || methodValue;
   const leadResearcher = meta.leadResearcher || body.user.name || '';
 
   const data = {
@@ -125,7 +127,7 @@ async function handleBriefSubmission({ ack, body, view, client }) {
     learning_objectives: extract('learning_objectives_block', 'learning_objectives_input') || '',
     out_of_scope: extract('out_of_scope_block', 'out_of_scope_input') || '',
     methodology: methodLabel,
-    methodology_value: methodValue,
+    methodology_value: methodOverride ? 'custom' : methodValue,
     participant_approach: extract('participant_approach_block', 'participant_approach_input') || '',
     timeline_preference: extract('timeline_block', 'timeline_radio')?.value || 'standard',
     start_date: extract('start_date_block', 'start_date_picker') || '',

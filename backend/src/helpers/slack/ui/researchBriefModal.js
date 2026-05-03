@@ -208,6 +208,24 @@ const researchBriefModal = {
         ],
       },
     },
+    // Method override — for combined/custom approaches not in dropdown
+    {
+      type: "input",
+      block_id: "method_override_block",
+      optional: true,
+      label: {
+        type: "plain_text",
+        text: "Or specify custom method (e.g., combined approaches)",
+      },
+      element: {
+        type: "plain_text_input",
+        action_id: "method_override_input",
+        placeholder: {
+          type: "plain_text",
+          text: "e.g., Card sorting + tree testing",
+        },
+      },
+    },
     // Participants — composition + count (approval level, not recruitment specs)
     {
       type: "input",

@@ -66,6 +66,35 @@ function synthesizeCascadeFields(upstream, artifacts) {
     }
   }
 
+  // Participants — synthesize from discovery evidence
+  const segments = [];
+  const participantHints = [];
+
+  // Check for AT user evidence from constraints or survey
+  const constraintText = upstream.upstream_stakeholder_constraints || '';
+  const surveyText = upstream.upstream_survey_themes || '';
+  const barrierText = upstream.upstream_discovered_barriers || '';
+
+  if (constraintText.match(/screen.reader|assistive.tech|508|accessibility/i) ||
+      surveyText.match(/screen.reader|assistive.tech|accessibility/i) ||
+      barrierText.match(/screen.reader|assistive.tech|accessibility/i)) {
+    segments.push('3 screen reader users');
+    segments.push('2 voice control users');
+    participantHints.push('AT users flagged by discovery');
+  }
+
+  // Check for age-related patterns
+  if (barrierText.match(/age|older|65\+|senior/i) ||
+      surveyText.match(/age|older|65\+|senior/i)) {
+    segments.push('at least 3 aged 65+');
+    participantHints.push('age-related barriers in discovery');
+  }
+
+  if (segments.length > 0) {
+    result.participants = `8-12 Veterans, including ${segments.join(', ')}. Mix of iOS and Android users. Recruited via VA Section 508 Office and MHV coordinators.`;
+    result.participantsHint = `Composition reflects discovery: ${participantHints.join('; ')}`;
+  }
+
   // Risks preview — from stakeholder_constraints
   const constraints = upstream.upstream_stakeholder_constraints;
   if (constraints) {
@@ -211,18 +240,54 @@ async function buildBriefEntryModal(leadResearcher, channelId) {
         }],
       });
 
-      // Pre-populate method field if discovery recommends one
+      // Pre-populate method — hybrid radio + override
       if (cascade.method) {
-        const methodIdx = modalBlocks.findIndex(b => b.block_id === 'research_method_block');
-        // Can't pre-select radio buttons dynamically in Slack easily,
-        // so add a context hint instead
-        cascadeBlocks.push({
-          type: "context",
-          elements: [{
-            type: "mrkdwn",
-            text: `✨ *Method:* ${cascade.method}\n      ${cascade.methodHint}`,
-          }],
-        });
+        // Check if cascade method matches a radio option
+        const radioOptions = {
+          'usability testing': 'usability_testing',
+          'moderated usability testing': 'usability_testing',
+          'user interviews': 'user_interviews',
+          'contextual inquiry': 'contextual_inquiry',
+          'concept testing': 'concept_testing',
+          'survey': 'survey',
+          'survey research': 'survey',
+          'card sorting': 'card_sorting',
+          'tree testing': 'tree_testing',
+          'mixed methods': 'mixed_methods',
+        };
+        const matchedRadio = radioOptions[cascade.method.toLowerCase()];
+
+        if (matchedRadio) {
+          // Matches a radio option — pre-select it
+          const methodIdx = modalBlocks.findIndex(b => b.block_id === 'research_method_block');
+          if (methodIdx !== -1) {
+            const opts = modalBlocks[methodIdx].element.options;
+            const matchedOpt = opts.find(o => o.value === matchedRadio);
+            if (matchedOpt) {
+              modalBlocks[methodIdx] = {
+                ...modalBlocks[methodIdx],
+                element: { ...modalBlocks[methodIdx].element, initial_option: matchedOpt },
+              };
+            }
+          }
+          cascadeBlocks.push({
+            type: "context",
+            elements: [{ type: "mrkdwn", text: `✨ *Method:* ${cascade.method} — ${cascade.methodHint}` }],
+          });
+        } else {
+          // Doesn't match radio — pre-fill override text field
+          const overrideIdx = modalBlocks.findIndex(b => b.block_id === 'method_override_block');
+          if (overrideIdx !== -1) {
+            modalBlocks[overrideIdx] = {
+              ...modalBlocks[overrideIdx],
+              element: { ...modalBlocks[overrideIdx].element, initial_value: cascade.method },
+            };
+          }
+          cascadeBlocks.push({
+            type: "context",
+            elements: [{ type: "mrkdwn", text: `✨ *Method:* Discovery recommends combined method — using custom field. ${cascade.methodHint}` }],
+          });
+        }
       }
 
       // Pre-populate research questions (learning objectives field)
@@ -262,6 +327,27 @@ async function buildBriefEntryModal(leadResearcher, channelId) {
             elements: [{
               type: "mrkdwn",
               text: `✨ *Out of scope:* ${cascade.outOfScopeHint}`,
+            }],
+          });
+        }
+      }
+
+      // Pre-populate participants
+      if (cascade.participants) {
+        const partIdx = modalBlocks.findIndex(b => b.block_id === 'participant_approach_block');
+        if (partIdx !== -1) {
+          modalBlocks[partIdx] = {
+            ...modalBlocks[partIdx],
+            element: {
+              ...modalBlocks[partIdx].element,
+              initial_value: cascade.participants,
+            },
+          };
+          cascadeBlocks.push({
+            type: "context",
+            elements: [{
+              type: "mrkdwn",
+              text: `✨ *Participants:* ${cascade.participantsHint}`,
             }],
           });
         }
