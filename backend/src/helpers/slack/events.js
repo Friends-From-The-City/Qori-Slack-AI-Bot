@@ -693,14 +693,15 @@ slackApp.view('delete-study-modal', async ({ ack, body, view, client }) => {
 
     // 2. Delete from GitHub first (before database deletion)
     let githubResult = { deleted: 0, message: 'No GitHub folder found' };
+    let githubError = null;
     if (study.path) {
       try {
         console.log(`🗑️ Deleting GitHub folder: ${study.path}`);
         githubResult = await deleteStudyFolderFromGitHub(study.path, process.env.GITHUB_REPO);
         console.log(`✅ GitHub deletion result:`, githubResult);
-      } catch (githubError) {
-        console.error('⚠️ Error deleting from GitHub (continuing with DB deletion):', githubError);
-        // Continue with database deletion even if GitHub deletion fails
+      } catch (err) {
+        console.error('⚠️ Error deleting from GitHub (continuing with DB deletion):', err);
+        githubError = err.message;
       }
     }
 
@@ -708,10 +709,22 @@ slackApp.view('delete-study-modal', async ({ ack, body, view, client }) => {
     const deleteResult = await deleteResearchStudy(studyId, userId);
     console.log(`✅ Database deletion result:`, deleteResult);
 
-    // 4. Send success message to DM
-    const successMessage = `✅ *Study deleted successfully!*\n\n` +
+    // 4. Build status message with clear GitHub outcome
+    let githubStatus;
+    if (!study.path) {
+      githubStatus = `⚠️ *GitHub:* No study path stored — GitHub files were NOT deleted. If files exist in the repo, delete them manually.`;
+    } else if (githubError) {
+      githubStatus = `❌ *GitHub:* Deletion failed — ${githubError}\nFiles may still exist at \`${study.path}\`. Delete manually from the repo.`;
+    } else if (githubResult.deleted === 0) {
+      githubStatus = `⚠️ *GitHub:* No files found at \`${study.path}\` — folder may have already been removed.`;
+    } else {
+      githubStatus = `✅ *GitHub:* Deleted ${githubResult.deleted}/${githubResult.total} file(s)` +
+        (githubResult.errors ? ` (${githubResult.errors.length} failed — check repo manually)` : '');
+    }
+
+    const successMessage = `✅ *Study deleted from database*\n\n` +
       `*Study:* ${studyName}\n` +
-      `*GitHub:* Deleted ${githubResult.deleted} file(s)\n` +
+      `${githubStatus}\n` +
       `*Database:* Study and all associated data removed\n\n` +
       `⚠️ This action cannot be undone.`;
 
