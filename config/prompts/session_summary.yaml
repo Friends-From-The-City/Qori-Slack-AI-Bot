@@ -4,12 +4,23 @@
 id: analyze_notes
 name: analyze_session_notes
 label: "📝 Analyze Notes"
-version: "v1.6"
-description: Analyze session notes and transcript to generate comprehensive session summary with pain points, opportunities, insights, and recommendations
+version: "v2.0"
+description: Cascade-aware session analysis — generates session summary with pain points, barrier validation, cascade citation markers, and rich variable emissions for downstream templates
 
 author: Qori R&D
 created: 2025-10-25
-last_updated: 2026-04-30
+last_updated: 2026-05-04
+
+# v2.0 CHANGELOG (2026-05-04)
+# - Cascade-aware: consumes target_barriers, research_questions, methodology_selection from brief
+# - Deepened schemas: atomic_nugget, participant_metadata, task_completion_record, barrier_validation
+#   now capture verbatim quotes, behavioral context, emotional state, confidence levels
+# - Added Barrier Validation section (conditional on upstream target_barriers)
+# - Added Upstream Context appendix (conditional on upstream variables)
+# - Added CASCADE-AWARE GENERATION instructions for TB/RQ citation markers
+# - Modal shows Cascade Context section when brief variables exist
+# - atomic_nuggets pool_strategy changed to append_or_replace_per_participant
+# - Added methodology_selection to consumes block
 
 # ═══════════════════════════════════════════════════════════
 # CONFIGURATION
@@ -82,43 +93,49 @@ consumes:
   - key: target_barriers
     source: research_brief
     required: false
-    inject_as: context
-    description: "Barriers to validate against session observations"
+    inject_as: grounding
+    description: "Hypothesized barriers to validate against this session's observations"
 
   - key: research_questions
     source: research_brief
     required: false
     inject_as: context
-    description: "Questions that frame what to look for in sessions"
+    description: "Questions that frame what to look for in this session"
+
+  - key: methodology_selection
+    source: research_brief
+    required: false
+    inject_as: context
+    description: "Methodology determines what observations matter and how to frame them"
 
 emits:
   - key: atomic_nuggets
     pool: true
-    pool_strategy: append
+    pool_strategy: append_or_replace_per_participant
     schema:
       $ref: schemas/atomic_nugget.yaml
-    extract_from: "Pain points, quotes, what worked, key insights, task observations"
+    extract_from: "Findings sections, evidence quotes, task observations, accessibility issues, behavioral patterns"
 
   - key: participant_metadata
     pool: true
     pool_strategy: append
     schema:
       $ref: schemas/participant_metadata.yaml
-    extract_from: "Participant context section"
+    extract_from: "Participant section, participant context boxes, session conditions"
 
   - key: task_completion_records
     pool: true
     pool_strategy: append
     schema:
       $ref: schemas/task_completion_record.yaml
-    extract_from: "Task completion observations, recommended actions table"
+    extract_from: "Task observations, completion tables, methodology section, recommended actions"
 
   - key: barrier_validations
     pool: true
     pool_strategy: append
     schema:
       $ref: schemas/barrier_validation.yaml
-    extract_from: "Pain points that confirm or refute target barriers"
+    extract_from: "Findings that confirm or refute target barriers from research brief, barrier validation section"
 
 # ═══════════════════════════════════════════════════════════
 # AI GENERATION
@@ -147,9 +164,39 @@ ai_generation_tasks:
       {{upstream_research_questions}}
       {% endif %}
 
-      When analyzing this session, note which target barriers were confirmed
-      or refuted by the participant's experience. Link pain points to specific
-      barriers when the connection is clear.
+      {% if upstream_methodology_selection %}
+      METHODOLOGY:
+      {{upstream_methodology_selection}}
+      {% endif %}
+
+      ============================================================
+      CASCADE-AWARE GENERATION
+      ============================================================
+
+      When upstream brief variables are present, your job is to:
+
+      1. REFERENCE TARGET BARRIERS EXPLICITLY. When an observation validates
+         or refutes a target_barrier from the brief, mark it inline with
+         [TB1], [TB2], etc. (matching the barrier order above). In the
+         Barrier Validation section, summarize which barriers were confirmed,
+         refuted, or not addressed for this participant.
+
+      2. REFERENCE RESEARCH QUESTIONS EXPLICITLY. When an observation
+         addresses a research_question from the brief, mark it inline
+         with [RQ1], [RQ2], etc. (matching the question order above).
+
+      3. USE METHODOLOGY TO FRAME OBSERVATIONS. If method is "card sorting,"
+         frame observations in card sorting language (groupings, labels,
+         spatial relationships). If "usability testing," frame in task
+         language (success, failure, friction, recovery). If "interviews,"
+         frame in narrative language (themes, mental models, motivations).
+
+      4. CITE VERBATIM QUOTES. Use the exact participant language when
+         capturing observations. Mark quotes with the [verbatim] tag
+         in extraction-friendly format.
+
+      5. USE ONLY OBSERVATIONS FROM THE SESSION. Do not infer or fabricate.
+         If an observation isn't in the transcript or notes, do not include it.
       {% endif %}
 
       PRIMARY SOURCE - Session Transcript:
@@ -323,6 +370,23 @@ ai_generation_tasks:
 
       ---
 
+      {% if upstream_target_barriers %}
+      ## Barrier validation
+
+      Summarize which target barriers from the research brief were confirmed, refuted, or not addressed in this session.
+
+      | Target barrier | Status | Evidence |
+      |----------------|--------|----------|
+      | TB1: [barrier text from brief] | ✓ Confirmed / ✗ Refuted / ◯ Not addressed | [observation summary with quote ref] |
+      | TB2: [barrier text] | [status] | [evidence] |
+
+      **Confidence** — [Strong/Moderate/Limited] ([parenthetical reasoning for overall barrier validation confidence])
+
+      If no barriers were testable in this session: *Session tasks did not address target barriers directly. Cross-reference with subsequent sessions.*
+
+      ---
+
+      {% endif %}
       ## Methodology
 
       **Session format** — [Moderated/unmoderated, duration, setup details from sources]
@@ -344,6 +408,20 @@ ai_generation_tasks:
 
       ---
 
+      {% if upstream_target_barriers %}
+      ## Upstream context
+
+      This session summary was analyzed against upstream inputs from the research brief.
+
+      | Source | Used for |
+      |--------|----------|
+      | research_brief ({{study_name}}) | Target barriers [TB1-n], research questions [RQ1-n], methodology context |
+
+      Citation markers throughout: [TB*] = target barriers, [RQ*] = research questions.
+
+      ---
+
+      {% endif %}
       ## Appendix
 
       <details>

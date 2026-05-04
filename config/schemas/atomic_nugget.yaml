@@ -2,12 +2,13 @@
 # Emitted by: session_summary
 # Consumed by: affinity_mapping, journey_mapping, persona_generator,
 #              usability_issues, jobs_to_be_done, design_opportunities
+# Schema v2.0 — deepened for cascade-aware session_summary retrofit
 type: object
 properties:
   id:
     type: string
     pattern: "nugget-{participant}-{seq}"
-    description: "Unique nugget ID"
+    description: "Unique nugget ID, e.g. nugget-PT-001-001"
   nugget_type:
     type: string
     enum:
@@ -30,17 +31,29 @@ properties:
   text:
     type: string
     description: "The observation text"
+  verbatim_quote:
+    type: string
+    nullable: true
+    description: "Direct participant quote if observation includes one — copy exactly, do not paraphrase"
   participant:
     type: string
     pattern: "PT-###"
     description: "Participant ID"
+  participant_context:
+    type: string
+    nullable: true
+    description: "Role or demographic context relevant to this specific nugget"
   session:
     type: string
     description: "Session identifier"
   timestamp:
     type: string
     nullable: true
-    description: "HH:MM:SS timestamp if available"
+    description: "HH:MM:SS timestamp if available from transcript"
+  task_context:
+    type: string
+    nullable: true
+    description: "Which task scenario this observation occurred in, if applicable"
   linked_barrier:
     type: string
     nullable: true
@@ -49,6 +62,18 @@ properties:
     type: string
     nullable: true
     description: "Reference to research_questions key, if this nugget addresses a question"
+  observed_behavior:
+    type: string
+    nullable: true
+    description: "What the participant physically DID (actions, navigation, gestures) — distinct from what they said"
+  inferred_meaning:
+    type: string
+    nullable: true
+    description: "What the researcher infers from the behavior — interpretation, not observation"
+  emotional_state:
+    type: string
+    nullable: true
+    description: "Participant emotional state during observation (frustrated, confused, satisfied, etc.)"
   confidence:
     type: string
     enum: [Strong, Moderate, Limited]

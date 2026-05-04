@@ -5,6 +5,33 @@ const sessionSummaryService = require("../../../services/session-summary.service
 const sessionObserverService = require("../../../services/session_observer.service");
 const { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepoByPath, fetchFileFromRepo } = require("../../../helpers/github");
 const { processYamlTemplate } = require("../../../helpers/yamlProcessor");
+const { readStudyVariables } = require("../../../helpers/studyVariables");
+
+// Read cascade context from study variables (brief-emitted vars)
+const getCascadeContext = async (studyPath) => {
+  if (!studyPath) return null;
+  try {
+    const studyVars = await readStudyVariables(decodeURIComponent(studyPath));
+    if (!studyVars || !studyVars.variables) return null;
+
+    const vars = studyVars.variables;
+    const barriers = vars.target_barriers?.value;
+    const questions = vars.research_questions?.value;
+    const methodology = vars.methodology_selection?.value;
+
+    const barrierCount = Array.isArray(barriers) ? barriers.length
+      : (typeof barriers === 'string' && barriers.trim()) ? barriers.split(/\n|;/).filter(Boolean).length : 0;
+    const questionCount = Array.isArray(questions) ? questions.length
+      : (typeof questions === 'string' && questions.trim()) ? questions.split(/\n|;/).filter(Boolean).length : 0;
+
+    if (barrierCount === 0 && questionCount === 0 && !methodology) return null;
+
+    return { barrierCount, questionCount, methodology: methodology || null };
+  } catch (error) {
+    console.warn("Could not read cascade context for study:", error.message);
+    return null;
+  }
+};
 
 // Command handler to open the analyze notes modal
 const analyzeNotesHandler = async ({ ack, body, client, command }) => {
@@ -315,11 +342,21 @@ const handleStudySelectionChange = async ({ ack, body, client }) => {
     const studyId = parseInt(selectedStudyOption.value);
     const studyName = selectedStudyOption.text.text;
 
-    // Fetch sessions for the selected study
+    // Fetch sessions and cascade context in parallel
     let sessions = [];
+    let cascadeContext = null;
     try {
-      sessions = await sessionObserverService.getObserverRequestsByStudy(studyId);
-      console.log(`✅ Loaded ${sessions.length} sessions for study "${studyName}"`);
+      const study = await getResearchStudyWithRoles(studyName);
+      const [sessionsResult, cascadeResult] = await Promise.all([
+        sessionObserverService.getObserverRequestsByStudy(studyId).catch(err => {
+          console.warn("Warning: Could not fetch sessions:", err.message);
+          return [];
+        }),
+        study?.path ? getCascadeContext(study.path) : Promise.resolve(null),
+      ]);
+      sessions = sessionsResult;
+      cascadeContext = cascadeResult;
+      console.log(`✅ Loaded ${sessions.length} sessions for study "${studyName}"${cascadeContext ? ` (cascade: ${cascadeContext.barrierCount} barriers, ${cascadeContext.questionCount} questions)` : ''}`);
     } catch (error) {
       console.warn("Warning: Could not fetch sessions:", error.message);
     }
@@ -336,6 +373,7 @@ const handleStudySelectionChange = async ({ ack, body, client }) => {
         showSession: true,
         showNotes: false,
         selectedStudy: studyId,
+        cascadeContext,
       })
     });
 
@@ -367,15 +405,16 @@ const handleSessionSelectionChange = async ({ ack, body, client }) => {
     const studyId = parseInt(selectedStudyOption.value);
     const studyName = selectedStudyOption.text.text;
 
-    // Get the studies list and sessions to pass back to the modal
-    const studies = await getStudiesByUser(body.user.id);
-
-    let sessions = [];
-    try {
-      sessions = await sessionObserverService.getObserverRequestsByStudy(studyId);
-    } catch (error) {
-      console.warn("Warning: Could not fetch sessions:", error.message);
-    }
+    // Get the studies list, sessions, and cascade context in parallel
+    const study = await getResearchStudyWithRoles(studyName);
+    const [studies, sessions, cascadeContext] = await Promise.all([
+      getStudiesByUser(body.user.id),
+      sessionObserverService.getObserverRequestsByStudy(studyId).catch(err => {
+        console.warn("Warning: Could not fetch sessions:", err.message);
+        return [];
+      }),
+      study?.path ? getCascadeContext(study.path) : Promise.resolve(null),
+    ]);
 
     if (!selectedSessionOption || selectedSessionOption.value === "no_sessions") {
       // No session selected, show study + session but no notes
@@ -388,6 +427,7 @@ const handleSessionSelectionChange = async ({ ack, body, client }) => {
           showSession: true,
           showNotes: false,
           selectedStudy: studyId,
+          cascadeContext,
         })
       });
       return;
@@ -451,6 +491,7 @@ const handleSessionSelectionChange = async ({ ack, body, client }) => {
         showNotes: true,
         selectedStudy: studyId,
         selectedSession: sessionId,
+        cascadeContext,
       })
     });
 

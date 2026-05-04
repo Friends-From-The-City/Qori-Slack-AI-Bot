@@ -1,6 +1,7 @@
 # Participant metadata — demographics and context from a session
 # Emitted by: session_summary
 # Consumed by: persona_generator, research_readout
+# Schema v2.0 — deepened for cascade-aware session_summary retrofit
 type: object
 properties:
   participant_id:
@@ -12,15 +13,27 @@ properties:
     description: "Military service, disability status, relevant experience"
   tech_setup:
     type: string
-    description: "Device, OS, connectivity"
+    description: "Device, OS, connectivity, browser"
   accessibility:
     type: string
     nullable: true
     description: "Assistive technology or accessibility needs"
+  recruitment_source:
+    type: string
+    nullable: true
+    description: "How participant was recruited (Perigean, intercept, snowball, etc.)"
+  consent_recording:
+    type: boolean
+    nullable: true
+    description: "Whether participant consented to session recording"
   app_usage:
     type: string
     nullable: true
     description: "Frequency, primary tasks"
+  session_notes:
+    type: string
+    nullable: true
+    description: "Observer notes about session conditions, interruptions, technical issues"
   key_contribution:
     type: string
-    description: "What this participant uniquely highlighted"
+    description: "One-sentence summary of what this participant uniquely surfaced"

@@ -349,10 +349,59 @@ Each translation plan and design reference must include an "Inputs and rationale
 
 ---
 
+## Section 8 — Cascade-Aware Templates
+
+Templates that participate in the cascade contract (consuming upstream variables and/or emitting downstream variables) follow additional patterns beyond the base design language.
+
+### 8.1 Consume pattern
+
+When a template consumes upstream variables, it:
+
+1. Declares `consumes:` in the YAML with source, required, and inject_as fields
+2. Accesses upstream values via `{{upstream_*}}` Handlebars variables in the generate prompt
+3. Conditionally renders cascade-dependent sections using `{% if upstream_* %}` guards
+4. Suppresses cascade sections entirely when upstream variables are absent (graceful degradation)
+
+### 8.2 Emit pattern
+
+When a template emits downstream variables, it:
+
+1. Declares `emits:` in the YAML with pool, pool_strategy, schema ref, and extract_from hints
+2. References shared schemas in `config/schemas/` — deepened to capture verbatim quotes, behavioral context, and confidence levels
+3. Uses `extract_from` hints to tell the extraction LLM where in the output document to look
+
+### 8.3 Citation markers
+
+Templates that consume upstream variables use inline citation markers to trace observations back to upstream inputs:
+
+- `[TB1]`, `[TB2]`, etc. — target barriers from research brief
+- `[RQ1]`, `[RQ2]`, etc. — research questions from research brief
+- `[D1]`, `[S1]`, `[V1]`, etc. — discovery artifacts (desk research, stakeholder, survey)
+
+An **Upstream context** appendix section maps markers to their sources. This section is conditionally rendered only when upstream variables exist.
+
+### 8.4 Barrier validation section
+
+Templates that validate upstream barriers (e.g., session_summary) include a **Barrier validation** section with a table of target barriers, validation status (confirmed/refuted/not addressed), and supporting evidence. This section is conditionally rendered only when `target_barriers` upstream variable exists.
+
+### 8.5 Canonical examples
+
+| Template | Pattern | Notes |
+|----------|---------|-------|
+| research_brief v6.0 | Consume-heavy | Consumes discovery artifacts, emits brief variables. Manual loading via handler (not YAML consumes) for researcher cherry-picking. |
+| session_summary v2.0 | Balanced consume + emit | Consumes brief variables (barriers, questions, methodology), emits atomic_nuggets, participant_metadata, task_completion_records, barrier_validations. First template with both deep consume and deep emit. |
+
+### 8.6 Modal cascade context
+
+When a template consumes upstream variables, the modal should display a **Cascade Context** section showing what upstream inputs are available (counts, methodology). This section is suppressed when no upstream variables exist. The modal works without cascade — researcher enters all inputs from scratch.
+
+---
+
 ## Revision History
 
 | Date | Change |
 |------|--------|
+| May 4, 2026 | Added Section 8 — Cascade-Aware Templates. Defines consume/emit patterns, citation markers, barrier validation section, modal cascade context. Canonical examples: research_brief v6.0 (consume-heavy), session_summary v2.0 (balanced consume + emit). |
 | May 1, 2026 | Added §4.9 Filename convention. Renumbered §4.10-4.12. Added Pattern A modified sub-section under §6 with stakeholder_synthesis v4.0 and persona_generator v4.3 as canonical examples. |
 | April 30, 2026 | Added Section 4.9 (markdown table formatting rule). Added Section 7 (Inputs and Rationale). Traceability patterns A/B/C defined. H1 emoji removed. Canonical examples: research_readout v5.4.1, affinity_mapping v3.2. research_plan v4.6 as Pattern C reference. |
 | April 29, 2026 | Initial version. Locked design language for Pentagram-style documents. |

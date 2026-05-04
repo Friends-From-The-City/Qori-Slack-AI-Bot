@@ -1,11 +1,15 @@
 # Barrier validation — whether a target barrier was confirmed or refuted
 # Emitted by: session_summary
 # Consumed by: affinity_mapping, research_readout
+# Schema v2.0 — deepened for cascade-aware session_summary retrofit
 type: object
 properties:
+  id:
+    type: string
+    description: "Unique validation ID, e.g. bv-PT-001-TB1"
   barrier_ref:
     type: string
-    description: "Reference to the target_barriers key this validates"
+    description: "Reference to the target_barriers key this validates (e.g. TB1, TB2)"
   participant:
     type: string
     pattern: "PT-###"
@@ -14,4 +18,16 @@ properties:
     description: "true if barrier was confirmed, false if refuted"
   evidence:
     type: string
-    description: "What the participant did or said that validates/refutes"
+    description: "What the participant did or said that validates/refutes this barrier"
+  verbatim_evidence:
+    type: string
+    nullable: true
+    description: "Direct participant quote supporting the validation — copy exactly"
+  confidence:
+    type: string
+    enum: [Strong, Moderate, Limited]
+    description: "Confidence in this validation judgment"
+  notes:
+    type: string
+    nullable: true
+    description: "Additional context or nuance about how this barrier manifested"

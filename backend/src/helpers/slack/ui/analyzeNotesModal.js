@@ -7,6 +7,7 @@ const analyzeNotesModal = (researchStudies = [], noteFiles = [], sessions = [], 
     showNotes = false,
     selectedStudy = null,
     selectedSession = null,
+    cascadeContext = null,
   } = options;
 
   // Build research study options dynamically (limit to 10 to avoid Slack's limit)
@@ -120,6 +121,33 @@ const analyzeNotesModal = (researchStudies = [], noteFiles = [], sessions = [], 
         ],
       });
     }
+  }
+
+  // Cascade Context: Show upstream brief variables when available
+  if (cascadeContext && showSession) {
+    blocks.push({
+      type: "divider",
+    });
+
+    const contextLines = [];
+    if (cascadeContext.barrierCount > 0) {
+      contextLines.push(`*${cascadeContext.barrierCount}* target barrier${cascadeContext.barrierCount !== 1 ? 's' : ''} to validate`);
+    }
+    if (cascadeContext.questionCount > 0) {
+      contextLines.push(`*${cascadeContext.questionCount}* research question${cascadeContext.questionCount !== 1 ? 's' : ''} to address`);
+    }
+    if (cascadeContext.methodology) {
+      contextLines.push(`Method: ${cascadeContext.methodology}`);
+    }
+
+    blocks.push({
+      type: "section",
+      block_id: "cascade_context_section",
+      text: {
+        type: "mrkdwn",
+        text: `*Cascade Context*\n\nBrief approved — analyzing against:\n${contextLines.map(l => `  •  ${l}`).join('\n')}\n\nSession summary will reference these upstream inputs.`,
+      },
+    });
   }
 
   // Section 2: Select Session (shown when showSession is true)

@@ -1,17 +1,45 @@
 # Task completion record — per-task success/failure from a session
 # Emitted by: session_summary
 # Consumed by: usability_issues, research_readout
+# Schema v2.0 — deepened for cascade-aware session_summary retrofit
 type: object
 properties:
+  id:
+    type: string
+    description: "Unique record ID, e.g. task-PT-001-01"
   participant:
     type: string
     pattern: "PT-###"
-  task:
+  task_number:
+    type: integer
+    description: "Task sequence number in the session protocol"
+  task_name:
     type: string
     description: "Task name or description"
   success:
     type: boolean
     description: "Whether participant completed the task"
+  completion_time:
+    type: string
+    nullable: true
+    description: "Time to complete if measured (MM:SS or HH:MM:SS)"
+  attempts:
+    type: integer
+    nullable: true
+    description: "Number of attempts before success or abandonment"
+  workaround_used:
+    type: boolean
+    description: "Whether participant used an unintended path to complete"
   notes:
     type: string
     description: "What happened during the task attempt"
+  blockers:
+    type: array
+    items:
+      type: string
+    description: "What stopped completion if task failed — each blocker as separate item"
+  linked_nuggets:
+    type: array
+    items:
+      type: string
+    description: "Nugget IDs that document observations from this task"
