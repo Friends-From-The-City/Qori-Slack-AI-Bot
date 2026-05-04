@@ -4,7 +4,45 @@ const yaml = require('js-yaml');
 const fs = require('fs');
 const path = require('path');
 
-const SCHEMA_BASE_PATH = path.resolve(__dirname, '../../../config/schemas');
+const SCHEMA_BASE_PATH = path.resolve(__dirname, '../../config/schemas');
+
+/**
+ * Verify all schema files load at startup.
+ * Logs INFO for successes, WARNING for failures.
+ * Called once on module load — does not block, but ensures visibility.
+ */
+function verifySchemas() {
+  try {
+    if (!fs.existsSync(SCHEMA_BASE_PATH)) {
+      console.error(`❌ SCHEMA DIRECTORY NOT FOUND: ${SCHEMA_BASE_PATH}`);
+      console.error(`   Variables emitted with $ref schemas will fall back to flat string extraction.`);
+      return;
+    }
+    const files = fs.readdirSync(SCHEMA_BASE_PATH).filter(f => f.endsWith('.yaml'));
+    if (files.length === 0) {
+      console.warn(`⚠️ No schema files found in ${SCHEMA_BASE_PATH}`);
+      return;
+    }
+    let loaded = 0;
+    let failed = 0;
+    for (const file of files) {
+      try {
+        const content = fs.readFileSync(path.join(SCHEMA_BASE_PATH, file), 'utf8');
+        yaml.load(content);
+        loaded++;
+      } catch (err) {
+        failed++;
+        console.warn(`⚠️ Schema "${file}" failed to load — variables emitted with this schema will fall back to flat string extraction. Error: ${err.message}`);
+      }
+    }
+    console.log(`📋 Schema verification: ${loaded} loaded, ${failed} failed (${SCHEMA_BASE_PATH})`);
+  } catch (err) {
+    console.error(`❌ Schema verification error: ${err.message}`);
+  }
+}
+
+// Run verification on module load
+verifySchemas();
 
 /**
  * Load a schema file referenced by $ref in an emits spec.
@@ -19,7 +57,8 @@ function loadSchema(ref) {
     const content = fs.readFileSync(schemaPath, 'utf8');
     return yaml.load(content);
   } catch (error) {
-    console.warn(`⚠️ Could not load schema "${ref}":`, error.message);
+    console.error(`❌ Schema "${ref}" failed to load at extraction time: ${error.message}`);
+    console.error(`   Path attempted: ${schemaPath}`);
     return null;
   }
 }
@@ -148,10 +187,13 @@ function parseExtractionResponse(responseText) {
 
 /**
  * Validate extracted variables against their schemas.
- * Returns { valid: true/false, errors: [...] }
+ * Checks both structural requirements (array vs single) and schema shape
+ * (objects vs strings when schema defines properties).
+ * Returns { valid: true/false, errors: [...], structureErrors: [...] }
  */
 function validateExtraction(extracted, emitsSpec) {
   const errors = [];
+  const structureErrors = [];
 
   for (const emit of emitsSpec) {
     const value = extracted[emit.key];
@@ -162,12 +204,33 @@ function validateExtraction(extracted, emitsSpec) {
 
     if (emit.pool && !Array.isArray(value)) {
       errors.push(`${emit.key} should be an array (pool variable), got ${typeof value}`);
+      continue;
+    }
+
+    // Strict schema shape validation: if schema defines object properties,
+    // extracted values must be objects, not flat strings
+    const resolvedSchema = resolveSchemaRefs(emit.schema);
+    if (resolvedSchema && resolvedSchema.properties && emit.pool && Array.isArray(value)) {
+      const expectedKeys = Object.keys(resolvedSchema.properties);
+      for (let i = 0; i < value.length; i++) {
+        const item = value[i];
+        if (typeof item === 'string') {
+          structureErrors.push(`${emit.key}[${i}]: expected object with keys [${expectedKeys.slice(0, 4).join(', ')}...], got string "${item.slice(0, 60)}..."`);
+        } else if (typeof item === 'object' && item !== null) {
+          // Check that at least some expected keys are present
+          const presentKeys = expectedKeys.filter(k => item[k] !== undefined);
+          if (presentKeys.length < Math.min(3, expectedKeys.length)) {
+            structureErrors.push(`${emit.key}[${i}]: only ${presentKeys.length}/${expectedKeys.length} schema keys present`);
+          }
+        }
+      }
     }
   }
 
   return {
-    valid: errors.length === 0,
+    valid: errors.length === 0 && structureErrors.length === 0,
     errors,
+    structureErrors,
   };
 }
 
@@ -209,7 +272,9 @@ async function extractVariables(renderedOutput, emitsSpec, inputValues) {
   while (attempts < maxAttempts && !extracted) {
     attempts++;
     try {
-      const response = await llm.invoke(prompt);
+      const currentPrompt = attempts === 1 ? prompt : prompt + `\n\nCRITICAL RETRY INSTRUCTION: Your previous response returned flat strings instead of structured objects. You MUST return JSON matching the exact schema above. Do not return strings or summaries — return objects with ALL specified fields. Every pool variable must be an array of objects, not an array of strings. Use null for missing optional fields.`;
+
+      const response = await llm.invoke(currentPrompt);
       const parsed = parseExtractionResponse(response.content);
 
       if (!parsed) {
@@ -218,11 +283,22 @@ async function extractVariables(renderedOutput, emitsSpec, inputValues) {
       }
 
       const validation = validateExtraction(parsed, emitsSpec);
-      if (!validation.valid) {
+
+      if (validation.errors.length > 0) {
         console.warn(`⚠️ Extraction attempt ${attempts}/${maxAttempts}: Validation errors:`, validation.errors);
         if (attempts < maxAttempts) continue;
-        // On last attempt, use what we got even if partially invalid
-        console.warn('⚠️ Using partially valid extraction on final attempt');
+      }
+
+      if (validation.structureErrors.length > 0) {
+        console.error(`❌ Extraction attempt ${attempts}/${maxAttempts}: Schema structure mismatch:`);
+        validation.structureErrors.forEach(e => console.error(`   ${e}`));
+        if (attempts < maxAttempts) {
+          console.warn(`🔄 Retrying extraction with stricter prompt...`);
+          continue;
+        }
+        // Final attempt still has structure errors — reject the extraction
+        console.error(`❌ CRITICAL: Extraction failed schema validation after ${maxAttempts} attempts. Variables will NOT be written to study-variables.json to prevent cascade corruption.`);
+        return null;
       }
 
       extracted = parsed;
