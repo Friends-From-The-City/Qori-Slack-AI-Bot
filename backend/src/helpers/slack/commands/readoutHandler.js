@@ -354,7 +354,7 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }) => {
     }
 
     console.log('Total content items fetched:', contentArray.length);
-    console.log('Content array sample:', JSON.stringify(contentArray.slice(0, 2), null, 2));
+    console.log(`Content array: ${contentArray.length} items, first: ${contentArray[0]?.filename || 'unknown'}`);
 
     // Create combined content string from all files for AI processing
     let combinedContent = '';

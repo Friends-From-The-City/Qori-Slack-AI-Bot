@@ -41,7 +41,7 @@ const handleStudySelectionChange = async ({ ack, body, client }) => {
     await ack();
 
     const view = body.view;
-    console.log("🚀 ~ View state:", JSON.stringify(view.state, null, 2));
+    console.log("🚀 ~ View state blocks:", Object.keys(view.state?.values || {}).length, "blocks");
     
     if (!view || !view.state || !view.state.values) {
       console.error("🚨 No view state available");

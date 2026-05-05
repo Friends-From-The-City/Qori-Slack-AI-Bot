@@ -327,7 +327,7 @@ async function processObserverYamlTemplate(rawYamlContent, inputValues, baseFold
 
   // 8. Push the updated content to GitHub
   const result = await createOrUpdateFileOnGitHub(fullPath, updatedContent);
-  console.log('GitHub write result:', result);
+  console.log(`GitHub write: ${result?.data?.content?.path || 'unknown path'}`);
 
   return { result, outputTemplate: updatedContent };
 }

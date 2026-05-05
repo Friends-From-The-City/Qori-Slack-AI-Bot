@@ -17,7 +17,7 @@ async function processSlackFile(slackFileUrl, slackToken, fileType) {
       },
       responseType: 'arraybuffer'
     });
-    console.log("🚀 ~ processSlackFile ~ response:", response)
+    console.log(`🚀 ~ processSlackFile: status=${response.status}, size=${response.data?.length || 0} bytes`);
 
     const buffer = Buffer.from(response.data);
 
@@ -66,7 +66,7 @@ async function processSlackFiles(files, slackToken) {
       }
 
       const content = await processSlackFile(fileUrl, slackToken, file.mimetype);
-      console.log("🚀 ~ processSlackFiles ~ content:", content)
+      console.log(`🚀 ~ processSlackFiles: ${file.name}, ${content.length} chars`);
       processedFiles.push({
         name: file.name,
         type: file.mimetype,

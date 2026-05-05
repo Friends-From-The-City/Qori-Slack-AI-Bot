@@ -579,7 +579,7 @@ async function processParticipantYamlTemplate(rawYamlContent, inputValues, baseF
 
   // 7. Push the updated content to GitHub
   const result = await createOrUpdateFileOnGitHub(fullPath, updatedContent);
-  console.log('GitHub write result:', result);
+  console.log(`GitHub write: ${result?.data?.content?.path || 'unknown path'}`);
 
   return { result, outputTemplate: updatedContent };
 }

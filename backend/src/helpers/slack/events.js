@@ -966,7 +966,7 @@ slackApp.view('research-shareout-submit', async ({ ack, body, view, client }) =>
     channelId: channelId,
   };
 
-  console.log('📢 Research Shareout Submitted:', data);
+  console.log(`📢 Research Shareout Submitted: study=${data.studyName}, channel=${data.deliveryChannel}`);
 
   await client.chat.postMessage({
     channel: body.user.id,
@@ -1325,7 +1325,7 @@ slackApp.view('research_plan_modal', async ({ ack, body, view, client }) => {
     operational_risks: extract('operational_risks_block', 'operational_risks_input') || '',
   };
   
-  console.log('📋 Extracted research plan data:', JSON.stringify(data, null, 2));
+  console.log(`📋 Extracted research plan data: ${Object.keys(data).length} fields, study: ${data.study_name || 'unknown'}`);
   const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, "research_plan.yaml");
   const renderedYaml = await processYamlTemplate(file.content, data, study.path);
 
@@ -2039,7 +2039,7 @@ slackApp.view("stakeholder_interview_guide_modal", async ({ ack, body, view, cli
       study_name: studyName,
     };
 
-    console.log("📝 Template Data:", JSON.stringify(templateData, null, 2));
+    console.log(`📝 Template Data: ${Object.keys(templateData).length} fields, study: ${templateData.study_name || 'unknown'}`);
 
     // Fetch and process YAML template
     const study = await getResearchStudyWithRoles(studyName);
@@ -2187,7 +2187,7 @@ slackApp.view('upload_stakeholder_notes_modal', async ({ ack, view, body, client
     channelId,
   };
 
-  console.log("🚀 ~ stakeholder notes data:", data);
+  console.log(`🚀 ~ stakeholder notes: study=${data.studyName}, files=${data.uploadedFiles?.length || 0}`);
 
 
   // Validate files
@@ -2533,8 +2533,7 @@ slackApp.view('upload_desk_research_modal', async ({ ack, view, body, client }) 
     description: description,
     researchFocus: researchFocus,
   };
-  console.log("🚀 ~ data:", data)
-  console.log("🚀 ~ uploadedFiles count:", uploadedFiles.length)
+  console.log(`🚀 ~ desk research: study=${data.studyName}, files=${uploadedFiles.length}`);
 
   // Process the desk research
   try {

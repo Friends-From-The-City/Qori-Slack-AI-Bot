@@ -171,7 +171,7 @@ async function handleBriefSubmission({ ack, body, view, client }) {
     }
   }
 
-  console.log('📋 Extracted research brief data:', JSON.stringify(data, null, 2));
+  console.log(`📋 Extracted research brief data: ${Object.keys(data).length} fields, study: ${data.study_name || data.selected_study || 'unknown'}`);
 
   const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, "research_brief.yaml");
   const renderedYaml = await processYamlTemplate(file.content, data, study.path);

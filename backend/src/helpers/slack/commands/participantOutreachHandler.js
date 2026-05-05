@@ -64,7 +64,7 @@ const handleParticipantOutreachSubmit = async ({ ack, body, view, client }) => {
   // Don't acknowledge yet - we'll return a response with the next view
 
   console.log("🚀 ~ handleParticipantOutreachSubmit called");
-  console.log("🚀 ~ view.state.values:", JSON.stringify(view.state.values, null, 2));
+  console.log("🚀 ~ view.state.values:", Object.keys(view.state.values).length, "blocks");
   console.log("🚀 ~ view.private_metadata:", view.private_metadata);
 
   const values = view.state.values;
@@ -209,7 +209,7 @@ const handleParticipantOutreachSubmit = async ({ ack, body, view, client }) => {
 
 const handleInitialRecruitmentSubmit = async ({ ack, body, view, client }) => {
   console.log("🚀 ~ handleInitialRecruitmentSubmit called");
-  console.log("🚀 ~ view.state.values:", JSON.stringify(view.state.values, null, 2));
+  console.log("🚀 ~ view.state.values:", Object.keys(view.state.values).length, "blocks");
   
   // Store view_id and hash for later update
   const viewId = body.view.id;
@@ -341,7 +341,7 @@ const handleInitialRecruitmentSubmit = async ({ ack, body, view, client }) => {
 };
 const handleReschedulingRequestSubmit = async ({ ack, body, view, client }) => {
   console.log("🚀 ~ handleReschedulingRequestSubmit called");
-  console.log("🚀 ~ view.state.values:", JSON.stringify(view.state.values, null, 2));
+  console.log("🚀 ~ view.state.values:", Object.keys(view.state.values).length, "blocks");
   
   // Store view_id and hash for later update
   const viewId = body.view.id;
@@ -464,7 +464,7 @@ const handleReschedulingRequestSubmit = async ({ ack, body, view, client }) => {
 
 const handleSessionConfirmationSubmit = async ({ ack, body, view, client }) => {
   console.log("🚀 ~ handleSessionConfirmationSubmit called");
-  console.log("🚀 ~ view.state.values:", JSON.stringify(view.state.values, null, 2));
+  console.log("🚀 ~ view.state.values:", Object.keys(view.state.values).length, "blocks");
   
   // Store view_id and hash for later update
   const viewId = body.view.id;
@@ -589,7 +589,7 @@ const handleSessionConfirmationSubmit = async ({ ack, body, view, client }) => {
 
 const handleThankYouSubmit = async ({ ack, body, view, client }) => {
   console.log("🚀 ~ handleThankYouSubmit called");
-  console.log("🚀 ~ view.state.values:", JSON.stringify(view.state.values, null, 2));
+  console.log("🚀 ~ view.state.values:", Object.keys(view.state.values).length, "blocks");
   
   // Store view_id and hash for later update
   const viewId = body.view.id;
@@ -709,7 +709,7 @@ const handleThankYouSubmit = async ({ ack, body, view, client }) => {
 
 const handleFollowUpSubmit = async ({ ack, body, view, client }) => {
   console.log("🚀 ~ handleFollowUpSubmit called");
-  console.log("🚀 ~ view.state.values:", JSON.stringify(view.state.values, null, 2));
+  console.log("🚀 ~ view.state.values:", Object.keys(view.state.values).length, "blocks");
   
   // Store view_id and hash for later update
   const viewId = body.view.id;
@@ -825,7 +825,7 @@ const handleFollowUpSubmit = async ({ ack, body, view, client }) => {
 
 const handleSessionReminderSubmit = async ({ ack, body, view, client }) => {
   console.log("🚀 ~ handleSessionReminderSubmit called");
-  console.log("🚀 ~ view.state.values:", JSON.stringify(view.state.values, null, 2));
+  console.log("🚀 ~ view.state.values:", Object.keys(view.state.values).length, "blocks");
   
   // Store view_id and hash for later update
   const viewId = body.view.id;
@@ -996,7 +996,7 @@ const handleAddParticipantSubmit = async ({ ack, body, view, client }) => {
       current_date,
       added_by
     }
-    console.log("🚀 ~ handleAddParticipantSubmit ~ data:", data)
+    console.log(`🚀 ~ handleAddParticipantSubmit: study=${data.study_name}, participant=${data.participant_id}`);
 
     const study = await getResearchStudyWithRoles(study_name);
 

@@ -241,7 +241,7 @@ const handleRequestChangesSubmission = async (ack, view, body, client) => {
   console.log('Files to Update:', filesToUpdate);
   console.log('Priority Level:', priorityLevel);
   console.log('Deadline:', deadline);
-  console.log('Raw view.state.values:', JSON.stringify(values, null, 2));
+  console.log('Raw view.state.values:', Object.keys(values).length, 'blocks');
 
   await addStudyStatus({
     study_name: studyName,
