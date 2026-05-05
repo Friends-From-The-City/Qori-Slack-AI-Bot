@@ -207,6 +207,39 @@ async function mergeVariables(existing, extracted, sourceTemplate, sourceVersion
 }
 
 /**
+ * Normalize field names in stored variable data to match current schema.
+ * Handles renames across schema versions without requiring DB migrations.
+ */
+const FIELD_RENAMES = {
+  validated_themes: {
+    label: 'theme_name',
+    description: 'summary',
+    nugget_refs: 'supporting_nuggets',
+    confidence_rationale: 'confidence_reasoning',
+    participants: 'participants_observed',
+  },
+};
+
+function normalizeVariableFields(key, value) {
+  const renames = FIELD_RENAMES[key];
+  if (!renames) return value;
+
+  const normalize = (item) => {
+    if (!item || typeof item !== 'object') return item;
+    const normalized = { ...item };
+    for (const [oldName, newName] of Object.entries(renames)) {
+      if (normalized[oldName] !== undefined && normalized[newName] === undefined) {
+        normalized[newName] = normalized[oldName];
+        delete normalized[oldName];
+      }
+    }
+    return normalized;
+  };
+
+  return Array.isArray(value) ? value.map(normalize) : normalize(value);
+}
+
+/**
  * Read specific upstream variables for a template's consumes spec.
  */
 async function readUpstreamVariables(studyBasePath, consumesSpec) {
@@ -229,8 +262,9 @@ async function readUpstreamVariables(studyBasePath, consumesSpec) {
 
         if (rows.length > 0) {
           const isPool = rows[0].is_pool;
+          const rawValue = isPool ? rows.map(r => r.value) : rows[0].value;
           upstream[spec.key] = {
-            value: isPool ? rows.map(r => r.value) : rows[0].value,
+            value: normalizeVariableFields(spec.key, rawValue),
             source: {
               template: rows[0].source_template,
               version: rows[0].source_version,
@@ -254,7 +288,7 @@ async function readUpstreamVariables(studyBasePath, consumesSpec) {
     const variable = studyVars.variables[spec.key];
     if (variable) {
       upstream[spec.key] = {
-        value: variable.value,
+        value: normalizeVariableFields(spec.key, variable.value),
         source: variable.source,
         confidence: variable.confidence,
       };

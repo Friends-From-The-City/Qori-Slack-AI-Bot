@@ -231,7 +231,7 @@ GITHUB_REPO=your-repo-name
 ANTHROPIC_API_KEY=sk-ant-api03-your-anthropic-key-here
 ANTHROPIC_MODEL_NAME=claude-sonnet-4-20250514  # Optional, defaults to claude-sonnet-4-20250514
 ANTHROPIC_TEMPERATURE=0.4                       # Optional, defaults to 0.4
-ANTHROPIC_MAX_TOKENS=3000                       # Optional, defaults to 3000
+ANTHROPIC_MAX_TOKENS=8192                       # Optional, defaults to 8192
 OPENAI_API_KEY=sk-your-openai-key-here
 ```
 

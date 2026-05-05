@@ -900,6 +900,13 @@ const handleResearchSynthesisSubmission = async ({ ack, body, view, client }) =>
       throw new Error(`Unknown analysis method: ${analysisMethod}`);
     }
 
+    // Send immediate progress message so user knows it's working
+    await client.chat.postEphemeral({
+      channel: body.user.id,
+      user: body.user.id,
+      text: `Generating ${analysisMethod.replace(/_/g, ' ')} for *${selectedStudyName}*... (${filesWithContent.length} files, this may take 1-2 minutes)`,
+    });
+
     try {
       const yamlTemplateFile = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, yamlFileName);
 
@@ -915,13 +922,13 @@ const handleResearchSynthesisSubmission = async ({ ack, body, view, client }) =>
       await client.chat.postEphemeral({
         channel: body.user.id,
         user: body.user.id,
-        text: `🎯 *Research Synthesis Complete!*`,
+        text: `*Research Synthesis Complete!*`,
         blocks: [
           {
             type: 'section',
             text: {
               type: 'mrkdwn',
-              text: `🎯 *Research Synthesis Complete!*\n\n*Study:* ${selectedStudyName}\n*Method:* ${analysisMethod}\n*Files Analyzed:* ${filesWithContent.length} files\n• Session Summaries: ${filesWithContent.filter(f => f.file_type === 'session_summary').length}\n• Transcripts: ${filesWithContent.filter(f => f.file_type === 'transcript' || f.file_type === 'study_note').length}\n• Stakeholder Guides: ${filesWithContent.filter(f => f.file_type === 'stakeholder_guide').length}`,
+              text: `*Research Synthesis Complete!*\n\n*Study:* ${selectedStudyName}\n*Method:* ${analysisMethod}\n*Files Analyzed:* ${filesWithContent.length} files\n• Session Summaries: ${filesWithContent.filter(f => f.file_type === 'session_summary').length}\n• Transcripts: ${filesWithContent.filter(f => f.file_type === 'transcript' || f.file_type === 'study_note').length}\n• Stakeholder Guides: ${filesWithContent.filter(f => f.file_type === 'stakeholder_guide').length}`,
             },
           },
           {
@@ -938,7 +945,7 @@ const handleResearchSynthesisSubmission = async ({ ack, body, view, client }) =>
       if (study?.channel_name) {
         await client.chat.postMessage({
           channel: study.channel_name,
-          text: `🎯 *Research Synthesis Complete!*`,
+          text: `*Research Synthesis Complete!*`,
           blocks: [
             {
               type: 'section',
@@ -958,10 +965,33 @@ const handleResearchSynthesisSubmission = async ({ ack, body, view, client }) =>
               type: 'section',
               text: {
                 type: 'mrkdwn',
-                text: `📊 *To see the complete synthesis and detailed insights, please visit:*\n<${renderedAnalysis.result.url}|:github: View Full Analysis on GitHub>`,
+                text: `To see the complete synthesis and detailed insights, please visit:\n<${renderedAnalysis.result.url}|:github: View Full Analysis on GitHub>`,
               },
             },
           ],
+        });
+      }
+
+      // Track extraction in background — send follow-up when done
+      if (renderedAnalysis.extractionPromise) {
+        renderedAnalysis.extractionPromise.then(async (extractResult) => {
+          try {
+            if (extractResult.success) {
+              await client.chat.postEphemeral({
+                channel: body.user.id,
+                user: body.user.id,
+                text: `Cascade variables extracted: ${extractResult.variableCount} items (${extractResult.keys.join(', ')}). Downstream templates can now consume this data.`,
+              });
+            } else {
+              await client.chat.postEphemeral({
+                channel: body.user.id,
+                user: body.user.id,
+                text: `Warning: Variable extraction failed — ${extractResult.error}. The document was saved but cascade variables were not updated. Downstream templates will use file content as fallback.`,
+              });
+            }
+          } catch (msgErr) {
+            console.error('Failed to send extraction status message:', msgErr.message);
+          }
         });
       }
 
@@ -973,7 +1003,7 @@ const handleResearchSynthesisSubmission = async ({ ack, body, view, client }) =>
       await client.chat.postEphemeral({
         channel: body.user.id,
         user: body.user.id,
-        text: `❌ *Synthesis failed*\n\n*Study:* ${selectedStudyName}\n*Method:* ${analysisMethod}\n*Error:* ${error.message}\n\nPlease try again or contact support.`,
+        text: `*Synthesis failed*\n\n*Study:* ${selectedStudyName}\n*Method:* ${analysisMethod}\n*Error:* ${error.message}\n\nPlease try again or contact support.`,
       });
     }
 

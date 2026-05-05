@@ -117,6 +117,23 @@ async function processYamlTemplate(rawYamlContent, inputValues, baseFolderEncode
         }
 
         console.log(`✅ Transform: Injected ${Object.keys(upstream).length} upstream variables for ${yamlConfig.id}`);
+
+        // When structured upstream data exists as primary reference, truncate raw file
+        // content to save tokens. The structured variables ARE the data — raw files are
+        // redundant (the variables were extracted from those same files).
+        const hasReferenceUpstream = yamlConfig.consumes.some(
+          c => c.inject_as === 'reference' && c.required && upstream[c.key]
+        );
+        if (hasReferenceUpstream && inputValues.combined_file_content) {
+          const originalLen = inputValues.combined_file_content.length;
+          // Keep first 2000 chars as light context (file headers, structure), drop the rest
+          if (originalLen > 2500) {
+            inputValues.combined_file_content =
+              inputValues.combined_file_content.slice(0, 2000) +
+              `\n\n[... ${Math.round((originalLen - 2000) / 1000)}K chars truncated — structured upstream variables contain the primary data ...]`;
+            console.log(`✅ Transform: Truncated combined_file_content from ${originalLen} to ~2000 chars (upstream reference data is primary)`);
+          }
+        }
       }
     } catch (error) {
       console.warn(`⚠️ Transform phase failed for ${yamlConfig.id}, continuing without upstream variables:`, error.message);
@@ -166,84 +183,61 @@ async function processYamlTemplate(rawYamlContent, inputValues, baseFolderEncode
   const fullPath = path.posix.join(baseFolder, extraFolder, filePath, filename);
   const result = await createOrUpdateFileOnGitHub(fullPath, fullContent);
 
-  // 8. EXTRACT PHASE: Runs AFTER document is written — fully non-blocking
+  // 8. EXTRACT PHASE: Runs AFTER document is written — non-blocking but trackable.
   // User already has their document. Extract + variable write happen in background.
+  // The extractionPromise is returned on the result object so callers can attach
+  // notification logic (e.g., Slack follow-up on success/failure).
+  let extractionPromise = null;
   if (yamlConfig.emits && yamlConfig.emits.length > 0) {
     console.log(`🔄 Extract: Starting extraction for ${yamlConfig.id} (${yamlConfig.emits.length} variables)`);
-    (async () => {
-      try {
-        const extractionResult = await extractVariables(outputTemplate, yamlConfig.emits, inputValues);
-        if (!extractionResult) {
-          console.warn(`⚠️ Extract phase returned null for ${yamlConfig.id}`);
-          return;
-        }
-        console.log(`🔄 Extract: Got ${Object.keys(extractionResult).length} variables for ${yamlConfig.id}`);
-
-        // Write extracted variables — discovery or study scoped
-        if (isDiscoveryScope && inputValues.topic_slug && inputValues._discovery_type && inputValues._discovery_team) {
-          const team = inputValues._discovery_team;
-          const discoveryVars = await readDiscoveryVariables(team, inputValues._discovery_type);
-          const merged = mergeDiscoveryVariables(
-            discoveryVars,
-            extractionResult,
-            inputValues.topic_slug,
-            yamlConfig.id,
-            yamlConfig.version
-          );
-          await writeDiscoveryVariables(team, inputValues._discovery_type, merged);
-          console.log(`✅ Extract: Wrote discovery variables for ${yamlConfig.id} to ${team}/_discovery/${inputValues._discovery_type}`);
-        } else {
-          const studyVars = await readStudyVariables(baseFolder);
-          const merged = mergeVariables(
-            studyVars,
-            extractionResult,
-            yamlConfig.id,
-            yamlConfig.version
-          );
-          await writeStudyVariables(baseFolder, merged);
-          console.log(`✅ Extract: Wrote variables for ${yamlConfig.id} to study-variables.json`);
-        }
-
-        // Upsert Postgres index (best effort)
-        try {
-          const sequelize = require('../database');
-          const StudyVariable = sequelize.models.StudyVariable;
-          if (StudyVariable) {
-            const studyName = inputValues.selected_study || inputValues.study_name;
-            for (const [key, variable] of Object.entries(extractionResult)) {
-              if (!variable.value) continue;
-              const entryCount = Array.isArray(variable.value) ? variable.value.length : 1;
-              await StudyVariable.upsert({
-                study_name: studyName,
-                variable_key: key,
-                variable_type: variable._emitSpec?.pool ? 'pool' : 'single',
-                source_template: yamlConfig.id,
-                source_version: yamlConfig.version,
-                value_hash: require('./studyVariables').hashVariables({ [key]: variable.value }),
-                entry_count: entryCount,
-                is_pool: variable._emitSpec?.pool || false,
-                stale: false,
-                extracted_at: new Date(),
-                updated_at: new Date(),
-              }, {
-                conflictFields: ['study_name', 'variable_key'],
-              });
-            }
-            console.log(`✅ Extract: Upserted Postgres index for ${yamlConfig.id}`);
-          }
-        } catch (dbError) {
-          console.warn(`⚠️ Postgres index upsert failed (non-blocking):`, dbError.message, dbError.errors?.[0]?.message || '');
-        }
-      } catch (error) {
-        console.error(`❌ Failed to write study variables for ${yamlConfig.id}:`, error.message);
+    extractionPromise = (async () => {
+      const extractionResult = await extractVariables(outputTemplate, yamlConfig.emits, inputValues);
+      if (!extractionResult) {
+        console.warn(`⚠️ Extract phase returned null for ${yamlConfig.id}`);
+        return { success: false, error: 'Extraction returned null', variableCount: 0 };
       }
-    })();
+      console.log(`🔄 Extract: Got ${Object.keys(extractionResult).length} variables for ${yamlConfig.id}`);
+
+      // Write extracted variables — discovery or study scoped
+      // mergeVariables handles all Postgres writes (transactional DELETE+INSERT).
+      if (isDiscoveryScope && inputValues.topic_slug && inputValues._discovery_type && inputValues._discovery_team) {
+        const team = inputValues._discovery_team;
+        const discoveryVars = await readDiscoveryVariables(team, inputValues._discovery_type);
+        const merged = mergeDiscoveryVariables(
+          discoveryVars,
+          extractionResult,
+          inputValues.topic_slug,
+          yamlConfig.id,
+          yamlConfig.version
+        );
+        await writeDiscoveryVariables(team, inputValues._discovery_type, merged);
+        console.log(`✅ Extract: Wrote discovery variables for ${yamlConfig.id} to ${team}/_discovery/${inputValues._discovery_type}`);
+      } else {
+        const studyVars = await readStudyVariables(baseFolder);
+        const merged = mergeVariables(
+          studyVars,
+          extractionResult,
+          yamlConfig.id,
+          yamlConfig.version
+        );
+        await writeStudyVariables(baseFolder, merged);
+        console.log(`✅ Extract: Wrote variables for ${yamlConfig.id} to study-variables.json`);
+      }
+
+      const variableCount = Object.values(extractionResult).reduce((sum, v) => {
+        return sum + (Array.isArray(v.value) ? v.value.length : 1);
+      }, 0);
+      return { success: true, variableCount, keys: Object.keys(extractionResult) };
+    })().catch(error => {
+      console.error(`❌ Extract failed for ${yamlConfig.id}: ${error.message}`);
+      return { success: false, error: error.message, variableCount: 0 };
+    });
   }
 
   if (aiCheck) {
-    return { result, outputTemplate, aiResponses };
+    return { result, outputTemplate, aiResponses, extractionPromise };
   } else {
-    return { result, outputTemplate };
+    return { result, outputTemplate, extractionPromise };
   }
 }
 

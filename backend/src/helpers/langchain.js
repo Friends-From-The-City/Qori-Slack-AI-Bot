@@ -95,11 +95,38 @@ function convertHandlebarsToNunjucks(template) {
   return converted;
 }
 
+/**
+ * Escape Nunjucks template syntax in a string value.
+ * Prevents participant quotes containing {{ }}, {% %} etc. from being
+ * interpreted as template logic during nunjucks.renderString().
+ */
+function escapeNunjucksSyntax(str) {
+  if (typeof str !== 'string') return str;
+  return str
+    .replace(/\{%/g, '{_PCT_')
+    .replace(/%\}/g, '_PCT_}')
+    .replace(/\{\{/g, '{_DBL_')
+    .replace(/\}\}/g, '_DBL_}');
+}
+
+/**
+ * Restore escaped Nunjucks syntax after rendering.
+ * Reverses the escaping so the LLM sees the original text.
+ */
+function unescapeNunjucksSyntax(str) {
+  if (typeof str !== 'string') return str;
+  return str
+    .replace(/\{_PCT_/g, '{%')
+    .replace(/_PCT_\}/g, '%}')
+    .replace(/\{_DBL_/g, '{{')
+    .replace(/_DBL_\}/g, '}}');
+}
+
 async function executeAiGenerationTasks(aiGenerationTasks, inputValues) {
   // Get AI model configuration from environment variables with defaults
   const modelName = process.env.ANTHROPIC_MODEL_NAME || "claude-sonnet-4-20250514";
   const temperature = parseFloat(process.env.ANTHROPIC_TEMPERATURE || "0.4");
-  const maxTokens = parseInt(process.env.ANTHROPIC_MAX_TOKENS || "3000", 10);
+  const maxTokens = parseInt(process.env.ANTHROPIC_MAX_TOKENS || "8192", 10);
 
   // Validate API key
   if (!process.env.ANTHROPIC_API_KEY) {
@@ -112,27 +139,33 @@ async function executeAiGenerationTasks(aiGenerationTasks, inputValues) {
     temperature: temperature,
     maxTokens: maxTokens,
   });
+
+  // Escape Nunjucks-sensitive sequences in upstream data to prevent
+  // participant quotes like "I typed {{username}}" from crashing the renderer
+  const safeInputValues = { ...inputValues };
+  for (const [key, val] of Object.entries(safeInputValues)) {
+    if (typeof val === 'string' && (key.startsWith('upstream_') || key === 'combined_file_content')) {
+      safeInputValues[key] = escapeNunjucksSyntax(val);
+    }
+  }
+
   const aiResponses = {};
 
   const taskPromises = aiGenerationTasks.map(async (task) => {
     try {
       // 0) Convert Handlebars syntax to Nunjucks if present
       const nunjucksTemplate = convertHandlebarsToNunjucks(task.prompt);
-      
+
       // 1) Render all Jinja/Nunjucks if-blocks, loops, etc.
-      const jinjaOut = nunjucks.renderString(nunjucksTemplate, inputValues);
+      const jinjaOut = nunjucks.renderString(nunjucksTemplate, safeInputValues);
 
-      // 2) Convert your {{var}} placeholders to LangChain's {var}
-      const convertedPrompt = jinjaOut.replace(/\{\{\s*(\w+)\s*\}\}/g, "{$1}");
+      // 2) Restore escaped sequences so the LLM sees original text
+      const finalPrompt = unescapeNunjucksSyntax(jinjaOut);
 
-      // 3) Feed into PromptTemplate as before
-      const promptTemplate = PromptTemplate.fromTemplate(convertedPrompt);
-      const formattedPrompt = await promptTemplate.format(inputValues);
-
-      const response = await llm.invoke(formattedPrompt);
+      const response = await llm.invoke(finalPrompt);
       return { taskId: task.task_id, response: response.content };
     } catch (error) {
-      console.error(`Error processing task ${task.task_id}:`, error);
+      console.error(`Error processing task ${task.task_id}:`, error.message);
       throw error;
     }
   });
