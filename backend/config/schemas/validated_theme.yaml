@@ -2,55 +2,96 @@
 # Emitted by: affinity_mapping
 # Consumed by: journey_mapping, persona_generator, usability_issues,
 #              jobs_to_be_done, design_opportunities, research_readout
+#
+# v2.0 (May 5, 2026): Cascade-aware deepening. Added pattern_description,
+#   participant_coverage, severity_distribution, representative_quote fields,
+#   linked_barriers/linked_questions for upstream traceability,
+#   validation_status, cross_cutting_dimensions.
+#   Renamed: label→theme_name, description→summary, participants→participants_observed,
+#            confidence_rationale→confidence_reasoning, nugget_refs→supporting_nuggets.
 type: object
+required: [id, theme_name, summary, supporting_nuggets, confidence]
 properties:
   id:
     type: string
-    pattern: "theme-{seq}"
-    description: "Unique theme ID"
-  label:
+    description: "Format: theme-{seq}, e.g. theme-01"
+  theme_name:
     type: string
-    description: "Theme name"
-  description:
+    description: "Concise theme label from participant language"
+  summary:
+    type: string
+    description: "1-2 sentence theme description"
+  pattern_description:
     type: string
     nullable: true
-    description: "What this theme captures — the pattern in plain language"
-  evidence_count:
-    type: integer
-    description: "Number of supporting observations"
-  participants:
+    description: "Full pattern explanation — what this theme reveals about user behavior or experience"
+  supporting_nuggets:
     type: array
+    description: "References to atomic_nugget_core.id values that support this theme"
     items:
       type: string
-    description: "Participant IDs who contributed evidence"
-  representative_quotes:
+  evidence_count:
+    type: integer
+    description: "Number of nugget instances supporting this theme"
+  participants_observed:
     type: array
+    description: "PT-XXX IDs where this theme was observed"
     items:
-      type: object
-      properties:
-        quote:
-          type: string
-        participant:
-          type: string
-        context:
-          type: string
-          nullable: true
+      type: string
+  participant_coverage:
+    type: string
     nullable: true
-    description: "Verbatim quotes that best illustrate this theme, with participant ID and context"
+    description: "X of Y participants format, e.g. '5 of 8'"
+  severity_distribution:
+    type: object
+    nullable: true
+    description: "Count of nuggets by severity level"
+    properties:
+      severity_0:
+        type: integer
+      severity_1:
+        type: integer
+      severity_2:
+        type: integer
+      severity_3:
+        type: integer
+      severity_4:
+        type: integer
+  representative_quote:
+    type: string
+    nullable: true
+    description: "Single most representative verbatim quote across the supporting nuggets"
+  representative_quote_source:
+    type: string
+    nullable: true
+    description: "Which participant said the representative quote (PT-XXX)"
+  linked_barriers:
+    type: array
+    nullable: true
+    description: "References to target_barriers if theme validates or refutes"
+    items:
+      type: string
+  validation_status:
+    type: string
+    nullable: true
+    enum: [validates_barrier, refutes_barrier, unexpected_pattern]
+    description: "How this theme relates to upstream barriers"
+  linked_questions:
+    type: array
+    nullable: true
+    description: "References to research_questions if theme addresses"
+    items:
+      type: string
+  cross_cutting_dimensions:
+    type: array
+    nullable: true
+    description: "Demographics or contexts that pattern across — e.g., AT users, age 65+, iOS users"
+    items:
+      type: string
   confidence:
     type: string
     enum: [Strong, Moderate, Limited]
-  confidence_rationale:
+  confidence_reasoning:
     type: string
     nullable: true
-    description: "Why this confidence level — triangulation, sample coverage, contradictions"
-  implications:
-    type: string
-    nullable: true
-    description: "What this theme means for design, research, or implementation"
-  nugget_refs:
-    type: array
-    items:
-      type: string
-    nullable: true
-    description: "References to atomic_nuggets that support this theme"
+    description: "Why this confidence level — participant count, severity pattern, evidence quality"

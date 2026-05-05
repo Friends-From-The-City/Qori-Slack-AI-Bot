@@ -4,7 +4,7 @@
 id: affinity_mapping
 name: run_affinity_mapping
 label: 🧠 Affinity Mapping
-version: "v3.2"
+version: "v4.0"
 
 description: >
   Group qualitative data into research-grounded themes using inductive clustering.
@@ -13,7 +13,7 @@ description: >
 
 author: Qori R&D
 created: 2025-06-27
-last_updated: 2026-04-30
+last_updated: 2026-05-05
 
 # ═══════════════════════════════════════════════════════════
 # CONFIGURATION
@@ -37,32 +37,52 @@ input_variables:
 # CASCADE CONTRACT
 # ═══════════════════════════════════════════════════════════
 consumes:
-  - key: atomic_nuggets
+  - key: atomic_nugget_core
     source: session_summary
     required: true
     inject_as: reference
-    description: "Cross-participant observation pool — primary input for theme clustering"
+    description: "Pool of typed observations across all sessions — primary input for theme clustering"
+
+  - key: atomic_nugget_detail
+    source: session_summary
+    required: true
+    inject_as: reference
+    description: "Rich context for nuggets — verbatim quotes, behaviors, inferred meaning, emotional state"
+
   - key: target_barriers
     source: research_brief
     required: false
     inject_as: grounding
-    description: "Hypothesized barriers — themes to validate against"
+    description: "Hypothesized barriers — themes can validate or refute these"
+
+  - key: research_questions
+    source: research_brief
+    required: false
+    inject_as: context
+    description: "Research questions to address through theme synthesis"
+
+  - key: participant_metadata
+    source: session_summary
+    required: false
+    inject_as: reference
+    description: "Demographics for cross-participant pattern validation"
 
 emits:
   - key: validated_themes
     pool: false
     pool_strategy: replace
+    extraction_model: sonnet
     schema:
       $ref: schemas/validated_theme.yaml
-    extract_from: "Theme sections with evidence tables"
+    extract_from: "Theme sections, evidence tables, pattern analysis, supporting quotes, confidence levels, barrier/question markers"
+
   - key: unexpected_patterns
     pool: false
     pool_strategy: replace
+    extraction_model: sonnet
     schema:
-      type: array
-      items:
-        type: string
-    extract_from: "Themes not anticipated by target barriers"
+      $ref: schemas/unexpected_pattern.yaml
+    extract_from: "Patterns that emerged outside of target_barriers — surprises, contradictions, novel observations marked [unexpected]"
 
 # ═══════════════════════════════════════════════════════════
 # AI GENERATION
@@ -110,22 +130,67 @@ ai_generation_tasks:
       ✅ SPECIFIC: "Unlabeled Buttons Block Screen Reader Navigation"
       ✅ SPECIFIC: "Claim Status Shows 'None' Despite Active Filing"
 
-      {% if upstream_atomic_nuggets %}
+      {% if upstream_atomic_nugget_core %}
       ============================================================
-      UPSTREAM CONTEXT (structured variables from cascade)
+      CASCADE-AWARE GENERATION
       ============================================================
 
-      ATOMIC NUGGETS (typed observations from session summaries):
-      {{upstream_atomic_nuggets}}
+      You have access to upstream nugget pool (atomic_nugget_core + atomic_nugget_detail)
+      and target context (target_barriers, research_questions). Your job is to:
+
+      1. **Cluster nuggets into themes by semantic pattern.** Use nugget_type, severity,
+         observed_behavior, and inferred_meaning to group. Do NOT cluster by participant —
+         themes should cross participants.
+
+      2. **Cite supporting nuggets by ID.** Each theme's evidence section must reference
+         specific nugget IDs (e.g., nugget-PT001-003, nugget-PT002-007). The supporting_nuggets
+         array in the theme variable must list ALL contributing nugget IDs.
+
+      3. **Include representative verbatim quotes.** Pull the strongest verbatim_quote from
+         supporting nuggets and surface it in the theme. Attribute correctly with participant ID.
+
+      4. **Mark theme-barrier relationships.**
+         - When a theme validates a target_barrier from the brief, mark it inline with [validates TB1] etc.
+         - When a theme refutes a target_barrier, mark with [refutes TB1]
+         - When a theme is unexpected (no upstream barrier), mark with [unexpected]
+
+      5. **Address research questions explicitly.** When a theme addresses a research_question
+         from the brief, mark it inline with [addresses RQ1] etc.
+
+      6. **Cross-cutting dimensions.** Surface when a theme correlates with specific demographics
+         or contexts (AT users, age 65+, iOS users, first-time vs experienced users). Include in
+         cross_cutting_dimensions field.
+
+      7. **Confidence calibration:**
+         - Strong: ≥3 participants, consistent severity, multiple verbatim quotes
+         - Moderate: 2 participants OR mixed severity OR limited verbatim evidence
+         - Limited: 1 participant OR weak evidence chain
+
+      8. **Use ONLY observations from upstream nuggets.** Do not infer beyond what nuggets
+         contain. If a pattern requires evidence not present in the nugget pool, do not
+         include it as a theme.
+
+      ATOMIC NUGGETS — CORE (typed observations from session summaries):
+      {{upstream_atomic_nugget_core}}
+
+      ATOMIC NUGGETS — DETAIL (verbatim quotes, behaviors, emotional context):
+      {{upstream_atomic_nugget_detail}}
 
       {% if upstream_target_barriers %}
       TARGET BARRIERS (from research brief — validate these against themes):
       {{upstream_target_barriers}}
       {% endif %}
 
-      Use these structured observations to ground your theme clustering.
-      Nuggets with severity 3-4 should receive priority attention. When a
-      theme aligns with or contradicts a target barrier, note the connection.
+      {% if upstream_research_questions %}
+      RESEARCH QUESTIONS (from research brief — address through themes):
+      {{upstream_research_questions}}
+      {% endif %}
+
+      {% if upstream_participant_metadata %}
+      PARTICIPANT METADATA (demographics for cross-cutting analysis):
+      {{upstream_participant_metadata}}
+      {% endif %}
+
       {% endif %}
 
       ============================================================
@@ -152,17 +217,34 @@ ai_generation_tasks:
 
       ---
 
-      ## At a Glance
+      {% if upstream_atomic_nugget_core %}
+      ## Cascade Summary
 
-      | Theme | Evidence | Participants | Severity |
-      |:------|:---------|:-------------|:---------|
-      | [Specific theme name] | X items | PT-00X, PT-00X | 🔴 Critical |
-      | [Specific theme name] | X items | PT-00X, PT-00X | 🟡 High |
-      | [Specific theme name] | X items | PT-00X, PT-00X | 🟢 Medium |
+      This affinity analysis synthesizes nuggets from upstream session summaries.
+
+      | Source data | Count |
+      |-------------|-------|
+      | Sessions analyzed | [n] |
+      | Nugget pool size | [n] |
+      | Participants represented | [n] |
+      | Target barriers under validation | [n or 0 if none] |
+      | Research questions addressed | [n or 0 if none] |
 
       ---
 
-      ## Theme 1: [Specific Theme Name from Participant Language]
+      {% endif %}
+
+      ## At a Glance
+
+      | Theme | Evidence | Participants | Severity | Cascade |
+      |:------|:---------|:-------------|:---------|:--------|
+      | [Specific theme name] | X items | PT-00X, PT-00X | 🔴 Critical | [validates TB1] |
+      | [Specific theme name] | X items | PT-00X, PT-00X | 🟡 High | [addresses RQ2] |
+      | [Specific theme name] | X items | PT-00X, PT-00X | 🟢 Medium | [unexpected] |
+
+      ---
+
+      ## Theme 01: [Specific Theme Name from Participant Language] [validates TB1] [addresses RQ1]
 
       **The Pattern:** [One sentence describing what connects these data points]
 
@@ -170,11 +252,14 @@ ai_generation_tasks:
 
       | Type | Evidence | Source |
       |:----:|----------|--------|
-      | 💬 | "[Verbatim quote from data]" | PT-00X, 00:00:00 |
-      | 💬 | "[Verbatim quote from data]" | PT-00X, 00:00:00 |
-      | 🔴 | [Pain point description] | PT-00X, 00:00:00 |
-      | 🔴 | [Pain point description] | PT-00X, 00:00:00 |
-      | 👁️ | [Observed behavior] | PT-00X |
+      | 💬 | "[Verbatim quote from data]" | PT-00X via nugget-PT00X-003 |
+      | 💬 | "[Verbatim quote from data]" | PT-00X via nugget-PT00X-007 |
+      | 🔴 | [Pain point description] | PT-00X via nugget-PT00X-011 |
+      | 👁️ | [Observed behavior] | PT-00X via nugget-PT00X-015 |
+
+      **Coverage** — X of Y participants observed (PT-001, PT-002, PT-003)
+
+      **Confidence** — Strong (consistent severity 3-4 across participants, multiple verbatim quotes)
 
       ### Implication
 
@@ -184,13 +269,13 @@ ai_generation_tasks:
 
       ---
 
-      ## Theme 2: [Specific Theme Name]
+      ## Theme 02: [Specific Theme Name]
 
-      [Same format as Theme 1]
+      [Same format as Theme 01]
 
       ---
 
-      [REPEAT FOR EACH THEME - typically 3-5 themes]
+      [REPEAT FOR EACH THEME - typically 3-7 themes]
 
       ---
 
@@ -215,9 +300,9 @@ ai_generation_tasks:
 
       | Priority | Action | Addresses Theme | Effort |
       |:--------:|--------|-----------------|:------:|
-      | 1 | [Specific action] | Theme 1 | 🔵⚪⚪ |
-      | 2 | [Specific action] | Theme 2 | 🔵🔵⚪ |
-      | 3 | [Specific action] | Theme 1, 3 | 🔵🔵⚪ |
+      | 1 | [Specific action] | Theme 01 | 🔵⚪⚪ |
+      | 2 | [Specific action] | Theme 02 | 🔵🔵⚪ |
+      | 3 | [Specific action] | Theme 01, 03 | 🔵🔵⚪ |
 
       ---
 
@@ -232,6 +317,26 @@ ai_generation_tasks:
       **Evidence Utilization:** [X]% of extracted data points used in themes
 
       ---
+
+      {% if upstream_atomic_nugget_core %}
+      ## Upstream Context
+
+      This affinity analysis was synthesized from:
+
+      | Source | Used for |
+      |--------|----------|
+      | session_summary outputs | Nuggets across participants |
+      {% if upstream_target_barriers %}| research_brief | Target barriers, research questions |{% endif %}
+
+      Citation markers throughout:
+      - [validates TBx] / [refutes TBx] = theme relationship to target barriers
+      - [addresses RQx] = theme addresses research question
+      - [unexpected] = theme not anticipated by upstream barriers
+      - nugget-PT00X-XXX = source nugget reference
+
+      ---
+
+      {% endif %}
 
       ### References
 
@@ -254,6 +359,13 @@ ai_generation_tasks:
       - [ ] Each theme has 4+ evidence items
       - [ ] Multiple participants cited across themes
       - [ ] Timestamps included where available
+      {% if upstream_atomic_nugget_core %}
+      - [ ] Nugget IDs referenced in evidence tables match actual upstream IDs
+      - [ ] Each theme has supporting_nuggets array populated
+      - [ ] Cascade markers ([validates TBx], [addresses RQx], [unexpected]) present
+      - [ ] Cascade Summary table has accurate counts
+      - [ ] Upstream Context appendix present
+      {% endif %}
 
       Do NOT output a footer or "Generated by Qori" line — that is added automatically.
 
@@ -297,6 +409,18 @@ quality_assurance:
   require_inductive_process: true
 
 notes: |
+  v4.0 Changes (Cascade-Aware Retrofit):
+  - Consumes: atomic_nugget_core + atomic_nugget_detail (both required), target_barriers,
+    research_questions, participant_metadata (all optional)
+  - Emits: validated_themes (deepened schema, 17 fields, Sonnet extraction),
+    unexpected_patterns (new schema file, Sonnet extraction)
+  - Prompt: cascade-aware generation instructions (nugget clustering, barrier validation,
+    research question addressing, cross-cutting dimensions, confidence calibration)
+  - Output: Cascade Summary table, nugget ID references in evidence tables,
+    [validates TBx]/[addresses RQx]/[unexpected] markers, Upstream Context appendix
+  - Theme numbering: zero-padded (Theme 01, Theme 02) for editorial consistency
+  - At a Glance table: added Cascade column for barrier/question markers
+
   v3.2 Changes (Design Language Translation):
   - Applied locked design from docs/design-references/affinity-map-reference.md
   - H1: removed emoji, clean text "# Affinity Map"

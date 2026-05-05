@@ -1,0 +1,23 @@
+# Unexpected pattern — theme not anticipated by upstream barriers
+# Emitted by: affinity_mapping
+type: object
+required: [id, pattern, why_unexpected, supporting_nuggets]
+properties:
+  id:
+    type: string
+    description: "Format: unexpected-{seq}, e.g. unexpected-01"
+  pattern:
+    type: string
+    description: "What the unexpected pattern is"
+  why_unexpected:
+    type: string
+    description: "Why this was not anticipated — no matching target barrier"
+  supporting_nuggets:
+    type: array
+    description: "References to atomic_nugget_core.id values"
+    items:
+      type: string
+  significance:
+    type: string
+    nullable: true
+    description: "Why this matters for the research"

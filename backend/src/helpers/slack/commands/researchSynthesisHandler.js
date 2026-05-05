@@ -682,6 +682,29 @@ const handleResearchSynthesisSubmission = async ({ ack, body, view, client }) =>
 
     const study = await getResearchStudyWithRoles(selectedStudyName);
 
+    // Cascade validation: affinity_mapping requires upstream nuggets
+    if (analysisMethod === 'affinity_mapping' && study?.path) {
+      try {
+        const decodedPath = decodeURIComponent(study.path);
+        const studyVars = await readStudyVariables(decodedPath);
+        const hasNuggetCore = studyVars?.variables?.atomic_nugget_core?.value &&
+          Array.isArray(studyVars.variables.atomic_nugget_core.value) &&
+          studyVars.variables.atomic_nugget_core.value.length > 0;
+        if (!hasNuggetCore) {
+          throw new Error(
+            "Affinity mapping requires session summaries with extracted nuggets. " +
+            "Run /qori-analyze on session transcripts first to build the nugget pool."
+          );
+        }
+      } catch (validationError) {
+        if (validationError.message.includes('Affinity mapping requires')) {
+          throw validationError;
+        }
+        // Non-blocking if variable read fails — let it proceed with file content
+        console.warn('⚠️ Cascade validation check failed (continuing):', validationError.message);
+      }
+    }
+
     // Fetch files based on selected checkboxes
     let allFiles = [];
 

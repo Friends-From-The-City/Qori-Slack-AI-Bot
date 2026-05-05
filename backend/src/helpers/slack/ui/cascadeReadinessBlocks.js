@@ -5,8 +5,11 @@
 const TEMPLATE_CONSUMES = {
   // Synthesis modal — method-dependent
   affinity_mapping: [
-    { key: 'atomic_nuggets', required: true, label: 'Atomic nuggets', source_hint: 'Run session summaries first' },
+    { key: 'atomic_nugget_core', required: true, label: 'Atomic nuggets (core)', source_hint: 'Run session summaries first' },
+    { key: 'atomic_nugget_detail', required: true, label: 'Atomic nuggets (detail)', source_hint: 'Run session summaries first' },
     { key: 'target_barriers', required: false, label: 'Target barriers', source_hint: 'Run research brief first' },
+    { key: 'research_questions', required: false, label: 'Research questions', source_hint: 'Run research brief first' },
+    { key: 'participant_metadata', required: false, label: 'Participant metadata', source_hint: 'Run session summaries first' },
   ],
   journey_mapping: [
     { key: 'atomic_nuggets', required: true, label: 'Atomic nuggets', source_hint: 'Run session summaries first' },
