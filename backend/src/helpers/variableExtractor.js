@@ -242,88 +242,134 @@ function validateExtraction(extracted, emitsSpec) {
  * @param {Object} inputValues - Template input values (for context)
  * @returns {Object|null} Extracted variables keyed by variable name, or null on failure
  */
+/**
+ * Select extraction model based on emit config or schema complexity.
+ */
+function selectExtractionModel(emitConfig, schema) {
+  // Explicit override from YAML config
+  if (emitConfig.extraction_model) {
+    if (emitConfig.extraction_model === 'sonnet') {
+      return process.env.EXTRACTION_MODEL_SONNET || 'claude-sonnet-4-20250514';
+    }
+    return process.env.EXTRACTION_MODEL_NAME || 'claude-haiku-4-5-20251001';
+  }
+
+  // Complexity heuristic
+  if (schema && schema.properties) {
+    const propertyCount = Object.keys(schema.properties).length;
+    const hasMultiValueEnum = Object.values(schema.properties).some(
+      p => p && p.enum && p.enum.length > 5
+    );
+    if (propertyCount > 10 || hasMultiValueEnum) {
+      return process.env.EXTRACTION_MODEL_SONNET || 'claude-sonnet-4-20250514';
+    }
+  }
+
+  return process.env.EXTRACTION_MODEL_NAME || 'claude-haiku-4-5-20251001';
+}
+
+/**
+ * Extract variables from a rendered document.
+ * Groups emits by model selection and runs extraction per group.
+ */
 async function extractVariables(renderedOutput, emitsSpec, inputValues) {
   if (!emitsSpec || emitsSpec.length === 0) {
     return null;
   }
-
-  // Use Haiku for extraction — structured task, cheaper model
-  const extractionModel = process.env.EXTRACTION_MODEL_NAME || 'claude-haiku-4-5-20251001';
-  const maxTokens = parseInt(process.env.EXTRACTION_MAX_TOKENS || '8192', 10);
 
   if (!process.env.ANTHROPIC_API_KEY) {
     console.warn('⚠️ ANTHROPIC_API_KEY not set — skipping variable extraction');
     return null;
   }
 
-  const llm = new ChatAnthropic({
-    anthropicApiKey: process.env.ANTHROPIC_API_KEY,
-    modelName: extractionModel,
-    temperature: 0,
-    maxTokens: maxTokens,
-  });
+  const maxTokens = parseInt(process.env.EXTRACTION_MAX_TOKENS || '8192', 10);
 
-  const prompt = buildExtractionPrompt(renderedOutput, emitsSpec, inputValues);
+  // Group emits by their selected model
+  const modelGroups = {};
+  for (const emit of emitsSpec) {
+    const schema = resolveSchemaRefs(emit.schema);
+    const model = selectExtractionModel(emit, schema);
+    if (!modelGroups[model]) modelGroups[model] = [];
+    modelGroups[model].push(emit);
+  }
 
-  let extracted = null;
-  let attempts = 0;
-  const maxAttempts = 2;
+  const modelNames = Object.keys(modelGroups);
+  console.log(`🔄 Extraction: ${emitsSpec.length} variables across ${modelNames.length} model(s): ${modelNames.map(m => `${m.split('-')[1] || m}(${modelGroups[m].length})`).join(', ')}`);
 
-  while (attempts < maxAttempts && !extracted) {
-    attempts++;
-    try {
-      const currentPrompt = attempts === 1 ? prompt : prompt + `\n\nCRITICAL RETRY INSTRUCTION: Your previous response returned flat strings instead of structured objects. You MUST return JSON matching the exact schema above. Do not return strings or summaries — return objects with ALL specified fields. Every pool variable must be an array of objects, not an array of strings. Use null for missing optional fields.`;
+  const allExtracted = {};
 
-      const response = await llm.invoke(currentPrompt);
-      const parsed = parseExtractionResponse(response.content);
+  for (const [modelName, groupEmits] of Object.entries(modelGroups)) {
+    const llm = new ChatAnthropic({
+      anthropicApiKey: process.env.ANTHROPIC_API_KEY,
+      modelName: modelName,
+      temperature: 0,
+      maxTokens: maxTokens,
+    });
 
-      if (!parsed) {
-        console.warn(`⚠️ Extraction attempt ${attempts}/${maxAttempts}: JSON parse failed`);
-        continue;
-      }
+    const prompt = buildExtractionPrompt(renderedOutput, groupEmits, inputValues);
+    let extracted = null;
+    let attempts = 0;
+    const maxAttempts = 2;
 
-      const validation = validateExtraction(parsed, emitsSpec);
+    while (attempts < maxAttempts && !extracted) {
+      attempts++;
+      try {
+        const currentPrompt = attempts === 1 ? prompt : prompt + `\n\nCRITICAL RETRY INSTRUCTION: Your previous response returned flat strings instead of structured objects. You MUST return JSON matching the exact schema above. Do not return strings or summaries — return objects with ALL specified fields. Every pool variable must be an array of objects, not an array of strings. Use null for missing optional fields.`;
 
-      if (validation.errors.length > 0) {
-        console.warn(`⚠️ Extraction attempt ${attempts}/${maxAttempts}: Validation errors:`, validation.errors);
-        if (attempts < maxAttempts) continue;
-      }
+        const response = await llm.invoke(currentPrompt);
+        const parsed = parseExtractionResponse(response.content);
 
-      if (validation.structureErrors.length > 0) {
-        console.error(`❌ Extraction attempt ${attempts}/${maxAttempts}: Schema structure mismatch:`);
-        validation.structureErrors.forEach(e => console.error(`   ${e}`));
-        if (attempts < maxAttempts) {
-          console.warn(`🔄 Retrying extraction with stricter prompt...`);
+        if (!parsed) {
+          console.warn(`⚠️ [${modelName}] Extraction attempt ${attempts}/${maxAttempts}: JSON parse failed`);
           continue;
         }
-        // Final attempt still has structure errors — reject the extraction
-        console.error(`❌ CRITICAL: Extraction failed schema validation after ${maxAttempts} attempts. Variables will NOT be written to study-variables.json to prevent cascade corruption.`);
-        return null;
-      }
 
-      extracted = parsed;
-    } catch (error) {
-      console.error(`❌ Extraction attempt ${attempts}/${maxAttempts} failed:`, error.message);
-      if (attempts >= maxAttempts) {
-        console.error('❌ All extraction attempts failed — skipping variable extraction');
-        return null;
+        const validation = validateExtraction(parsed, groupEmits);
+
+        if (validation.errors.length > 0) {
+          console.warn(`⚠️ [${modelName}] Attempt ${attempts}/${maxAttempts}: Validation errors:`, validation.errors);
+          if (attempts < maxAttempts) continue;
+        }
+
+        if (validation.structureErrors.length > 0) {
+          console.error(`❌ [${modelName}] Attempt ${attempts}/${maxAttempts}: Schema structure mismatch:`);
+          validation.structureErrors.forEach(e => console.error(`   ${e}`));
+          if (attempts < maxAttempts) {
+            console.warn(`🔄 Retrying with stricter prompt...`);
+            continue;
+          }
+          console.error(`❌ CRITICAL: [${modelName}] Extraction failed schema validation after ${maxAttempts} attempts. These variables will NOT be written.`);
+          // Don't return null — other model groups may have succeeded
+          break;
+        }
+
+        extracted = parsed;
+      } catch (error) {
+        console.error(`❌ [${modelName}] Attempt ${attempts}/${maxAttempts} failed:`, error.message);
+        if (attempts >= maxAttempts) {
+          console.error(`❌ [${modelName}] All extraction attempts failed`);
+        }
       }
+    }
+
+    if (extracted) {
+      Object.assign(allExtracted, extracted);
     }
   }
 
-  if (!extracted) return null;
+  if (Object.keys(allExtracted).length === 0) return null;
 
-  // Attach emit specs for merge logic (pool strategy, etc.)
+  // Attach emit specs for merge logic
   for (const emit of emitsSpec) {
-    if (extracted[emit.key] !== undefined) {
-      extracted[emit.key] = {
-        value: extracted[emit.key],
+    if (allExtracted[emit.key] !== undefined) {
+      allExtracted[emit.key] = {
+        value: allExtracted[emit.key],
         _emitSpec: emit,
       };
     }
   }
 
-  return extracted;
+  return allExtracted;
 }
 
 module.exports = {

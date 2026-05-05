@@ -1,0 +1,50 @@
+# Atomic nugget detail — enrichment fields linked to core nuggets by id
+# Emitted by: session_summary (second extraction pass)
+# Consumed by: research_readout (verbatim quotes), journey_mapping (behaviors)
+# Schema v1.0 — split from atomic_nugget v2.0 for extraction reliability
+type: object
+required: [id]
+properties:
+  id:
+    type: string
+    description: "Links to atomic_nugget_core.id — must match exactly"
+  verbatim_quote:
+    type: string
+    nullable: true
+    description: "Direct participant quote — copy exactly, do not paraphrase"
+  participant_context:
+    type: string
+    nullable: true
+    description: "Role or demographic context relevant to this specific nugget"
+  task_context:
+    type: string
+    nullable: true
+    description: "Which task scenario this occurred in, if applicable"
+  timestamp:
+    type: string
+    nullable: true
+    description: "HH:MM:SS if available from transcript"
+  linked_barrier:
+    type: string
+    nullable: true
+    description: "Reference to target_barriers key (e.g. TB1)"
+  linked_question:
+    type: string
+    nullable: true
+    description: "Reference to research_questions key (e.g. RQ1)"
+  observed_behavior:
+    type: string
+    nullable: true
+    description: "What the participant physically DID (actions, navigation, gestures)"
+  inferred_meaning:
+    type: string
+    nullable: true
+    description: "What the researcher infers from the behavior"
+  emotional_state:
+    type: string
+    nullable: true
+    description: "frustrated, confused, satisfied, surprised, etc."
+  confidence:
+    type: string
+    enum: [Strong, Moderate, Limited]
+    description: "Evidence confidence for this nugget"

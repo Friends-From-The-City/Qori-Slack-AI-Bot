@@ -109,33 +109,45 @@ consumes:
     description: "Methodology determines what observations matter and how to frame them"
 
 emits:
-  - key: atomic_nuggets
+  - key: atomic_nugget_core
     pool: true
     pool_strategy: append_or_replace_per_participant
+    extraction_model: sonnet
     schema:
-      $ref: schemas/atomic_nugget.yaml
-    extract_from: "Findings sections, evidence quotes, task observations, accessibility issues, behavioral patterns"
+      $ref: schemas/atomic_nugget_core.yaml
+    extract_from: "Findings sections, task observations, accessibility issues, key insights, pain points, what worked"
+
+  - key: atomic_nugget_detail
+    pool: true
+    pool_strategy: append_or_replace_per_participant
+    extraction_model: sonnet
+    schema:
+      $ref: schemas/atomic_nugget_detail.yaml
+    extract_from: "Per-finding verbatim quotes, behavioral observations, emotional context, inferred meaning. Each detail must reference a core nugget id."
 
   - key: participant_metadata
     pool: true
-    pool_strategy: append
+    pool_strategy: append_or_replace_per_participant
+    extraction_model: sonnet
     schema:
       $ref: schemas/participant_metadata.yaml
-    extract_from: "Participant section, participant context boxes, session conditions"
+    extract_from: "Participant context section, session conditions"
 
   - key: task_completion_records
     pool: true
-    pool_strategy: append
+    pool_strategy: append_or_replace_per_participant
+    extraction_model: sonnet
     schema:
       $ref: schemas/task_completion_record.yaml
-    extract_from: "Task observations, completion tables, methodology section, recommended actions"
+    extract_from: "Task observations, completion outcomes, methodology section, recommended actions"
 
   - key: barrier_validations
     pool: true
-    pool_strategy: append
+    pool_strategy: append_or_replace_per_participant
+    extraction_model: sonnet
     schema:
       $ref: schemas/barrier_validation.yaml
-    extract_from: "Findings that confirm or refute target barriers from research brief, barrier validation section"
+    extract_from: "Barrier validation section, findings that confirm or refute target barriers"
 
 # ═══════════════════════════════════════════════════════════
 # AI GENERATION

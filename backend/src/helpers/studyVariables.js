@@ -1,108 +1,329 @@
-// studyVariables.js — Read/write study-variables.json in qori-studies repo
+// studyVariables.js — Authoritative variable store backed by Postgres
+// Fallback: reads from GitHub study-variables.json if Postgres has no data (migration period)
 const { fetchFileFromRepoByPath, createOrUpdateFileOnGitHub } = require('./github');
 
 const VARIABLES_DIR = '.variables';
 const VARIABLES_FILE = 'study-variables.json';
 const DISCOVERY_VARIABLES_FILE = 'discovery-variables.json';
 
+// ═══════════════════════════════════════════════════════════
+// POSTGRES HELPERS
+// ═══════════════════════════════════════════════════════════
+
+function getStudyVariableModel() {
+  try {
+    const sequelize = require('../database');
+    return sequelize.models.StudyVariable;
+  } catch (err) {
+    console.warn('⚠️ Could not load StudyVariable model:', err.message);
+    return null;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// STUDY-SCOPED READ/WRITE
+// ═══════════════════════════════════════════════════════════
+
 /**
- * Read the study variables file from GitHub.
- * Returns parsed JSON or a fresh empty structure if file doesn't exist.
+ * Read study variables from Postgres. Falls back to GitHub JSON during migration.
+ * Returns a structure compatible with the old JSON format for backward compat.
  */
 async function readStudyVariables(studyBasePath) {
-  const filePath = `${studyBasePath}/primary-research/${VARIABLES_DIR}/${VARIABLES_FILE}`;
-  try {
-    const file = await fetchFileFromRepoByPath(process.env.GITHUB_REPO, filePath);
-    return JSON.parse(file.content);
-  } catch (error) {
-    // File doesn't exist yet — return empty structure
-    // fetchFileFromRepoByPath wraps 404s as "Could not fetch file ..." so check for that too
-    if (error.status === 404 || error.message?.includes('Not Found') || error.message?.includes('Could not fetch file')) {
-      return createEmptyVariablesFile(studyBasePath);
+  const studySlug = extractStudySlug(studyBasePath);
+  const StudyVariable = getStudyVariableModel();
+
+  if (StudyVariable) {
+    try {
+      const rows = await StudyVariable.findAll({
+        where: { study_name: studySlug, scope: 'study' },
+      });
+
+      if (rows.length > 0) {
+        return rowsToVariablesStructure(rows, studySlug);
+      }
+    } catch (err) {
+      console.warn('⚠️ Postgres read failed, falling back to GitHub:', err.message);
     }
-    throw error;
   }
+
+  // Fallback: read from GitHub (migration period or Postgres unavailable)
+  return readStudyVariablesFromGitHub(studyBasePath);
 }
 
 /**
- * Write the study variables file to GitHub.
+ * Write study variables to Postgres. Also writes GitHub JSON as debugging artifact.
  */
 async function writeStudyVariables(studyBasePath, variablesData) {
-  const filePath = `${studyBasePath}/primary-research/${VARIABLES_DIR}/${VARIABLES_FILE}`;
-  variablesData.last_updated = new Date().toISOString();
-  const content = JSON.stringify(variablesData, null, 2);
-  return createOrUpdateFileOnGitHub(filePath, content);
-}
+  const studySlug = extractStudySlug(studyBasePath);
+  const StudyVariable = getStudyVariableModel();
 
-// ═══════════════════════════════════════════════════════════
-// DISCOVERY-SCOPED VARIABLE STORE
-// ═══════════════════════════════════════════════════════════
-
-/**
- * Build the GitHub path for a discovery variables file.
- * @param {string} team - team slug, e.g., 'friends-lab'
- * @param {string} discoveryType - e.g., 'desk-research', 'stakeholder-interviews', 'survey-synthesis'
- */
-function discoveryVariablesPath(team, discoveryType) {
-  return `${team}/_discovery/${discoveryType}/${VARIABLES_DIR}/${DISCOVERY_VARIABLES_FILE}`;
-}
-
-/**
- * Read discovery variables from GitHub.
- * Returns parsed JSON or a fresh empty structure if file doesn't exist.
- * @param {string} team - team slug
- * @param {string} discoveryType - e.g., 'desk-research'
- */
-async function readDiscoveryVariables(team, discoveryType) {
-  const filePath = discoveryVariablesPath(team, discoveryType);
-  try {
-    const file = await fetchFileFromRepoByPath(process.env.GITHUB_REPO, filePath);
-    return JSON.parse(file.content);
-  } catch (error) {
-    if (error.status === 404 || error.message?.includes('Not Found') || error.message?.includes('Could not fetch file')) {
-      return createEmptyDiscoveryVariablesFile(team, discoveryType);
+  if (StudyVariable) {
+    try {
+      await writeVariablesToPostgres(StudyVariable, studySlug, 'study', variablesData);
+      console.log(`✅ Variables written to Postgres for ${studySlug}`);
+    } catch (err) {
+      console.error(`❌ Postgres write failed for ${studySlug}:`, err.message);
+      // Fall through to GitHub write as safety net
     }
-    throw error;
+  }
+
+  // Also write GitHub JSON (debugging artifact, not authoritative)
+  try {
+    const filePath = `${studyBasePath}/primary-research/${VARIABLES_DIR}/${VARIABLES_FILE}`;
+    variablesData.last_updated = new Date().toISOString();
+    const content = JSON.stringify(variablesData, null, 2);
+    await createOrUpdateFileOnGitHub(filePath, content);
+  } catch (err) {
+    // Non-blocking: GitHub write failure doesn't affect cascade
+    console.warn(`⚠️ GitHub variables artifact write failed (non-blocking): ${err.message}`);
   }
 }
 
 /**
- * Write discovery variables to GitHub.
- * @param {string} team - team slug
- * @param {string} discoveryType - e.g., 'desk-research'
- * @param {object} variablesData - the variables structure to write
+ * Merge extracted variables into Postgres using proper transactions.
+ * Implements append_or_replace_per_participant atomically.
+ */
+async function mergeVariables(existing, extracted, sourceTemplate, sourceVersion) {
+  const StudyVariable = getStudyVariableModel();
+  const now = new Date().toISOString();
+
+  // If Postgres is unavailable, fall back to in-memory merge (old behavior)
+  if (!StudyVariable) {
+    return mergeVariablesInMemory(existing, extracted, sourceTemplate, sourceVersion);
+  }
+
+  const studySlug = existing.study || 'unknown';
+  const sequelize = require('../database');
+
+  try {
+    await sequelize.transaction(async (t) => {
+      for (const [key, extractedVar] of Object.entries(extracted)) {
+        const emitSpec = extractedVar._emitSpec;
+        const isPool = emitSpec?.pool === true;
+        const poolStrategy = emitSpec?.pool_strategy || 'replace';
+        const values = extractedVar.value;
+
+        if (isPool && Array.isArray(values)) {
+          // Determine participant for per-participant pools
+          const participantId = values[0]?.participant || values[0]?.participant_id || null;
+
+          // Delete existing entries for this variable + participant (replace per participant)
+          if (poolStrategy === 'append_or_replace_per_participant' && participantId) {
+            await StudyVariable.destroy({
+              where: {
+                study_name: studySlug,
+                variable_key: key,
+                participant_id: participantId,
+                scope: 'study',
+              },
+              transaction: t,
+            });
+          } else if (poolStrategy === 'append' && participantId) {
+            // Same behavior: replace this participant's entries
+            await StudyVariable.destroy({
+              where: {
+                study_name: studySlug,
+                variable_key: key,
+                participant_id: participantId,
+                scope: 'study',
+              },
+              transaction: t,
+            });
+          } else if (poolStrategy === 'replace') {
+            // Full replace: delete all entries for this variable
+            await StudyVariable.destroy({
+              where: {
+                study_name: studySlug,
+                variable_key: key,
+                scope: 'study',
+              },
+              transaction: t,
+            });
+          }
+
+          // Insert new pool items
+          for (const item of values) {
+            const itemKey = item.id || null;
+            const itemParticipant = item.participant || item.participant_id || participantId;
+
+            await StudyVariable.create({
+              study_name: studySlug,
+              variable_key: key,
+              variable_type: 'pool',
+              item_key: itemKey,
+              value: item,
+              participant_id: itemParticipant,
+              source_template: sourceTemplate,
+              source_version: sourceVersion,
+              source_date: now,
+              is_pool: true,
+              confidence: item.confidence || null,
+              scope: 'study',
+              stale: false,
+              extracted_at: now,
+              updated_at: now,
+            }, { transaction: t });
+          }
+        } else {
+          // Singleton: upsert single row
+          await StudyVariable.destroy({
+            where: {
+              study_name: studySlug,
+              variable_key: key,
+              scope: 'study',
+            },
+            transaction: t,
+          });
+
+          await StudyVariable.create({
+            study_name: studySlug,
+            variable_key: key,
+            variable_type: 'singleton',
+            item_key: null,
+            value: values,
+            participant_id: null,
+            source_template: sourceTemplate,
+            source_version: sourceVersion,
+            source_date: now,
+            is_pool: false,
+            scope: 'study',
+            stale: false,
+            extracted_at: now,
+            updated_at: now,
+          }, { transaction: t });
+        }
+      }
+    });
+
+    console.log(`✅ mergeVariables: Transaction committed for ${studySlug} (${Object.keys(extracted).length} variables)`);
+  } catch (err) {
+    console.error(`❌ mergeVariables transaction failed:`, err.message);
+    // Fall back to in-memory merge
+    return mergeVariablesInMemory(existing, extracted, sourceTemplate, sourceVersion);
+  }
+
+  // Also update in-memory structure (for GitHub artifact write)
+  return mergeVariablesInMemory(existing, extracted, sourceTemplate, sourceVersion);
+}
+
+/**
+ * Read specific upstream variables for a template's consumes spec.
+ */
+async function readUpstreamVariables(studyBasePath, consumesSpec) {
+  if (!consumesSpec || consumesSpec.length === 0) return {};
+
+  const studySlug = extractStudySlug(studyBasePath);
+  const StudyVariable = getStudyVariableModel();
+  const upstream = {};
+
+  if (StudyVariable) {
+    try {
+      for (const spec of consumesSpec) {
+        const rows = await StudyVariable.findAll({
+          where: {
+            study_name: studySlug,
+            variable_key: spec.key,
+            scope: 'study',
+          },
+        });
+
+        if (rows.length > 0) {
+          const isPool = rows[0].is_pool;
+          upstream[spec.key] = {
+            value: isPool ? rows.map(r => r.value) : rows[0].value,
+            source: {
+              template: rows[0].source_template,
+              version: rows[0].source_version,
+              date: rows[0].source_date,
+            },
+          };
+        } else if (spec.required) {
+          console.warn(`⚠️ Required upstream variable "${spec.key}" not found for study ${studySlug}`);
+        }
+      }
+
+      if (Object.keys(upstream).length > 0) return upstream;
+    } catch (err) {
+      console.warn('⚠️ Postgres upstream read failed, falling back to GitHub:', err.message);
+    }
+  }
+
+  // Fallback: read from GitHub
+  const studyVars = await readStudyVariablesFromGitHub(studyBasePath);
+  for (const spec of consumesSpec) {
+    const variable = studyVars.variables[spec.key];
+    if (variable) {
+      upstream[spec.key] = {
+        value: variable.value,
+        source: variable.source,
+        confidence: variable.confidence,
+      };
+    } else if (spec.required) {
+      console.warn(`⚠️ Required upstream variable "${spec.key}" not found for study ${studyBasePath}`);
+    }
+  }
+
+  return upstream;
+}
+
+// ═══════════════════════════════════════════════════════════
+// DISCOVERY-SCOPED READ/WRITE
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * Read discovery variables from Postgres. Falls back to GitHub.
+ */
+async function readDiscoveryVariables(team, discoveryType) {
+  const StudyVariable = getStudyVariableModel();
+  const discoveryStudyId = `discovery:${team}:${discoveryType}`;
+
+  if (StudyVariable) {
+    try {
+      const rows = await StudyVariable.findAll({
+        where: { study_name: discoveryStudyId, scope: 'discovery' },
+      });
+
+      if (rows.length > 0) {
+        return rowsToDiscoveryStructure(rows, team, discoveryType);
+      }
+    } catch (err) {
+      console.warn('⚠️ Postgres discovery read failed, falling back to GitHub:', err.message);
+    }
+  }
+
+  // Fallback: GitHub
+  return readDiscoveryVariablesFromGitHub(team, discoveryType);
+}
+
+/**
+ * Write discovery variables to Postgres. Also writes GitHub artifact.
  */
 async function writeDiscoveryVariables(team, discoveryType, variablesData) {
-  const filePath = discoveryVariablesPath(team, discoveryType);
-  variablesData.last_updated = new Date().toISOString();
-  const content = JSON.stringify(variablesData, null, 2);
-  return createOrUpdateFileOnGitHub(filePath, content);
+  const StudyVariable = getStudyVariableModel();
+  const discoveryStudyId = `discovery:${team}:${discoveryType}`;
+
+  if (StudyVariable) {
+    try {
+      await writeDiscoveryToPostgres(StudyVariable, discoveryStudyId, variablesData);
+      console.log(`✅ Discovery variables written to Postgres for ${discoveryStudyId}`);
+    } catch (err) {
+      console.error(`❌ Postgres discovery write failed:`, err.message);
+    }
+  }
+
+  // Also write GitHub artifact
+  try {
+    const filePath = `${team}/_discovery/${discoveryType}/${VARIABLES_DIR}/${DISCOVERY_VARIABLES_FILE}`;
+    variablesData.last_updated = new Date().toISOString();
+    const content = JSON.stringify(variablesData, null, 2);
+    await createOrUpdateFileOnGitHub(filePath, content);
+  } catch (err) {
+    console.warn(`⚠️ GitHub discovery artifact write failed (non-blocking): ${err.message}`);
+  }
 }
 
 /**
- * Create an empty discovery variables structure.
- * @param {string} team - team slug
- * @param {string} discoveryType - e.g., 'desk-research'
- */
-function createEmptyDiscoveryVariablesFile(team, discoveryType) {
-  return {
-    schema_version: '1.0',
-    scope: 'discovery',
-    team,
-    discovery_type: discoveryType,
-    last_updated: new Date().toISOString(),
-    artifacts: {},
-    generation_snapshots: {},
-  };
-}
-
-/**
- * Merge extracted variables into discovery store, keyed by artifact ID (topic slug).
- * @param {object} existing - current discovery variables structure
- * @param {object} extracted - variables extracted from this run
- * @param {string} discoveryArtifactId - the topic slug identifying this artifact
- * @param {string} sourceTemplate - which YAML template produced this
- * @param {string} sourceVersion - version of the template
+ * Merge discovery variables into Postgres.
  */
 function mergeDiscoveryVariables(existing, extracted, discoveryArtifactId, sourceTemplate, sourceVersion) {
   const now = new Date().toISOString();
@@ -136,19 +357,12 @@ function mergeDiscoveryVariables(existing, extracted, discoveryArtifactId, sourc
 }
 
 /**
- * Read upstream discovery variables for a template's consumes spec.
- * @param {string} team - team slug
- * @param {string} discoveryType - e.g., 'stakeholder-interviews'
- * @param {string} discoveryArtifactId - the topic slug
- * @param {Array} consumesSpec - consumes spec from YAML
+ * Read upstream discovery variables.
  */
 async function readUpstreamDiscoveryVariables(team, discoveryType, discoveryArtifactId, consumesSpec) {
   if (!consumesSpec || consumesSpec.length === 0) return {};
 
-  // Discovery consumes may come from a different discovery type
-  // (e.g., stakeholder-interviews consumes from desk-research)
   const upstream = {};
-
   for (const spec of consumesSpec) {
     const sourceType = spec.source_discovery_type || discoveryType;
     const discoveryVars = await readDiscoveryVariables(team, sourceType);
@@ -156,23 +370,215 @@ async function readUpstreamDiscoveryVariables(team, discoveryType, discoveryArti
     const variable = artifactVars[spec.key];
 
     if (variable) {
-      upstream[spec.key] = {
-        value: variable.value,
-        source: variable.source,
-      };
+      upstream[spec.key] = { value: variable.value, source: variable.source };
     } else if (spec.required) {
-      console.warn(`⚠️ Required upstream discovery variable "${spec.key}" not found for artifact ${discoveryArtifactId} in ${team}/${sourceType}`);
+      console.warn(`⚠️ Required upstream discovery variable "${spec.key}" not found for artifact ${discoveryArtifactId}`);
     }
   }
 
   return upstream;
 }
 
+// ═══════════════════════════════════════════════════════════
+// INTERNAL HELPERS
+// ═══════════════════════════════════════════════════════════
+
+function extractStudySlug(studyBasePath) {
+  if (!studyBasePath) return 'unknown';
+  return decodeURIComponent(studyBasePath).split('/').pop() || 'unknown';
+}
+
 /**
- * Merge extracted variables into the existing study variables.
- * Handles pool variables (append) vs. replace variables.
+ * Convert Postgres rows back to the old JSON structure (backward compat).
  */
-function mergeVariables(existing, extracted, sourceTemplate, sourceVersion) {
+function rowsToVariablesStructure(rows, studySlug) {
+  const variables = {};
+  for (const row of rows) {
+    const key = row.variable_key;
+    if (!variables[key]) {
+      variables[key] = {
+        value: row.is_pool ? [] : null,
+        source: {
+          template: row.source_template,
+          version: row.source_version,
+          date: row.source_date,
+        },
+        pool: row.is_pool,
+      };
+    }
+    if (row.is_pool) {
+      variables[key].value.push(row.value);
+    } else {
+      variables[key].value = row.value;
+    }
+  }
+  return {
+    schema_version: '2.0',
+    study: studySlug,
+    last_updated: rows[0]?.updated_at?.toISOString() || new Date().toISOString(),
+    variables,
+    generation_snapshots: {},
+  };
+}
+
+function rowsToDiscoveryStructure(rows, team, discoveryType) {
+  const artifacts = {};
+  for (const row of rows) {
+    const artifactId = row.discovery_artifact_id || 'default';
+    if (!artifacts[artifactId]) artifacts[artifactId] = {};
+    const key = row.variable_key;
+    if (!artifacts[artifactId][key]) {
+      artifacts[artifactId][key] = {
+        value: row.is_pool ? [] : null,
+        source: { template: row.source_template, version: row.source_version, date: row.source_date },
+        discovery_artifact_id: artifactId,
+      };
+    }
+    if (row.is_pool) {
+      artifacts[artifactId][key].value.push(row.value);
+    } else {
+      artifacts[artifactId][key].value = row.value;
+    }
+  }
+  return {
+    schema_version: '2.0',
+    scope: 'discovery',
+    team,
+    discovery_type: discoveryType,
+    last_updated: new Date().toISOString(),
+    artifacts,
+    generation_snapshots: {},
+  };
+}
+
+async function writeVariablesToPostgres(StudyVariable, studySlug, scope, variablesData) {
+  const sequelize = require('../database');
+  const now = new Date().toISOString();
+
+  await sequelize.transaction(async (t) => {
+    for (const [key, variable] of Object.entries(variablesData.variables || {})) {
+      // Clear existing for this key
+      await StudyVariable.destroy({
+        where: { study_name: studySlug, variable_key: key, scope },
+        transaction: t,
+      });
+
+      if (variable.pool && Array.isArray(variable.value)) {
+        for (const item of variable.value) {
+          await StudyVariable.create({
+            study_name: studySlug,
+            variable_key: key,
+            variable_type: 'pool',
+            item_key: item.id || null,
+            value: item,
+            participant_id: item.participant || item.participant_id || null,
+            source_template: variable.source?.template || 'unknown',
+            source_version: variable.source?.version || null,
+            source_date: variable.source?.date || now,
+            is_pool: true,
+            scope,
+            stale: false,
+            extracted_at: now,
+            updated_at: now,
+          }, { transaction: t });
+        }
+      } else {
+        await StudyVariable.create({
+          study_name: studySlug,
+          variable_key: key,
+          variable_type: 'singleton',
+          item_key: null,
+          value: variable.value,
+          participant_id: null,
+          source_template: variable.source?.template || 'unknown',
+          source_version: variable.source?.version || null,
+          source_date: variable.source?.date || now,
+          is_pool: false,
+          scope,
+          stale: false,
+          extracted_at: now,
+          updated_at: now,
+        }, { transaction: t });
+      }
+    }
+  });
+}
+
+async function writeDiscoveryToPostgres(StudyVariable, discoveryStudyId, variablesData) {
+  const sequelize = require('../database');
+  const now = new Date().toISOString();
+
+  await sequelize.transaction(async (t) => {
+    // Clear all existing for this discovery scope
+    await StudyVariable.destroy({
+      where: { study_name: discoveryStudyId, scope: 'discovery' },
+      transaction: t,
+    });
+
+    for (const [artifactId, artifactVars] of Object.entries(variablesData.artifacts || {})) {
+      for (const [key, variable] of Object.entries(artifactVars)) {
+        const values = Array.isArray(variable.value) ? variable.value : [variable.value];
+        const isPool = Array.isArray(variable.value);
+
+        for (const item of values) {
+          await StudyVariable.create({
+            study_name: discoveryStudyId,
+            variable_key: key,
+            variable_type: isPool ? 'pool' : 'singleton',
+            item_key: (typeof item === 'object' && item?.id) || null,
+            value: item,
+            participant_id: null,
+            source_template: variable.source?.template || 'unknown',
+            source_version: variable.source?.version || null,
+            source_date: variable.source?.date || now,
+            is_pool: isPool,
+            scope: 'discovery',
+            discovery_artifact_id: artifactId,
+            stale: false,
+            extracted_at: now,
+            updated_at: now,
+          }, { transaction: t });
+        }
+      }
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+// GITHUB FALLBACK (migration period)
+// ═══════════════════════════════════════════════════════════
+
+async function readStudyVariablesFromGitHub(studyBasePath) {
+  const filePath = `${studyBasePath}/primary-research/${VARIABLES_DIR}/${VARIABLES_FILE}`;
+  try {
+    const file = await fetchFileFromRepoByPath(process.env.GITHUB_REPO, filePath);
+    return JSON.parse(file.content);
+  } catch (error) {
+    if (error.status === 404 || error.message?.includes('Not Found') || error.message?.includes('Could not fetch file')) {
+      return createEmptyVariablesFile(studyBasePath);
+    }
+    throw error;
+  }
+}
+
+async function readDiscoveryVariablesFromGitHub(team, discoveryType) {
+  const filePath = `${team}/_discovery/${discoveryType}/${VARIABLES_DIR}/${DISCOVERY_VARIABLES_FILE}`;
+  try {
+    const file = await fetchFileFromRepoByPath(process.env.GITHUB_REPO, filePath);
+    return JSON.parse(file.content);
+  } catch (error) {
+    if (error.status === 404 || error.message?.includes('Not Found') || error.message?.includes('Could not fetch file')) {
+      return createEmptyDiscoveryVariablesFile(team, discoveryType);
+    }
+    throw error;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// IN-MEMORY MERGE (fallback when Postgres unavailable)
+// ═══════════════════════════════════════════════════════════
+
+function mergeVariablesInMemory(existing, extracted, sourceTemplate, sourceVersion) {
   const now = new Date().toISOString();
 
   for (const [key, extractedVar] of Object.entries(extracted)) {
@@ -182,47 +588,32 @@ function mergeVariables(existing, extracted, sourceTemplate, sourceVersion) {
 
     const newEntry = {
       value: extractedVar.value,
-      source: {
-        template: sourceTemplate,
-        version: sourceVersion,
-        date: now,
-      },
+      source: { template: sourceTemplate, version: sourceVersion, date: now },
       pool: isPool,
     };
 
-    if (isPool && poolStrategy === 'append' && existing.variables[key]) {
-      // Append to existing pool — deduplicate by id if items have ids
+    if (isPool && (poolStrategy === 'append' || poolStrategy === 'append_or_replace_per_participant') && existing.variables[key]) {
       const existingValues = existing.variables[key].value || [];
       const newValues = extractedVar.value || [];
 
       if (Array.isArray(existingValues) && Array.isArray(newValues)) {
-        // For pool append: remove items from same source (re-extraction replaces same-source items)
-        const sourceTemplate_ = sourceTemplate;
-        const filtered = existingValues.filter(item => {
-          // Keep items from other sources; replace items from this source+participant
-          if (item.participant && newValues.length > 0 && newValues[0].participant) {
-            return item.participant !== newValues[0].participant;
-          }
-          return true;
-        });
+        const participantId = newValues[0]?.participant || newValues[0]?.participant_id;
+        const filtered = participantId
+          ? existingValues.filter(item => (item.participant || item.participant_id) !== participantId)
+          : existingValues;
         newEntry.value = [...filtered, ...newValues];
 
-        // Track all source dates for pools
         const existingDates = existing.variables[key].source?.dates || [];
         newEntry.source.dates = [...new Set([...existingDates, now])];
         delete newEntry.source.date;
       }
     }
 
-    // Remove internal _emitSpec before storing
     delete newEntry._emitSpec;
     existing.variables[key] = newEntry;
   }
 
-  // Update generation snapshot
-  if (!existing.generation_snapshots) {
-    existing.generation_snapshots = {};
-  }
+  if (!existing.generation_snapshots) existing.generation_snapshots = {};
   existing.generation_snapshots[sourceTemplate] = {
     last_generated: now,
     variable_hash: hashVariables(extracted),
@@ -231,25 +622,23 @@ function mergeVariables(existing, extracted, sourceTemplate, sourceVersion) {
   return existing;
 }
 
-/**
- * Simple hash for variable comparison (staleness detection).
- */
+// ═══════════════════════════════════════════════════════════
+// UTILITIES
+// ═══════════════════════════════════════════════════════════
+
 function hashVariables(variables) {
   const str = JSON.stringify(variables, Object.keys(variables).sort());
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
     const char = str.charCodeAt(i);
     hash = ((hash << 5) - hash) + char;
-    hash |= 0; // Convert to 32bit integer
+    hash |= 0;
   }
   return hash.toString(16);
 }
 
-/**
- * Create an empty study variables structure.
- */
 function createEmptyVariablesFile(studyBasePath) {
-  const studySlug = studyBasePath.split('/').pop() || 'unknown';
+  const studySlug = extractStudySlug(studyBasePath);
   return {
     schema_version: '1.0',
     study: studySlug,
@@ -259,30 +648,16 @@ function createEmptyVariablesFile(studyBasePath) {
   };
 }
 
-/**
- * Read specific upstream variables needed by a template's consumes spec.
- * Returns an object of { key: value } for injection into the Generate prompt.
- */
-async function readUpstreamVariables(studyBasePath, consumesSpec) {
-  if (!consumesSpec || consumesSpec.length === 0) return {};
-
-  const studyVars = await readStudyVariables(studyBasePath);
-  const upstream = {};
-
-  for (const spec of consumesSpec) {
-    const variable = studyVars.variables[spec.key];
-    if (variable) {
-      upstream[spec.key] = {
-        value: variable.value,
-        source: variable.source,
-        confidence: variable.confidence,
-      };
-    } else if (spec.required) {
-      console.warn(`⚠️ Required upstream variable "${spec.key}" not found for study ${studyBasePath}`);
-    }
-  }
-
-  return upstream;
+function createEmptyDiscoveryVariablesFile(team, discoveryType) {
+  return {
+    schema_version: '1.0',
+    scope: 'discovery',
+    team,
+    discovery_type: discoveryType,
+    last_updated: new Date().toISOString(),
+    artifacts: {},
+    generation_snapshots: {},
+  };
 }
 
 module.exports = {
@@ -291,7 +666,6 @@ module.exports = {
   mergeVariables,
   readUpstreamVariables,
   hashVariables,
-  // Discovery-scoped
   readDiscoveryVariables,
   writeDiscoveryVariables,
   mergeDiscoveryVariables,

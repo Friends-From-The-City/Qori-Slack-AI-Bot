@@ -1,0 +1,41 @@
+# Atomic nugget core — essential observation fields for reliable extraction
+# Emitted by: session_summary
+# Consumed by: affinity_mapping, journey_mapping, persona_generator,
+#              usability_issues, jobs_to_be_done, design_opportunities
+# Schema v1.0 — split from atomic_nugget v2.0 for extraction reliability
+type: object
+required: [id, nugget_type, severity, text, participant, session]
+properties:
+  id:
+    type: string
+    pattern: "nugget-{participant}-{seq}"
+    description: "Unique nugget ID, e.g. nugget-PT-001-001"
+  nugget_type:
+    type: string
+    enum:
+      - task_success
+      - task_failure
+      - pain_point
+      - workaround
+      - quote
+      - positive
+      - surprise
+      - accessibility_issue
+      - behavioral_pattern
+      - mental_model
+    description: "Observation type classification"
+  severity:
+    type: integer
+    minimum: 0
+    maximum: 4
+    description: "Nielsen severity scale (0=cosmetic, 4=catastrophic)"
+  text:
+    type: string
+    description: "Concise observation text"
+  participant:
+    type: string
+    pattern: "PT-###"
+    description: "Participant ID"
+  session:
+    type: string
+    description: "Session identifier"
