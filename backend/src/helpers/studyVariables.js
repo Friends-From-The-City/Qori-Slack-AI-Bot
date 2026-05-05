@@ -599,8 +599,8 @@ function mergeVariablesInMemory(existing, extracted, sourceTemplate, sourceVersi
       if (Array.isArray(existingValues) && Array.isArray(newValues)) {
         const participantId = newValues[0]?.participant || newValues[0]?.participant_id;
         const filtered = participantId
-          ? existingValues.filter(item => (item.participant || item.participant_id) !== participantId)
-          : existingValues;
+          ? existingValues.filter(item => item && typeof item === 'object' && (item.participant || item.participant_id) !== participantId)
+          : existingValues.filter(item => item != null);
         newEntry.value = [...filtered, ...newValues];
 
         const existingDates = existing.variables[key].source?.dates || [];
