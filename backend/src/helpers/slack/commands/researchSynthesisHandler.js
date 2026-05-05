@@ -905,7 +905,7 @@ const handleResearchSynthesisSubmission = async ({ ack, body, view, client }) =>
 
       // Process the specific analysis YAML with the simplified data
       const renderedAnalysis = await processYamlTemplate(yamlTemplateFile.content, analysisData, study?.path);
-      console.log("🚀 ~ handleResearchSynthesisSubmission ~ renderedAnalysis:", renderedAnalysis)
+      console.log(`✅ Synthesis complete: ${renderedAnalysis.outputTemplate?.length || 0} chars, path: ${renderedAnalysis.result?.path || 'unknown'}`);
 
       // Extract first two lines from outputTemplate for channel message
       const outputLines = renderedAnalysis.outputTemplate.split('\n').filter(line => line.trim());
@@ -966,14 +966,14 @@ const handleResearchSynthesisSubmission = async ({ ack, body, view, client }) =>
       }
 
     } catch (error) {
-      console.error(`🚀 ~ Error processing analysis YAML ${yamlFileName}:`, error.message);
-      // Continue with basic processing if analysis YAML fails
+      console.error(`❌ Synthesis failed [${yamlFileName}]: ${error.message}`);
+      if (error.stack) console.error(error.stack.split('\n').slice(0, 5).join('\n'));
 
-      // Send confirmation message without GitHub link if processing failed
+      // Send error message to user so they know it failed
       await client.chat.postEphemeral({
         channel: body.user.id,
         user: body.user.id,
-        text: `🎯 *Research Synthesis Started!*\n\n*Study:* ${selectedStudyName}\n*Method:* ${analysisMethod}\n*Files:* ${filesWithContent.length} files selected\n\nAnalysis is being processed...`,
+        text: `❌ *Synthesis failed*\n\n*Study:* ${selectedStudyName}\n*Method:* ${analysisMethod}\n*Error:* ${error.message}\n\nPlease try again or contact support.`,
       });
     }
 

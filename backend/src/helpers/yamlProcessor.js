@@ -128,7 +128,7 @@ async function processYamlTemplate(rawYamlContent, inputValues, baseFolderEncode
   let aiResponses = {};
   if (yamlConfig.ai_generation_tasks && yamlConfig.ai_generation_tasks.length > 0) {
     aiResponses = await executeAiGenerationTasks(yamlConfig.ai_generation_tasks, { ...inputValues, current_date: format(new Date(), 'MMMM d, yyyy'), current_date_iso: format(new Date(), 'yyyy-MM-dd') });
-    console.log("🚀 ~ processYamlTemplate ~ aiResponses:", aiResponses)
+    console.log(`✅ AI generation complete for ${yamlConfig.id}: ${Object.keys(aiResponses).length} task(s), ${Object.values(aiResponses).reduce((sum, v) => sum + (typeof v === 'string' ? v.length : 0), 0)} chars total`);
   } else {
     aiResponses = {};
   }
