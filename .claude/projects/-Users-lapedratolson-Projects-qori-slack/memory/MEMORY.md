@@ -1,1 +1,5 @@
 - [ask-study RAG disabled](project_ask_study_rag.md) — /ask-study and /qori-ask need Supabase+OpenAI RAG pipeline, disabled for alpha
+- [Brief pre-population from discovery](project_brief_prepopulation.md) — After schema depth fix, brief modal should pre-fill fields from discovery cascade
+- [/qori-notes participant gap](project_notes_participant_gap.md) — New participants invisible in notes modal; SessionObserver join gap, not cache
+- [Non-linear cascade](project_nonlinear_cascade.md) — Modals must query fresh on open; researchers don't work linearly through cascade
+- [Postgres variable store](project_postgres_variable_store.md) — Variables in Postgres (May 5 2026), schema split, Sonnet extraction, per-participant pool merge
