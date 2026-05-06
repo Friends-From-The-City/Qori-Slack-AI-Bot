@@ -4,7 +4,7 @@
 id: research_plan
 name: run_research_plan
 label: "📋 Research Plan"
-version: "v5.0"
+version: "v6.0"
 
 description: |
   Transform your research concept into a stakeholder-ready execution plan.
@@ -87,7 +87,7 @@ consumes:
     required: false
     inject_as: commitment
     description: "Composition and count from brief"
-  # Context from brief — informs but does not bind
+  # Context from brief
   - key: business_context
     source: research_brief
     required: false
@@ -153,321 +153,247 @@ emits:
 # AI GENERATION
 # ═══════════════════════════════════════════════════════════
 ai_generation_tasks:
-  # GLOBAL FORMATTING RULE (applies to all tasks below):
-  # Always use markdown dash (-) for bullets, never Unicode bullets (•).
-  # Do not wrap text in quotes. Use display-friendly dates (Month DD, YYYY).
-
-  # Summary — narrative synthesis of the plan
-  - task_id: "summary"
+  - task_id: "plan_complete"
     prompt: |
-      Write a 2-3 sentence summary of this research plan:
+      You are generating a complete research execution plan. This plan
+      operationalizes an approved research brief into actionable steps.
+
+      ============================================================
+      CRITICAL RULES
+      ============================================================
+
+      1. GENERATE ALL SECTIONS. Output the COMPLETE plan in one pass.
+         Do NOT ask for more information. Do NOT output meta-responses
+         like "I'd be happy to help" or "Could you please provide..."
+      2. Use markdown dash (-) for bullets, never Unicode bullets (•).
+      3. Do not wrap text in quotes. Use display-friendly dates (Month DD, YYYY).
+      4. Do NOT invent team names. Use generic categories only:
+         Design, Engineering, Accessibility, Product, Content, Research.
+
+      ============================================================
+      RESEARCHER INPUT (from modal)
+      ============================================================
 
       Study: {{project_title}}
       Context: {{decision_context}}
       Goal: {{research_goal}}
       Method: {{methodology}}
       Participants: {{participant_count}} — {{target_participants}}
+      Start date: {{start_date}}
+      Timeline preference: {{timeline_preference}}
+      Lead researcher: {{lead_researcher}}
 
       {% if upstream_research_objectives %}
-      BRIEF COMMITMENTS (approved — this plan operationalizes these):
-      Research objectives: {{upstream_research_objectives}}
-      Research questions: {{upstream_research_questions}}
-      {% if upstream_target_barriers %}Target barriers: {{upstream_target_barriers}}{% endif %}
-      Approved method: {{upstream_methodology_selection}}
+      ============================================================
+      CASCADE — BRIEF COMMITMENTS (binding)
+      ============================================================
 
-      IMPORTANT: The plan exists to execute the approved brief. The summary
-      MUST reference the brief's objectives and method as commitments being
-      operationalized — not as optional context. Ground the summary in what
-      was approved and how this plan delivers on it.
+      The research brief has been approved. This plan MUST operationalize
+      these commitments. Do not deviate from the approved scope.
+
+      APPROVED OBJECTIVES:
+      {{upstream_research_objectives}}
+
+      APPROVED RESEARCH QUESTIONS:
+      {{upstream_research_questions}}
+
+      APPROVED METHOD: {{upstream_methodology_selection}}
+
+      TARGET BARRIERS (plan must design tasks to test these):
+      {{upstream_target_barriers}}
+
+      APPROVED PARTICIPANT CRITERIA:
+      {{upstream_participant_criteria}}
+
+      {% if upstream_participant_approach %}
+      APPROVED APPROACH: {{upstream_participant_approach}}
       {% endif %}
 
-      The summary should explain: what the study will do, how many participants
-      and what method, and what decision the findings will inform. Be specific
-      and concise. Do not use quotes around text.
-
-  # Background — expand business context, grounded in brief
-  - task_id: "background"
-    prompt: |
-      Expand this business context into a clear, professional background
-      paragraph (3-4 sentences):
-
-      {{decision_context}}
-
-      {% if upstream_research_objectives %}
-      BRIEF COMMITMENTS (approved):
-      Research objectives: {{upstream_research_objectives}}
-      {% if upstream_business_context %}Business context from brief: {{upstream_business_context}}{% endif %}
-      {% if upstream_out_of_scope %}Out of scope (constraint): {{upstream_out_of_scope}}{% endif %}
-
-      The background must be consistent with the approved brief's framing.
-      Reference the brief's objectives as the approved scope this plan serves.
-      Do not introduce new scope beyond what the brief approved.
+      {% if upstream_business_context %}
+      BUSINESS CONTEXT: {{upstream_business_context}}
       {% endif %}
 
-      Include: what the product/feature is, what problem exists, what decision
-      this research will inform, and why it matters now. Use direct language.
-      Do not wrap text in quotes.
+      ============================================================
+      CASCADE — CONSTRAINTS (hard envelopes)
+      ============================================================
 
-  # Objectives — reformulate research goal as learning verbs
-  - task_id: "objectives"
-    prompt: |
-      Transform this research goal into 3-4 specific objectives using
-      learning-focused verbs (Identify, Understand, Evaluate, Document):
+      {% if upstream_decision_deadline %}
+      DEADLINE: {{upstream_decision_deadline}} — all phases must complete before this.
+      {% endif %}
 
-      Goal: {{research_goal}}
-      Method: {{methodology}}
+      {% if upstream_budget %}
+      BUDGET: {{upstream_budget}} — plan costs must fit within this.
+      {% endif %}
 
-      Format as:
+      {% if upstream_out_of_scope %}
+      OUT OF SCOPE: {{upstream_out_of_scope}} — plan must not exceed these boundaries.
+      {% endif %}
+
+      {% if upstream_timeline_preference %}
+      TIMELINE PREFERENCE: {{upstream_timeline_preference}}
+      {% endif %}
+      {% endif %}
+
+      ============================================================
+      OUTPUT FORMAT — GENERATE ALL SECTIONS BELOW
+      ============================================================
+
+      ## Summary
+
+      [2-3 sentences: what the study will do, how many participants and what
+      method, and what decision the findings will inform. If brief commitments
+      exist above, reference them as the approved scope being operationalized.]
+
+      | | |
+      |---|---|
+      | **Method** | {{methodology}} |
+      | **Participants** | {{participant_count}} |
+      | **Timeline** | [X weeks, starting Month DD, YYYY — calculate from {{timeline_preference}} and {{start_date}}] |
+      | **Deliverables** | Research readout, design recommendations |
+
+      ---
+
+      ## Background
+
+      [3-4 sentences expanding the business context. If brief's business_context
+      exists above, ground in that approved framing. Do not introduce scope
+      beyond what the brief approved.]
+
+      ---
+
+      ## Objectives
+
+      What we aim to learn through this research:
+
+      [If brief commitments exist above, reformulate the APPROVED OBJECTIVES as
+      learning-focused verbs (Identify, Understand, Evaluate, Document). Preserve
+      their intent — do not add or remove objectives.
+      If no brief commitments, generate 3-4 from the research goal.]
+
       - **Identify** [what barriers/issues we aim to find]
       - **Understand** [what mental models/behaviors we aim to learn]
       - **Evaluate** [what we aim to assess]
       - **Document** [what we aim to record for future reference]
 
-      Each objective should be one line, specific to this study.
-      Always use markdown dash (-) for bullets, never Unicode bullets (•).
-      Do not wrap text in quotes.
+      ---
 
-  # Research questions — derive from objectives + context
-  - task_id: "research_questions"
-    prompt: |
-      Generate 3-4 specific research questions for this study:
+      ## Research questions
 
-      Study: {{project_title}}
-      Context: {{decision_context}}
-      Goal: {{research_goal}}
-      Method: {{methodology}}
+      [If brief commitments exist above, use the APPROVED RESEARCH QUESTIONS.
+      Add brief parenthetical context about how each will be investigated via
+      {{methodology}}. Preserve the approved questions — do not add or remove.
+      If no brief commitments, generate 3-4 from the study context.]
 
-      Format as a numbered list:
-      1. [Question about user behavior or pain points]
-      2. [Question about mental models or expectations]
-      3. [Question about specific feature/flow effectiveness]
-      4. [Question about priorities or improvements]
+      1. [Question] — _(investigated via [specific {{methodology}} technique])_
+      2. [Question] — _(investigated via [technique])_
+      3. [Question] — _(investigated via [technique])_
 
-      Questions should be answerable through {{methodology}} research.
-      Do not wrap text in quotes.
+      ---
 
-  # Method — expand methodology selection
-  - task_id: "method"
-    prompt: |
-      Describe the research methodology for this study:
+      ## Method
 
-      Method: {{methodology}}
-      Participants: {{participant_count}} — {{target_participants}}
-      Study: {{project_title}}
+      **Approach** — [2-3 sentences: what sessions will explore, protocol, data
+      collection. Be specific to {{methodology}}.]
 
-      Write in bold-em-dash format:
+      **Session format** — [Format, duration, setup. Note remote/in-person and
+      accessibility accommodations.]
 
-      **Approach** — [2-3 sentences: what the sessions will explore, what protocol
-      will be used, how data will be collected. Be specific to {{methodology}}.]
-
-      **Session format** — [Format, duration, and setup. For moderated research,
-      note remote/in-person and any accessibility accommodations.]
-
-      **Data collection** — [List specific methods: think-aloud protocol, screen
-      recording, observer notes, post-session interviews, etc.]
+      **Data collection** — [List methods: think-aloud, screen recording,
+      observer notes, post-session interviews, etc.]
 
       **Tasks** — [List 4-5 realistic task scenarios specific to this study.
-      These are what participants will be asked to do.]
+      If target barriers exist above, design tasks that will elicit evidence
+      about those barriers.]
 
       End with: "Detailed task scripts and discussion guide will be developed
       separately and reviewed before fielding."
 
-      Do not wrap text in quotes.
+      ---
 
-  # Participants — format participant criteria
-  - task_id: "participants"
-    prompt: |
-      Format participant recruitment details for this study:
-
-      Target: {{target_participants}}
-      Count: {{participant_count}}
-      Method: {{methodology}}
-
-      Write in this format:
+      ## Participants
 
       **Sample size** — {{participant_count}}
 
       **Required composition:**
 
-      [Format the target participant criteria as a bulleted list. Each distinct
-      criterion gets its own bullet. Include device diversity, accessibility
-      needs, usage frequency, and any demographic requirements mentioned.]
+      [If APPROVED PARTICIPANT CRITERIA exists above, use it. Otherwise use
+      the modal's target_participants. Format as bulleted list — each distinct
+      criterion gets its own bullet.]
 
-      **Recruitment** — [1-2 sentences about recruitment channels appropriate
-      for reaching these participants]
+      - [Criterion 1]
+      - [Criterion 2]
 
-      **Compensation** — [Standard rate for this type of research, typically
-      $50-$100 per participant for 60-90 minute sessions]
+      **Recruitment** — [1-2 sentences about channels appropriate for this population]
 
-      Always use markdown dash (-) for bullets, never Unicode bullets (•).
-      Do not wrap text in quotes.
+      **Compensation** — [Standard rate, typically $50-$100 per participant for 60-90 min]
 
-  # Timeline display — format timeline preference for summary table
-  - task_id: "timeline_display"
-    prompt: |
-      Format this timeline preference as a display-friendly string:
+      ---
 
-      Preference: {{timeline_preference}}
-      Start date: {{start_date}}
+      ## Timeline
 
-      Rules:
-      - "standard" → "5 weeks, starting [Month DD, YYYY]"
-      - "accelerated" → "2 weeks, starting [Month DD, YYYY]"
-      - "extended" → "8 weeks, starting [Month DD, YYYY]"
-
-      Convert the start date to display format (e.g., "May 4, 2026").
-      Output ONLY the formatted string, nothing else.
-
-  # Timeline — calculate dates from start_date + preference, respecting brief constraints
-  - task_id: "timeline"
-    prompt: |
-      Create a timeline table for {{timeline_preference}} research starting {{start_date}}.
-
-      {% if upstream_decision_deadline %}
-      CONSTRAINT: The brief specifies a decision deadline of {{upstream_decision_deadline}}.
-      The final Reporting phase MUST end on or before this date. If the standard
-      phase durations would exceed the deadline, compress proportionally —
-      Planning and Recruitment absorb the most compression, Fieldwork and
-      Analysis compress last.
-      {% endif %}
-
-      {% if upstream_start_date %}
-      CONSTRAINT: Brief-approved start date is {{upstream_start_date}}.
-      Use this if it differs from the modal input.
-      {% endif %}
-
-      CRITICAL: Output EXACTLY 3 columns per row. No more, no less.
-      The 3 columns are: Phase | Dates | Duration
-      The Dates column combines start AND end into ONE cell: "May 18 – May 25, 2026"
-
-      Phase durations for {{timeline_preference}}:
+      [Calculate phase dates from {{start_date}} using {{timeline_preference}} durations:
       - standard: Planning 7d, Recruitment 10d, Fieldwork 7d, Analysis 3d, Reporting 2d
       - accelerated: Planning 2d, Recruitment 4d, Fieldwork 4d, Analysis 2d, Reporting 2d
       - extended: Planning 14d, Recruitment 14d, Fieldwork 14d, Analysis 7d, Reporting 7d
 
-      Rules:
-      - Start from {{start_date}}. Each phase starts the day after the previous ends.
-      - Do NOT output a header row — only the 5 data rows.
-      - No blank lines between rows.
+      If a decision deadline constraint exists above, compress phases to fit.
+      Planning and Recruitment absorb the most compression.]
 
-      YOUR OUTPUT MUST LOOK EXACTLY LIKE THIS (but with dates calculated from {{start_date}}):
-      | Planning and stakeholder alignment | May 18 – May 25, 2026 | 1 week |
-      | Recruitment | May 26 – June 4, 2026 | 1.5 weeks |
-      | Fieldwork (sessions) | June 5 – June 11, 2026 | 1 week |
-      | Analysis | June 12 – June 14, 2026 | 3 days |
-      | Reporting | June 15 – June 16, 2026 | 2 days |
+      | Phase | Dates | Duration |
+      |-------|-------|---------:|
+      | Planning and stakeholder alignment | [calculated] | [duration] |
+      | Recruitment | [calculated] | [duration] |
+      | Fieldwork (sessions) | [calculated] | [duration] |
+      | Analysis | [calculated] | [duration] |
+      | Reporting | [calculated] | [duration] |
 
-  # Deliverables — methodology-driven static list
-  - task_id: "deliverables"
-    prompt: |
-      List the expected deliverables for {{methodology}} research.
+      > [!NOTE]
+      > Timeline begins after stakeholder approval of this plan.
 
-      Use EXACTLY the list for the matching methodology:
+      ---
 
-      Usability Testing:
-      - **Session summaries** (one per participant) — within 48 hours of each session
-      - **Affinity map** — themes from cross-participant analysis
-      - **Journey map** — stage-by-stage user experience with pain points (if behavioral patterns warrant)
-      - **Research readout** — primary stakeholder document with findings and recommendations
-      - **Design recommendations** — specific implementable changes tied to findings
+      ## Deliverables
 
-      User Interviews:
-      - **Session summaries** (one per participant) — within 48 hours of each session
-      - **Affinity map** — themes from cross-participant analysis
-      - **Personas** — behavioral archetypes (if archetype patterns warrant)
-      - **Research readout** — primary stakeholder document with findings and recommendations
+      [Select deliverables appropriate for {{methodology}}:
+      - Usability Testing: Session summaries, Affinity map, Journey map, Research readout, Design recommendations
+      - User Interviews: Session summaries, Affinity map, Personas, Research readout
+      - Card Sorting: Card sort analysis, IA recommendations, Research readout
+      - Survey Research: Survey synthesis, Research readout
+      - Concept Testing: Session summaries, Concept reaction synthesis, Research readout, Design recommendations
+      - Mixed Methods: Session summaries, Affinity map, Journey map, Research readout
 
-      Survey Research:
-      - **Survey synthesis** — thematic analysis of open-ended responses
-      - **Research readout** — primary stakeholder document with findings and recommendations
+      If brief objectives exist above, note which objective(s) each deliverable addresses.]
 
-      Card Sorting:
-      - **Card sort analysis** — clustering and similarity analysis
-      - **Information architecture recommendations** — restructuring proposals
-      - **Research readout** — primary stakeholder document with findings and recommendations
+      - **[Deliverable]** — [description] _(addresses objective N)_
 
-      Concept Testing:
-      - **Session summaries** — concept reactions and preference analysis
-      - **Concept reaction synthesis** — aggregated feedback and viability assessment
-      - **Research readout** — primary stakeholder document with findings and recommendations
-      - **Design recommendations** — specific changes based on concept feedback
+      All artifacts will be stored in the study's research folder for ongoing reference.
 
-      Mixed Methods:
-      - **Session summaries** (one per participant) — within 48 hours of each session
-      - **Affinity map** — themes from cross-participant analysis
-      - **Journey map** — stage-by-stage user experience with pain points
-      - **Research readout** — primary stakeholder document with findings and recommendations
-      - **Design recommendations** — specific implementable changes tied to findings
-      - **Decision matrix** — prioritized recommendations with effort estimates
+      ---
 
-      Contextual Inquiry:
-      - **Session summaries** — contextual observations and workflows documented
-      - **Affinity map** — themes from cross-participant analysis
-      - **Journey map** — workflow mapping with contextual pain points
-      - **Research readout** — primary stakeholder document with findings and recommendations
+      ## Team and roles
 
-      Tree Test:
-      - **Tree test analysis** — task completion rates and pathways
-      - **Information architecture recommendations** — restructuring proposals
-      - **Research readout** — primary stakeholder document with findings and recommendations
+      | Role | Person |
+      |------|--------|
+      | Lead researcher | {{lead_researcher}} |
+      | Note-taker | To be assigned |
+      | Observer | To be assigned |
+      | Stakeholder reviewer | TBD |
 
-      If the methodology doesn't match any above, use:
-      - **Session summaries** — per-participant analysis
-      - **Research readout** — primary stakeholder document with findings and recommendations
-      - **Design recommendations** — specific implementable changes tied to findings
+      ---
 
-      {% if upstream_research_objectives %}
-      BRIEF COMMITMENT — each deliverable should map to at least one approved
-      research objective:
-      {{upstream_research_objectives}}
+      ## Risks and mitigations
 
-      After each deliverable bullet, add a parenthetical noting which
-      objective(s) it addresses, e.g.: "— addresses objectives 1, 3"
-      {% endif %}
+      [Generate 3 study-specific risks. NOT generic project management risks.
+      If target barriers exist above, at least one risk should address challenges
+      testing those barriers. If deadline/budget constraints exist, address those.]
 
-      Output ONLY the bulleted list for {{methodology}}. Nothing else.
+      | Risk | Likelihood | Mitigation |
+      |------|:----------:|------------|
+      | [Study-specific risk] | [High/Medium/Low] | [Specific mitigation] |
+      | [Study-specific risk] | [High/Medium/Low] | [Specific mitigation] |
+      | [Study-specific risk] | [High/Medium/Low] | [Specific mitigation] |
 
-  # Risks — generate 3 study-specific risks, referencing upstream constraints
-  - task_id: "risks"
-    prompt: |
-      Identify 3 risks for {{methodology}} research on {{project_title}}
-      with {{participant_count}} participants ({{target_participants}}):
-
-      {% if upstream_target_barriers %}
-      UPSTREAM GROUNDING — barriers identified in approved brief:
-      {{upstream_target_barriers}}
-
-      At least one risk should address challenges related to testing these
-      specific barriers (e.g., difficulty simulating barrier conditions,
-      participant ability to articulate barrier experiences).
-      {% endif %}
-
-      {% if upstream_decision_deadline %}
-      CONSTRAINT: Decision deadline is {{upstream_decision_deadline}}.
-      Consider deadline-driven risks (compressed analysis time, stakeholder
-      availability for review).
-      {% endif %}
-
-      {% if upstream_budget %}
-      CONSTRAINT: Budget envelope is {{upstream_budget}}.
-      Consider budget-related risks if relevant (participant incentives,
-      tooling costs).
-      {% endif %}
-
-      Format as table rows ONLY (no header):
-      | [Risk description] | [High/Medium/Low] | [Specific mitigation] |
-      | [Risk description] | [High/Medium/Low] | [Specific mitigation] |
-      | [Risk description] | [High/Medium/Low] | [Specific mitigation] |
-
-      Risks should be specific to this study — not generic project management.
-      Consider: recruitment difficulty for this population, technical setup for
-      {{methodology}}, timeline constraints for {{timeline_preference}} schedule.
-
-      Do NOT invent team names, roles, or organizational units not present in
-      upstream data. Use generic labels only when no specific attribution exists.
-
-      CRITICAL: Output rows with NO blank lines between them. Every row must
-      connect directly to the next. Blank lines break markdown table rendering.
+      Do NOT output a footer or "Generated by Qori" line — that is added automatically.
 
 # ═══════════════════════════════════════════════════════════
 # OUTPUT
@@ -479,108 +405,7 @@ output_template: |
 
   ---
 
-  ## Summary
-
-  {{ai_generated.summary}}
-
-  | | |
-  |---|---|
-  | **Method** | {{methodology}} |
-  | **Participants** | {{participant_count}} |
-  | **Timeline** | {{ai_generated.timeline_display}} |
-  | **Deliverables** | Research readout, design recommendations |
-
-  ---
-
-  ## Background
-
-  {{ai_generated.background}}
-
-  ---
-
-  ## Objectives
-
-  What we aim to learn through this research:
-
-  {{ai_generated.objectives}}
-
-  ---
-
-  ## Research questions
-
-  {{ai_generated.research_questions}}
-
-  ---
-
-  ## Method
-
-  {{ai_generated.method}}
-
-  ---
-
-  ## Participants
-
-  {{ai_generated.participants}}
-
-  ---
-
-  ## Timeline
-
-  | Phase | Dates | Duration |
-  |-------|-------|---------:|
-  {{ai_generated.timeline}}
-
-  > [!NOTE]
-  > Timeline begins after stakeholder approval of this plan. Recruitment may extend if participant diversity requires additional outreach.
-
-  ---
-
-  ## Deliverables
-
-  {{ai_generated.deliverables}}
-
-  All artifacts will be stored in the study's research folder for ongoing reference.
-
-  ---
-
-  ## Team and roles
-
-  | Role | Person |
-  |------|--------|
-  | Lead researcher | {{lead_researcher}} |
-  | Note-taker | To be assigned |
-  | Observer | To be assigned |
-  | Stakeholder reviewer | TBD |
-
-  ---
-
-  ## Risks and mitigations
-
-  | Risk | Likelihood | Mitigation |
-  |------|:----------:|------------|
-  {{ai_generated.risks}}
-
-  {% if upstream_research_objectives %}
-  ---
-
-  ## Upstream context
-
-  This plan operationalizes the approved research brief. Brief commitments
-  are binding — scope changes require brief amendment.
-
-  | Brief commitment | How this plan addresses it |
-  |---|---|
-  | **Objectives** | Plan objectives elaborate the brief's approved learning goals |
-  | **Method** | {{upstream_methodology_selection}} — detailed in Method section |
-  | **Participants** | Recruitment criteria match brief's participant commitment |
-  | **Timeline** | Phased schedule fits within brief's {{upstream_timeline_preference}} preference{% if upstream_decision_deadline %}, ending before {{upstream_decision_deadline}}{% endif %} |
-  {% if upstream_out_of_scope %}| **Out of scope** | {{upstream_out_of_scope}} — plan does not exceed these boundaries |{% endif %}
-  {% if upstream_budget %}| **Budget** | {{upstream_budget}} — plan costs fit within this envelope |{% endif %}
-
-  > **Plan notes:** Brief commitments operationalized. Objectives, method, and
-  > participant criteria from the approved brief are treated as binding scope.
-  > Any deviation requires a brief amendment before proceeding.
-  {% endif %}
+  {{ai_generated.plan_complete}}
 
 output_options:
   path: "01-planning/"
@@ -591,8 +416,8 @@ output_options:
 # ═══════════════════════════════════════════════════════════
 processing_workflow:
   1. validate_modal_inputs
-  2. execute_ai_tasks
-  3. render_output_template_with_deliverables
+  2. execute_plan_complete
+  3. render_output_template
   4. save_to_planning_folder
 
 notify:
@@ -602,48 +427,28 @@ notify:
     message: "Research plan for {{project_title}} is ready for review."
 
 notes: |
-  v5.0: Cascade-aware retrofit per Section 8 of design standards.
-  - consumes: updated inject_as semantics (commitment/grounding/constraint
-    instead of blanket context). 5 keys now required: research_objectives,
-    research_questions, methodology_selection, target_barriers, participant_criteria.
-  - emits: schemas upgraded to $ref (study_timeline.yaml, study_risk.yaml,
-    study_deliverable.yaml). extraction_model: sonnet for all 3 emits.
-    extract_from instructions updated for array extraction.
-  - AI tasks: cascade-aware prompts in summary, background, timeline, risks,
-    deliverables. Brief commitments treated as binding scope. Timeline respects
-    decision_deadline constraint. Risks reference upstream barriers. Deliverables
-    map to approved objectives.
-  - Output: added "Upstream context" section with commitment traceability table.
-    Plan notes call out "Brief commitments operationalized."
-  - Multi-task architecture preserved (8 tasks, not consolidated).
+  v6.0: Single-task architecture migration.
+  - Migrated from 10 separate AI tasks to 1 consolidated "plan_complete" task.
+    Eliminates 10x API calls, cascade variable fragmentation, and meta-response
+    leakage. Matches architecture of brief, session_summary, affinity, persona,
+    journey, readout, discussion_guide, stakeholder_synthesis.
+  - All cascade variables available in single prompt context.
+  - Output template simplified to masthead + {{ai_generated.plan_complete}}.
+  - Anti-fabrication: generic team categories only.
+  - Cascade-aware: brief commitments (objectives, questions, method, participants)
+    treated as binding scope. Constraints (deadline, budget, out_of_scope) as
+    hard envelopes. Tasks designed to test target barriers.
 
-  v4.7: Removed Approval section — approval gate now lives in research brief.
-  Research brief = approval gate. Research plan = execution doc.
+  v5.0-v5.1: Cascade-aware retrofit (superseded by v6.0 migration).
 
-  v4.6 Changes (Design Language Translation):
-  - Translated locked design from docs/design-references/research_plan_reference.md
-  - Pattern C: document-level footer only (backend buildTraceabilityFooter)
-  - Modal simplified: 14 fields → 8. Removed session_duration, incentive,
-    researcher_title, researcher_email, team_office, product_area (merged into
-    decision_context as "business context"). Methodology changed from multi to
-    single select. Start date defaults to next Monday. Lead researcher auto-fills
-    from study or Slack profile.
-  - AI tasks: 15 → 7. Removed octo_priorities, user_journey, clean_product_area,
-    product_description, success_criteria, deliverables (static), demographics,
-    next_steps, detailed_protocols, formatted_participants.
-  - Output: ~292 lines → ~145 lines. Removed OCTO Priorities, User Journey,
-    Success Criteria, Detailed Protocols, Implementation Plan, demographic
-    sub-tables. Added Summary, Research Questions, Deliverables (methodology-
-    mapped static), Approval checkboxes, Status: Draft in masthead.
-  - Handler: updated extract() calls to match simplified modal. Added Slack
-    profile fallback for lead_researcher.
-  - Filename: research-plan-{{project_title}}-{{current_date_iso}}.md
-
-  v4.5: Standards Polish (canonical structure, dead config removal)
-  v4.4: Timeline start_date fix
-  v4.0: Single task architecture (from multi-task)
+  v4.7 Changes (Lean Rewrite):
+  - Research brief = approval gate. Research plan = execution doc.
+  - VA-specific sections removed: OCTO Priorities, User Journey, Implementation Plan
+  - Modal simplified from 15 fields to 8 with sensible defaults
+  - Output collapsed from ~292 lines to ~145 lines
 
 output_use: |
-  Generate stakeholder-ready research plans from modal input. Lean format
-  focused on methodology, participants, timeline, and deliverables.
-  Pattern C treatment — no findings traceability (planning document).
+  Generate a stakeholder-ready research execution plan from an approved
+  research brief. Plan operationalizes brief commitments: objectives become
+  study tasks, methodology becomes execution protocol, participant criteria
+  become recruitment spec, timeline fits within brief constraints.
