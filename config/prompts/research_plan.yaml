@@ -463,6 +463,9 @@ ai_generation_tasks:
       Consider: recruitment difficulty for this population, technical setup for
       {{methodology}}, timeline constraints for {{timeline_preference}} schedule.
 
+      Do NOT invent team names, roles, or organizational units not present in
+      upstream data. Use generic labels only when no specific attribution exists.
+
       CRITICAL: Output rows with NO blank lines between them. Every row must
       connect directly to the next. Blank lines break markdown table rendering.
 

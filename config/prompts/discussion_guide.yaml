@@ -150,6 +150,9 @@ ai_generation_tasks:
       4. **Coverage check required.** After all tasks, verify every RQ-XXX has at least
          one task addressing it. Flag gaps.
 
+      5. **No fabrication of entities.** Do NOT invent team names, roles, or
+         organizational units not present in upstream data.
+
       Ground warm-up questions in the research objectives. Design task
       scenarios that test the target barriers. Retrospective questions
       should assess whether the research questions were addressed.

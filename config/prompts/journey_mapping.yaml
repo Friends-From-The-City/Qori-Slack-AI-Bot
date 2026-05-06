@@ -209,8 +209,12 @@ ai_generation_tasks:
 
       2. **Cite evidence by nugget ID.** Pain points cite nugget-PT00X-XXX IDs.
 
-      3. **Link stages to personas when available.** If personas exist, note which
-         persona experiences each stage in linked_personas.
+      3. **Link stages to personas when available.** If personas exist, mark each stage
+         with which persona(s) experience it: [for persona-01] or [for persona-01, persona-02].
+         When personas have DIFFERENT experiences at a stage (e.g., accessibility persona
+         hits different barriers than efficiency persona), describe both paths. Include
+         persona IDs in linked_personas array for each stage. If the journey doesn't
+         diverge by persona at a stage, mark [for both personas] or [for all personas].
 
       4. **Mark stage-barrier relationships.** When a stage validates a target_barrier,
          mark inline with [validates TB-XXX].
@@ -223,6 +227,13 @@ ai_generation_tasks:
 
       7. **Use ONLY observations from upstream nuggets.** Do not invent journey stages
          not supported by evidence.
+
+      8. **No fabrication of entities.** Suggested owners, team names, and organizational
+         entities in design opportunities and discussion questions must come from upstream
+         variables (stakeholder roles, participant metadata, research_brief context). Do NOT
+         invent team names like "Policy Team" or "Innovation Lab" if they don't appear in
+         upstream data. Use generic labels like "Product team" or "Engineering team" only
+         when no specific upstream attribution exists.
 
       ATOMIC NUGGETS — CORE:
       {{upstream_atomic_nugget_core}}
@@ -325,6 +336,8 @@ ai_generation_tasks:
 
       {% if upstream_atomic_nugget_core %}
       **Supporting nuggets** — [nugget-PT001-XXX, nugget-PT002-XXX, ...]
+
+      {% if upstream_personas %}**Personas at this stage** — [for persona-01: The Accessibility-Dependent Navigator, persona-02: The Task-Focused Efficiency Seeker] (or subset if stage diverges){% endif %}
 
       {% if upstream_validated_themes %}**Grounded in** — theme-XX: [Theme title]{% endif %}
       {% endif %}

@@ -318,6 +318,11 @@ ai_generation_tasks:
 
       6. **Use stable IDs throughout.** TB-XXX, RQ-XXX, theme-XX, persona-XX, nugget-PTXXX-XXX.
          These IDs must match the upstream variable IDs exactly.
+
+      7. **No fabrication of entities.** Recommended owners, team names, stakeholder roles,
+         and organizational entities must come from upstream variables (stakeholder_constraints,
+         participant_metadata, research_brief context). Do NOT invent team names, roles, or
+         organizational units not present in upstream data.
       {% endif %}
 
       ============================================================
