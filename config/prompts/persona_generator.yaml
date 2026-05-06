@@ -4,7 +4,7 @@
 id: persona_generator
 name: generate_personas
 label: 👤 Persona Generator
-version: "v4.3"
+version: "v5.0"
 
 description: >
   Create evidence-based personas from research data. Personas aggregate
@@ -12,7 +12,7 @@ description: >
 
 author: Qori R&D
 created: 2025-06-26
-last_updated: 2026-04-30
+last_updated: 2026-05-06
 
 # ═══════════════════════════════════════════════════════════
 # CONFIGURATION
@@ -35,42 +35,58 @@ input_variables:
 # CASCADE CONTRACT
 # ═══════════════════════════════════════════════════════════
 consumes:
-  - key: atomic_nuggets
+  - key: atomic_nugget_core
     source: session_summary
     required: true
     inject_as: reference
-    description: "Observation pool for behavioral pattern identification"
+    description: "Nugget pool — primary input for behavioral pattern identification"
+
+  - key: atomic_nugget_detail
+    source: session_summary
+    required: true
+    inject_as: reference
+    description: "Rich context for nuggets — verbatim quotes, behaviors, emotional state, inferred meaning"
+
   - key: validated_themes
     source: affinity_mapping
     required: false
     inject_as: reference
-    description: "Cross-participant themes — validates persona groupings"
+    description: "Cross-participant themes — validates and groups persona behaviors"
+
   - key: participant_metadata
     source: session_summary
     required: true
     inject_as: reference
     description: "Demographics and context for persona attributes"
 
+  - key: target_barriers
+    source: research_brief
+    required: false
+    inject_as: grounding
+    description: "Hypothesized barriers — personas should reflect which barriers affect them"
+
+  - key: research_questions
+    source: research_brief
+    required: false
+    inject_as: context
+    description: "Questions personas should help answer"
+
 emits:
   - key: personas
     pool: false
     pool_strategy: replace
+    extraction_model: sonnet
     schema:
       $ref: schemas/persona.yaml
-    extract_from: "Numbered persona sections (## 01, ## 02)"
+    extract_from: "Persona sections (## 01, ## 02, etc.) including demographics, context, goals, frustrations, behaviors, workarounds, needs, quotes, theme links, barrier links"
+
   - key: persona_design_implications
     pool: false
     pool_strategy: replace
+    extraction_model: sonnet
     schema:
-      type: array
-      items:
-        type: object
-        properties:
-          persona_ref:
-            type: string
-          implication:
-            type: string
-    extract_from: "Design implication sub-section of each persona"
+      $ref: schemas/persona_design_implication.yaml
+    extract_from: "Design implication subsection within each persona, plus Design Priorities table"
 
 # ═══════════════════════════════════════════════════════════
 # AI GENERATION
@@ -128,43 +144,63 @@ ai_generation_tasks:
 
       Personas represent PATTERNS, not individuals.
 
-      AFFINITY MAP INTEGRATION (when available):
-      If the input data includes an affinity map, use its themes to validate
-      your persona groupings. Participants who cluster under the same affinity
-      themes should tend to appear in the same persona. If your persona
-      groupings contradict the affinity map themes, explain why in the
-      "Why these groupings" methodology section.
-
-      CONFIDENCE ASSESSMENT (required for each persona):
-      At the bottom of each persona section, assess the confidence level:
-      - Strong: Multiple participants exhibit pattern with multiple evidence points
-        Example: Strong (2 of 3 participants exhibit pattern with multiple evidence points across different accessibility profiles)
-      - Moderate: Pattern is consistent but based on limited evidence or single dimension
-        Example: Moderate (2 of 3 participants, but pattern based primarily on navigation preference without behavioral diversity)
-      - Limited: Pattern inferred from minimal evidence
-        Example: Limited (single participant, pattern extrapolated from limited observations)
-
-      THE "MOST ACTIONABLE INSIGHT" CALLOUT:
-      After defining your personas, look for cross-cutting patterns:
-      - Do any participants appear in multiple personas? (e.g., PT-003 in both)
-      - Is there a single design improvement that would help multiple personas?
-      - Is there a behavioral dimension that BOTH personas share but in different ways?
-
-      The most actionable insight is typically about leverage — where one fix
-      addresses multiple personas, or where participant overlap reveals something
-      the persona-level abstraction misses.
-
-      If no cross-cutting pattern exists, the callout can highlight the most
-      design-leveraged single finding instead. NEVER write a generic "personas
-      represent different needs" statement here.
-
-      {% if upstream_atomic_nuggets %}
+      {% if upstream_atomic_nugget_core %}
       ============================================================
-      UPSTREAM CONTEXT (structured variables from cascade)
+      CASCADE-AWARE GENERATION
       ============================================================
 
-      ATOMIC NUGGETS (typed observations from session summaries):
-      {{upstream_atomic_nuggets}}
+      You have access to upstream nugget pool (atomic_nugget_core + atomic_nugget_detail),
+      validated themes (if available from affinity_mapping), participant metadata, and
+      target context (target_barriers, research_questions). Your job is to:
+
+      1. **Cluster participants into personas by behavioral patterns.** Use
+         atomic_nugget_detail.observed_behavior, inferred_meaning, emotional_state, and
+         validated_themes to identify shared patterns. Do NOT create one persona per
+         participant — synthesize across participants who share patterns.
+
+      2. **Cite supporting nuggets by ID in evidence.** Each persona's frustrations,
+         behaviors, and quotes must reference specific nugget IDs (e.g., nugget-PT001-003).
+         The frustrations array's evidence_nugget field must contain actual nugget IDs.
+
+      3. **Link personas to themes when grounded.** When a persona exemplifies a
+         validated_theme from affinity, include the theme ID in linked_themes and list
+         in the "Grounded in themes" section. Personas grounded in themes are more
+         defensible than personas built only from raw nuggets.
+
+      4. **Mark persona-barrier relationships.** When a persona is materially affected
+         by a target_barrier from the brief, include the barrier ID (TB-XXX) in
+         affected_by_barriers and reference inline with [TB-XXX].
+
+      5. **Mark persona-question relationships.** When a persona helps answer a
+         research_question, mark inline with [RQ-XXX].
+
+      6. **Use ONLY observations from upstream variables.** Personas must be grounded
+         in actual evidence:
+         - Demographics from participant_metadata
+         - Behaviors from atomic_nugget_detail.observed_behavior
+         - Frustrations from atomic_nugget_core.text + atomic_nugget_detail.verbatim_quote
+         - Workarounds from nuggets where nugget_type = 'workaround'
+         - Quotes verbatim from atomic_nugget_detail.verbatim_quote
+         - DO NOT INVENT demographic details, names, or characteristics not in upstream data
+         - DO NOT FABRICATE quotes — every quote must trace to an actual nugget
+
+      7. **Privacy preserved:** Use only PT-XXX participant codes. Never invent
+         participant names, even for persona naming. Persona names should be archetypal
+         (e.g., "The Self-Reliant Veteran with Vision Impairment") not personal.
+
+      8. **Confidence calibration:**
+         - Strong: ≥3 participants share pattern, behaviors observed across multiple sessions, themes ground the persona
+         - Moderate: 2 participants OR weak theme grounding OR limited behavioral diversity
+         - Limited: 1 participant (this becomes a participant profile, not a true persona — flag explicitly)
+
+      9. **Persona count guidance:** Typically 3-5 personas per study. Don't manufacture
+         personas to hit a count — only create personas where evidence supports a distinct archetype.
+
+      ATOMIC NUGGETS — CORE (typed observations from session summaries):
+      {{upstream_atomic_nugget_core}}
+
+      ATOMIC NUGGETS — DETAIL (verbatim quotes, behaviors, emotional context):
+      {{upstream_atomic_nugget_detail}}
 
       {% if upstream_validated_themes %}
       VALIDATED THEMES (from affinity mapping — use to validate groupings):
@@ -176,11 +212,38 @@ ai_generation_tasks:
       {{upstream_participant_metadata}}
       {% endif %}
 
-      Use structured nuggets and themes to ground persona groupings.
-      Participants who cluster under the same themes should tend to appear
-      in the same persona. If your groupings contradict the validated themes,
-      explain why in the methodology section.
+      {% if upstream_target_barriers %}
+      TARGET BARRIERS (from research brief — mark which affect each persona):
+      {{upstream_target_barriers}}
       {% endif %}
+
+      {% if upstream_research_questions %}
+      RESEARCH QUESTIONS (from research brief — mark which each persona helps answer):
+      {{upstream_research_questions}}
+      {% endif %}
+
+      {% else %}
+      AFFINITY MAP INTEGRATION (when available):
+      If the input data includes an affinity map, use its themes to validate
+      your persona groupings. Participants who cluster under the same affinity
+      themes should tend to appear in the same persona.
+      {% endif %}
+
+      CONFIDENCE ASSESSMENT (required for each persona):
+      At the bottom of each persona section, assess the confidence level:
+      - Strong: Multiple participants exhibit pattern with multiple evidence points
+      - Moderate: Pattern is consistent but based on limited evidence or single dimension
+      - Limited: Pattern inferred from minimal evidence — flag as participant profile
+
+      THE "MOST ACTIONABLE INSIGHT" CALLOUT:
+      After defining your personas, look for cross-cutting patterns:
+      - Do any participants appear in multiple personas?
+      - Is there a single design improvement that would help multiple personas?
+      - Is there a behavioral dimension that BOTH personas share but in different ways?
+
+      The most actionable insight is about leverage — where one fix addresses
+      multiple personas, or where participant overlap reveals something the
+      persona-level abstraction misses. NEVER write a generic statement.
 
       ============================================================
       INPUT DATA
@@ -213,12 +276,29 @@ ai_generation_tasks:
 
       ---
 
-      ## 01 &nbsp;&nbsp; [Archetype Name]
+      {% if upstream_atomic_nugget_core %}
+      ## Cascade summary
+
+      This persona generation synthesizes behavioral patterns from upstream research.
+
+      | Source data | Count |
+      |-------------|-------|
+      | Sessions analyzed | [n] |
+      | Nugget pool size | [n] |
+      | Validated themes available | [n or 0 if not run] |
+      | Participants represented | [n] |
+      | Target barriers under consideration | [n or 0 if none] |
+
+      ---
+
+      {% endif %}
+
+      ## 01 &nbsp;&nbsp; [Archetype Name] [TB-XXX] [RQ-XXX]
 
       **Based on** — PT-001, PT-003 [list ALL participant IDs who share this pattern]
 
       > "[Key quote that captures this persona's experience]"
-      > — PT-001, [timestamp]
+      > — PT-001, via nugget-PT001-003
 
       ### Who they are
 
@@ -237,14 +317,31 @@ ai_generation_tasks:
 
       ### What blocks them
 
-      | Frustration | Evidence |
-      |-------------|----------|
-      | [Specific issue from data] | PT-001, 00:04:28 · PT-003, 00:04:08 |
-      | [Specific issue from data] | PT-003, 00:05:20 |
+      | Frustration | Evidence | Severity |
+      |-------------|----------|----------|
+      | [Specific issue from data] | PT-001 via nugget-PT001-003 · PT-003 via nugget-PT003-008 | 4 |
+      | [Specific issue from data] | PT-003 via nugget-PT003-012 | 3 |
 
       ### How they cope
 
       [Narrative paragraph: workarounds, fallback behaviors, what they've accommodated to. NOT a bulleted list — describe the behavioral pattern.]
+
+      {% if upstream_validated_themes %}
+      ### Grounded in themes
+
+      This persona exemplifies:
+      - Theme 02: [theme_name] (theme-02)
+      - Theme 04: [theme_name] (theme-04)
+
+      {% endif %}
+
+      {% if upstream_target_barriers %}
+      ### Affected by target barriers
+
+      - TB-XXX: [barrier text]
+      - TB-XXX: [barrier text]
+
+      {% endif %}
 
       ### Design implication
 
@@ -254,20 +351,24 @@ ai_generation_tasks:
 
       ---
 
-      ## 02 &nbsp;&nbsp; [Archetype Name]
+      ## 02 &nbsp;&nbsp; [Archetype Name] [TB-XXX] [RQ-XXX]
 
-      [Same complete format as Persona 01. Include all sections: Based on, quote, Who they are, What they're trying to do, What blocks them, How they cope, Design implication, Confidence.]
+      [Same complete format as Persona 01. Include all sections.]
+
+      ---
+
+      [REPEAT FOR EACH PERSONA — typically 2-5]
 
       ---
 
       ## Design priorities
 
-      These design opportunities emerge from analyzing both personas together. Items that address both personas have higher leverage.
+      These design opportunities emerge from analyzing personas together. Items that address multiple personas have higher leverage.
 
-      | # | Opportunity | Helps | Effort |
-      |:-:|-------------|-------|:------:|
-      | 1 | [Specific fix] | Both | [High/Medium/Low] |
-      | 2 | [Specific fix] | [Archetype name] | [Effort] |
+      | # | Opportunity | Helps | Effort | Addresses barrier |
+      |:-:|-------------|-------|:------:|:-----------------:|
+      | 1 | [Specific fix] | Both | High/Medium/Low | TB-XXX |
+      | 2 | [Specific fix] | [Archetype name] | [Effort] | TB-XXX |
 
       ---
 
@@ -277,9 +378,9 @@ ai_generation_tasks:
 
       **Approach** — Composite archetypes derived from behavioral patterns across participants. Personas represent shared patterns, not 1:1 participant mappings. Each persona aggregates participants who share goals, frustrations, and coping behaviors.
 
-      **Why these groupings** — [Narrative explaining the behavioral patterns that drove persona definitions. If participants appear in multiple personas, explain why. If affinity map themes were used to validate groupings, note that here.]
+      **Why these groupings** — [Narrative explaining the behavioral patterns that drove persona definitions. If participants appear in multiple personas, explain why. If validated themes were used to validate groupings, note specific theme IDs here.]
 
-      **Sources analyzed** — [List session summaries + affinity map if included]
+      **Sources analyzed** — [List session summaries + affinity map + upstream cascade sources]
 
       **Limitations** — [Sample size, representation caveats, what the model may underrepresent]
 
@@ -291,6 +392,27 @@ ai_generation_tasks:
       - Pruitt, J. & Adlin, T. — *The Persona Lifecycle* (2006)
 
       ---
+
+      {% if upstream_atomic_nugget_core %}
+      ## Upstream context
+
+      This persona generation was synthesized from:
+
+      | Source | Used for |
+      |--------|----------|
+      | session_summary outputs | Nuggets across participants |
+      {% if upstream_validated_themes %}| affinity_mapping | Theme grounding for personas |{% endif %}
+      {% if upstream_target_barriers %}| research_brief | Target barriers, research questions |{% endif %}
+
+      Citation markers throughout:
+      - [TB-XXX] = target barrier this persona is affected by
+      - [RQ-XXX] = research question this persona helps answer
+      - nugget-PT00X-XXX = source nugget reference
+      - theme-XX = source theme reference
+
+      ---
+
+      {% endif %}
 
       ## Appendix
 
@@ -321,6 +443,9 @@ ai_generation_tasks:
       | Quotes verbatim from session summaries | ✓ |
       | Design implications are specific and implementable | ✓ |
       | Confidence levels declared per persona | ✓ |
+      {% if upstream_atomic_nugget_core %}| Nugget IDs referenced in evidence | ✓ |
+      | Theme IDs referenced where grounded | ✓ |
+      | Barrier IDs referenced where affected | ✓ |{% endif %}
 
       </details>
 
@@ -336,7 +461,16 @@ ai_generation_tasks:
       - Do all frustrations have citations?
       - Does each persona have a Confidence level with reasoning?
       - Does the "Most actionable insight" callout identify a cross-cutting pattern?
-      - If affinity map was included, did you reference its themes in grouping rationale?
+      {% if upstream_atomic_nugget_core %}
+      - Do frustration evidence fields reference actual nugget IDs?
+      - Do linked_themes reference actual theme IDs from validated_themes?
+      - Do affected_by_barriers reference actual TB-XXX IDs?
+      - Does the Cascade Summary table have accurate counts?
+      - Is the Upstream Context appendix present?
+      {% endif %}
+      - PRIVACY: No real participant names anywhere in output
+      - PRIVACY: All participant references use PT-XXX format
+      - PRIVACY: Persona names are archetypal, not personal
 
       Do NOT output a footer or "Generated by Qori" line — that is added automatically.
 
@@ -380,6 +514,20 @@ quality_assurance:
   require_confidence_per_persona: true
 
 notes: |
+  v5.0 Changes (Cascade-Aware Retrofit):
+  - Consumes: atomic_nugget_core + atomic_nugget_detail (both required), validated_themes
+    (optional), participant_metadata (required), target_barriers, research_questions (optional)
+  - Emits: personas (deepened schema, 17 fields, Sonnet extraction),
+    persona_design_implications (new schema file, Sonnet extraction)
+  - Prompt: cascade-aware generation instructions (nugget-grounded evidence, theme linking,
+    barrier/question marking, privacy rules, confidence calibration)
+  - Output: Cascade Summary table, nugget ID references in frustration/behavior evidence,
+    "Grounded in themes" section, "Affected by target barriers" section,
+    [TB-XXX]/[RQ-XXX] markers in headers, Upstream Context appendix
+  - Design Priorities table: added "Addresses barrier" column
+  - Validity checklist: added cascade-specific rows (nugget IDs, theme IDs, barrier IDs)
+  - Uses stable IDs: TB-XXX (not positional TB1), RQ-XXX, theme-XX, nugget-PTXXX-XXX
+
   v4.3 Changes (Design Language Translation):
   - Translated locked design from docs/design-references/persona_generator_reference.md
   - Pattern A modified: Confidence per persona, Sources consolidated in Methodology
@@ -388,18 +536,11 @@ notes: |
   - Added Summary section with narrative + > [!IMPORTANT] "Most actionable insight"
     callout + at-a-glance table
   - Personas: ## 01 &nbsp;&nbsp; editorial numbering, bold-em-dash attributes
-    (replacing GFM table for "Who they are"), added "Calling pattern" attribute,
-    "How they cope" as narrative paragraph with H3 heading
   - Confidence indicator at bottom of each persona section
-  - Added affinity map integration instruction (conditional on input presence)
   - Design Priorities: effort dots → text labels
-  - Methodology: bold-em-dash format, added "Why these groupings" narrative,
-    Limitations, Pruitt & Adlin reference
-  - Added Appendix with Related Artifacts (from {{detected_files}}) + Validity
-    Checklist (7 rows matching all 5 rules + confidence + specificity)
+  - Methodology: bold-em-dash format, "Why these groupings" narrative
+  - Added Appendix with Related Artifacts + Validity Checklist
   - Footer removed from prompt (backend buildTraceabilityFooter handles it)
-  - Filename: {{selected_study}}-personas-{{current_date_iso}}.md
-  - Middle-dot (·) separating multiple evidence citations in frustration table
 
   v4.2: Standards Polish (canonical structure, dead config removal)
   v4.1: Aggregation rules, archetype naming, VA context
@@ -410,4 +551,4 @@ output_use: |
   Generate evidence-based personas using archetype names (never real names).
   Each persona aggregates behavioral patterns across multiple participants.
   Pattern A modified traceability: confidence per persona, sources in methodology.
-  Affinity map integration when analysis-layer files are included.
+  Cascade-aware: nugget IDs in evidence, theme linking, barrier/question marking.

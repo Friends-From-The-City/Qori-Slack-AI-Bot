@@ -391,6 +391,7 @@ Templates that validate upstream barriers (e.g., session_summary) include a **Ba
 | research_brief v6.0 | Consume-heavy | Consumes discovery artifacts, emits brief variables. Manual loading via handler (not YAML consumes) for researcher cherry-picking. |
 | session_summary v2.0 | Balanced consume + emit | Consumes brief variables (barriers, questions, methodology), emits atomic_nuggets, participant_metadata, task_completion_records, barrier_validations. First template with both deep consume and deep emit. |
 | affinity_mapping v4.0 | Mid-cascade synthesis | Consumes entire upstream pool (atomic_nugget_core + detail from session_summary), emits synthesized non-pool variables (validated_themes, unexpected_patterns). Demonstrates pool consumption pattern, cross-participant clustering with traceability back to source nuggets via nugget IDs. Server-side blocks submission when zero nuggets exist. |
+| persona_generator v5.0 | Terminal multi-source synthesis | Consumes nuggets + themes + metadata + brief context (6 upstream variables). Demonstrates lateral cascade (consumes from same-cycle peer affinity_mapping), privacy-preserving generation (PT-XXX only, archetypal naming), multi-hop traceability (persona → nugget → quote AND persona → theme → nuggets). |
 
 ### 8.6 Modal cascade context
 
@@ -402,6 +403,7 @@ When a template consumes upstream variables, the modal should display a **Cascad
 
 | Date | Change |
 |------|--------|
+| May 6, 2026 | Added persona_generator v5.0 as canonical terminal multi-source synthesis example (§8.5). Lateral cascade, privacy-preserving generation, multi-hop traceability. Stable IDs for target_barriers (TB-XXX) and research_questions (RQ-XXX) across all templates. |
 | May 5, 2026 | Added affinity_mapping v4.0 as canonical mid-cascade synthesis example (§8.5). Pool consumption pattern, cross-participant clustering with nugget ID traceability, server-side submission blocking. |
 | May 4, 2026 | Added Section 8 — Cascade-Aware Templates. Defines consume/emit patterns, citation markers, barrier validation section, modal cascade context. Canonical examples: research_brief v6.0 (consume-heavy), session_summary v2.0 (balanced consume + emit). |
 | May 1, 2026 | Added §4.9 Filename convention. Renumbered §4.10-4.12. Added Pattern A modified sub-section under §6 with stakeholder_synthesis v4.0 and persona_generator v4.3 as canonical examples. |

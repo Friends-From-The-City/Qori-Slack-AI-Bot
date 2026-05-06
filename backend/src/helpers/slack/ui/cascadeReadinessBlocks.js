@@ -16,9 +16,12 @@ const TEMPLATE_CONSUMES = {
     { key: 'validated_themes', required: false, label: 'Validated themes', source_hint: 'Run affinity mapping first' },
   ],
   persona_generation: [
-    { key: 'atomic_nuggets', required: true, label: 'Atomic nuggets', source_hint: 'Run session summaries first' },
+    { key: 'atomic_nugget_core', required: true, label: 'Atomic nuggets (core)', source_hint: 'Run session summaries first' },
+    { key: 'atomic_nugget_detail', required: true, label: 'Atomic nuggets (detail)', source_hint: 'Run session summaries first' },
     { key: 'validated_themes', required: false, label: 'Validated themes', source_hint: 'Run affinity mapping first' },
     { key: 'participant_metadata', required: true, label: 'Participant metadata', source_hint: 'Run session summaries first' },
+    { key: 'target_barriers', required: false, label: 'Target barriers', source_hint: 'Run research brief first' },
+    { key: 'research_questions', required: false, label: 'Research questions', source_hint: 'Run research brief first' },
   ],
   jobs_to_be_done: [
     { key: 'atomic_nuggets', required: true, label: 'Atomic nuggets', source_hint: 'Run session summaries first' },

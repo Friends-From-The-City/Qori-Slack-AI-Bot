@@ -682,8 +682,9 @@ const handleResearchSynthesisSubmission = async ({ ack, body, view, client }) =>
 
     const study = await getResearchStudyWithRoles(selectedStudyName);
 
-    // Cascade validation: affinity_mapping requires upstream nuggets
-    if (analysisMethod === 'affinity_mapping' && study?.path) {
+    // Cascade validation: synthesis methods that require upstream nuggets
+    const nuggetRequiredMethods = ['affinity_mapping', 'persona_generation'];
+    if (nuggetRequiredMethods.includes(analysisMethod) && study?.path) {
       try {
         const decodedPath = decodeURIComponent(study.path);
         const studyVars = await readStudyVariables(decodedPath);
@@ -691,13 +692,14 @@ const handleResearchSynthesisSubmission = async ({ ack, body, view, client }) =>
           Array.isArray(studyVars.variables.atomic_nugget_core.value) &&
           studyVars.variables.atomic_nugget_core.value.length > 0;
         if (!hasNuggetCore) {
+          const methodName = analysisMethod.replace(/_/g, ' ');
           throw new Error(
-            "Affinity mapping requires session summaries with extracted nuggets. " +
+            `${methodName} requires session summaries with extracted nuggets. ` +
             "Run /qori-analyze on session transcripts first to build the nugget pool."
           );
         }
       } catch (validationError) {
-        if (validationError.message.includes('Affinity mapping requires')) {
+        if (validationError.message.includes('requires session summaries')) {
           throw validationError;
         }
         // Non-blocking if variable read fails — let it proceed with file content

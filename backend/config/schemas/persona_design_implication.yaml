@@ -1,0 +1,30 @@
+# Persona design implication — actionable recommendation linked to a persona
+# Emitted by: persona_generator
+# Consumed by: design_opportunities, research_readout
+type: object
+required: [id, persona_id, implication, design_recommendation]
+properties:
+  id:
+    type: string
+    description: "Format: pdi-01, pdi-02, etc."
+  persona_id:
+    type: string
+    description: "Links to persona.id (e.g., persona-01)"
+  implication:
+    type: string
+    description: "What this persona's existence means for design decisions"
+  design_recommendation:
+    type: string
+    description: "Specific design action this implication suggests"
+  priority:
+    type: string
+    nullable: true
+    enum: [High, Medium, Low]
+  effort_estimate:
+    type: string
+    nullable: true
+    enum: [High, Medium, Low]
+  addresses_barrier:
+    type: string
+    nullable: true
+    description: "Target_barrier ID (TB-XXX) this implication addresses, if applicable"

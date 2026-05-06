@@ -1,36 +1,138 @@
 # Persona — behavioral archetype from research data
 # Emitted by: persona_generator
 # Consumed by: design_opportunities, research_readout
+#
+# v2.0 (May 6, 2026): Cascade-aware deepening. Added nested demographics/context
+#   objects, structured frustrations/behaviors with nugget refs, linked_themes,
+#   affected_by_barriers, representative_quote, confidence_reasoning.
+#   Renamed: archetype_name→persona_name, based_on→based_on_participants,
+#            key_need→summary, design_implication removed (separate schema now).
 type: object
+required: [id, persona_name, archetype, summary, based_on_participants, confidence]
 properties:
   id:
     type: string
-    pattern: "persona-{seq}"
-    description: "Unique persona ID"
-  archetype_name:
+    description: "Format: persona-01, persona-02, etc."
+  persona_name:
     type: string
-    description: "e.g., The Assisted Navigator"
-  based_on:
+    description: "Memorable archetype label, e.g., 'The Self-Reliant Veteran with Vision Impairment'"
+  archetype:
+    type: string
+    description: "1-2 word categorical archetype — Pragmatist, Explorer, Survivor, etc."
+  summary:
+    type: string
+    description: "1-2 sentence persona description"
+  based_on_participants:
     type: array
+    description: "PT-XXX IDs that informed this persona"
     items:
       type: string
-    description: "Participant IDs aggregated into this persona"
-  key_need:
+  representative_participant:
     type: string
-    description: "One-line core need"
+    nullable: true
+    description: "Single participant who most embodies this persona, if applicable"
+  demographics:
+    type: object
+    nullable: true
+    description: "Aggregated demographic attributes"
+    properties:
+      age_range:
+        type: string
+        nullable: true
+      service_era:
+        type: string
+        nullable: true
+      tech_comfort:
+        type: string
+        nullable: true
+  context:
+    type: object
+    nullable: true
+    description: "Living and usage context"
+    properties:
+      device_environment:
+        type: string
+        nullable: true
+      assistive_technology:
+        type: string
+        nullable: true
+      usage_frequency:
+        type: string
+        nullable: true
   goals:
     type: array
+    description: "What this persona is trying to accomplish with VA app"
     items:
       type: string
-    description: "Goals derived from research"
   frustrations:
     type: array
+    description: "Specific pain points with evidence references"
+    items:
+      type: object
+      properties:
+        frustration:
+          type: string
+        evidence_nugget:
+          type: string
+          nullable: true
+          description: "References atomic_nugget_core.id"
+        verbatim_quote:
+          type: string
+          nullable: true
+        severity:
+          type: integer
+          nullable: true
+  behaviors:
+    type: array
+    nullable: true
+    description: "Observed behavioral patterns"
+    items:
+      type: object
+      properties:
+        behavior:
+          type: string
+        context:
+          type: string
+          description: "When/where this behavior occurs"
+        evidence_nugget:
+          type: string
+          nullable: true
+  workarounds:
+    type: array
+    nullable: true
+    description: "How this persona compensates when app fails"
     items:
       type: string
-    description: "Key frustrations from research"
-  design_implication:
+  needs:
+    type: array
+    nullable: true
+    description: "Underlying needs the design must address"
+    items:
+      type: string
+  linked_themes:
+    type: array
+    nullable: true
+    description: "Validated_theme IDs this persona exemplifies"
+    items:
+      type: string
+  affected_by_barriers:
+    type: array
+    nullable: true
+    description: "Target_barrier IDs (TB-XXX) that materially affect this persona"
+    items:
+      type: string
+  representative_quote:
     type: string
-    description: "Specific design recommendation for this persona"
+    nullable: true
+    description: "Single most representative verbatim quote"
+  representative_quote_source:
+    type: string
+    nullable: true
+    description: "Which participant said it (PT-XXX)"
   confidence:
     type: string
     enum: [Strong, Moderate, Limited]
+  confidence_reasoning:
+    type: string
+    nullable: true
+    description: "Based on participant count, behavioral consistency, theme grounding"

@@ -218,6 +218,11 @@ const FIELD_RENAMES = {
     confidence_rationale: 'confidence_reasoning',
     participants: 'participants_observed',
   },
+  personas: {
+    archetype_name: 'persona_name',
+    based_on: 'based_on_participants',
+    key_need: 'summary',
+  },
 };
 
 /**
