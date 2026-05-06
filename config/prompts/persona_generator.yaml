@@ -200,6 +200,11 @@ ai_generation_tasks:
       9. **Persona count guidance:** Typically 3-5 personas per study. Don't manufacture
          personas to hit a count — only create personas where evidence supports a distinct archetype.
 
+      10. **No fabrication of entities.** For design implication owners, use ONLY:
+          - Teams explicitly named in upstream variables (stakeholder_constraints)
+          - Generic role categories: Design, Engineering, Accessibility, Product, Content, Research
+          Do NOT invent specific team names.
+
       ATOMIC NUGGETS — CORE (typed observations from session summaries):
       {{upstream_atomic_nugget_core}}
 

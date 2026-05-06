@@ -319,10 +319,12 @@ ai_generation_tasks:
       6. **Use stable IDs throughout.** TB-XXX, RQ-XXX, theme-XX, persona-XX, nugget-PTXXX-XXX.
          These IDs must match the upstream variable IDs exactly.
 
-      7. **No fabrication of entities.** Recommended owners, team names, stakeholder roles,
-         and organizational entities must come from upstream variables (stakeholder_constraints,
-         participant_metadata, research_brief context). Do NOT invent team names, roles, or
-         organizational units not present in upstream data.
+      7. **No fabrication of entities.** For suggested_owner and team references, use ONLY:
+         - Teams explicitly named in upstream variables (stakeholder_constraints, journey_stages)
+         - Generic role categories: Design, Engineering, Accessibility, Product, Content, Research
+         Do NOT invent specific team names like "Information Architecture Team", "Frontend
+         Development Team", or "UI/UX Design Team". Use "Design team" not "UI/UX Design Team".
+         Use "Engineering team" not "Frontend Development Team".
       {% endif %}
 
       ============================================================

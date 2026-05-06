@@ -420,7 +420,7 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }) => {
     let reportData = {
       research_folder_path: folderPath,
       study_name: selectedStudyName,
-      researcher_contact: selectedStudy?.researcher_email || 'Unknown Researcher',
+      researcher_contact: selectedStudy?.researcher_name || selectedStudy?.researcher_email || 'Unknown Researcher',
       study_channel: state.origin?.channel || 'general',
       research_readout_data: researchReadoutData,
       input_text: inputText,

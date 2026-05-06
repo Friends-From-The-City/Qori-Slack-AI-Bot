@@ -228,12 +228,11 @@ ai_generation_tasks:
       7. **Use ONLY observations from upstream nuggets.** Do not invent journey stages
          not supported by evidence.
 
-      8. **No fabrication of entities.** Suggested owners, team names, and organizational
-         entities in design opportunities and discussion questions must come from upstream
-         variables (stakeholder roles, participant metadata, research_brief context). Do NOT
-         invent team names like "Policy Team" or "Innovation Lab" if they don't appear in
-         upstream data. Use generic labels like "Product team" or "Engineering team" only
-         when no specific upstream attribution exists.
+      8. **No fabrication of entities.** For suggested_owner and team references, use ONLY:
+         - Teams explicitly named in upstream variables (stakeholder_constraints)
+         - Generic role categories: Design, Engineering, Accessibility, Product, Content, Research
+         Do NOT invent specific team names like "Policy Team", "Information Architecture Team",
+         or "Innovation Lab". Use "Design team" not "UI/UX Design Team".
 
       ATOMIC NUGGETS — CORE:
       {{upstream_atomic_nugget_core}}

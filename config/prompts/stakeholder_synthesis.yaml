@@ -286,8 +286,10 @@ ai_generation_tasks:
 
       3. **Use stable IDs.** All emitted variables use sequential IDs (constraint-001, etc.).
 
-      4. **No fabrication of entities.** Do NOT invent team names, roles, or
-         organizational units beyond what stakeholders explicitly mentioned.
+      4. **No fabrication of entities.** For team/role references, use ONLY what
+         stakeholders explicitly mentioned. Do NOT invent team names beyond those in
+         the interview data. Generic categories (Design, Engineering, Product) only
+         when no specific upstream attribution exists.
 
       DISCOVERED BARRIERS:
       {{upstream_discovered_barriers}}
