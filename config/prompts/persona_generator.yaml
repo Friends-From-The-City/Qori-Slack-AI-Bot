@@ -77,16 +77,20 @@ emits:
     pool_strategy: replace
     extraction_model: sonnet
     schema:
-      $ref: schemas/persona.yaml
-    extract_from: "Persona sections (## 01, ## 02, etc.) including demographics, context, goals, frustrations, behaviors, workarounds, needs, quotes, theme links, barrier links"
+      type: array
+      items:
+        $ref: schemas/persona.yaml
+    extract_from: "ALL persona sections (## 01, ## 02, etc.) — extract EVERY persona as a separate array item"
 
   - key: persona_design_implications
     pool: false
     pool_strategy: replace
     extraction_model: sonnet
     schema:
-      $ref: schemas/persona_design_implication.yaml
-    extract_from: "Design implication subsection within each persona, plus Design Priorities table"
+      type: array
+      items:
+        $ref: schemas/persona_design_implication.yaml
+    extract_from: "Design implication subsection within EACH persona, plus Design Priorities table — one item per implication"
 
 # ═══════════════════════════════════════════════════════════
 # AI GENERATION

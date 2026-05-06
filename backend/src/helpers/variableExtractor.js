@@ -133,11 +133,11 @@ the information is genuinely absent from the source document.
 RULES:
 1. Extract ONLY information that exists in the document. Do not invent data.
 2. Follow the schema exactly. Every field must be present (use null for missing optional fields).
-3. For pool variables (pool: true), extract an array of items.
-4. For non-pool variables, extract a single value or object.
+3. When the schema type is "array", ALWAYS extract an array of items — even if pool is false.
+4. When the schema type is "object" (not array), extract a single object.
 5. Participant/stakeholder IDs must use the PT-### or SH-### format found in the document.
 6. Quotes MUST be verbatim from the document — do not paraphrase.
-7. If a variable cannot be extracted (no relevant content), use an empty array [] for pools or null for singles.
+7. If a variable cannot be extracted (no relevant content), use an empty array [] for arrays or null for singles.
 8. For metrics, include context (comparisons, trends, benchmarks) not just raw numbers.
 9. When extract_from says "Assign sequential IDs", number items starting from 001.
 
@@ -155,7 +155,10 @@ ${renderedMarkdown}
 
 Respond with ONLY valid JSON in this exact structure (no markdown, no explanation):
 {
-${variableDescriptions.map(v => `  "${v.key}": ${v.pool ? '[...]' : '{...}'}`).join(',\n')}
+${variableDescriptions.map(v => {
+    const isArray = v.pool || (v.schema && (v.schema.type === 'array' || v.schema.items));
+    return `  "${v.key}": ${isArray ? '[...]' : '{...}'}`;
+  }).join(',\n')}
 }`;
 }
 

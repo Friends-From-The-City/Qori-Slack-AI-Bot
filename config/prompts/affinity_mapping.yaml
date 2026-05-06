@@ -73,16 +73,20 @@ emits:
     pool_strategy: replace
     extraction_model: sonnet
     schema:
-      $ref: schemas/validated_theme.yaml
-    extract_from: "Theme sections, evidence tables, pattern analysis, supporting quotes, confidence levels, barrier/question markers"
+      type: array
+      items:
+        $ref: schemas/validated_theme.yaml
+    extract_from: "ALL theme sections — extract EVERY theme as a separate array item"
 
   - key: unexpected_patterns
     pool: false
     pool_strategy: replace
     extraction_model: sonnet
     schema:
-      $ref: schemas/unexpected_pattern.yaml
-    extract_from: "Patterns that emerged outside of target_barriers — surprises, contradictions, novel observations marked [unexpected]"
+      type: array
+      items:
+        $ref: schemas/unexpected_pattern.yaml
+    extract_from: "ALL patterns that emerged outside of target_barriers — extract EVERY unexpected pattern as a separate array item"
 
 # ═══════════════════════════════════════════════════════════
 # AI GENERATION
