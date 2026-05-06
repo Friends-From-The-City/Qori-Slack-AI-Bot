@@ -6,10 +6,10 @@ type: object
 properties:
   id:
     type: string
-    description: "Unique validation ID, e.g. bv-PT-001-TB1"
+    description: "Unique validation ID, e.g. bv-PT-001-TB-001"
   barrier_ref:
     type: string
-    description: "Reference to the target_barriers key this validates (e.g. TB1, TB2)"
+    description: "Reference to the target_barriers ID this validates (e.g. TB-001, TB-002)"
   participant:
     type: string
     pattern: "PT-###"

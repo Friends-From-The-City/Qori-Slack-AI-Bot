@@ -27,11 +27,11 @@ properties:
   linked_barrier:
     type: string
     nullable: true
-    description: "Reference to target_barriers key (e.g. TB1)"
+    description: "Reference to target_barriers ID (e.g. TB-001)"
   linked_question:
     type: string
     nullable: true
-    description: "Reference to research_questions key (e.g. RQ1)"
+    description: "Reference to research_questions ID (e.g. RQ-001)"
   observed_behavior:
     type: string
     nullable: true

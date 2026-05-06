@@ -187,15 +187,16 @@ ai_generation_tasks:
 
       When upstream brief variables are present, your job is to:
 
-      1. REFERENCE TARGET BARRIERS EXPLICITLY. When an observation validates
+      1. REFERENCE TARGET BARRIERS BY ID. When an observation validates
          or refutes a target_barrier from the brief, mark it inline with
-         [TB1], [TB2], etc. (matching the barrier order above). In the
-         Barrier Validation section, summarize which barriers were confirmed,
+         the barrier's stable ID: [TB-001], [TB-002], etc. (each barrier
+         in the upstream data has an id field like TB-001). In the Barrier
+         Validation section, summarize which barriers were confirmed,
          refuted, or not addressed for this participant.
 
-      2. REFERENCE RESEARCH QUESTIONS EXPLICITLY. When an observation
+      2. REFERENCE RESEARCH QUESTIONS BY ID. When an observation
          addresses a research_question from the brief, mark it inline
-         with [RQ1], [RQ2], etc. (matching the question order above).
+         with the question's stable ID: [RQ-001], [RQ-002], etc.
 
       3. USE METHODOLOGY TO FRAME OBSERVATIONS. If method is "card sorting,"
          frame observations in card sorting language (groupings, labels,
@@ -389,8 +390,8 @@ ai_generation_tasks:
 
       | Target barrier | Status | Evidence |
       |----------------|--------|----------|
-      | TB1: [barrier text from brief] | ✓ Confirmed / ✗ Refuted / ◯ Not addressed | [observation summary with quote ref] |
-      | TB2: [barrier text] | [status] | [evidence] |
+      | TB-001: [barrier text from brief] | ✓ Confirmed / ✗ Refuted / ◯ Not addressed | [observation summary with quote ref] |
+      | TB-002: [barrier text] | [status] | [evidence] |
 
       **Confidence** — [Strong/Moderate/Limited] ([parenthetical reasoning for overall barrier validation confidence])
 
@@ -427,9 +428,9 @@ ai_generation_tasks:
 
       | Source | Used for |
       |--------|----------|
-      | research_brief ({{study_name}}) | Target barriers [TB1-n], research questions [RQ1-n], methodology context |
+      | research_brief ({{study_name}}) | Target barriers [TB-001..n], research questions [RQ-001..n], methodology context |
 
-      Citation markers throughout: [TB*] = target barriers, [RQ*] = research questions.
+      Citation markers throughout: [TB-XXX] = target barriers, [RQ-XXX] = research questions.
 
       ---
 

@@ -150,12 +150,12 @@ ai_generation_tasks:
          supporting nuggets and surface it in the theme. Attribute correctly with participant ID.
 
       4. **Mark theme-barrier relationships.**
-         - When a theme validates a target_barrier from the brief, mark it inline with [validates TB1] etc.
-         - When a theme refutes a target_barrier, mark with [refutes TB1]
+         - When a theme validates a target_barrier from the brief, mark it inline with [validates TB-001] etc.
+         - When a theme refutes a target_barrier, mark with [refutes TB-001]
          - When a theme is unexpected (no upstream barrier), mark with [unexpected]
 
       5. **Address research questions explicitly.** When a theme addresses a research_question
-         from the brief, mark it inline with [addresses RQ1] etc.
+         from the brief, mark it inline with [addresses RQ-001] etc.
 
       6. **Cross-cutting dimensions.** Surface when a theme correlates with specific demographics
          or contexts (AT users, age 65+, iOS users, first-time vs experienced users). Include in
@@ -238,13 +238,13 @@ ai_generation_tasks:
 
       | Theme | Evidence | Participants | Severity | Cascade |
       |:------|:---------|:-------------|:---------|:--------|
-      | [Specific theme name] | X items | PT-00X, PT-00X | 🔴 Critical | [validates TB1] |
-      | [Specific theme name] | X items | PT-00X, PT-00X | 🟡 High | [addresses RQ2] |
+      | [Specific theme name] | X items | PT-00X, PT-00X | 🔴 Critical | [validates TB-001] |
+      | [Specific theme name] | X items | PT-00X, PT-00X | 🟡 High | [addresses RQ-002] |
       | [Specific theme name] | X items | PT-00X, PT-00X | 🟢 Medium | [unexpected] |
 
       ---
 
-      ## Theme 01: [Specific Theme Name from Participant Language] [validates TB1] [addresses RQ1]
+      ## Theme 01: [Specific Theme Name from Participant Language] [validates TB-001] [addresses RQ-001]
 
       **The Pattern:** [One sentence describing what connects these data points]
 
@@ -329,8 +329,8 @@ ai_generation_tasks:
       {% if upstream_target_barriers %}| research_brief | Target barriers, research questions |{% endif %}
 
       Citation markers throughout:
-      - [validates TBx] / [refutes TBx] = theme relationship to target barriers
-      - [addresses RQx] = theme addresses research question
+      - [validates TB-XXX] / [refutes TB-XXX] = theme relationship to target barriers
+      - [addresses RQ-XXX] = theme addresses research question
       - [unexpected] = theme not anticipated by upstream barriers
       - nugget-PT00X-XXX = source nugget reference
 
@@ -362,7 +362,7 @@ ai_generation_tasks:
       {% if upstream_atomic_nugget_core %}
       - [ ] Nugget IDs referenced in evidence tables match actual upstream IDs
       - [ ] Each theme has supporting_nuggets array populated
-      - [ ] Cascade markers ([validates TBx], [addresses RQx], [unexpected]) present
+      - [ ] Cascade markers ([validates TB-XXX], [addresses RQ-XXX], [unexpected]) present
       - [ ] Cascade Summary table has accurate counts
       - [ ] Upstream Context appendix present
       {% endif %}
@@ -417,7 +417,7 @@ notes: |
   - Prompt: cascade-aware generation instructions (nugget clustering, barrier validation,
     research question addressing, cross-cutting dimensions, confidence calibration)
   - Output: Cascade Summary table, nugget ID references in evidence tables,
-    [validates TBx]/[addresses RQx]/[unexpected] markers, Upstream Context appendix
+    [validates TB-XXX]/[addresses RQ-XXX]/[unexpected] markers, Upstream Context appendix
   - Theme numbering: zero-padded (Theme 01, Theme 02) for editorial consistency
   - At a Glance table: added Cascade column for barrier/question markers
 

@@ -220,7 +220,31 @@ const FIELD_RENAMES = {
   },
 };
 
+/**
+ * Convert old flat-string arrays to ID'd object arrays.
+ * e.g., ["barrier text 1", "barrier text 2"] → [{id: "TB-001", barrier: "barrier text 1"}, ...]
+ */
+const FLAT_TO_OBJECT_UPGRADES = {
+  target_barriers: (str, idx) => ({
+    id: `TB-${String(idx + 1).padStart(3, '0')}`,
+    barrier: str,
+    source: null,
+  }),
+  research_questions: (str, idx) => ({
+    id: `RQ-${String(idx + 1).padStart(3, '0')}`,
+    question: str,
+    priority: null,
+  }),
+};
+
 function normalizeVariableFields(key, value) {
+  // First: upgrade flat string arrays to ID'd objects
+  const upgrader = FLAT_TO_OBJECT_UPGRADES[key];
+  if (upgrader && Array.isArray(value) && value.length > 0 && typeof value[0] === 'string') {
+    return value.map((item, idx) => upgrader(item, idx));
+  }
+
+  // Then: apply field renames
   const renames = FIELD_RENAMES[key];
   if (!renames) return value;
 

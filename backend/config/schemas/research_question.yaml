@@ -1,0 +1,17 @@
+# Research question — question to address through the study
+# Emitted by: research_brief
+# Consumed by: session_summary (context), affinity_mapping (context)
+type: object
+required: [id, question]
+properties:
+  id:
+    type: string
+    description: "Stable ID, format: RQ-001, RQ-002, etc."
+  question:
+    type: string
+    description: "The research question"
+  priority:
+    type: string
+    nullable: true
+    enum: [Primary, Secondary, Exploratory]
+    description: "Question priority level"

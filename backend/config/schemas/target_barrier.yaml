@@ -1,0 +1,16 @@
+# Target barrier — hypothesized barrier from research brief for session validation
+# Emitted by: research_brief
+# Consumed by: session_summary (grounding), affinity_mapping (grounding)
+type: object
+required: [id, barrier]
+properties:
+  id:
+    type: string
+    description: "Stable ID, format: TB-001, TB-002, etc."
+  barrier:
+    type: string
+    description: "The hypothesized barrier statement"
+  source:
+    type: string
+    nullable: true
+    description: "Where this barrier was identified — discovery artifact, stakeholder input, or researcher hypothesis"

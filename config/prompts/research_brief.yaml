@@ -97,16 +97,16 @@ emits:
     schema:
       type: array
       items:
-        type: string
-    extract_from: "What we'll learn section (reframed as questions)"
+        $ref: schemas/research_question.yaml
+    extract_from: "What we'll learn section (reframed as questions) — each with RQ-001, RQ-002 IDs"
   - key: target_barriers
     pool: false
     pool_strategy: replace
     schema:
       type: array
       items:
-        type: string
-    extract_from: "Problem section — barriers identified for testing"
+        $ref: schemas/target_barrier.yaml
+    extract_from: "Problem section — barriers identified for testing, each with TB-001, TB-002 IDs"
   - key: methodology_selection
     pool: false
     pool_strategy: replace
@@ -279,15 +279,35 @@ ai_generation_tasks:
       Bold key metrics. Show contrast (what works vs what fails). Include stakeholder
       diagnosis of root cause. Citation markers on every upstream number.
 
+      After the narrative, list target barriers with stable IDs:
+
+      **Target barriers for validation:**
+      - **TB-001:** [barrier statement — e.g., "73% of veterans report abandoning tasks..."]
+      - **TB-002:** [barrier statement]
+      - **TB-003:** [barrier statement]
+      [continue for each barrier identified from discovery + researcher input]
+
+      These IDs are stable references used by downstream templates (session_summary,
+      affinity_mapping). Number sequentially from TB-001.
+
       ## What we'll learn
 
       {% if upstream_stakeholder_questions_for_users %}
-      Use stakeholder questions as numbered research questions (they come pre-prioritized
+      Use stakeholder questions as research questions (they come pre-prioritized
       Blocking/Important/Validation). Frame each with context from discovery.
       Structure: blocking questions first, then important, note which are non-blocking.
       {% else %}
-      Format researcher's learning objectives as numbered list.
+      Format researcher's learning objectives as research questions.
       {% endif %}
+
+      Each question MUST have a stable ID:
+      - **RQ-001:** [question text] _(Primary)_
+      - **RQ-002:** [question text] _(Primary)_
+      - **RQ-003:** [question text] _(Secondary)_
+      [continue for each question]
+
+      These IDs are stable references used by downstream templates. Number
+      sequentially from RQ-001. Mark priority: Primary, Secondary, or Exploratory.
 
       ## Method
 
