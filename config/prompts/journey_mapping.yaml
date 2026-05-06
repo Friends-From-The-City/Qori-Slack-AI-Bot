@@ -272,23 +272,6 @@ ai_generation_tasks:
 
       ---
 
-      {% if upstream_atomic_nugget_core %}
-      ## Cascade summary
-
-      This journey map synthesizes behavioral sequences from upstream research.
-
-      | Source data | Count |
-      |-------------|-------|
-      | Sessions analyzed | [n] |
-      | Nugget pool size | [n] |
-      | Validated themes available | [n or 0] |
-      | Personas available | [n or 0] |
-      | Target barriers under consideration | [n or 0] |
-
-      ---
-
-      {% endif %}
-
       ## Summary
 
       [2-3 sentence narrative synthesis of the journey. Reference: how many stages, where failures concentrate, what pattern emerges across stages. Ground every sentence in THIS study's data.]
@@ -305,6 +288,23 @@ ai_generation_tasks:
       | 05 — [Stage name] | [count] | [X of Y] |{% if upstream_atomic_nugget_core %} [validates TB-XXX] |{% endif %}
 
       ---
+
+      {% if upstream_atomic_nugget_core %}
+      ## Cascade summary
+
+      This journey map synthesizes behavioral sequences from upstream research.
+
+      | Source data | Count |
+      |-------------|-------|
+      | Sessions analyzed | [n] |
+      | Nugget pool size | [n] |
+      | Validated themes available | [n or 0] |
+      | Personas available | [n or 0] |
+      | Target barriers under consideration | [n or 0] |
+
+      ---
+
+      {% endif %}
 
       ## 01 &nbsp;&nbsp; [Stage Title — Descriptive]
 

@@ -191,6 +191,8 @@ ai_generation_tasks:
       Start date: {{start_date}}
       Timeline preference: {{timeline_preference}}
       Lead researcher: {{lead_researcher}}
+      Recruitment sources: {{recruitment_sources}}
+      Operational risks: {{operational_risks}}
 
       {% if upstream_research_objectives %}
       ============================================================
@@ -247,6 +249,21 @@ ai_generation_tasks:
       OUTPUT FORMAT — GENERATE ALL SECTIONS BELOW
       ============================================================
 
+      ## Summary
+
+      [2-3 sentences: what the study will do, how many participants and what
+      method, and what decision the findings will inform. If brief commitments
+      exist above, reference them as the approved scope being operationalized.]
+
+      | | |
+      |---|---|
+      | **Method** | {{methodology}} |
+      | **Participants** | {{participant_count}} |
+      | **Timeline** | [X weeks, starting Month DD, YYYY — calculate from {{timeline_preference}} and {{start_date}}] |
+      | **Deliverables** | Research readout, design recommendations |
+
+      ---
+
       {% if upstream_research_objectives %}
       ## Cascade summary
 
@@ -265,21 +282,6 @@ ai_generation_tasks:
       ---
 
       {% endif %}
-
-      ## Summary
-
-      [2-3 sentences: what the study will do, how many participants and what
-      method, and what decision the findings will inform. If brief commitments
-      exist above, reference them as the approved scope being operationalized.]
-
-      | | |
-      |---|---|
-      | **Method** | {{methodology}} |
-      | **Participants** | {{participant_count}} |
-      | **Timeline** | [X weeks, starting Month DD, YYYY — calculate from {{timeline_preference}} and {{start_date}}] |
-      | **Deliverables** | Research readout, design recommendations |
-
-      ---
 
       ## Background
 
@@ -404,8 +406,8 @@ ai_generation_tasks:
       | Role | Person |
       |------|--------|
       | Lead researcher | {{lead_researcher}} |
-      | Note-taker | To be assigned |
-      | Observer | To be assigned |
+      | Note-taker | {{note_taker}} |
+      | Observer | {{observer}} |
       | Stakeholder reviewer | TBD |
 
       ---
