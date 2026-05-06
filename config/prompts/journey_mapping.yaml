@@ -4,7 +4,7 @@
 id: journey_mapping
 name: run_journey_mapping
 label: 🧭 Journey Mapping
-version: "v3.12"
+version: "v4.0"
 
 description: >
   Turn raw user research into a clear, step-by-step journey map. Maps key stages of the
@@ -13,7 +13,7 @@ description: >
 
 author: Qori R&D
 created: 2025-06-30
-last_updated: 2026-04-30
+last_updated: 2026-05-06
 
 # ═══════════════════════════════════════════════════════════
 # CONFIGURATION
@@ -37,16 +37,56 @@ input_variables:
 # CASCADE CONTRACT
 # ═══════════════════════════════════════════════════════════
 consumes:
-  - key: atomic_nuggets
+  - key: atomic_nugget_core
     source: session_summary
     required: true
-    inject_as: context
-    description: "Atomic observations from session summaries — primary input for journey construction"
+    inject_as: reference
+    description: "Nugget pool — primary input for journey stage identification"
+  - key: atomic_nugget_detail
+    source: session_summary
+    required: true
+    inject_as: reference
+    description: "Rich context — verbatim quotes, behaviors, emotional state for stage characterization"
   - key: validated_themes
     source: affinity_mapping
     required: false
+    inject_as: reference
+    description: "Cross-participant themes — validates and groups journey patterns"
+  - key: personas
+    source: persona_generator
+    required: false
+    inject_as: reference
+    description: "Persona archetypes — journeys can be persona-specific or aggregate"
+  - key: target_barriers
+    source: research_brief
+    required: false
+    inject_as: grounding
+    description: "Hypothesized barriers — journey stages can validate when they manifest"
+  - key: research_questions
+    source: research_brief
+    required: false
     inject_as: context
-    description: "Cross-participant themes to organize journey stages"
+    description: "Questions journey map should help answer"
+
+emits:
+  - key: journey_stages
+    pool: false
+    pool_strategy: replace
+    extraction_model: sonnet
+    schema:
+      type: array
+      items:
+        $ref: schemas/journey_stage.yaml
+    extract_from: "ALL journey stage sections — extract EVERY stage as a separate array item"
+  - key: journey_pain_points
+    pool: false
+    pool_strategy: replace
+    extraction_model: sonnet
+    schema:
+      type: array
+      items:
+        $ref: schemas/journey_pain_point.yaml
+    extract_from: "Pain points highlighted across stages, intervention opportunities"
 
 # ═══════════════════════════════════════════════════════════
 # AI GENERATION
@@ -155,6 +195,63 @@ ai_generation_tasks:
       **Research Data:** {{combined_file_content}}
       **Quality Assessment:** {{ai_generated.file_discovery_summary}}
 
+      {% if upstream_atomic_nugget_core %}
+      ============================================================
+      CASCADE-AWARE GENERATION
+      ============================================================
+
+      You have access to upstream nugget pool (atomic_nugget_core + atomic_nugget_detail),
+      validated themes, personas, and target context (target_barriers, research_questions).
+
+      1. **Build journey stages from nugget behavioral sequences.** Use
+         atomic_nugget_detail.observed_behavior and task_context to identify discrete
+         stages. Each stage's supporting_nuggets must list actual nugget IDs.
+
+      2. **Cite evidence by nugget ID.** Pain points cite nugget-PT00X-XXX IDs.
+
+      3. **Link stages to personas when available.** If personas exist, note which
+         persona experiences each stage in linked_personas.
+
+      4. **Mark stage-barrier relationships.** When a stage validates a target_barrier,
+         mark inline with [validates TB-XXX].
+
+      5. **Mark stage-question relationships.** When a stage addresses a research_question,
+         mark inline with [addresses RQ-XXX].
+
+      6. **Ground in themes when available.** When a stage aligns with a validated_theme,
+         reference the theme ID.
+
+      7. **Use ONLY observations from upstream nuggets.** Do not invent journey stages
+         not supported by evidence.
+
+      ATOMIC NUGGETS — CORE:
+      {{upstream_atomic_nugget_core}}
+
+      ATOMIC NUGGETS — DETAIL:
+      {{upstream_atomic_nugget_detail}}
+
+      {% if upstream_validated_themes %}
+      VALIDATED THEMES:
+      {{upstream_validated_themes}}
+      {% endif %}
+
+      {% if upstream_personas %}
+      PERSONAS:
+      {{upstream_personas}}
+      {% endif %}
+
+      {% if upstream_target_barriers %}
+      TARGET BARRIERS:
+      {{upstream_target_barriers}}
+      {% endif %}
+
+      {% if upstream_research_questions %}
+      RESEARCH QUESTIONS:
+      {{upstream_research_questions}}
+      {% endif %}
+
+      {% endif %}
+
       ============================================================
       OUTPUT FORMAT
       ============================================================
@@ -165,6 +262,23 @@ ai_generation_tasks:
 
       ---
 
+      {% if upstream_atomic_nugget_core %}
+      ## Cascade summary
+
+      This journey map synthesizes behavioral sequences from upstream research.
+
+      | Source data | Count |
+      |-------------|-------|
+      | Sessions analyzed | [n] |
+      | Nugget pool size | [n] |
+      | Validated themes available | [n or 0] |
+      | Personas available | [n or 0] |
+      | Target barriers under consideration | [n or 0] |
+
+      ---
+
+      {% endif %}
+
       ## Summary
 
       [2-3 sentence narrative synthesis of the journey. Reference: how many stages, where failures concentrate, what pattern emerges across stages. Ground every sentence in THIS study's data.]
@@ -172,13 +286,13 @@ ai_generation_tasks:
       > [!IMPORTANT]
       > **Most critical journey moment:** [Identify the stage with the highest number of task-blocking pain points OR the stage that affects the most participants. Explain what happens and why it matters.]
 
-      | Stage | Critical issues | Participants affected |
-      |-------|-----------------|----------------------|
-      | 01 — [Stage name] | [count] | [X of Y] |
-      | 02 — [Stage name] | [count] | [X of Y] |
-      | 03 — [Stage name] | [count] | [X of Y] |
-      | 04 — [Stage name] | [count] | [X of Y] |
-      | 05 — [Stage name] | [count] | [X of Y] |
+      | Stage | Critical issues | Participants affected |{% if upstream_atomic_nugget_core %} Cascade |{% endif %}
+      |-------|-----------------|----------------------|{% if upstream_atomic_nugget_core %}---------|{% endif %}
+      | 01 — [Stage name] | [count] | [X of Y] |{% if upstream_atomic_nugget_core %} [validates TB-XXX] |{% endif %}
+      | 02 — [Stage name] | [count] | [X of Y] |{% if upstream_atomic_nugget_core %} [validates TB-XXX] |{% endif %}
+      | 03 — [Stage name] | [count] | [X of Y] |{% if upstream_atomic_nugget_core %} [validates TB-XXX] |{% endif %}
+      | 04 — [Stage name] | [count] | [X of Y] |{% if upstream_atomic_nugget_core %} [validates TB-XXX] |{% endif %}
+      | 05 — [Stage name] | [count] | [X of Y] |{% if upstream_atomic_nugget_core %} [validates TB-XXX] |{% endif %}
 
       ---
 
@@ -195,9 +309,9 @@ ai_generation_tasks:
 
       #### What goes wrong
 
-      - [Specific issue] — PT-001, [timestamp]
-      - [Specific issue] — PT-003, [timestamp]
-      - [Specific issue] — PT-001, [timestamp]
+      - [Specific issue] — PT-001, [timestamp]{% if upstream_atomic_nugget_core %} (nugget-PT001-XXX){% endif %}
+      - [Specific issue] — PT-003, [timestamp]{% if upstream_atomic_nugget_core %} (nugget-PT003-XXX){% endif %}
+      - [Specific issue] — PT-001, [timestamp]{% if upstream_atomic_nugget_core %} (nugget-PT001-XXX){% endif %}
 
       #### Success looks like
 
@@ -208,6 +322,12 @@ ai_generation_tasks:
       [SPECIFIC implementable fix — e.g., "Modify VoiceOver focus behavior to start on the tab bar, and implement responsive navigation labels that remain visible at 180% text scaling." NOT vague like "improve accessibility."]
 
       **Suggested owner** — [Team name]
+
+      {% if upstream_atomic_nugget_core %}
+      **Supporting nuggets** — [nugget-PT001-XXX, nugget-PT002-XXX, ...]
+
+      {% if upstream_validated_themes %}**Grounded in** — theme-XX: [Theme title]{% endif %}
+      {% endif %}
 
       ---
 
@@ -262,6 +382,29 @@ ai_generation_tasks:
 
       ---
 
+      {% if upstream_atomic_nugget_core %}
+      ## Upstream context
+
+      This journey map was synthesized from:
+
+      | Source | Used for |
+      |--------|----------|
+      | session_summary outputs | Nuggets across participants |
+      {% if upstream_validated_themes %}| affinity_mapping | Theme grounding |{% endif %}
+      {% if upstream_personas %}| persona_generator | Persona-specific journey paths |{% endif %}
+      {% if upstream_target_barriers %}| research_brief | Target barriers, research questions |{% endif %}
+
+      Citation markers throughout:
+      - [validates TB-XXX] = target barrier manifesting at this stage
+      - [addresses RQ-XXX] = research question this stage helps answer
+      - nugget-PT00X-XXX = source nugget reference
+      - theme-XX = source theme reference
+      - persona-XX = persona whose journey includes this stage
+
+      ---
+
+      {% endif %}
+
       ## Appendix
 
       <details>
@@ -305,6 +448,13 @@ ai_generation_tasks:
       - Opportunities are specific enough for a developer to implement
       - Owners are VA teams (Product, Engineering, Design, Content, Accessibility, Policy)
       - Summary stage overview counts match actual pain points per stage
+      {% if upstream_atomic_nugget_core %}
+      - [ ] Nugget IDs referenced in stage evidence match actual upstream IDs
+      - [ ] Each stage has supporting_nuggets populated
+      - [ ] Cascade markers ([validates TB-XXX], [addresses RQ-XXX]) present where applicable
+      - [ ] Cascade Summary table has accurate counts
+      - [ ] Upstream Context appendix present
+      {% endif %}
 
       Do NOT output a footer or "Generated by Qori" line — that is added automatically.
 
@@ -349,6 +499,19 @@ quality_assurance:
   require_stage_consistency: true
 
 notes: |
+  v4.0 Changes (Cascade-aware retrofit):
+  - Consumes: atomic_nuggets split into atomic_nugget_core + atomic_nugget_detail (schema split)
+  - Consumes: added personas (persona_generator), target_barriers and research_questions (research_brief)
+  - Consumes: inject_as upgraded from context to reference/grounding per cascade spec
+  - Emits: added journey_stages and journey_pain_points with Sonnet extraction
+  - Added CASCADE-AWARE GENERATION instruction block with 7 cascade rules
+  - Added Cascade Summary section (source data counts table)
+  - Summary table gains Cascade column with [validates TB-XXX] markers
+  - Stage template gains nugget ID citations, Supporting nuggets line, Grounded in theme line
+  - Added Upstream Context appendix with citation marker legend
+  - Added cascade quality checks (nugget ID verification, cascade markers, counts)
+  - All existing prompt content, design language, and quality checks preserved
+
   v3.12 Changes (Design Language Translation):
   - Translated locked design from docs/design-references/journey-map-reference.md
   - Pattern B traceability: inline citations per stage, no per-stage Sources lines

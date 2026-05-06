@@ -4,7 +4,7 @@
 id: discussion_guide
 name: run_discussion_guide
 label: "💬 Discussion Guide"
-version: "v6.2"
+version: "v7.0"
 
 description: |
   Generate a session guide for user research. Adapts structure based on
@@ -13,7 +13,7 @@ description: |
 
 author: Qori R&D
 created: 2025-06-26
-last_updated: 2026-04-30
+last_updated: 2026-05-06
 
 # ═══════════════════════════════════════════════════════════
 # CONFIGURATION
@@ -53,51 +53,49 @@ input_variables:
 consumes:
   - key: research_objectives
     source: research_brief
-    required: false
-    inject_as: context
-    description: "Grounds warm-up and retrospective questions"
+    required: true
+    inject_as: commitment
+    description: "Guide must serve all research objectives"
   - key: research_questions
     source: research_brief
-    required: false
-    inject_as: context
-    description: "Questions that tasks should explore"
-  - key: target_barriers
-    source: research_brief
-    required: false
-    inject_as: grounding
-    description: "Barriers that inform probing strategy"
+    required: true
+    inject_as: commitment
+    description: "Each script section must serve at least one research question"
   - key: methodology_selection
     source: research_brief
+    required: true
+    inject_as: commitment
+    description: "Methodology determines guide structure"
+  - key: target_barriers
+    source: research_brief
+    required: true
+    inject_as: grounding
+    description: "Tasks/probes designed to elicit barrier validation evidence"
+  - key: participant_criteria
+    source: research_brief
     required: false
     inject_as: context
-    description: "Determines guide structure (usability vs. interview vs. card sort)"
+    description: "Adjust language/probes based on participant types"
 
 emits:
   - key: task_scenarios
     pool: false
     pool_strategy: replace
+    extraction_model: sonnet
     schema:
       type: array
       items:
-        type: object
-        properties:
-          task_number:
-            type: integer
-          name:
-            type: string
-          scenario:
-            type: string
-          success_criteria:
-            type: string
-    extract_from: "Task sections (## 03 Tasks)"
-  - key: probing_questions
+        $ref: schemas/task_scenario.yaml
+    extract_from: "ALL task sections — extract EVERY task scenario as a separate array item"
+  - key: probes
     pool: false
     pool_strategy: replace
+    extraction_model: sonnet
     schema:
       type: array
       items:
-        type: string
-    extract_from: "Probe sub-sections within each task"
+        $ref: schemas/probe.yaml
+    extract_from: "ALL probe/follow-up questions — extract EVERY probe as a separate array item"
 
 # ═══════════════════════════════════════════════════════════
 # AI GENERATION
@@ -132,9 +130,33 @@ ai_generation_tasks:
       APPROVED METHOD: {{upstream_methodology_selection}}
       {% endif %}
 
+      {% if upstream_participant_criteria %}
+      PARTICIPANT CRITERIA:
+      {{upstream_participant_criteria}}
+      {% endif %}
+
+      ============================================================
+      CASCADE-AWARE GENERATION
+      ============================================================
+
+      1. **Each task must serve research questions.** Mark inline with [RQ-XXX] which
+         question(s) each task addresses.
+
+      2. **Tasks designed to validate barriers.** Mark inline with [targets TB-XXX]
+         when a task is specifically designed to elicit evidence about a target barrier.
+
+      3. **Use stable IDs.** RQ-XXX for questions, TB-XXX for barriers.
+
+      4. **Coverage check required.** After all tasks, verify every RQ-XXX has at least
+         one task addressing it. Flag gaps.
+
       Ground warm-up questions in the research objectives. Design task
       scenarios that test the target barriers. Retrospective questions
       should assess whether the research questions were addressed.
+      {% if upstream_participant_criteria %}
+      Adjust language, probes, and scenario complexity based on
+      participant criteria.
+      {% endif %}
       {% endif %}
 
       ============================================================
@@ -201,6 +223,23 @@ ai_generation_tasks:
       | **Session length** | {{session_length}} minutes |
       | **Format** | Remote, video + screen share |
       | **Tasks** | {{task_count}} |
+
+      {% if upstream_research_objectives %}
+      ---
+
+      ## Upstream context
+
+      | Source | Variable | Status |
+      |--------|----------|--------|
+      | Research brief | Research objectives | Committed |
+      | Research brief | Research questions | Committed |
+      | Research brief | Methodology | Committed |
+      | Research brief | Target barriers | Grounding |
+      {% if upstream_participant_criteria %}
+      | Research brief | Participant criteria | Context |
+      {% endif %}
+
+      {% endif %}
 
       ---
 
@@ -295,7 +334,7 @@ ai_generation_tasks:
 
       [Generate {{task_count}} task blocks. Each follows this format:]
 
-      ### Task 01 &nbsp;·&nbsp; [X] min &nbsp;·&nbsp; [Task Name — specific to {{research_focus}}]
+      ### Task 01 &nbsp;·&nbsp; [X] min &nbsp;·&nbsp; [Task Name — specific to {{research_focus}}] &nbsp; [RQ-XXX] [targets TB-XXX]
 
       #### Scenario
 
@@ -323,14 +362,15 @@ ai_generation_tasks:
 
       ---
 
-      [Continue for Task 02 through Task {{task_count}} using the same format]
+      [Continue for Task 02 through Task {{task_count}} using the same format.
+       Each task header MUST include [RQ-XXX] and [targets TB-XXX] markers.]
 
       {% elif research_method == "user_interviews" %}
       *These are open-ended questions to explore experiences and mental models. Follow the participant's lead and probe deeper on interesting responses.*
 
       [Generate {{task_count}} topic blocks. Each follows this format:]
 
-      ### Topic 01 &nbsp;·&nbsp; [X] min &nbsp;·&nbsp; [Topic Name — specific to {{research_focus}}]
+      ### Topic 01 &nbsp;·&nbsp; [X] min &nbsp;·&nbsp; [Topic Name — specific to {{research_focus}}] &nbsp; [RQ-XXX] [targets TB-XXX]
 
       #### Primary question
 
@@ -349,14 +389,15 @@ ai_generation_tasks:
 
       ---
 
-      [Continue for Topic 02 through Topic {{task_count}}]
+      [Continue for Topic 02 through Topic {{task_count}}.
+       Each topic header MUST include [RQ-XXX] and [targets TB-XXX] markers.]
 
       {% elif research_method == "card_sorting" %}
       *Set up the card sorting exercise. Explain the process clearly before beginning.*
 
       [Generate {{task_count}} sort exercise blocks:]
 
-      ### Task 01 &nbsp;·&nbsp; [X] min &nbsp;·&nbsp; [Sort Exercise Name]
+      ### Task 01 &nbsp;·&nbsp; [X] min &nbsp;·&nbsp; [Sort Exercise Name] &nbsp; [RQ-XXX] [targets TB-XXX]
 
       #### Setup
 
@@ -378,14 +419,15 @@ ai_generation_tasks:
 
       ---
 
-      [Continue for remaining sort exercises]
+      [Continue for remaining sort exercises.
+       Each task header MUST include [RQ-XXX] and [targets TB-XXX] markers.]
 
       {% elif research_method == "concept_testing" %}
       *Show each concept and gather reactions. Don't explain or defend — let participants react naturally.*
 
       [Generate {{task_count}} concept blocks:]
 
-      ### Concept 01 &nbsp;·&nbsp; [X] min &nbsp;·&nbsp; [Concept Name]
+      ### Concept 01 &nbsp;·&nbsp; [X] min &nbsp;·&nbsp; [Concept Name] &nbsp; [RQ-XXX] [targets TB-XXX]
 
       #### Reveal
 
@@ -405,14 +447,15 @@ ai_generation_tasks:
 
       ---
 
-      [Continue for remaining concepts]
+      [Continue for remaining concepts.
+       Each concept header MUST include [RQ-XXX] and [targets TB-XXX] markers.]
 
       {% elif research_method == "contextual_inquiry" %}
       *Observe the participant in their natural context. Ask questions as they arise.*
 
       [Generate {{task_count}} observation blocks:]
 
-      ### Observation 01 &nbsp;·&nbsp; [X] min &nbsp;·&nbsp; [Activity to Observe]
+      ### Observation 01 &nbsp;·&nbsp; [X] min &nbsp;·&nbsp; [Activity to Observe] &nbsp; [RQ-XXX] [targets TB-XXX]
 
       #### Context
 
@@ -431,14 +474,15 @@ ai_generation_tasks:
 
       ---
 
-      [Continue for remaining observations]
+      [Continue for remaining observations.
+       Each observation header MUST include [RQ-XXX] and [targets TB-XXX] markers.]
 
       {% elif research_method == "tree_test" %}
       *Present the tree structure. For each question, ask where they would go to find the answer.*
 
       [Generate {{task_count}} tree question blocks:]
 
-      ### Task 01 &nbsp;·&nbsp; [X] min &nbsp;·&nbsp; [Finding Task]
+      ### Task 01 &nbsp;·&nbsp; [X] min &nbsp;·&nbsp; [Finding Task] &nbsp; [RQ-XXX] [targets TB-XXX]
 
       #### Question
 
@@ -456,33 +500,35 @@ ai_generation_tasks:
 
       ---
 
-      [Continue for remaining tree questions]
+      [Continue for remaining tree questions.
+       Each task header MUST include [RQ-XXX] and [targets TB-XXX] markers.]
 
       {% elif research_method == "mixed_methods" %}
       *Split session: first half is task-based, second half is interview topics.*
 
       [Generate first half as Task blocks, second half as Topic blocks. Split {{task_count}} roughly in half.]
 
-      ### Task 01 &nbsp;·&nbsp; [X] min &nbsp;·&nbsp; [Task Name]
+      ### Task 01 &nbsp;·&nbsp; [X] min &nbsp;·&nbsp; [Task Name] &nbsp; [RQ-XXX] [targets TB-XXX]
 
       [Use usability testing format: Scenario → Instruction → Success criteria → Observe → Probe]
 
       ---
 
-      ### Topic 01 &nbsp;·&nbsp; [X] min &nbsp;·&nbsp; [Topic Name]
+      ### Topic 01 &nbsp;·&nbsp; [X] min &nbsp;·&nbsp; [Topic Name] &nbsp; [RQ-XXX] [targets TB-XXX]
 
       [Use interview format: Primary question → Follow-up probes → Listen for]
 
       ---
 
-      [Continue for remaining tasks and topics]
+      [Continue for remaining tasks and topics.
+       Each header MUST include [RQ-XXX] and [targets TB-XXX] markers.]
 
       {% else %}
       *Adapt these activities to your specific research method.*
 
       [Generate {{task_count}} activity blocks:]
 
-      ### Activity 01 &nbsp;·&nbsp; [X] min &nbsp;·&nbsp; [Activity Name]
+      ### Activity 01 &nbsp;·&nbsp; [X] min &nbsp;·&nbsp; [Activity Name] &nbsp; [RQ-XXX] [targets TB-XXX]
 
       #### Setup
 
@@ -499,7 +545,8 @@ ai_generation_tasks:
 
       ---
 
-      [Continue for remaining activities]
+      [Continue for remaining activities.
+       Each activity header MUST include [RQ-XXX] and [targets TB-XXX] markers.]
 
       {% endif %}
 
@@ -585,6 +632,49 @@ ai_generation_tasks:
       - Review consent form if questions arise
       - Stop recording immediately if requested
 
+      {% if upstream_research_questions %}
+      ---
+
+      ## Coverage check
+
+      | Research question | Addressed by |
+      |-------------------|--------------|
+      [For each RQ-XXX from the upstream research questions, list which task/topic/concept/observation addresses it. If a question has no task addressing it, mark it as "GAP — no task addresses this question".]
+
+      {% if upstream_target_barriers %}
+      | Target barrier | Validated by |
+      |----------------|--------------|
+      [For each TB-XXX from the upstream target barriers, list which task/topic/concept/observation targets it. If a barrier has no task targeting it, mark it as "GAP — no task targets this barrier".]
+      {% endif %}
+      {% endif %}
+
+      {% if upstream_research_objectives %}
+      ---
+
+      ## Appendix: Upstream context
+
+      *This guide was generated from the following approved research brief variables.
+      These are provided for moderator reference — do not read aloud.*
+
+      **Research objectives:**
+      {{upstream_research_objectives}}
+
+      {% if upstream_research_questions %}
+      **Research questions:**
+      {{upstream_research_questions}}
+      {% endif %}
+
+      {% if upstream_target_barriers %}
+      **Target barriers:**
+      {{upstream_target_barriers}}
+      {% endif %}
+
+      {% if upstream_participant_criteria %}
+      **Participant criteria:**
+      {{upstream_participant_criteria}}
+      {% endif %}
+      {% endif %}
+
       ============================================================
       QUALITY CHECKS (do not include in output)
       ============================================================
@@ -596,6 +686,10 @@ ai_generation_tasks:
       - Tables have no blank lines between rows
       - Tasks/topics are specific to {{research_focus}}, not generic
       - Activity labels match methodology (Task/Topic/Concept/Observation/Activity)
+      - Every task/topic/concept/observation header has [RQ-XXX] markers
+      - Every RQ-XXX appears in at least one task (coverage check table is complete)
+      - [targets TB-XXX] markers present where tasks probe specific barriers
+      - Coverage check section has no GAPs (if gaps exist, add tasks or reassign)
 
       Do NOT output a footer or "Generated by Qori" line — that is added automatically.
 
@@ -625,6 +719,23 @@ notify:
     message: "Discussion guide for {{selected_study}} is ready for review."
 
 notes: |
+  v7.0 Changes (Cascade-Aware Retrofit):
+  - Consumes upgraded: research_objectives, research_questions, methodology_selection
+    now required with inject_as: commitment. Added participant_criteria (optional, context).
+  - Emits upgraded: task_scenarios and probes now use $ref schemas
+    (schemas/task_scenario.yaml, schemas/probe.yaml) with extraction_model: sonnet.
+    Renamed probing_questions → probes for consistency.
+  - Cascade-aware generation instructions added to prompt: [RQ-XXX] markers on
+    every task/topic/concept/observation header, [targets TB-XXX] for barrier
+    validation tasks, stable IDs, coverage check requirement.
+  - Output template additions: Upstream context summary table (after Summary),
+    Coverage check section (after Emergency procedures) with RQ and TB gap detection,
+    Upstream context appendix for moderator reference.
+  - All 7 method branches + fallback updated with cascade markers in headers.
+  - Quality checks expanded: RQ coverage, TB targeting, gap detection.
+  - Backward compatible: cascade sections are Jinja2-gated on upstream variable
+    presence — guide generates cleanly without upstream context.
+
   v6.2 Changes (Design Language Translation):
   - Translated locked design from docs/design-references/discussion_guide_reference.md
   - Pattern C: document-level footer only (backend buildTraceabilityFooter)

@@ -223,6 +223,17 @@ const FIELD_RENAMES = {
     based_on: 'based_on_participants',
     key_need: 'summary',
   },
+  prioritized_findings: {
+    finding_number: 'id',
+    title: 'finding',
+    affected_count: 'participant_coverage',
+    confidence: 'evidence_strength',
+  },
+  prioritized_recommendations: {
+    action: 'recommendation',
+    timeframe: 'priority',
+    addresses_finding: 'addresses_findings',
+  },
 };
 
 /**

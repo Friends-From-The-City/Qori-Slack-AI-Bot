@@ -1,21 +1,50 @@
-# Prioritized recommendation — actionable next step from research
+# Prioritized recommendation — actionable next step from research readout
 # Emitted by: research_readout
 # Consumed by: targeted_readouts, github_issues_generator
+#
+# v2.0 (May 6, 2026): Cascade-aware deepening. Added addresses_findings,
+#   expected_impact, implementation_notes, source_implications, addresses_barrier.
 type: object
+required: [id, recommendation, priority]
 properties:
-  timeframe:
+  id:
     type: string
-    enum: [immediate, short_term, future]
-    description: "Implementation horizon"
-  action:
+    description: "Format: rec-01, rec-02, etc."
+  recommendation:
     type: string
     description: "Specific action to take"
-  addresses_finding:
+  rationale:
     type: string
-    description: "Which finding number or 'Working well' this addresses"
-  owner:
+    nullable: true
+    description: "Why this recommendation matters"
+  addresses_findings:
+    type: array
+    nullable: true
+    items:
+      type: string
+    description: "Finding IDs (finding-XX) this addresses"
+  priority:
     type: string
-    description: "Team or role responsible"
-  effort:
+    enum: [P0, P1, P2, P3]
+  effort_estimate:
     type: string
+    nullable: true
     enum: [High, Medium, Low]
+  expected_impact:
+    type: string
+    nullable: true
+    description: "What changes if this is implemented"
+  implementation_notes:
+    type: string
+    nullable: true
+    description: "How to implement"
+  addresses_barrier:
+    type: string
+    nullable: true
+    description: "Target barrier ID (TB-XXX) this recommendation addresses"
+  source_implications:
+    type: array
+    nullable: true
+    description: "References persona_design_implication IDs if derived from personas"
+    items:
+      type: string

@@ -1,13 +1,40 @@
-# Decision input — what stakeholders need to decide from research
+# Decision input — decision-making context from research readout
 # Emitted by: research_readout
 # Consumed by: targeted_readouts
+#
+# v2.0 (May 6, 2026): Cascade-aware deepening. Added id, decision_question,
+#   recommended_path, supporting_findings, open_questions, caveats.
 type: object
+required: [id, decision_question, recommended_path]
 properties:
-  bottom_line:
+  id:
     type: string
-    description: "Single-sentence critical insight from Summary"
-  follow_up_research:
+    description: "Format: decision-01, decision-02, etc."
+  decision_question:
+    type: string
+    description: "The decision the brief was meant to inform"
+  recommended_path:
+    type: string
+    description: "What the evidence supports"
+  evidence_summary:
+    type: string
+    nullable: true
+    description: "Brief summary of supporting evidence"
+  supporting_findings:
     type: array
+    nullable: true
     items:
       type: string
-    description: "Research gaps identified for future investigation"
+    description: "Finding IDs (finding-XX) supporting this recommendation"
+  open_questions:
+    type: array
+    nullable: true
+    items:
+      type: string
+    description: "Unresolved questions that may affect this decision"
+  caveats:
+    type: array
+    nullable: true
+    items:
+      type: string
+    description: "Limitations or conditions on the recommendation"

@@ -1,0 +1,30 @@
+# Study risk — identified risk in research plan
+# Emitted by: research_plan
+type: object
+required: [id, risk, mitigation]
+properties:
+  id:
+    type: string
+    description: "Format: risk-01, risk-02, etc."
+  risk:
+    type: string
+    description: "The risk statement"
+  source_constraint:
+    type: string
+    nullable: true
+    description: "References stakeholder_constraint.id from discovery, if applicable"
+  likelihood:
+    type: string
+    nullable: true
+    enum: [High, Medium, Low]
+  impact:
+    type: string
+    nullable: true
+    enum: [High, Medium, Low]
+  mitigation:
+    type: string
+    description: "How to mitigate this risk"
+  contingency:
+    type: string
+    nullable: true
+    description: "Backup plan if mitigation fails"

@@ -4,7 +4,7 @@
 id: research_plan
 name: run_research_plan
 label: "📋 Research Plan"
-version: "v4.7"
+version: "v5.0"
 
 description: |
   Transform your research concept into a stakeholder-ready execution plan.
@@ -12,7 +12,7 @@ description: |
 
 author: Qori R&D
 created: 2025-06-26
-last_updated: 2026-04-30
+last_updated: 2026-05-06
 
 # ═══════════════════════════════════════════════════════════
 # CONFIGURATION
@@ -56,106 +56,98 @@ input_variables:
 # CASCADE CONTRACT
 # ═══════════════════════════════════════════════════════════
 consumes:
-  # Scope from brief (approval-level)
+  # Commitments from brief — plan MUST honor these
   - key: research_objectives
     source: research_brief
-    required: false
-    inject_as: context
-    description: "Approved objectives — plan elaborates these"
+    required: true
+    inject_as: commitment
+    description: "Approved objectives — plan operationalizes these"
   - key: research_questions
     source: research_brief
-    required: false
-    inject_as: context
-    description: "Approved questions from brief"
-  - key: target_barriers
-    source: research_brief
-    required: false
-    inject_as: context
-    description: "Barriers to test — informs task design"
+    required: true
+    inject_as: commitment
+    description: "Approved questions — plan designs tasks to answer these"
   - key: methodology_selection
     source: research_brief
-    required: false
-    inject_as: context
+    required: true
+    inject_as: commitment
     description: "Approved method — plan details the execution"
+  - key: target_barriers
+    source: research_brief
+    required: true
+    inject_as: grounding
+    description: "Barriers to test — grounds task design and risk assessment"
   - key: participant_criteria
     source: research_brief
+    required: true
+    inject_as: commitment
+    description: "Who to recruit — plan specifies recruitment to match"
+  - key: participant_approach
+    source: research_brief
     required: false
-    inject_as: context
-    description: "Who to recruit — plan specifies recruitment"
+    inject_as: commitment
+    description: "Composition and count from brief"
+  # Context from brief — informs but does not bind
   - key: business_context
     source: research_brief
     required: false
     inject_as: context
     description: "Problem framing from brief"
+  # Constraints from brief — plan must work within these
   - key: out_of_scope
     source: research_brief
     required: false
-    inject_as: context
-    description: "What research won't cover"
-  # Timeline + budget from brief
+    inject_as: constraint
+    description: "What research won't cover — plan must not exceed"
   - key: timeline_preference
     source: research_brief
     required: false
-    inject_as: context
-    description: "Standard/accelerated/extended — drives phase date calculation"
+    inject_as: constraint
+    description: "Standard/accelerated/extended — constrains phase date calculation"
   - key: start_date
     source: research_brief
     required: false
-    inject_as: context
-    description: "When planning begins — drives phase dates"
+    inject_as: constraint
+    description: "When planning begins — constrains phase dates"
   - key: decision_deadline
     source: research_brief
     required: false
-    inject_as: context
-    description: "Hard deadline for findings"
+    inject_as: constraint
+    description: "Hard deadline for findings — plan must deliver before this"
   - key: budget
     source: research_brief
     required: false
-    inject_as: context
-    description: "Budget envelope from brief"
-  - key: participant_approach
-    source: research_brief
-    required: false
-    inject_as: context
-    description: "Composition and count from brief"
+    inject_as: constraint
+    description: "Budget envelope from brief — plan must not exceed"
 
 emits:
   - key: study_timeline
     pool: false
     pool_strategy: replace
+    extraction_model: sonnet
     schema:
       type: array
       items:
-        type: object
-        properties:
-          phase:
-            type: string
-          dates:
-            type: string
-    extract_from: "Timeline table"
+        $ref: schemas/study_timeline.yaml
+    extract_from: "ALL timeline phases — extract EVERY phase as a separate array item"
   - key: risks
     pool: false
     pool_strategy: replace
+    extraction_model: sonnet
     schema:
       type: array
       items:
-        type: object
-        properties:
-          risk:
-            type: string
-          likelihood:
-            type: string
-          mitigation:
-            type: string
-    extract_from: "Risks and mitigations table"
+        $ref: schemas/study_risk.yaml
+    extract_from: "ALL risks — extract EVERY risk as a separate array item"
   - key: deliverables
     pool: false
     pool_strategy: replace
+    extraction_model: sonnet
     schema:
       type: array
       items:
-        type: string
-    extract_from: "Deliverables section"
+        $ref: schemas/study_deliverable.yaml
+    extract_from: "ALL deliverables — extract EVERY deliverable as a separate array item"
 
 # ═══════════════════════════════════════════════════════════
 # AI GENERATION
@@ -177,20 +169,23 @@ ai_generation_tasks:
       Participants: {{participant_count}} — {{target_participants}}
 
       {% if upstream_research_objectives %}
-      UPSTREAM CONTEXT (from approved research brief):
+      BRIEF COMMITMENTS (approved — this plan operationalizes these):
       Research objectives: {{upstream_research_objectives}}
+      Research questions: {{upstream_research_questions}}
       {% if upstream_target_barriers %}Target barriers: {{upstream_target_barriers}}{% endif %}
-      {% if upstream_methodology_selection %}Approved method: {{upstream_methodology_selection}}{% endif %}
+      Approved method: {{upstream_methodology_selection}}
 
-      The plan elaborates the approved brief. Ground the summary in the
-      brief's objectives and barriers when available.
+      IMPORTANT: The plan exists to execute the approved brief. The summary
+      MUST reference the brief's objectives and method as commitments being
+      operationalized — not as optional context. Ground the summary in what
+      was approved and how this plan delivers on it.
       {% endif %}
 
       The summary should explain: what the study will do, how many participants
       and what method, and what decision the findings will inform. Be specific
       and concise. Do not use quotes around text.
 
-  # Background — expand business context
+  # Background — expand business context, grounded in brief
   - task_id: "background"
     prompt: |
       Expand this business context into a clear, professional background
@@ -199,7 +194,14 @@ ai_generation_tasks:
       {{decision_context}}
 
       {% if upstream_research_objectives %}
-      Research objectives from approved brief: {{upstream_research_objectives}}
+      BRIEF COMMITMENTS (approved):
+      Research objectives: {{upstream_research_objectives}}
+      {% if upstream_business_context %}Business context from brief: {{upstream_business_context}}{% endif %}
+      {% if upstream_out_of_scope %}Out of scope (constraint): {{upstream_out_of_scope}}{% endif %}
+
+      The background must be consistent with the approved brief's framing.
+      Reference the brief's objectives as the approved scope this plan serves.
+      Do not introduce new scope beyond what the brief approved.
       {% endif %}
 
       Include: what the product/feature is, what problem exists, what decision
@@ -316,10 +318,23 @@ ai_generation_tasks:
       Convert the start date to display format (e.g., "May 4, 2026").
       Output ONLY the formatted string, nothing else.
 
-  # Timeline — calculate dates from start_date + preference
+  # Timeline — calculate dates from start_date + preference, respecting brief constraints
   - task_id: "timeline"
     prompt: |
       Create a timeline table for {{timeline_preference}} research starting {{start_date}}.
+
+      {% if upstream_decision_deadline %}
+      CONSTRAINT: The brief specifies a decision deadline of {{upstream_decision_deadline}}.
+      The final Reporting phase MUST end on or before this date. If the standard
+      phase durations would exceed the deadline, compress proportionally —
+      Planning and Recruitment absorb the most compression, Fieldwork and
+      Analysis compress last.
+      {% endif %}
+
+      {% if upstream_start_date %}
+      CONSTRAINT: Brief-approved start date is {{upstream_start_date}}.
+      Use this if it differs from the modal input.
+      {% endif %}
 
       CRITICAL: Output EXACTLY 3 columns per row. No more, no less.
       The 3 columns are: Phase | Dates | Duration
@@ -401,13 +416,43 @@ ai_generation_tasks:
       - **Research readout** — primary stakeholder document with findings and recommendations
       - **Design recommendations** — specific implementable changes tied to findings
 
+      {% if upstream_research_objectives %}
+      BRIEF COMMITMENT — each deliverable should map to at least one approved
+      research objective:
+      {{upstream_research_objectives}}
+
+      After each deliverable bullet, add a parenthetical noting which
+      objective(s) it addresses, e.g.: "— addresses objectives 1, 3"
+      {% endif %}
+
       Output ONLY the bulleted list for {{methodology}}. Nothing else.
 
-  # Risks — generate 3 study-specific risks
+  # Risks — generate 3 study-specific risks, referencing upstream constraints
   - task_id: "risks"
     prompt: |
       Identify 3 risks for {{methodology}} research on {{project_title}}
       with {{participant_count}} participants ({{target_participants}}):
+
+      {% if upstream_target_barriers %}
+      UPSTREAM GROUNDING — barriers identified in approved brief:
+      {{upstream_target_barriers}}
+
+      At least one risk should address challenges related to testing these
+      specific barriers (e.g., difficulty simulating barrier conditions,
+      participant ability to articulate barrier experiences).
+      {% endif %}
+
+      {% if upstream_decision_deadline %}
+      CONSTRAINT: Decision deadline is {{upstream_decision_deadline}}.
+      Consider deadline-driven risks (compressed analysis time, stakeholder
+      availability for review).
+      {% endif %}
+
+      {% if upstream_budget %}
+      CONSTRAINT: Budget envelope is {{upstream_budget}}.
+      Consider budget-related risks if relevant (participant incentives,
+      tooling costs).
+      {% endif %}
 
       Format as table rows ONLY (no header):
       | [Risk description] | [High/Medium/Low] | [Specific mitigation] |
@@ -512,6 +557,28 @@ output_template: |
   |------|:----------:|------------|
   {{ai_generated.risks}}
 
+  {% if upstream_research_objectives %}
+  ---
+
+  ## Upstream context
+
+  This plan operationalizes the approved research brief. Brief commitments
+  are binding — scope changes require brief amendment.
+
+  | Brief commitment | How this plan addresses it |
+  |---|---|
+  | **Objectives** | Plan objectives elaborate the brief's approved learning goals |
+  | **Method** | {{upstream_methodology_selection}} — detailed in Method section |
+  | **Participants** | Recruitment criteria match brief's participant commitment |
+  | **Timeline** | Phased schedule fits within brief's {{upstream_timeline_preference}} preference{% if upstream_decision_deadline %}, ending before {{upstream_decision_deadline}}{% endif %} |
+  {% if upstream_out_of_scope %}| **Out of scope** | {{upstream_out_of_scope}} — plan does not exceed these boundaries |{% endif %}
+  {% if upstream_budget %}| **Budget** | {{upstream_budget}} — plan costs fit within this envelope |{% endif %}
+
+  > **Plan notes:** Brief commitments operationalized. Objectives, method, and
+  > participant criteria from the approved brief are treated as binding scope.
+  > Any deviation requires a brief amendment before proceeding.
+  {% endif %}
+
 output_options:
   path: "01-planning/"
   filename: "{{selected_study}}-research-plan-{{current_date_iso}}.md"
@@ -532,6 +599,21 @@ notify:
     message: "Research plan for {{project_title}} is ready for review."
 
 notes: |
+  v5.0: Cascade-aware retrofit per Section 8 of design standards.
+  - consumes: updated inject_as semantics (commitment/grounding/constraint
+    instead of blanket context). 5 keys now required: research_objectives,
+    research_questions, methodology_selection, target_barriers, participant_criteria.
+  - emits: schemas upgraded to $ref (study_timeline.yaml, study_risk.yaml,
+    study_deliverable.yaml). extraction_model: sonnet for all 3 emits.
+    extract_from instructions updated for array extraction.
+  - AI tasks: cascade-aware prompts in summary, background, timeline, risks,
+    deliverables. Brief commitments treated as binding scope. Timeline respects
+    decision_deadline constraint. Risks reference upstream barriers. Deliverables
+    map to approved objectives.
+  - Output: added "Upstream context" section with commitment traceability table.
+    Plan notes call out "Brief commitments operationalized."
+  - Multi-task architecture preserved (8 tasks, not consolidated).
+
   v4.7: Removed Approval section — approval gate now lives in research brief.
   Research brief = approval gate. Research plan = execution doc.
 

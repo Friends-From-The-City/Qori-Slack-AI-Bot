@@ -1,0 +1,86 @@
+# Journey stage — discrete phase in user journey
+# Emitted by: journey_mapping
+# Consumed by: research_readout, design_opportunities
+type: object
+required: [id, stage_name, description, supporting_nuggets]
+properties:
+  id:
+    type: string
+    description: "Format: journey-stage-01, journey-stage-02, etc."
+  stage_name:
+    type: string
+    description: "Stage label, e.g., 'Initial App Launch', 'Navigation Discovery'"
+  description:
+    type: string
+    description: "What happens at this stage"
+  participant_thoughts:
+    type: array
+    nullable: true
+    items:
+      type: string
+    description: "What participants think/feel at this stage"
+  participant_actions:
+    type: array
+    nullable: true
+    items:
+      type: string
+    description: "What participants do at this stage"
+  emotional_state:
+    type: string
+    nullable: true
+    description: "frustrated, confused, satisfied, curious, etc."
+  pain_points:
+    type: array
+    nullable: true
+    description: "Barriers experienced at this stage"
+    items:
+      type: object
+      properties:
+        pain:
+          type: string
+        evidence_nugget:
+          type: string
+          nullable: true
+          description: "References atomic_nugget_core.id"
+        severity:
+          type: integer
+          nullable: true
+  opportunities:
+    type: array
+    nullable: true
+    items:
+      type: string
+  supporting_nuggets:
+    type: array
+    description: "Nugget IDs that informed this stage"
+    items:
+      type: string
+  participants_observed:
+    type: array
+    nullable: true
+    items:
+      type: string
+    description: "PT-XXX IDs observed at this stage"
+  linked_personas:
+    type: array
+    nullable: true
+    description: "Persona IDs whose journeys include this stage"
+    items:
+      type: string
+  linked_barriers:
+    type: array
+    nullable: true
+    description: "Target_barrier IDs (TB-XXX) manifesting at this stage"
+    items:
+      type: string
+  duration_estimate:
+    type: string
+    nullable: true
+    description: "Time spent at this stage if observed"
+  decision_point:
+    type: boolean
+    nullable: true
+    description: "Is this a fork in the journey?"
+  confidence:
+    type: string
+    enum: [Strong, Moderate, Limited]

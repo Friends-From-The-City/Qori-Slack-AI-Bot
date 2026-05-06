@@ -1,0 +1,38 @@
+# Study timeline phase — discrete phase in research plan
+# Emitted by: research_plan
+type: object
+required: [id, phase_name, duration]
+properties:
+  id:
+    type: string
+    description: "Format: phase-01, phase-02, etc."
+  phase_name:
+    type: string
+    description: "Phase label, e.g., 'Planning and recruitment'"
+  duration:
+    type: string
+    description: "Duration description, e.g., '2 weeks'"
+  start_date:
+    type: string
+    nullable: true
+    description: "Phase start date"
+  end_date:
+    type: string
+    nullable: true
+    description: "Phase end date"
+  activities:
+    type: array
+    nullable: true
+    items:
+      type: string
+    description: "Key activities in this phase"
+  deliverables:
+    type: array
+    nullable: true
+    items:
+      type: string
+    description: "Outputs from this phase"
+  responsible_party:
+    type: string
+    nullable: true
+    description: "Who owns this phase"

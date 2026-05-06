@@ -1,32 +1,80 @@
-# Prioritized finding — discrete research finding with evidence chain
+# Prioritized finding — key insight from research readout
 # Emitted by: research_readout
 # Consumed by: targeted_readouts, github_issues_generator
+#
+# v2.0 (May 6, 2026): Cascade-aware deepening. Added supporting_themes,
+#   supporting_nuggets, participant_coverage, affected_personas, barrier/question
+#   linkage, representative_quote. Renamed finding_number→id.
 type: object
+required: [id, finding, severity, evidence_strength]
 properties:
-  finding_number:
-    type: integer
-    description: "Editorial number (1-5)"
-  title:
+  id:
     type: string
-    description: "Finding title — specific and descriptive"
+    description: "Format: finding-01, finding-02, etc."
+  finding:
+    type: string
+    description: "The insight statement"
+  category:
+    type: string
+    nullable: true
+    enum: [accessibility_barrier, mental_model_mismatch, navigation_failure, success_pattern, unexpected_pattern, other]
   severity:
-    type: string
-    enum: [Critical, High, Medium]
-  affected_count:
-    type: string
-    description: "X of Y participants"
-  confidence:
+    type: integer
+    description: "1-4 severity scale"
+  evidence_strength:
     type: string
     enum: [Strong, Moderate, Limited]
-  confidence_reasoning:
+  supporting_themes:
+    type: array
+    nullable: true
+    items:
+      type: string
+    description: "Validated theme IDs (theme-XX) that ground this finding"
+  supporting_nuggets:
+    type: array
+    nullable: true
+    items:
+      type: string
+    description: "Nugget IDs that provide evidence"
+  participant_coverage:
     type: string
-    description: "Parenthetical explanation of confidence level"
+    nullable: true
+    description: "X of Y participants format"
+  affected_personas:
+    type: array
+    nullable: true
+    items:
+      type: string
+    description: "Persona IDs affected by this finding"
+  validates_barrier:
+    type: string
+    nullable: true
+    description: "Target barrier ID (TB-XXX) validated by this finding"
+  refutes_barrier:
+    type: string
+    nullable: true
+    description: "Target barrier ID (TB-XXX) refuted by this finding"
+  addresses_question:
+    type: string
+    nullable: true
+    description: "Research question ID (RQ-XXX) answered by this finding"
+  unexpected:
+    type: boolean
+    nullable: true
+    description: "True if not anticipated by upstream barriers"
+  representative_quote:
+    type: string
+    nullable: true
+    description: "Verbatim quote illustrating this finding"
+  representative_quote_source:
+    type: string
+    nullable: true
+    description: "PT-XXX who said the quote"
   recommendation:
     type: string
-    description: "Recommended action"
+    nullable: true
+    description: "Recommended action for this finding"
   recommended_owner:
     type: string
+    nullable: true
     description: "Team or role responsible"
-  effort:
-    type: string
-    enum: [High, Medium, Low]

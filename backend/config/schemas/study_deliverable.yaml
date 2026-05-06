@@ -1,0 +1,26 @@
+# Study deliverable — output from research plan
+# Emitted by: research_plan
+type: object
+required: [id, deliverable_name, format]
+properties:
+  id:
+    type: string
+    description: "Format: deliverable-01, deliverable-02, etc."
+  deliverable_name:
+    type: string
+    description: "Name of the deliverable"
+  format:
+    type: string
+    description: "Output format — e.g., 'Markdown report', 'Slack presentation'"
+  due_date:
+    type: string
+    nullable: true
+    description: "When this is due"
+  audience:
+    type: string
+    nullable: true
+    description: "Who receives this deliverable"
+  addresses_objective:
+    type: string
+    nullable: true
+    description: "Research objective ID this deliverable serves"

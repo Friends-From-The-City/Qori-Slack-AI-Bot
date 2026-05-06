@@ -4,7 +4,7 @@
 id: research_readout
 name: run_research_readout
 label: "📊 Research Report"
-version: "v5.4.1"
+version: "v6.0"
 
 description: |
   Generate comprehensive, stakeholder-ready research reports from session summaries
@@ -14,7 +14,7 @@ description: |
 
 author: Qori R&D
 created: 2025-06-26
-last_updated: 2026-04-30
+last_updated: 2026-05-06
 
 # ═══════════════════════════════════════════════════════════
 # CONFIGURATION
@@ -40,17 +40,17 @@ input_variables:
 # CASCADE CONTRACT
 # ═══════════════════════════════════════════════════════════
 consumes:
-  # From research_brief (framing context)
+  # From research_brief (framing commitments)
   - key: research_objectives
     source: research_brief
     required: false
-    inject_as: context
-    description: "What the study set out to learn — frames 'Why we conducted this research'"
+    inject_as: commitment
+    description: "What the study set out to learn — commitments that findings must address"
   - key: research_questions
     source: research_brief
     required: false
-    inject_as: context
-    description: "Specific questions the study aimed to answer"
+    inject_as: commitment
+    description: "Specific questions the study aimed to answer — each must be addressed or flagged"
   - key: target_barriers
     source: research_brief
     required: false
@@ -63,11 +63,16 @@ consumes:
     description: "Problem framing and decision context"
 
   # From session_summary pool (primary evidence)
-  - key: atomic_nuggets
+  - key: atomic_nugget_core
     source: session_summary
     required: true
     inject_as: reference
-    description: "Cross-participant observation pool — primary evidence for findings"
+    description: "Cross-participant observation pool — primary evidence for findings (id, type, severity, text, participant, session)"
+  - key: atomic_nugget_detail
+    source: session_summary
+    required: true
+    inject_as: reference
+    description: "Enrichment layer for nuggets — context, quotes, recommendations, linked by id"
   - key: participant_metadata
     source: session_summary
     required: true
@@ -100,6 +105,16 @@ consumes:
     required: false
     inject_as: reference
     description: "Behavioral archetypes — informs who is affected per finding"
+  - key: persona_design_implications
+    source: persona_generator
+    required: false
+    inject_as: reference
+    description: "Design implications per persona — informs recommendation feasibility"
+  - key: journey_stages
+    source: journey_mapping
+    required: false
+    inject_as: reference
+    description: "User journey stages — contextualizes where findings occur in the experience"
 
   # From stakeholder stream (decision context)
   - key: stakeholder_constraints
@@ -117,21 +132,30 @@ emits:
   - key: prioritized_findings
     pool: false
     pool_strategy: replace
+    extraction_model: sonnet
     schema:
-      $ref: schemas/prioritized_finding.yaml
-    extract_from: "Numbered findings sections (## 01 through ## 05)"
+      type: array
+      items:
+        $ref: schemas/prioritized_finding.yaml
+    extract_from: "ALL numbered findings sections — extract EVERY finding as a separate array item"
   - key: prioritized_recommendations
     pool: false
     pool_strategy: replace
+    extraction_model: sonnet
     schema:
-      $ref: schemas/prioritized_recommendation.yaml
-    extract_from: "Recommended actions section (Immediate, Short-term, Future)"
+      type: array
+      items:
+        $ref: schemas/prioritized_recommendation.yaml
+    extract_from: "ALL recommendations — extract EVERY recommendation as a separate array item"
   - key: decision_inputs
     pool: false
     pool_strategy: replace
+    extraction_model: sonnet
     schema:
-      $ref: schemas/decision_input.yaml
-    extract_from: "Summary bottom line callout and Follow-up research checklist"
+      type: array
+      items:
+        $ref: schemas/decision_input.yaml
+    extract_from: "Decision sections and bottom line summary"
   - key: study_methodology
     pool: false
     pool_strategy: replace
@@ -189,7 +213,7 @@ ai_generation_tasks:
       Use middle-dot (·) between sources. Cite only files that actually support
       the finding. NEVER construct a path that isn't in the list above.
 
-      {% if upstream_atomic_nuggets %}
+      {% if upstream_atomic_nugget_core %}
       ============================================================
       UPSTREAM CONTEXT (structured variables from cascade)
       ============================================================
@@ -214,8 +238,13 @@ ai_generation_tasks:
       {{upstream_business_context}}
       {% endif %}
 
-      ATOMIC NUGGETS (typed observations from session summaries):
-      {{upstream_atomic_nuggets}}
+      ATOMIC NUGGETS — CORE (typed observations from session summaries):
+      {{upstream_atomic_nugget_core}}
+
+      {% if upstream_atomic_nugget_detail %}
+      ATOMIC NUGGETS — DETAIL (enrichment: context, quotes, recommendations):
+      {{upstream_atomic_nugget_detail}}
+      {% endif %}
 
       {% if upstream_participant_metadata %}
       PARTICIPANT METADATA:
@@ -242,6 +271,16 @@ ai_generation_tasks:
       {{upstream_personas}}
       {% endif %}
 
+      {% if upstream_persona_design_implications %}
+      PERSONA DESIGN IMPLICATIONS:
+      {{upstream_persona_design_implications}}
+      {% endif %}
+
+      {% if upstream_journey_stages %}
+      JOURNEY STAGES (user journey context):
+      {{upstream_journey_stages}}
+      {% endif %}
+
       {% if upstream_stakeholder_constraints %}
       STAKEHOLDER CONSTRAINTS (for recommendation feasibility):
       {{upstream_stakeholder_constraints}}
@@ -256,6 +295,29 @@ ai_generation_tasks:
       Research objectives and questions frame the "Why we conducted this research"
       section. Barrier validations inform which findings confirm or refute
       hypotheses. Stakeholder constraints inform recommendation feasibility.
+
+      ============================================================
+      CASCADE-AWARE GENERATION
+      ============================================================
+
+      1. **Findings must trace to evidence.** Each finding references supporting_themes
+         and supporting_nuggets IDs. Use [from theme-XX] and nugget-PT00X-XXX markers.
+
+      2. **Address brief commitments explicitly.** Research objectives and questions are
+         commitments. Add a "Brief commitments addressed" section showing which objectives
+         and questions each finding addresses. Flag any unaddressed commitments.
+
+      3. **Mark barrier validation.** Use [validates TB-XXX] / [refutes TB-XXX] inline
+         when findings confirm or refute target barriers from the research brief.
+
+      4. **Reference personas.** Use [for persona-XX] when findings are persona-specific.
+         Cross-reference persona_design_implications for recommendation grounding.
+
+      5. **Recommendations trace to findings.** Each recommendation explicitly lists which
+         finding IDs it addresses.
+
+      6. **Use stable IDs throughout.** TB-XXX, RQ-XXX, theme-XX, persona-XX, nugget-PTXXX-XXX.
+         These IDs must match the upstream variable IDs exactly.
       {% endif %}
 
       ============================================================
@@ -328,6 +390,18 @@ ai_generation_tasks:
       | **Medium** | [Finding title] | [Action] |
       | **Working well** | [Positive finding] | [Action to preserve/replicate] |
 
+      {% if upstream_atomic_nugget_core %}
+      #### Cascade summary
+
+      | Source | Count | Coverage |
+      |--------|:-----:|----------|
+      | Atomic nuggets | [N] | [nugget IDs used / total available] |
+      | Validated themes | [N or —] | [theme IDs referenced] |
+      | Target barriers | [N or —] | [validated / refuted / unaddressed] |
+      | Research questions | [N or —] | [addressed / total] |
+      | Personas referenced | [N or —] | [persona IDs used] |
+      {% endif %}
+
       ---
 
       ## Why we conducted this research
@@ -366,6 +440,10 @@ ai_generation_tasks:
 
       **Sources** — [PT-001 session summary](../03-fieldwork/session-summaries/PT-001-session-summary.md) · [PT-003 session summary](../03-fieldwork/session-summaries/PT-003-session-summary.md)
 
+      {% if upstream_atomic_nugget_core %}
+      **Evidence chain** — nugget-PT001-003, nugget-PT003-007 [from theme-02] [validates TB-001] [for persona-01]
+      {% endif %}
+
       #### Recommendation
 
       **Action** — [Specific, actionable recommendation]
@@ -382,7 +460,27 @@ ai_generation_tasks:
 
       ---
 
-      [Continue through Finding 05. MAX 5 findings. Each follows the exact same format.]
+      [Continue through Finding 05. MAX 5 findings. Each follows the exact same format.
+      Include the Evidence chain line on each finding when upstream cascade data is available.]
+
+      {% if upstream_research_objectives or upstream_research_questions %}
+      ---
+
+      ## Brief commitments addressed
+
+      > [!NOTE]
+      > This section maps research brief commitments to findings. Unaddressed commitments are flagged for follow-up.
+
+      | Commitment | Type | Addressed by | Status |
+      |------------|------|-------------|--------|
+      | RQ-001: [question text] | Research question | Finding 01, Finding 03 | Addressed |
+      | RQ-002: [question text] | Research question | — | **Gap** — recommend follow-up |
+      | [Objective text] | Objective | Finding 02, Finding 04 | Addressed |
+      | [Objective text] | Objective | Finding 01 | Partially addressed |
+
+      [If any commitments are unaddressed, add a brief note explaining why — insufficient data,
+      out of scope for this methodology, or deferred to follow-up research.]
+      {% endif %}
 
       ---
 
@@ -512,6 +610,33 @@ ai_generation_tasks:
 
       </details>
 
+      {% if upstream_atomic_nugget_core %}
+      <details>
+      <summary><strong>Upstream context</strong></summary>
+
+      This readout was generated with cascade-aware upstream variables:
+
+      | Variable | Source | Status |
+      |----------|--------|--------|
+      | atomic_nugget_core | session_summary | [Available/Missing] |
+      | atomic_nugget_detail | session_summary | [Available/Missing] |
+      | research_objectives | research_brief | [Available/Missing] |
+      | research_questions | research_brief | [Available/Missing] |
+      | target_barriers | research_brief | [Available/Missing] |
+      | validated_themes | affinity_mapping | [Available/Missing] |
+      | prioritized_issues | usability_issues | [Available/Missing] |
+      | personas | persona_generator | [Available/Missing] |
+      | persona_design_implications | persona_generator | [Available/Missing] |
+      | journey_stages | journey_mapping | [Available/Missing] |
+      | stakeholder_constraints | stakeholder_synthesis | [Available/Missing] |
+      | alignment_gaps | stakeholder_synthesis | [Available/Missing] |
+
+      Mark each variable as Available or Missing based on what was actually
+      provided in the upstream context block above.
+
+      </details>
+      {% endif %}
+
       ============================================================
       QUALITY CHECKS (do not include in output)
       ============================================================
@@ -586,6 +711,22 @@ notify:
     message: "Research report for {{study_name}} is ready for review."
 
 notes: |
+  v6.0 Changes (Cascade-Aware Retrofit):
+  - Cascade contract: atomic_nuggets split into atomic_nugget_core + atomic_nugget_detail
+  - research_objectives and research_questions changed from inject_as: context to
+    inject_as: commitment (these are promises the readout must account for)
+  - Added persona_design_implications and journey_stages to consumes block
+  - Emits updated: array wrappers on prioritized_findings, prioritized_recommendations,
+    decision_inputs; extraction_model: sonnet added to complex emits
+  - Prompt: CASCADE-AWARE GENERATION block with 6 rules (evidence tracing, brief
+    commitment addressing, barrier validation markers, persona references, recommendation
+    tracing, stable ID usage)
+  - Output: Cascade summary table after Summary, per-finding Evidence chain line with
+    nugget/theme/barrier/persona IDs, Brief commitments addressed section (maps RQ-XXX
+    and objectives to findings, flags gaps), Upstream context appendix
+  - All cascade additions are conditional on upstream_atomic_nugget_core — non-cascade
+    readouts render identically to v5.4.1
+
   v5.4.1 Changes (Source Path Grounding):
   - Sources lines now use {{detected_files}} as source of truth instead of
     LLM-constructed path patterns. Prevents 404s from filename mismatches

@@ -1,0 +1,39 @@
+# Journey pain point — friction point identified across journey stages
+# Emitted by: journey_mapping
+# Consumed by: design_opportunities, research_readout
+type: object
+required: [id, pain_point, stage_id]
+properties:
+  id:
+    type: string
+    description: "Format: jp-01, jp-02, etc."
+  pain_point:
+    type: string
+    description: "Description of the friction"
+  stage_id:
+    type: string
+    description: "References journey_stage.id where this pain manifests"
+  severity:
+    type: integer
+    nullable: true
+    description: "1-4 Nielsen severity scale"
+  evidence_nuggets:
+    type: array
+    nullable: true
+    items:
+      type: string
+    description: "References to atomic_nugget_core.id values"
+  participants_affected:
+    type: array
+    nullable: true
+    items:
+      type: string
+    description: "PT-XXX IDs who experienced this"
+  intervention_opportunity:
+    type: string
+    nullable: true
+    description: "Potential design fix"
+  linked_barrier:
+    type: string
+    nullable: true
+    description: "Target_barrier ID (TB-XXX) if this validates a barrier"

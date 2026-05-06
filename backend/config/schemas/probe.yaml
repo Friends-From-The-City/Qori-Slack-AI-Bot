@@ -1,0 +1,25 @@
+# Probe — follow-up question in discussion guide
+# Emitted by: discussion_guide
+type: object
+required: [id, probe_text]
+properties:
+  id:
+    type: string
+    description: "Format: probe-01, probe-02, etc."
+  probe_text:
+    type: string
+    description: "The follow-up question"
+  context:
+    type: string
+    nullable: true
+    description: "When to use this probe"
+  addresses_question:
+    type: string
+    nullable: true
+    description: "Research question ID (RQ-XXX) this probe targets"
+  follow_ups:
+    type: array
+    nullable: true
+    items:
+      type: string
+    description: "Additional follow-up prompts if participant is unclear"

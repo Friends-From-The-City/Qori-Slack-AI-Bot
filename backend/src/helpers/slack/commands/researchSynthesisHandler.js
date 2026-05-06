@@ -683,7 +683,7 @@ const handleResearchSynthesisSubmission = async ({ ack, body, view, client }) =>
     const study = await getResearchStudyWithRoles(selectedStudyName);
 
     // Cascade validation: synthesis methods that require upstream nuggets
-    const nuggetRequiredMethods = ['affinity_mapping', 'persona_generation'];
+    const nuggetRequiredMethods = ['affinity_mapping', 'persona_generation', 'journey_mapping', 'jobs_to_be_done', 'usability_issues', 'design_opportunities', 'service_blueprint'];
     if (nuggetRequiredMethods.includes(analysisMethod) && study?.path) {
       try {
         const decodedPath = decodeURIComponent(study.path);

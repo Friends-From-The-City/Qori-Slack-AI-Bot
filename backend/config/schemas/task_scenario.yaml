@@ -1,0 +1,48 @@
+# Task scenario — scripted task in discussion guide
+# Emitted by: discussion_guide
+# Consumed by: session_summary (operational context)
+type: object
+required: [id, task_description, success_criteria]
+properties:
+  id:
+    type: string
+    description: "Format: task-01, task-02, etc."
+  scenario_number:
+    type: integer
+    description: "Task sequence number in the session protocol"
+  task_description:
+    type: string
+    description: "What the participant is asked to do"
+  user_goal:
+    type: string
+    nullable: true
+    description: "The underlying goal the task simulates"
+  starting_state:
+    type: string
+    nullable: true
+    description: "Where the participant starts (e.g., app home screen)"
+  success_criteria:
+    type: string
+    description: "How to determine task completion"
+  estimated_duration:
+    type: string
+    nullable: true
+    description: "Expected time for this task"
+  addresses_questions:
+    type: array
+    nullable: true
+    items:
+      type: string
+    description: "Research question IDs (RQ-XXX) this task addresses"
+  validates_barriers:
+    type: array
+    nullable: true
+    items:
+      type: string
+    description: "Target barrier IDs (TB-XXX) this task is designed to elicit"
+  observation_focus:
+    type: array
+    nullable: true
+    items:
+      type: string
+    description: "What to watch for during this task"
