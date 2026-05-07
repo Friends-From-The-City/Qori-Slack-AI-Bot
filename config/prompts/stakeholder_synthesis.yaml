@@ -271,6 +271,15 @@ ai_generation_tasks:
       Do not stop early. If running low on space, compress content in
       earlier sections rather than omitting later ones.
 
+      RULE 6: NO METADATA FABRICATION
+
+      For factual metadata fields (interview duration, dates, team size,
+      metric values), use ONLY data explicitly stated in the source transcripts.
+      When source data does not specify a value (e.g., interview duration not
+      recorded), write "Not specified" or omit the field. NEVER fabricate
+      uniform placeholder values (e.g., "~36 minutes" for all stakeholders)
+      to fill slots.
+
       {% if upstream_discovered_barriers %}
       ============================================================
       CASCADE-AWARE GENERATION
@@ -503,7 +512,7 @@ ai_generation_tasks:
 
       **Synthesis methods** — Constraint triangulation; alignment gap analysis; system dynamics mapping with failure-mode identification; stakeholder belief vs. reality framing.
 
-      **Sources analyzed** — SH-001 ([Role], [duration if available]), SH-002 ([Role], [duration]), SH-003 ([Role], [duration])
+      **Sources analyzed** — [List each SH-XXX with Role. Include duration ONLY if explicitly stated in transcript. If duration not stated, omit it. Do NOT fabricate durations.]
 
       **Limitations** — [Sample size, which perspectives are missing, what the model may underrepresent. Be specific: "Health team PM and Design System lead were not interviewed."]
 
@@ -679,6 +688,12 @@ auto_variables:
   github_file_link: "generate_github_link(selected_study, current_date)"
 
 notes: |
+  v5.0.1 Fixes:
+  - Rule 6: anti-fabrication for metadata (interview durations, dates, metrics).
+    Sonnet was fabricating uniform "~36 minutes" for all stakeholders.
+  - Sources analyzed: duration only when explicitly stated in transcript.
+  - detected_files now populated from actual upload filenames (discoverHandler fix).
+
   v5.0 Update — Cascade-aware retrofit:
   - Cascade contract: consumes desk_research barriers + knowledge gaps (inject_as: reference)
   - Emits 6 structured variables with array wrappers and schema refs

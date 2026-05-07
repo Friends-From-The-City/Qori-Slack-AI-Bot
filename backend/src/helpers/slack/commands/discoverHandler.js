@@ -274,6 +274,8 @@ async function handleDiscoverSubmission({ ack, view, body, client }) {
     if (discoveryType === 'stakeholder_synthesis') {
       data.study_channel = replyChannel;
       data.researcher_contact = `<@${userId}>`;
+      // Provide actual filenames for source citation in appendix
+      data.detected_files = documents.map(d => d.name).join('\n- ');
     }
 
     // Fetch YAML template
