@@ -498,20 +498,24 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }) => {
         text: `🔄 Generating ${selectedAudiences.length} targeted readout(s) for *${selectedStudyName}*... You'll receive a notification as each completes.`,
       });
 
-      // Fire parallel generation for each audience
-      for (const audience of selectedAudiences) {
-        const templateName = audienceTemplateMap[audience];
-        if (!templateName) {
-          console.warn(`⚠️ No template for audience: ${audience}`);
-          continue;
-        }
+      // Generate sequentially to avoid GitHub SHA conflicts from parallel commits.
+      // AI generation runs concurrently (LLM calls), but GitHub writes serialize.
+      // Background IIFE so the modal closes immediately.
+      (async () => {
+        const results = [];
+        for (const audience of selectedAudiences) {
+          const templateName = audienceTemplateMap[audience];
+          if (!templateName) {
+            console.warn(`⚠️ No template for audience: ${audience}`);
+            continue;
+          }
 
-        // Run each in background (don't await — fire and notify)
-        (async () => {
           try {
             const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, templateName);
             const audienceReportData = { ...reportData, target_audience: audience };
             const rendered = await processYamlTemplate(file.content, audienceReportData, selectedStudy.path, 'primary-research');
+
+            results.push({ audience, url: rendered.result.url, success: true });
 
             await client.chat.postMessage({
               channel: body.user.id,
@@ -528,13 +532,36 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }) => {
             });
           } catch (err) {
             console.error(`❌ Error generating ${audience} readout:`, err.message);
+            results.push({ audience, error: err.message, success: false });
+
             await client.chat.postMessage({
               channel: body.user.id,
               text: `❌ Error generating *${audience}* readout: ${err.message}`,
             });
           }
-        })();
-      }
+        }
+
+        // Summary message after all complete
+        const succeeded = results.filter(r => r.success);
+        const failed = results.filter(r => !r.success);
+        if (succeeded.length > 0) {
+          const links = succeeded.map(r => `• <${r.url}|${r.audience}>`).join('\n');
+          await client.chat.postMessage({
+            channel: body.user.id,
+            text: `📊 *All targeted readouts complete* (${succeeded.length}/${results.length})`,
+            blocks: [
+              {
+                type: 'section',
+                text: {
+                  type: 'mrkdwn',
+                  text: `📊 *All targeted readouts complete* (${succeeded.length}/${results.length})\n\n${links}${failed.length > 0 ? `\n\n❌ ${failed.length} failed: ${failed.map(r => r.audience).join(', ')}` : ''}`,
+                },
+              },
+            ],
+          });
+        }
+      })();
+
 
     } else {
       // Research readout (existing flow)
