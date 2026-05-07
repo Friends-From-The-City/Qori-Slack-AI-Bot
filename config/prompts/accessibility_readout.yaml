@@ -216,10 +216,8 @@ ai_generation_tasks:
       > [AT user quote from nugget_detail that documents this barrier]
       > — PT-XXX
 
-      {% if additional quotes exist %}
-      > [Additional AT user quote]
-      > — PT-XXX
-      {% endif %}
+      [If additional AT user quotes exist for this finding, include them here.
+       Each quote on its own blockquote line with PT-XXX attribution.]
 
       ---
 
@@ -265,9 +263,7 @@ ai_generation_tasks:
 
       **WCAG criterion** — [X.X.X Criterion Name, or "Not confidently mapped"]
 
-      {% if section_508_implication %}
-      **Section 508 implication** — [Federal compliance impact]
-      {% endif %}
+      **Section 508 implication** — [Federal compliance impact, or "None identified"]
 
       **Affected AT users** — [Screen reader, voice control, large text, etc.]
 
@@ -280,9 +276,8 @@ ai_generation_tasks:
       - [Another test: "NVDA on Windows with Chrome"]
       - [Automated: "axe-core accessibility audit"]
 
-      {% if compliance_deadline %}
-      **Compliance deadline** — [From upstream data only]
-      {% endif %}
+      [If a compliance deadline exists in upstream data, include:
+       **Compliance deadline** — [date/context from upstream]]
 
       ---
 
