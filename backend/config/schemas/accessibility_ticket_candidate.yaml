@@ -1,0 +1,68 @@
+# Accessibility ticket candidate — compliance and AT work from accessibility readout
+# Emitted by: accessibility_readout
+# Consumed by: github_issues_generator (review-before-create)
+#
+# v1.0 (May 7, 2026): Initial schema. Translates research findings into
+#   accessibility-scoped tickets with WCAG criteria, AT user impact,
+#   Section 508 implications, and compliance priority distinction.
+type: object
+required: [id, title, description, wcag_criterion, priority]
+properties:
+  id:
+    type: string
+    description: "Format: a11y-ticket-001, a11y-ticket-002, etc."
+  title:
+    type: string
+    description: "Compliance-focused ticket title (e.g., 'Fix VoiceOver focus management on tab navigation')"
+  description:
+    type: string
+    description: "Accessibility issue and required compliance action"
+  wcag_criterion:
+    type: string
+    nullable: true
+    description: "WCAG 2.2 success criterion violated (e.g., '2.4.3 Focus Order'). Null if unknown."
+  section_508_implication:
+    type: string
+    nullable: true
+    description: "Federal Section 508 compliance impact if applicable"
+  addresses_findings:
+    type: array
+    nullable: true
+    description: "Finding IDs from research_readout (finding-XX)"
+    items:
+      type: string
+  affected_at_users:
+    type: array
+    nullable: true
+    description: "AT user types affected (screen reader, voice control, large text, etc.)"
+    items:
+      type: string
+  affected_personas:
+    type: array
+    nullable: true
+    description: "Persona IDs with assistive_technology context"
+    items:
+      type: string
+  evidence_nuggets:
+    type: array
+    nullable: true
+    description: "Nugget IDs with accessibility_issue type that document this issue"
+    items:
+      type: string
+  recommended_testing:
+    type: array
+    nullable: true
+    description: "How to verify fix (specific AT setups: NVDA, JAWS, VoiceOver, etc.)"
+    items:
+      type: string
+  priority:
+    type: string
+    enum: [P0_legal, P0_severe, P1, P2, P3]
+    description: "P0_legal for compliance violations, P0_severe for blocking AT users"
+  effort:
+    type: string
+    enum: [High, Medium, Low]
+  compliance_deadline:
+    type: string
+    nullable: true
+    description: "If linked to legal/compliance timeline from upstream data"

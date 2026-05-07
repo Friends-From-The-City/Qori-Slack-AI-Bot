@@ -331,7 +331,7 @@ ai_generation_tasks:
       |-----------|:---:|
       | All findings referenced exist in upstream prioritized_findings | ✓ |
       | All personas referenced exist in upstream personas | ✓ |
-      | All journey stages referenced exist in upstream journey_stages | ✓ |
+      | All journey stages referenced exist in upstream journey_stages | [✓ if journey_stages available, N/A if missing] |
       | No fabricated design challenges | ✓ |
       | Acceptance criteria are design-scoped (not engineering) | ✓ |
       | Privacy preserved — PT-XXX codes only | ✓ |

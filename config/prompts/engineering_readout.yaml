@@ -326,10 +326,10 @@ ai_generation_tasks:
       | Criterion | Verified |
       |-----------|:---:|
       | All findings referenced exist in upstream prioritized_findings | ✓ |
-      | Technical constraints reference real constraint IDs | ✓ |
+      | Technical constraints reference real constraint IDs | [✓ if stakeholder_constraints available, N/A if missing] |
       | Acceptance criteria are engineering-scoped (not design) | ✓ |
       | No fabricated components or library names | ✓ |
-      | Sprint estimates grounded in stakeholder data | ✓ |
+      | Sprint estimates grounded in stakeholder data | [✓ if estimates present, N/A if stakeholder_constraints missing] |
       | Privacy preserved — PT-XXX codes only | ✓ |
 
       </details>
