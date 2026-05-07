@@ -1,0 +1,70 @@
+# Engineering ticket candidate — technical work from engineering readout
+# Emitted by: engineering_readout
+# Consumed by: github_issues_generator (review-before-create)
+#
+# v1.0 (May 7, 2026): Initial schema. Translates research findings into
+#   engineering-scoped tickets with technical acceptance criteria, component
+#   references, and stakeholder constraint linkage.
+type: object
+required: [id, title, description, addresses_findings, priority, effort]
+properties:
+  id:
+    type: string
+    description: "Format: eng-ticket-001, eng-ticket-002, etc."
+  title:
+    type: string
+    description: "Technical ticket title (e.g., 'Implement React Navigation v7 upgrade for tab focus management')"
+  description:
+    type: string
+    description: "Technical specification of what needs to be built"
+  addresses_findings:
+    type: array
+    description: "Finding IDs from research_readout (finding-XX)"
+    items:
+      type: string
+  technical_acceptance_criteria:
+    type: array
+    nullable: true
+    description: "Specific technical behaviors required"
+    items:
+      type: string
+  affected_components:
+    type: array
+    nullable: true
+    description: "Code components, files, or systems impacted"
+    items:
+      type: string
+  technical_constraints:
+    type: array
+    nullable: true
+    description: "References stakeholder_constraint IDs (constraint-XXX) that affect this implementation"
+    items:
+      type: string
+  testing_approach:
+    type: array
+    nullable: true
+    description: "How to validate the implementation works"
+    items:
+      type: string
+  priority:
+    type: string
+    enum: [P0, P1, P2, P3]
+  effort:
+    type: string
+    enum: [High, Medium, Low]
+  effort_estimate_sprints:
+    type: string
+    nullable: true
+    description: "Sprint estimate if grounded in stakeholder data"
+  blocked_by:
+    type: array
+    nullable: true
+    description: "Other ticket IDs that must complete first"
+    items:
+      type: string
+  enables:
+    type: array
+    nullable: true
+    description: "Other tickets this unblocks"
+    items:
+      type: string

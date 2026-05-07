@@ -1,0 +1,418 @@
+# ═══════════════════════════════════════════════════════════
+# IDENTITY
+# ═══════════════════════════════════════════════════════════
+id: engineering_readout
+name: run_engineering_readout
+label: "⚙️ Engineering Readout"
+version: "v1.0"
+
+description: |
+  Translate research findings into engineering-scoped work. Produces audience-specific
+  markdown summary + engineering_ticket_candidates variable for GitHub Issues integration.
+  Consumes from research_readout v6.0. Pentagram design language.
+
+author: Qori R&D
+created: 2026-05-07
+last_updated: 2026-05-07
+
+# ═══════════════════════════════════════════════════════════
+# CONFIGURATION
+# ═══════════════════════════════════════════════════════════
+input_type: structured
+input_processing: direct
+
+# ═══════════════════════════════════════════════════════════
+# INPUTS
+# ═══════════════════════════════════════════════════════════
+input_variables:
+  - selected_study:
+      type: "select"
+      required: true
+  - study_name:
+      type: "text"
+      required: true
+  - researcher_contact:
+      type: "text"
+      required: true
+  - detected_files:
+      type: "text"
+      required: false
+
+# ═══════════════════════════════════════════════════════════
+# CASCADE CONTRACT
+# ═══════════════════════════════════════════════════════════
+consumes:
+  - key: prioritized_findings
+    source: research_readout
+    required: true
+    inject_as: grounding
+    description: "Findings — engineer scopes technical implementation"
+  - key: prioritized_recommendations
+    source: research_readout
+    required: true
+    inject_as: grounding
+    description: "Recommendations — engineer translates into technical work"
+  - key: stakeholder_constraints
+    source: stakeholder_synthesis
+    required: false
+    inject_as: grounding
+    description: "Technical constraints from engineering stakeholders inform implementation"
+  - key: personas
+    source: persona_generator
+    required: false
+    inject_as: reference
+    description: "Personas — engineer understands who the work serves"
+  - key: target_barriers
+    source: research_brief
+    required: false
+    inject_as: context
+  - key: methodology_selection
+    source: research_brief
+    required: false
+    inject_as: context
+
+emits:
+  - key: engineering_ticket_candidates
+    pool: false
+    pool_strategy: replace
+    extraction_model: sonnet
+    schema:
+      type: array
+      items:
+        $ref: schemas/engineering_ticket_candidate.yaml
+    extract_from: "ALL ticket candidate sections — extract EVERY ticket as a separate array item"
+
+# ═══════════════════════════════════════════════════════════
+# AI GENERATION
+# ═══════════════════════════════════════════════════════════
+ai_generation_tasks:
+  - task_id: "engineering_readout_complete"
+    prompt: |
+      You are creating an engineering-focused readout that translates research findings
+      into actionable technical work. Audience: engineering team.
+
+      IMPORTANT: Generate the COMPLETE document. Do not stop early. Every
+      section listed in the output format below is REQUIRED.
+
+      ============================================================
+      UPSTREAM DATA (from research readout + synthesis chain)
+      ============================================================
+
+      NOTE: The data below may be in JSON format. This is the raw variable
+      store format. When you reference this data in the output, extract the
+      human-readable content and format as clean markdown. NEVER copy JSON
+      syntax into the output.
+
+      PRIORITIZED FINDINGS:
+      {{upstream_prioritized_findings}}
+
+      PRIORITIZED RECOMMENDATIONS:
+      {{upstream_prioritized_recommendations}}
+
+      {% if upstream_stakeholder_constraints %}
+      STAKEHOLDER CONSTRAINTS (from engineering stakeholders):
+      {{upstream_stakeholder_constraints}}
+      {% endif %}
+
+      {% if upstream_personas %}
+      PERSONAS:
+      {{upstream_personas}}
+      {% endif %}
+
+      {% if upstream_target_barriers %}
+      TARGET BARRIERS:
+      {{upstream_target_barriers}}
+      {% endif %}
+
+      ============================================================
+      CASCADE-AWARE ENGINEERING READOUT GENERATION
+      ============================================================
+
+      1. **Translate findings into technical work.** What needs to change in the
+         codebase or system architecture to address each finding?
+
+      2. **Stakeholder constraints inform implementation.** When stakeholder_constraints
+         exist (especially Technical type), reference them as [from constraint-XXX].
+         They define what's possible and what's expensive.
+
+      3. **Acceptance criteria in technical terms.** Specific behaviors, not user outcomes.
+         "Tab focus order includes navigation tabs on screen change" not "Users can find
+         navigation tabs."
+
+      4. **Affected components.** Be specific: component names, system boundaries, platform
+         considerations. Engineers need to know what to touch.
+
+      5. **Effort grounded in stakeholder data.** When stakeholder_constraints mention
+         sprint estimates, use those. Don't invent sprint counts.
+
+      6. **Anti-fabrication.** Don't invent technical components, library names, or system
+         boundaries not in upstream variables. When technical specifics aren't in the
+         upstream data, describe the problem generically rather than guessing implementation.
+
+      7. **Privacy preserved.** PT-XXX codes only.
+
+      8. **No raw JSON in output.** Format all upstream data as readable text.
+
+      ============================================================
+      INPUT
+      ============================================================
+
+      **Study:** {{study_name}}
+      **Researcher:** {{researcher_contact}}
+
+      ============================================================
+      OUTPUT FORMAT — FOLLOW EXACTLY
+      ============================================================
+
+      # Engineering Readout: {{study_name}}
+
+      **Study:** {{selected_study}} &nbsp; | &nbsp; **Audience:** Engineering &nbsp; | &nbsp; **Date:** {{current_date}} &nbsp; | &nbsp; **Status:** Draft
+
+      ---
+
+      ## Cascade summary
+
+      | Source | Count |
+      |--------|-------|
+      | Findings from research readout | [count] |
+      | Recommendations from research readout | [count] |
+      | Stakeholder constraints available | [count or "Not available"] |
+      | Personas available | [count or "Not available"] |
+
+      ---
+
+      ## Summary
+
+      [2-3 sentences: what this readout covers for the engineering team. Frame in terms
+      of technical challenges and system changes needed. State how many tickets are
+      proposed and at what priority levels.]
+
+      ---
+
+      ## Technical challenges
+
+      [For each finding that requires engineering work, translate into a technical
+      challenge. Each challenge gets editorial numbering (## 01, ## 02, etc.).]
+
+      ## 01 &nbsp;&nbsp; [Technical challenge title — what needs to change in the system]
+
+      **Research finding** — [1-2 sentence summary in engineering language]
+
+      {% if upstream_stakeholder_constraints %}
+      **Architecture context** — [Relevant stakeholder constraints that affect implementation.
+      Reference constraint IDs where applicable.]
+      {% endif %}
+
+      **Technical scope** — [What systems, components, or layers are affected.
+      Describe the technical change needed.]
+
+      **User impact** — [Brief: which personas this serves and why it matters technically]
+
+      > [Representative quote that illustrates the technical problem]
+      > — PT-XXX
+
+      ---
+
+      [Continue for each technical challenge. Not every finding becomes a technical
+      challenge — skip findings that are purely design or content.]
+
+      ---
+
+      {% if upstream_stakeholder_constraints %}
+      ## Architecture context
+
+      [Summarize relevant stakeholder constraints that affect engineering decisions.
+      Group by constraint type (Technical, Resource, Policy, Process).]
+
+      | Type | Constraint | Impact on implementation | Source |
+      |------|-----------|------------------------|--------|
+      | [Type] | [Constraint] | [How it affects engineering] | [constraint-XXX] |
+
+      ---
+      {% endif %}
+
+      ## Ticket candidates
+
+      [Generate engineering-scoped tickets. Each ticket must ground in specific findings
+      and reference technical constraints where applicable.]
+
+      ### eng-ticket-001 &nbsp;·&nbsp; [P0/P1/P2/P3] &nbsp;·&nbsp; [High/Medium/Low] effort
+
+      **[Ticket title — technical, actionable]**
+
+      [Description: what needs to be built/changed, in 2-3 technical sentences]
+
+      **Addresses findings** — [finding-XX, finding-XX]
+
+      {% if upstream_stakeholder_constraints %}
+      **Technical constraints** — [constraint-XXX references, or "None identified"]
+      {% endif %}
+
+      **Acceptance criteria:**
+      - [Technical behavior: "Tab focus includes navigation on screen change"]
+      - [Another criterion]
+
+      **Affected components:**
+      - [Component/system names from upstream data or generic descriptions]
+
+      **Testing approach:**
+      - [How to verify: unit tests, integration tests, accessibility audits, etc.]
+
+      {% if effort_estimate_sprints %}
+      **Effort estimate** — [X sprints, grounded in stakeholder data]
+      {% endif %}
+
+      {% if blocked_by %}
+      **Blocked by** — [Other ticket IDs]
+      {% endif %}
+
+      {% if enables %}
+      **Enables** — [Tickets this unblocks]
+      {% endif %}
+
+      ---
+
+      [Continue for each ticket. Generate 3-8 tickets depending on finding count.]
+
+      ---
+
+      ## Implementation sequencing
+
+      [Show dependency graph and recommended order. Distinguish foundation work from
+      feature work. Identify parallel tracks.]
+
+      | Phase | Ticket | Dependencies | Rationale |
+      |:-----:|--------|-------------|-----------|
+      | 1 | [ticket ID] | None | [Foundation work — must complete first] |
+      | 2 | [ticket ID] | [depends on] | [Builds on phase 1] |
+      | 2 | [ticket ID] | [depends on] | [Can parallel] |
+
+      ---
+
+      ## Technical risks
+
+      [Identify 2-4 technical risks that could affect implementation. Ground in
+      stakeholder constraints and research evidence.]
+
+      | Risk | Likelihood | Impact | Mitigation |
+      |------|:----------:|:------:|------------|
+      | [Risk] | [H/M/L] | [H/M/L] | [Mitigation] |
+
+      ---
+
+      ## Methodology
+
+      **Framework** — Research-to-engineering translation
+
+      **Approach** — Translated [X] research findings into engineering-scoped work items,
+      organized by technical dependencies and system boundaries. Tickets reference specific
+      stakeholder constraints where available.
+
+      **Upstream chain** — Research readout → Engineering readout → Ticket candidates
+
+      ### References
+
+      - Google — *Software Engineering at Google* (2020)
+      - W3C — Web Content Accessibility Guidelines (WCAG) 2.2
+      - Nielsen Norman Group — Engineering implications of usability research
+
+      ---
+
+      ## Appendix
+
+      <details>
+      <summary><strong>Validity checklist</strong></summary>
+
+      | Criterion | Verified |
+      |-----------|:---:|
+      | All findings referenced exist in upstream prioritized_findings | ✓ |
+      | Technical constraints reference real constraint IDs | ✓ |
+      | Acceptance criteria are engineering-scoped (not design) | ✓ |
+      | No fabricated components or library names | ✓ |
+      | Sprint estimates grounded in stakeholder data | ✓ |
+      | Privacy preserved — PT-XXX codes only | ✓ |
+
+      </details>
+
+      <details>
+      <summary><strong>Upstream context</strong></summary>
+
+      This engineering readout was generated from:
+
+      | Variable | Source | Status |
+      |----------|--------|--------|
+      | prioritized_findings | research_readout | [Available/Missing] |
+      | prioritized_recommendations | research_readout | [Available/Missing] |
+      | stakeholder_constraints | stakeholder_synthesis | [Available/Missing] |
+      | personas | persona_generator | [Available/Missing] |
+      | target_barriers | research_brief | [Available/Missing] |
+
+      Citation markers throughout:
+      - finding-XX = research readout finding ID
+      - eng-ticket-XXX = ticket candidate ID
+      - constraint-XXX = stakeholder constraint ID
+      - TB-XXX = target barrier ID
+
+      </details>
+
+      ============================================================
+      QUALITY CHECKS (do not include in output)
+      ============================================================
+
+      Before outputting, verify:
+      - Every ticket's addresses_findings references real finding IDs from upstream
+      - Acceptance criteria are engineering-scoped, not design
+      - No fabricated component names or library versions
+      - Sprint estimates only where stakeholder data supports them
+      - No raw JSON anywhere in output
+      - All tables have consistent column counts
+      - Editorial numbering uses ## 01 &nbsp;&nbsp; format for technical challenges
+      - Ticket IDs use eng-ticket-XXX format
+      - Privacy: no real names, PT-XXX only
+      - Implementation sequencing is logically ordered with dependencies
+
+      Do NOT output a footer or "Generated by Qori" line — that is added automatically.
+
+# ═══════════════════════════════════════════════════════════
+# OUTPUT
+# ═══════════════════════════════════════════════════════════
+output_template: |
+  {{ai_generated.engineering_readout_complete}}
+
+output_options:
+  path: "05-reports/"
+  filename: "{{selected_study}}-engineering-readout-{{current_date_iso}}.md"
+
+# ═══════════════════════════════════════════════════════════
+# METADATA
+# ═══════════════════════════════════════════════════════════
+processing_workflow:
+  1. validate_inputs
+  2. read_upstream_variables
+  3. execute_engineering_readout_complete_task
+  4. render_output_template
+  5. save_to_reports_folder
+
+notify:
+  - role: team
+    action: "Engineering readout generated"
+    channel: "{{study_channel}}"
+    message: "Engineering readout for {{study_name}} is ready for review."
+
+notes: |
+  v1.0: Initial engineering readout template.
+  - Single-task architecture (engineering_readout_complete)
+  - Consumes: prioritized_findings, prioritized_recommendations (required, grounding),
+    stakeholder_constraints (optional, grounding), personas (optional, reference),
+    target_barriers (optional, context), methodology_selection (optional, context)
+  - Emits: engineering_ticket_candidates (array of engineering_ticket_candidate schema)
+  - Pentagram design language with editorial numbering for technical challenges
+  - Architecture context section surfaces stakeholder constraints for engineering decisions
+  - Technical risks section grounded in constraints and research evidence
+  - Implementation sequencing with dependency graph
+  - Anti-fabrication: no invented components, libraries, or sprint estimates
+
+output_use: |
+  Translate research findings into engineering-scoped work items. Produces
+  audience-specific markdown document + engineering_ticket_candidates variable
+  for review-before-create GitHub Issues integration.
