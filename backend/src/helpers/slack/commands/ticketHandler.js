@@ -285,16 +285,50 @@ const handleStep2Submit = async ({ ack, body, view, client }) => {
   const CreatedIssue = sequelize.models?.CreatedIssue;
 
   let tickets = [];
+  let findings = [];
+  let nuggetDetails = {};
   try {
-    const row = await StudyVariable.findOne({
+    // Load ticket candidates
+    const ticketRow = await StudyVariable.findOne({
       where: { study_name: studyName, variable_key: config.variableKey, scope: 'study' },
       attributes: ['value'],
     });
-    tickets = (row?.value || []).filter(t => selectedTicketIds.includes(t.id));
+    tickets = (ticketRow?.value || []).filter(t => selectedTicketIds.includes(t.id));
+
+    // Load prioritized_findings for finding statements
+    const findingsRow = await StudyVariable.findOne({
+      where: { study_name: studyName, variable_key: 'prioritized_findings', scope: 'study' },
+      attributes: ['value'],
+    });
+    findings = findingsRow?.value || [];
+
+    // Load atomic_nugget_detail for verbatim quotes
+    const detailRows = await StudyVariable.findAll({
+      where: { study_name: studyName, variable_key: 'atomic_nugget_detail', scope: 'study' },
+      attributes: ['item_key', 'value'],
+    });
+    // Build lookup: nugget ID → detail object
+    // Handle both pool items (individual rows) and singleton array (one row)
+    for (const row of detailRows) {
+      if (row.item_key && row.value) {
+        nuggetDetails[row.item_key] = row.value;
+      } else if (!row.item_key && Array.isArray(row.value)) {
+        // Singleton array: extract each item by id
+        for (const item of row.value) {
+          if (item.id) nuggetDetails[item.id] = item;
+        }
+      }
+    }
   } catch (err) {
     console.error('❌ Error loading ticket data:', err.message);
     await client.chat.postMessage({ channel: userId, text: `❌ Error loading tickets: ${err.message}` });
     return;
+  }
+
+  // Build findings lookup: finding ID → finding object
+  const findingsMap = {};
+  for (const f of findings) {
+    if (f.id) findingsMap[f.id] = f;
   }
 
   // Acknowledge
@@ -315,7 +349,7 @@ const handleStep2Submit = async ({ ack, body, view, client }) => {
 
   for (const ticket of tickets) {
     try {
-      const issueBody = formatIssueBody(ticket, audience, studyName);
+      const issueBody = formatIssueBody(ticket, audience, studyName, findingsMap, nuggetDetails);
       const labels = buildLabels(ticket, audience, studyName);
 
       const { data } = await octokit.rest.issues.create({
@@ -381,7 +415,7 @@ const handleStep2Submit = async ({ ack, body, view, client }) => {
 // ISSUE BODY FORMATTING (audience-specific)
 // ═══════════════════════════════════════════════════════════
 
-function formatIssueBody(ticket, audience, studyName) {
+function formatIssueBody(ticket, audience, studyName, findingsMap = {}, nuggetDetails = {}) {
   const sections = [];
 
   sections.push(`## Description\n\n${ticket.description}`);
@@ -446,18 +480,58 @@ function formatIssueBody(ticket, audience, studyName) {
     }
   }
 
-  // Common footer — linked findings with deep links to readout
+  // Common footer — linked findings with statements + verbatim evidence
   if (ticket.addresses_findings?.length) {
     const owner = process.env.GITHUB_OWNER;
     const repo = process.env.GITHUB_REPO;
-    const findingLinks = ticket.addresses_findings.map(f => {
-      // Link to the readout's finding section using the finding number as anchor
-      // GitHub auto-generates anchors from heading text, e.g., "01--va-categories..."
-      const findingNum = f.replace('finding-', '');
-      const readoutPath = `${studyName}/primary-research/05-reports/`;
-      return `- [${f}](https://github.com/${owner}/${repo}/tree/main/${readoutPath}) — see research readout`;
+    const readoutPath = `${studyName}/primary-research/05-reports/`;
+    const readoutLink = `https://github.com/${owner}/${repo}/tree/main/${readoutPath}`;
+
+    // Finding statements with severity
+    const findingLines = ticket.addresses_findings.map(fId => {
+      const finding = findingsMap[fId];
+      if (finding) {
+        const severity = finding.severity ? ` (Severity ${finding.severity})` : '';
+        return `- **${fId}**${severity} — ${finding.finding}`;
+      }
+      return `- **${fId}** — [see research readout](${readoutLink})`;
     });
-    sections.push(`## Linked Findings\n\n${findingLinks.join('\n')}`);
+    sections.push(`## Linked Findings\n\n${findingLines.join('\n')}`);
+
+    // Collect verbatim quotes from supporting nuggets across all linked findings
+    const quotes = [];
+    for (const fId of ticket.addresses_findings) {
+      const finding = findingsMap[fId];
+      if (!finding) continue;
+
+      // Use representative_quote from finding itself
+      if (finding.representative_quote && finding.representative_quote_source) {
+        quotes.push({ quote: finding.representative_quote, source: finding.representative_quote_source });
+      }
+
+      // Also pull from supporting_nuggets → atomic_nugget_detail
+      const nuggetIds = finding.supporting_nuggets || [];
+      for (const nId of nuggetIds.slice(0, 3)) { // Max 3 per finding
+        const detail = nuggetDetails[nId];
+        if (detail?.verbatim_quote) {
+          // Avoid duplicating the representative_quote
+          if (!quotes.some(q => q.quote === detail.verbatim_quote)) {
+            quotes.push({
+              quote: detail.verbatim_quote,
+              source: detail.participant || nId,
+            });
+          }
+        }
+      }
+    }
+
+    // Add collapsed research evidence if we have quotes
+    if (quotes.length > 0) {
+      // Limit to 3 most representative quotes total
+      const topQuotes = quotes.slice(0, 3);
+      const quoteBlock = topQuotes.map(q => `> "${q.quote}"\n> — ${q.source}`).join('\n\n');
+      sections.push(`<details>\n<summary>Research evidence</summary>\n\n${quoteBlock}\n\n</details>`);
+    }
   }
 
   sections.push(`## Source\n\n- **Study:** ${studyName}\n- **Audience:** ${audience}\n- **Ticket ID:** ${ticket.id}\n- **Priority:** ${ticket.priority}\n- **Effort:** ${ticket.effort}\n\n---\n*Generated by Qori*`);
