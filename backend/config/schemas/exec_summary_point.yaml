@@ -1,0 +1,36 @@
+# Executive summary point — leadership-level insight from leadership readout
+# Emitted by: leadership_readout
+# Consumed by: none (document-only, no downstream tickets)
+#
+# v1.0 (May 7, 2026): Initial schema. Distills research findings into
+#   executive-level statements with business implications and recommended actions.
+type: object
+required: [id, point, supporting_findings]
+properties:
+  id:
+    type: string
+    description: "Format: exec-point-001, exec-point-002, etc."
+  point:
+    type: string
+    description: "Executive-level statement (1-2 sentences)"
+  category:
+    type: string
+    nullable: true
+    enum: [risk, opportunity, decision_required, validation, recommendation]
+  supporting_findings:
+    type: array
+    description: "Finding IDs from research_readout (finding-XX)"
+    items:
+      type: string
+  business_implication:
+    type: string
+    nullable: true
+    description: "Why this matters at executive level"
+  recommended_action:
+    type: string
+    nullable: true
+    description: "What leadership should do, decide, or escalate"
+  effort_summary:
+    type: string
+    nullable: true
+    description: "Resource implication summary"
