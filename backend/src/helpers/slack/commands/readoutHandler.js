@@ -5,6 +5,34 @@ const { processYamlTemplate } = require('../../yamlProcessor');
 const researchPlanService = require('../../../services/research_plan.service');
 const sessionSummaryService = require('../../../services/session-summary.service');
 
+// Check if prioritized_findings exists for a study (needed for targeted readouts)
+async function checkReadoutExists(studyPath) {
+  try {
+    const sequelize = require('../../../database');
+    const StudyVariable = sequelize.models?.StudyVariable;
+    if (!StudyVariable) return false;
+
+    const studySlug = studyPath.split('/').pop() || studyPath;
+    const row = await StudyVariable.findOne({
+      where: {
+        study_name: studySlug,
+        variable_key: 'prioritized_findings',
+        scope: 'study',
+      },
+      attributes: ['id', 'value'],
+    });
+
+    if (!row || !row.value) return false;
+
+    // Build stats string for modal display
+    const findingsCount = Array.isArray(row.value) ? row.value.length : 0;
+    return { exists: true, findingsCount };
+  } catch (err) {
+    console.warn('⚠️ Could not check readout existence:', err.message);
+    return false;
+  }
+}
+
 // Handler for opening the readout modal
 const openReadoutModal = async ({ ack, body, client, command }) => {
   try {
@@ -75,47 +103,39 @@ const handleReadoutModalInteraction = async ({ ack, body, client, action }) => {
     };
 
     switch (action.action_id) {
-      case 'study_selection_change':
-        const selectedStudyId = action.selected_option.value;
-        const selectedStudy = studies.find(s => s.id.toString() === selectedStudyId);
-        updatedState.selectedStudyId = selectedStudy?.id || null;
-        updatedState.selectedStudy = selectedStudy;
+      case 'study_selection_change': {
+        const newStudyId = action.selected_option.value;
+        const newStudy = studies.find(s => s.id.toString() === newStudyId);
+        updatedState.selectedStudyId = newStudy?.id || null;
+        updatedState.selectedStudy = newStudy;
 
-        // Update research files based on selected study
-        updatedState.researchFiles = await getResearchFilesForStudy(selectedStudy);
+        // Check readout existence for the new study
+        if (newStudy?.path) {
+          const readoutCheck = await checkReadoutExists(newStudy.path);
+          updatedState.hasReadout = readoutCheck && readoutCheck.exists;
+          updatedState.readoutStats = readoutCheck ? `• ${readoutCheck.findingsCount} findings available` : null;
+        }
         break;
+      }
 
       case 'select_research_readout':
         updatedState.reportType = 'research_readout';
         break;
 
-      case 'select_targeted_readouts':
+      case 'select_targeted_readouts': {
         updatedState.reportType = 'targeted_readouts';
+        // Check readout existence for current study
+        const currentStudy = updatedState.selectedStudy;
+        if (currentStudy?.path) {
+          const readoutCheck = await checkReadoutExists(currentStudy.path);
+          updatedState.hasReadout = readoutCheck && readoutCheck.exists;
+          updatedState.readoutStats = readoutCheck ? `• ${readoutCheck.findingsCount} findings available` : null;
+        }
         break;
+      }
 
-      case 'select_github_issues':
-        updatedState.reportType = 'github_issues';
-        break;
-
-
-      case 'target_audience_change':
-        updatedState.targetAudience = action.selected_option.value;
-        break;
-
-      case 'team_members_input':
-        updatedState.teamMembers = action.selected_options.map(option => option.value).join(',');
-        break;
-
-      case 'timeline_change':
-        updatedState.timeline = action.selected_option.value;
-        break;
-
-      case 'issue_priority_change':
-        updatedState.issuePriority = action.selected_option.value;
-        break;
-
-      case 'assignee_input':
-        updatedState.assignee = action.value;
+      case 'audience_checkboxes':
+        // Checkboxes are handled on submit, not on change
         break;
 
       default:
@@ -451,11 +471,9 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }) => {
     } else {
       console.warn('⚠️ WARNING: input_text is empty!');
     }
-    let yamlTemplateName = '';
-    if (reportType === 'research_readout') {
-      yamlTemplateName = 'research_readout.yaml';
-    } else if (reportType === 'targeted_readouts') {
-      // Route to audience-specific template
+    // Route based on report type
+    if (reportType === 'targeted_readouts') {
+      // Multi-audience parallel generation
       const audienceTemplateMap = {
         'Design Team': 'designer_readout.yaml',
         'Engineering Team': 'engineering_readout.yaml',
@@ -463,104 +481,80 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }) => {
         'Executive Leadership': 'leadership_readout.yaml',
         'Product Leadership': 'leadership_readout.yaml',
       };
-      yamlTemplateName = audienceTemplateMap[targetAudience] || 'targeted_readouts.yaml';
-      reportData.target_audience = targetAudience;
-    } else if (reportType === 'github_issues') {
-      yamlTemplateName = 'github_issues_generator.yaml';
-    }
 
-    const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, yamlTemplateName);
-    const aiCheck = reportType === 'github_issues';
-    const renderedYaml = await processYamlTemplate(file.content, reportData, selectedStudy.path, 'primary-research', aiCheck);
+      const selectedAudiences = values.audience_selection?.audience_checkboxes?.selected_options?.map(o => o.value) || [];
 
-    // console.log('Generating report with data:', reportData);
+      if (selectedAudiences.length === 0) {
+        await client.chat.postMessage({
+          channel: body.user.id,
+          text: '❌ Please select at least one audience for targeted readouts.',
+        });
+        return;
+      }
 
-    let successMessage = `✅ Report generated successfully!`;
-    let blocks = [
-      {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: `📊 *To see the complete report, please visit:*\n<${renderedYaml.result.url}|:github: View Full Report on GitHub>`,
-        },
-      },
-    ];
+      // Acknowledge immediately
+      await client.chat.postMessage({
+        channel: body.user.id,
+        text: `🔄 Generating ${selectedAudiences.length} targeted readout(s) for *${selectedStudyName}*... You'll receive a notification as each completes.`,
+      });
 
-    // If this is a GitHub issues report, create the actual GitHub issues
-    if (reportType === 'github_issues' && renderedYaml.aiResponses && renderedYaml.aiResponses.github_issues_complete) {
-      try {
-        // Parse the GitHub issues from the AI response
-        const issues = parseGitHubIssues(renderedYaml.aiResponses.github_issues_complete);
-        console.log("🚀 ~ handleReadoutModalSubmission ~ issues:", issues)
+      // Fire parallel generation for each audience
+      for (const audience of selectedAudiences) {
+        const templateName = audienceTemplateMap[audience];
+        if (!templateName) {
+          console.warn(`⚠️ No template for audience: ${audience}`);
+          continue;
+        }
 
-        // Create the issues in GitHub
-        const createdIssues = await createGitHubIssues(issues);
+        // Run each in background (don't await — fire and notify)
+        (async () => {
+          try {
+            const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, templateName);
+            const audienceReportData = { ...reportData, target_audience: audience };
+            const rendered = await processYamlTemplate(file.content, audienceReportData, selectedStudy.path, 'primary-research');
 
-        // Update success message to include issue creation info
-        successMessage = `✅ Report generated and ${createdIssues.length} GitHub issues created successfully!`;
+            await client.chat.postMessage({
+              channel: body.user.id,
+              text: `✅ *${audience}* readout complete for ${selectedStudyName}`,
+              blocks: [
+                {
+                  type: 'section',
+                  text: {
+                    type: 'mrkdwn',
+                    text: `✅ *${audience}* readout complete\n\n<${rendered.result.url}|View on GitHub>`,
+                  },
+                },
+              ],
+            });
+          } catch (err) {
+            console.error(`❌ Error generating ${audience} readout:`, err.message);
+            await client.chat.postMessage({
+              channel: body.user.id,
+              text: `❌ Error generating *${audience}* readout: ${err.message}`,
+            });
+          }
+        })();
+      }
 
-        // Add blocks showing the created issues
-        const issueBlocks = createdIssues.map(issue => ({
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: `🔗 *Issue #${issue.number}:* <${issue.url}|${issue.title}>\n*Priority:* ${issue.priority} | *Effort:* ${issue.effort}`,
-          },
-        }));
+    } else {
+      // Research readout (existing flow)
+      const yamlTemplateName = 'research_readout.yaml';
+      const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, yamlTemplateName);
+      const renderedYaml = await processYamlTemplate(file.content, reportData, selectedStudy.path, 'primary-research');
 
-        blocks = [
-          ...blocks,
+      await client.chat.postMessage({
+        channel: body.user.id,
+        text: `✅ Report generated successfully!`,
+        blocks: [
           {
             type: 'section',
             text: {
               type: 'mrkdwn',
-              text: `🎯 *Created ${createdIssues.length} GitHub Issues:*`,
+              text: `📊 *Report ready:*\n<${renderedYaml.result.url}|View Full Report on GitHub>`,
             },
           },
-          ...issueBlocks,
-        ];
-      } catch (error) {
-        console.error('Error creating GitHub issues:', error);
-        // Don't fail the whole process, just log the error
-        successMessage = `✅ Report generated successfully! (Note: Some GitHub issues may not have been created due to an error)`;
-      }
-    }
-
-    // Send success message with report details
-    await client.chat.postMessage({
-      channel: body.user.id,
-      text: successMessage,
-      blocks: blocks,
-    });
-
-    // Notify team members for targeted readouts
-    if (reportType === 'targeted_readouts' && teamMemberUserIds.length > 0) {
-      try {
-        await client.chat.postMessage({
-          channel: state.origin?.channel || 'general',
-          text: `📢 *New Targeted Readout Report Available!*\n\n*Study:* ${selectedStudyName}\n*Target Audience:* ${targetAudience}\n*Report:* <${renderedYaml.result.url}|View Report on GitHub>\n\n*Notified:* ${teamMembers}`,
-          blocks: [
-            {
-              type: 'section',
-              text: {
-                type: 'mrkdwn',
-                text: `📢 *New Targeted Readout Report Available!*\n\n*Study:* ${selectedStudyName}\n*Target Audience:* ${targetAudience}\n*Report:* <${renderedYaml.result.url}|View Report on GitHub>`
-              }
-            },
-            {
-              type: 'context',
-              elements: [
-                {
-                  type: 'mrkdwn',
-                  text: `*Notified:* ${teamMembers}`
-                }
-              ]
-            }
-          ]
-        });
-      } catch (notificationError) {
-        console.error('Error notifying team members:', notificationError);
-      }
+        ],
+      });
     }
 
 

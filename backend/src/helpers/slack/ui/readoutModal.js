@@ -1,30 +1,26 @@
 const buildReadoutModal = (state = {}) => {
-  console.log("🚀 ~ buildReadoutModal ~ state:", state);
-
   const selectedStudy = state.selectedStudy || null;
   const reportType = state.reportType || 'research_readout';
-  const targetAudience = state.targetAudience || 'Design Team';
-  const teamMembers = state.teamMembers || '';
-  const timeline = state.timeline || 'Immediate (1-2 weeks)';
-  const researchFiles = state.researchFiles || [];
+  const hasReadout = state.hasReadout || false;
+  const readoutStats = state.readoutStats || null;
 
   // Create minimal state for private metadata to avoid size limits
   const minimalState = {
     selectedStudyId: selectedStudy?.id || null,
+    selectedStudyName: selectedStudy?.name || null,
+    selectedStudyPath: selectedStudy?.path || null,
     reportType,
-    targetAudience,
-    teamMembers,
-    timeline,
+    hasReadout,
     origin: state.origin
   };
 
   const getReportTypeCards = () => {
-    const cards = [
+    return [
       {
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: '*Select a Report Type* :bar_chart:'
+          text: '*What do you want to generate?*'
         }
       },
       {
@@ -44,160 +40,102 @@ const buildReadoutModal = (state = {}) => {
             text: { type: 'plain_text', text: 'Targeted Readouts' },
             style: reportType === 'targeted_readouts' ? 'primary' : undefined,
             value: 'targeted_readouts'
-          },
+          }
+        ]
+      },
+      {
+        type: 'context',
+        elements: [
           {
-            type: 'button',
-            action_id: 'select_github_issues',
-            text: { type: 'plain_text', text: 'GitHub Issues' },
-            style: reportType === 'github_issues' ? 'primary' : undefined,
-            value: 'github_issues'
+            type: 'mrkdwn',
+            text: reportType === 'research_readout'
+              ? '📄 *Research Readout* — Comprehensive findings, recommendations, and decisions from all research data'
+              : '🎯 *Targeted Readouts* — Generate audience-specific reports from an existing research readout'
           }
         ]
       }
     ];
-
-    // Add description cards
-    cards.push(
-      {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: `*${reportType === 'research_readout' ? 'Research Readout' : reportType === 'targeted_readouts' ? 'Targeted Readouts' : 'GitHub Issues'}*\n${getReportDescription(reportType)}`
-        }
-      }
-    );
-
-    return cards;
-  };
-
-  const getReportDescription = (type) => {
-    switch (type) {
-      case 'research_readout':
-        return 'Complete analysis with findings and insights';
-      case 'targeted_readouts':
-        return '';
-      case 'github_issues':
-        return 'Actionable development tasks';
-      default:
-        return '';
-    }
   };
 
   const getTargetedReadoutsConfig = () => {
     if (reportType !== 'targeted_readouts') return [];
 
-    return [
-      {
-        type: 'input',
-        block_id: 'target_audience',
-        label: { type: 'plain_text', text: 'Target Audience' },
-        element: {
-          type: 'static_select',
-          action_id: 'target_audience_change',
-          placeholder: { type: 'plain_text', text: 'Select target audience...' },
-          option_groups: [
-            {
-              label: { type: 'plain_text', text: 'Team Audiences' },
-              options: [
-                { text: { type: 'plain_text', text: 'Design Team' }, value: 'Design Team' },
-                { text: { type: 'plain_text', text: 'Engineering Team' }, value: 'Engineering Team' },
-                { text: { type: 'plain_text', text: 'Content Team' }, value: 'Content Team' },
-                { text: { type: 'plain_text', text: 'Product Team' }, value: 'Product Team' },
-                { text: { type: 'plain_text', text: 'Accessibility Team' }, value: 'Accessibility Team' }
-              ]
-            },
-            {
-              label: { type: 'plain_text', text: 'Stakeholder Audiences' },
-              options: [
-                { text: { type: 'plain_text', text: 'Executive Leadership' }, value: 'Executive Leadership' },
-                { text: { type: 'plain_text', text: 'Product Leadership' }, value: 'Product Leadership' },
-                { text: { type: 'plain_text', text: 'Design Leadership' }, value: 'Design Leadership' },
-                { text: { type: 'plain_text', text: 'Congressional Briefing' }, value: 'Congressional Briefing' }
-              ]
-            }
-          ],
-          initial_option: {
-            text: { type: 'plain_text', text: targetAudience },
-            value: targetAudience
+    // Show error state if no research readout exists
+    if (!hasReadout) {
+      return [
+        { type: 'divider' },
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: '❌ *Research readout required*\n\nTargeted readouts consume findings from an existing research readout. Run a Research Readout first, then come back to generate audience-specific reports.'
           }
+        },
+        {
+          type: 'context',
+          elements: [
+            {
+              type: 'mrkdwn',
+              text: '_Switch to "Research Readout" above to generate one now._'
+            }
+          ]
         }
-      },
-      // {
-      //   type: 'section',
-      //   text: {
-      //     type: 'mrkdwn',
-      //     text: '*TEAM IMPLEMENTATION SETTINGS* :gear:'
-      //   }
-      // },
-      // {
-      //   type: 'input',
-      //   block_id: 'team_members',
-      //   label: { type: 'plain_text', text: 'Team Members to Notify' },
-      //   element: {
-      //     type: 'multi_static_select',
-      //     action_id: 'team_members_input',
-      //     placeholder: { type: 'plain_text', text: 'Select team members by role...' },
-      //     options: [
-      //       { text: { type: 'plain_text', text: 'Stakeholder' }, value: 'stakeholder' },
-      //       { text: { type: 'plain_text', text: 'PM' }, value: 'pm' },
-      //       { text: { type: 'plain_text', text: 'Tech Lead' }, value: 'tech_lead' },
-      //       { text: { type: 'plain_text', text: 'Designer' }, value: 'designer' },
-      //       { text: { type: 'plain_text', text: 'Researcher' }, value: 'researcher' }
-      //     ]
-      //   }
-      // },
-      // {
-      //   type: 'input',
-      //   block_id: 'timeline',
-      //   label: { type: 'plain_text', text: 'Implementation Timeline' },
-      //   element: {
-      //     type: 'static_select',
-      //     action_id: 'timeline_change',
-      //     placeholder: { type: 'plain_text', text: 'Select timeline...' },
-      //     options: [
-      //       { text: { type: 'plain_text', text: 'Immediate (1-2 weeks)' }, value: 'Immediate (1-2 weeks)' },
-      //       { text: { type: 'plain_text', text: 'Short-term (1 month)' }, value: 'Short-term (1 month)' },
-      //       { text: { type: 'plain_text', text: 'Medium-term (2-3 months)' }, value: 'Medium-term (2-3 months)' },
-      //       { text: { type: 'plain_text', text: 'Long-term (3+ months)' }, value: 'Long-term (3+ months)' }
-      //     ],
-      //     initial_option: {
-      //       text: { type: 'plain_text', text: timeline },
-      //       value: timeline
-      //     }
-      //   }
-      // }
-    ];
-  };
+      ];
+    }
 
-
-  const getResearchFilesSection = () => {
-    if (!researchFiles || researchFiles.length === 0) return [];
-
-    const fileItems = researchFiles.map(file => `• ${file.name}`).join('\n');
-
-    return [
+    // Show cascade context + audience checkboxes
+    const blocks = [
+      { type: 'divider' },
       {
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `*Research Files Detected:*\n${fileItems}`
+          text: `✅ *Research readout available*${readoutStats ? `\n${readoutStats}` : ''}`
         }
+      },
+      {
+        type: 'input',
+        block_id: 'audience_selection',
+        label: { type: 'plain_text', text: 'Generate for' },
+        element: {
+          type: 'checkboxes',
+          action_id: 'audience_checkboxes',
+          options: [
+            {
+              text: { type: 'mrkdwn', text: '*🎨 Designer* — design challenges + ticket candidates' },
+              description: { type: 'plain_text', text: 'Creates GitHub Issues after review' },
+              value: 'Design Team'
+            },
+            {
+              text: { type: 'mrkdwn', text: '*⚙️ Engineering* — technical challenges + ticket candidates' },
+              description: { type: 'plain_text', text: 'Creates GitHub Issues after review' },
+              value: 'Engineering Team'
+            },
+            {
+              text: { type: 'mrkdwn', text: '*♿ Accessibility* — WCAG compliance + ticket candidates' },
+              description: { type: 'plain_text', text: 'Creates GitHub Issues after review' },
+              value: 'Accessibility Team'
+            },
+            {
+              text: { type: 'mrkdwn', text: '*👔 Leadership* — executive brief (BLUF style)' },
+              description: { type: 'plain_text', text: 'Document only — no tickets' },
+              value: 'Executive Leadership'
+            }
+          ]
+        }
+      },
+      {
+        type: 'context',
+        elements: [
+          {
+            type: 'mrkdwn',
+            text: '_Select one or more audiences. Each generates a separate document. Ticket candidates land in the document for review before GitHub Issues creation._'
+          }
+        ]
       }
     ];
-  };
 
-  const getSummaryText = () => {
-    const reportTypeName = reportType === 'research_readout' ? 'Research Readout' :
-      reportType === 'targeted_readouts' ? 'Targeted Readouts' :
-        'GitHub Issues';
-
-    let summary = `${reportTypeName} from ${selectedStudy?.name || 'Selected Study'}`;
-
-    if (reportType === 'targeted_readouts') {
-      summary += ` (${timeline})`;
-    }
-
-    return summary;
+    return blocks;
   };
 
   return {
@@ -205,18 +143,10 @@ const buildReadoutModal = (state = {}) => {
     callback_id: 'readout_modal_submit',
     private_metadata: JSON.stringify(minimalState),
     title: { type: 'plain_text', text: 'Research Reports' },
-    submit: { type: 'plain_text', text: 'Generate Report' },
+    submit: { type: 'plain_text', text: reportType === 'targeted_readouts' && !hasReadout ? 'Switch to Readout' : 'Generate' },
     close: { type: 'plain_text', text: 'Cancel' },
     blocks: [
-  
       // Study Selection
-      {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: ':file_folder: *Research Study*'
-        }
-      },
       {
         type: 'input',
         block_id: 'study_selection',
@@ -236,27 +166,11 @@ const buildReadoutModal = (state = {}) => {
         }
       },
 
-      // Research Files Section
-      ...getResearchFilesSection(),
-
       // Report Type Selection
       ...getReportTypeCards(),
 
-      // Targeted Readouts Configuration
+      // Targeted Readouts Configuration (conditionally shown)
       ...getTargetedReadoutsConfig(),
-
-      // Summary (only for Research Readout and GitHub Issues)
-      ...(reportType !== 'targeted_readouts' ? [
-        {
-          type: 'context',
-          elements: [
-            {
-              type: 'mrkdwn',
-              text: '📄 *Research Readout* — Complete findings and insights\n🎯 *Targeted Readouts* — Audience-specific summaries\n🐙 *GitHub Issues* — Create issues from findings'
-            }
-          ]
-        }
-      ] : [])
     ]
   };
 };

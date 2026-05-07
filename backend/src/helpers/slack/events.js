@@ -2647,8 +2647,7 @@ slackApp.view("session_notes_submit", handleSessionNotesSubmission)
 slackApp.view("readout_modal_submit", handleReadoutModalSubmission);
 
 // Handle readout modal interactions
-slackApp.action(/^(select_research_readout|select_targeted_readouts|select_github_issues|study_selection_change|target_audience_change|timeline_change)$/, handleReadoutModalInteraction);
-slackApp.action(/^(team_members_input)$/, handleReadoutModalInteraction);
+slackApp.action(/^(select_research_readout|select_targeted_readouts|study_selection_change|audience_checkboxes)$/, handleReadoutModalInteraction);
 
 // analyze notes
 slackApp.command("/qori-analyze", analyzeNotesHandler)
