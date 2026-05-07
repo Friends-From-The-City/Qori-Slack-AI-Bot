@@ -1,5 +1,5 @@
 const { requestObserveSessionModal } = require("../ui/requestObserveSessionModal");
-const { getResearchStudyWithRoles } = require("../../../services/research_study.service");
+const { getResearchStudyWithRoles, getStudiesByUser } = require("../../../services/research_study.service");
 const sessionObserverService = require("../../../services/session_observer.service");
 const studyParticipantService = require("../../../services/study_participant.service");
 const { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo } = require("../../github");
@@ -16,42 +16,57 @@ const observeSessionHandler = async ({ ack, body, client, command }) => {
     // Get user's display name
     const userName = body.user.real_name || body.user.name || body.user.username || "";
 
-    // Mock sessions data - in a real implementation, this would come from your database
-    const mockSessions = [
-      {
-        id: "PT003",
-        participantId: 1,
-        date: "Today",
-        time: "3:00 PM",
-        assignedObservers: ["blake", "tariq"],
-        maxObservers: 3,
-        requiresApproval: false,
-      },
-      {
-        id: "PT004",
-        participantId: 2,
-        date: "Today",
-        time: "4:30 PM",
-        assignedObservers: [],
-        maxObservers: 3,
-        requiresApproval: false,
-      },
-      {
-        id: "PT005",
-        participantId: 3,
-        date: "Tomorrow",
-        time: "10:00 AM",
-        assignedObservers: [],
-        maxObservers: 3,
-        requiresApproval: true,
-      },
-    ];
+    // Fetch real studies for this user
+    const studies = await getStudiesByUser(userId);
+    if (!studies || studies.length === 0) {
+      await client.chat.postEphemeral({
+        channel: channelId,
+        user: userId,
+        text: "❌ No studies found. Create a study first with `/qori-brief`.",
+      });
+      return;
+    }
+
+    // Collect participants from all user's studies
+    const sessions = [];
+    let studyName = '';
+    let studyId = null;
+
+    for (const study of studies) {
+      const participants = await studyParticipantService.getParticipantsByStudy(study.id);
+      if (participants && participants.length > 0) {
+        studyName = study.name;
+        studyId = study.id;
+        for (const p of participants) {
+          // Format participant ID: PT-XXX using padded DB id
+          const ptId = `PT-${String(p.id).padStart(3, '0')}`;
+          sessions.push({
+            id: ptId,
+            participantId: p.id,
+            date: p.scheduled_date || 'TBD',
+            time: p.scheduled_time || 'TBD',
+            assignedObservers: [],
+            maxObservers: 3,
+            requiresApproval: true,
+          });
+        }
+      }
+    }
+
+    if (sessions.length === 0) {
+      await client.chat.postEphemeral({
+        channel: channelId,
+        user: userId,
+        text: "❌ No participants found in your studies. Add participants first with `/qori-participant`.",
+      });
+      return;
+    }
 
     await client.views.open({
       trigger_id: body.trigger_id,
       view: {
-        ...requestObserveSessionModal(mockSessions, "", "", userName),
-        private_metadata: JSON.stringify({ channelId, userId, userName }),
+        ...requestObserveSessionModal(sessions, studyName, "", userName),
+        private_metadata: JSON.stringify({ channelId, userId, userName, studyName, studyId }),
       },
     });
   } catch (error) {
