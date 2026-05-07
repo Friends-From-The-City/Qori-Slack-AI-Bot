@@ -554,9 +554,13 @@ function formatIssueBody(ticket, audience, studyName, findingsMap = {}, nuggetDe
         if (detail?.verbatim_quote) {
           // Avoid duplicating the representative_quote
           if (!quotes.some(q => q.quote === detail.verbatim_quote)) {
+            // Extract participant code from nugget ID (nugget-PT-003-001 → PT-003)
+            // or use detail.participant field. Never show raw nugget ID as attribution.
+            const participant = detail.participant
+              || (nId.match(/PT-\d+/) ? nId.match(/PT-\d+/)[0] : nId);
             quotes.push({
               quote: detail.verbatim_quote,
-              source: detail.participant || nId,
+              source: participant,
             });
           }
         }
