@@ -39,6 +39,7 @@ const { uploadNotesHandler, handleTabManual, handleTabUpload, handleSessionSelec
 const { analyzeNotesHandler, handleAnalyzeNotesSubmission, handleStudySelectionChange: handleAnalyzeNotesStudyChange, handleSessionSelectionChange: handleAnalyzeNotesSessionChange } = require("./commands/analyzeNotesHandler");
 const { researchSynthesisHandler, handleResearchSynthesisSubmission, handleStudySelectionChange, handleFileCheckboxChange, handleLoadSynthesisFiles } = require("./commands/researchSynthesisHandler");
 const { openReadoutModal, handleReadoutModalInteraction, handleReadoutModalSubmission } = require("./commands/readoutHandler");
+const { ticketHandler, handleStep1Submit, handleStep2Submit } = require("./commands/ticketHandler");
 const { processSlackFiles } = require("../pdfProcessor");
 const research_planService = require("../../services/research_plan.service");
 const { requestResearchHandler, handleRequestResearchSubmission, handleCreateBriefFromRequest, handleCreateStudyFromRequest } = require("./commands/requestResearchHandler");
@@ -2632,6 +2633,11 @@ slackApp.command("/qori-notes", uploadNotesHandler);
 
 // readout reports
 slackApp.command("/qori-report", openReadoutModal);
+
+// /qori-tickets — create GitHub Issues from ticket_candidates
+slackApp.command("/qori-tickets", ticketHandler);
+slackApp.view("tickets_step1_submit", handleStep1Submit);
+slackApp.view("tickets_step2_submit", handleStep2Submit);
 
 // Tab switching
 slackApp.action('tab_manual', handleTabManual);
