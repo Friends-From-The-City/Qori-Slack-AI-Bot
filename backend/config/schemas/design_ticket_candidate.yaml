@@ -1,0 +1,70 @@
+# Design ticket candidate — actionable design work from designer readout
+# Emitted by: designer_readout
+# Consumed by: github_issues_generator (review-before-create)
+#
+# v1.0 (May 7, 2026): Initial schema. Translates research findings into
+#   design-scoped tickets with persona impact, journey context, and
+#   design artifact requirements.
+type: object
+required: [id, title, description, addresses_findings, priority, effort]
+properties:
+  id:
+    type: string
+    description: "Format: design-ticket-001, design-ticket-002, etc."
+  title:
+    type: string
+    description: "Design-focused ticket title (e.g., 'Redesign appointment scheduling navigation pattern')"
+  description:
+    type: string
+    description: "What needs to be designed and why, in design language"
+  addresses_findings:
+    type: array
+    description: "Finding IDs from research_readout (finding-XX)"
+    items:
+      type: string
+  affected_personas:
+    type: array
+    nullable: true
+    description: "Persona IDs this design serves"
+    items:
+      type: string
+  affected_journey_stages:
+    type: array
+    nullable: true
+    description: "Journey stage IDs this design intervenes in"
+    items:
+      type: string
+  acceptance_criteria:
+    type: array
+    nullable: true
+    description: "Design-specific success criteria"
+    items:
+      type: string
+  design_artifacts_needed:
+    type: array
+    nullable: true
+    description: "Deliverables: mockups, prototypes, design specs, design system updates, etc."
+    items:
+      type: string
+  priority:
+    type: string
+    enum: [P0, P1, P2, P3]
+  effort:
+    type: string
+    enum: [High, Medium, Low]
+  effort_estimate_design:
+    type: string
+    nullable: true
+    description: "Design hours estimate if grounded in upstream data"
+  collaboration_needed:
+    type: array
+    nullable: true
+    description: "Other teams/roles that need to be involved"
+    items:
+      type: string
+  blocked_by:
+    type: array
+    nullable: true
+    description: "Other ticket IDs that must complete first"
+    items:
+      type: string

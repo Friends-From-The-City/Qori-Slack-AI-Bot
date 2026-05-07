@@ -455,7 +455,15 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }) => {
     if (reportType === 'research_readout') {
       yamlTemplateName = 'research_readout.yaml';
     } else if (reportType === 'targeted_readouts') {
-      yamlTemplateName = 'targeted_readouts.yaml';
+      // Route to audience-specific template
+      const audienceTemplateMap = {
+        'Design Team': 'designer_readout.yaml',
+        'Engineering Team': 'engineering_readout.yaml',
+        'Accessibility Team': 'accessibility_readout.yaml',
+        'Executive Leadership': 'leadership_readout.yaml',
+        'Product Leadership': 'leadership_readout.yaml',
+      };
+      yamlTemplateName = audienceTemplateMap[targetAudience] || 'targeted_readouts.yaml';
       reportData.target_audience = targetAudience;
     } else if (reportType === 'github_issues') {
       yamlTemplateName = 'github_issues_generator.yaml';

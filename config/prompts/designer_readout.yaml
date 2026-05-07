@@ -1,0 +1,422 @@
+# ═══════════════════════════════════════════════════════════
+# IDENTITY
+# ═══════════════════════════════════════════════════════════
+id: designer_readout
+name: run_designer_readout
+label: "🎨 Designer Readout"
+version: "v1.0"
+
+description: |
+  Translate research findings into design-scoped work. Produces audience-specific
+  markdown summary + design_ticket_candidates variable for GitHub Issues integration.
+  Consumes from research_readout v6.0. Pentagram design language.
+
+author: Qori R&D
+created: 2026-05-07
+last_updated: 2026-05-07
+
+# ═══════════════════════════════════════════════════════════
+# CONFIGURATION
+# ═══════════════════════════════════════════════════════════
+input_type: structured
+input_processing: direct
+
+# ═══════════════════════════════════════════════════════════
+# INPUTS
+# ═══════════════════════════════════════════════════════════
+input_variables:
+  - selected_study:
+      type: "select"
+      required: true
+  - study_name:
+      type: "text"
+      required: true
+  - researcher_contact:
+      type: "text"
+      required: true
+  - detected_files:
+      type: "text"
+      required: false
+
+# ═══════════════════════════════════════════════════════════
+# CASCADE CONTRACT
+# ═══════════════════════════════════════════════════════════
+consumes:
+  - key: prioritized_findings
+    source: research_readout
+    required: true
+    inject_as: grounding
+    description: "Findings — designer prioritizes by user impact"
+  - key: prioritized_recommendations
+    source: research_readout
+    required: true
+    inject_as: grounding
+    description: "Recommendations — designer translates into design work"
+  - key: personas
+    source: persona_generator
+    required: true
+    inject_as: reference
+    description: "Personas — designer needs to know who they're designing for"
+  - key: journey_stages
+    source: journey_mapping
+    required: false
+    inject_as: reference
+    description: "Journey stages — designer needs flow context"
+  - key: validated_themes
+    source: affinity_mapping
+    required: false
+    inject_as: reference
+    description: "Themes — designer references thematic patterns"
+  - key: target_barriers
+    source: research_brief
+    required: false
+    inject_as: context
+
+emits:
+  - key: design_ticket_candidates
+    pool: false
+    pool_strategy: replace
+    extraction_model: sonnet
+    schema:
+      type: array
+      items:
+        $ref: schemas/design_ticket_candidate.yaml
+    extract_from: "ALL ticket candidate sections — extract EVERY ticket as a separate array item"
+
+# ═══════════════════════════════════════════════════════════
+# AI GENERATION
+# ═══════════════════════════════════════════════════════════
+ai_generation_tasks:
+  - task_id: "designer_readout_complete"
+    prompt: |
+      You are creating a designer-focused readout that translates research findings
+      into actionable design work. Audience: design team.
+
+      IMPORTANT: Generate the COMPLETE document. Do not stop early. Every
+      section listed in the output format below is REQUIRED.
+
+      ============================================================
+      UPSTREAM DATA (from research readout + synthesis chain)
+      ============================================================
+
+      NOTE: The data below may be in JSON format. This is the raw variable
+      store format. When you reference this data in the output, extract the
+      human-readable content and format as clean markdown. NEVER copy JSON
+      syntax into the output.
+
+      PRIORITIZED FINDINGS:
+      {{upstream_prioritized_findings}}
+
+      PRIORITIZED RECOMMENDATIONS:
+      {{upstream_prioritized_recommendations}}
+
+      {% if upstream_personas %}
+      PERSONAS:
+      {{upstream_personas}}
+      {% endif %}
+
+      {% if upstream_journey_stages %}
+      JOURNEY STAGES:
+      {{upstream_journey_stages}}
+      {% endif %}
+
+      {% if upstream_validated_themes %}
+      VALIDATED THEMES:
+      {{upstream_validated_themes}}
+      {% endif %}
+
+      {% if upstream_target_barriers %}
+      TARGET BARRIERS:
+      {{upstream_target_barriers}}
+      {% endif %}
+
+      ============================================================
+      CASCADE-AWARE DESIGN READOUT GENERATION
+      ============================================================
+
+      1. **Translate findings into design language.** Don't reproduce the readout's
+         bullet points. Translate them into design challenges with persona impact,
+         journey context, and design intervention opportunities.
+
+      2. **Personas drive priority.** Tickets affecting more personas, or personas
+         with higher severity barriers, get higher priority.
+
+      3. **Each ticket addresses specific findings.** addresses_findings array must
+         reference actual finding IDs from upstream prioritized_findings.
+
+      4. **Acceptance criteria in design terms.** "Mockup demonstrates X behavior
+         across Y states" not "Implement X feature." Design specifies, doesn't implement.
+
+      5. **Design artifacts needed.** Specify what design deliverables produce the
+         ticket's outcome (wireframes, hi-fi mockups, prototypes, design system
+         updates, etc.)
+
+      6. **Anti-fabrication.** All findings, personas, journey stages, themes
+         referenced must exist in upstream variables. Don't invent design challenges
+         not grounded in research.
+
+      7. **Privacy preserved.** PT-XXX participant codes only. No real names.
+         Personas referenced by ID and archetype.
+
+      8. **No raw JSON in output.** Format all upstream data as readable text.
+
+      ============================================================
+      INPUT
+      ============================================================
+
+      **Study:** {{study_name}}
+      **Researcher:** {{researcher_contact}}
+
+      ============================================================
+      OUTPUT FORMAT — FOLLOW EXACTLY
+      ============================================================
+
+      # Designer Readout: {{study_name}}
+
+      **Study:** {{selected_study}} &nbsp; | &nbsp; **Audience:** Design &nbsp; | &nbsp; **Date:** {{current_date}} &nbsp; | &nbsp; **Status:** Draft
+
+      ---
+
+      ## Cascade summary
+
+      | Source | Count |
+      |--------|-------|
+      | Findings from research readout | [count] |
+      | Recommendations from research readout | [count] |
+      | Personas available | [count] |
+      | Journey stages available | [count or "Not available"] |
+      | Validated themes available | [count or "Not available"] |
+
+      ---
+
+      ## Summary
+
+      [2-3 sentences: what this readout covers for the design team. Frame in terms of
+      design challenges, not research methodology. State how many tickets are proposed
+      and at what priority levels.]
+
+      ---
+
+      ## Design challenges
+
+      [For each finding that requires design work, translate into a design challenge.
+      Each challenge gets editorial numbering (## 01, ## 02, etc.).]
+
+      ## 01 &nbsp;&nbsp; [Design challenge title — framed as what designers need to solve]
+
+      **Research finding** — [1-2 sentence summary of the finding in design language]
+
+      **Persona impact** — [Which personas are affected and how. Reference persona IDs.]
+
+      {% if upstream_journey_stages %}
+      **Journey context** — [Which journey stage(s) this manifests in. Reference stage IDs.]
+      {% endif %}
+
+      **Design opportunity** — [What the design intervention looks like. Be specific about
+      the interaction pattern, component, or flow that needs redesign.]
+
+      > [Representative quote from research that illustrates the design challenge]
+      > — PT-XXX
+
+      ---
+
+      [Continue for each design challenge. Not every finding becomes a design challenge —
+      skip findings that are engineering-only, compliance-only, or already working well
+      (unless the "working well" pattern needs to be replicated as a design standard).]
+
+      ---
+
+      ## Personas to design for
+
+      [For each persona from upstream, summarize the design-relevant aspects:
+      archetype, primary frustrations relevant to design, accessibility requirements,
+      and which design challenges affect them most.]
+
+      | Persona | Archetype | Primary design frustrations | Design challenges affected |
+      |---------|-----------|----------------------------|---------------------------|
+      | [persona ID] | [archetype name] | [frustrations in design terms] | [challenge numbers] |
+
+      ---
+
+      {% if upstream_journey_stages %}
+      ## Journey stages requiring design intervention
+
+      [Map journey stages to design challenges. Show which stages need redesign
+      and what the design intervention targets at each stage.]
+
+      | Stage | Current experience | Design intervention | Challenge |
+      |-------|-------------------|---------------------|-----------|
+      | [stage ID] | [what goes wrong] | [what design changes] | [## number] |
+
+      {% endif %}
+
+      ---
+
+      ## Ticket candidates
+
+      [Generate design-scoped tickets. Each ticket must ground in specific findings.
+      These will become GitHub Issues after researcher review.]
+
+      ### design-ticket-001 &nbsp;·&nbsp; [P0/P1/P2/P3] &nbsp;·&nbsp; [High/Medium/Low] effort
+
+      **[Ticket title — design-focused, actionable]**
+
+      [Description: what needs to be designed and why, in 2-3 sentences]
+
+      **Addresses findings** — [finding-XX, finding-XX]
+
+      **Affected personas** — [persona IDs]
+
+      {% if upstream_journey_stages %}
+      **Affected journey stages** — [stage IDs or "Cross-cutting"]
+      {% endif %}
+
+      **Acceptance criteria:**
+      - [Design-specific criterion: "Mockup demonstrates..." or "Prototype shows..."]
+      - [Another criterion]
+
+      **Design artifacts needed:**
+      - [Wireframes / Hi-fi mockups / Prototype / Design system update / etc.]
+
+      **Collaboration needed** — [Teams: Engineering, Accessibility, Content, etc.]
+
+      {% if blocked_by %}
+      **Blocked by** — [Other ticket IDs]
+      {% endif %}
+
+      ---
+
+      [Continue for each ticket. Generate 3-8 tickets depending on finding count.
+      Every finding that requires design work should have at least one ticket.]
+
+      ---
+
+      ## Recommended sequencing
+
+      [Which tickets should be done first? Show dependencies and parallel tracks.]
+
+      | Sequence | Ticket | Rationale |
+      |:--------:|--------|-----------|
+      | 1 | [ticket ID] | [Why this goes first — unlocks others, highest impact, etc.] |
+      | 2 | [ticket ID] | [Rationale] |
+      | 2 | [ticket ID] | [Can parallel with above] |
+      | 3 | [ticket ID] | [Depends on sequence 1-2] |
+
+      ---
+
+      ## Methodology
+
+      **Framework** — Research-to-design translation
+
+      **Approach** — Translated [X] research findings into design-scoped work items,
+      organized by persona impact and journey stage context. Each ticket grounds in
+      specific research evidence with traceable finding IDs.
+
+      **Upstream chain** — Research readout → Designer readout → Ticket candidates
+
+      ### References
+
+      - Cooper, A. — *About Face: The Essentials of Interaction Design*
+      - Nielsen Norman Group — Research-to-design translation methods
+      - Kalbach, J. — *Mapping Experiences* (journey-to-design mapping)
+
+      ---
+
+      ## Appendix
+
+      <details>
+      <summary><strong>Validity checklist</strong></summary>
+
+      | Criterion | Verified |
+      |-----------|:---:|
+      | All findings referenced exist in upstream prioritized_findings | ✓ |
+      | All personas referenced exist in upstream personas | ✓ |
+      | All journey stages referenced exist in upstream journey_stages | ✓ |
+      | No fabricated design challenges | ✓ |
+      | Acceptance criteria are design-scoped (not engineering) | ✓ |
+      | Privacy preserved — PT-XXX codes only | ✓ |
+
+      </details>
+
+      <details>
+      <summary><strong>Upstream context</strong></summary>
+
+      This designer readout was generated from:
+
+      | Variable | Source | Status |
+      |----------|--------|--------|
+      | prioritized_findings | research_readout | [Available/Missing] |
+      | prioritized_recommendations | research_readout | [Available/Missing] |
+      | personas | persona_generator | [Available/Missing] |
+      | journey_stages | journey_mapping | [Available/Missing] |
+      | validated_themes | affinity_mapping | [Available/Missing] |
+      | target_barriers | research_brief | [Available/Missing] |
+
+      Citation markers throughout:
+      - finding-XX = research readout finding ID
+      - design-ticket-XXX = ticket candidate ID
+      - persona-XX = persona ID
+      - stage-XX = journey stage ID
+      - theme-XX = validated theme ID
+
+      </details>
+
+      ============================================================
+      QUALITY CHECKS (do not include in output)
+      ============================================================
+
+      Before outputting, verify:
+      - Every ticket's addresses_findings references real finding IDs from upstream
+      - Every persona referenced exists in upstream personas
+      - Acceptance criteria are design-scoped, not engineering implementation
+      - No raw JSON anywhere in output
+      - All tables have consistent column counts
+      - Editorial numbering uses ## 01 &nbsp;&nbsp; format for design challenges
+      - Ticket IDs use design-ticket-XXX format
+      - Privacy: no real names, PT-XXX only
+      - Sequencing table is logically ordered
+
+      Do NOT output a footer or "Generated by Qori" line — that is added automatically.
+
+# ═══════════════════════════════════════════════════════════
+# OUTPUT
+# ═══════════════════════════════════════════════════════════
+output_template: |
+  {{ai_generated.designer_readout_complete}}
+
+output_options:
+  path: "05-reports/"
+  filename: "{{selected_study}}-designer-readout-{{current_date_iso}}.md"
+
+# ═══════════════════════════════════════════════════════════
+# METADATA
+# ═══════════════════════════════════════════════════════════
+processing_workflow:
+  1. validate_inputs
+  2. read_upstream_variables
+  3. execute_designer_readout_complete_task
+  4. render_output_template
+  5. save_to_reports_folder
+
+notify:
+  - role: team
+    action: "Designer readout generated"
+    channel: "{{study_channel}}"
+    message: "Designer readout for {{study_name}} is ready for review."
+
+notes: |
+  v1.0: Initial designer readout template.
+  - Single-task architecture (designer_readout_complete)
+  - Consumes: prioritized_findings, prioritized_recommendations (required, grounding),
+    personas (required, reference), journey_stages (optional, reference),
+    validated_themes (optional, reference), target_barriers (optional, context)
+  - Emits: design_ticket_candidates (array of design_ticket_candidate schema)
+  - Pentagram design language with editorial numbering for design challenges
+  - Ticket candidates section produces structured tickets for GitHub Issues integration
+  - Anti-fabrication: all references must trace to upstream variables
+  - Privacy: PT-XXX codes only, personas by ID and archetype
+
+output_use: |
+  Translate research findings into design-scoped work items. Produces
+  audience-specific markdown document + design_ticket_candidates variable
+  for review-before-create GitHub Issues integration.
