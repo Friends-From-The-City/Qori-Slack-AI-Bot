@@ -336,8 +336,8 @@ ai_generation_tasks:
       about those barriers. Mark each task with which barrier it tests:
       e.g., "Navigate to disability benefits [targets TB-001, TB-002]"]
 
-      End with: "Detailed task scripts and discussion guide will be developed
-      separately and reviewed before fielding."
+      Close with a note that detailed task scripts and discussion guide will
+      be developed separately and reviewed before fielding.
 
       ---
 
@@ -406,9 +406,9 @@ ai_generation_tasks:
       | Role | Person |
       |------|--------|
       | Lead researcher | {{lead_researcher}} |
-      | Note-taker | {{note_taker}} |
-      | Observer | {{observer}} |
-      | Stakeholder reviewer | TBD |
+      | Note-taker | To be assigned |
+      | Observer | To be assigned |
+      | Stakeholder reviewer | To be assigned |
 
       ---
 
@@ -496,7 +496,8 @@ notes: |
     journey, readout, discussion_guide, stakeholder_synthesis.
   - All cascade variables available in single prompt context.
   - Output template simplified to masthead + {{ai_generated.plan_complete}}.
-  - Anti-fabrication: generic team categories only.
+  - Anti-fabrication: team roles default to "To be assigned" (not fabricated categories).
+  - Method section: removed "End with:" meta-instruction that leaked into output.
   - Cascade-aware: brief commitments (objectives, questions, method, participants)
     treated as binding scope. Constraints (deadline, budget, out_of_scope) as
     hard envelopes. Tasks designed to test target barriers.

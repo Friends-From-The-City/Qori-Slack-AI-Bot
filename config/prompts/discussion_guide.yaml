@@ -113,6 +113,12 @@ ai_generation_tasks:
       UPSTREAM CONTEXT (from approved research brief)
       ============================================================
 
+      NOTE: The data below may be in JSON format with array brackets,
+      curly braces, and null fields. This is the raw variable store
+      format. When you reference this data in the output, you MUST
+      reformat it as readable prose — bulleted lists with IDs and
+      plain-text descriptions. NEVER copy JSON syntax into the output.
+
       RESEARCH OBJECTIVES:
       {{upstream_research_objectives}}
 
@@ -155,6 +161,17 @@ ai_generation_tasks:
          - Generic role categories: Design, Engineering, Accessibility, Product, Content, Research
          Do NOT invent specific team names.
 
+      6. **Title must reflect upstream scope.** The study title in the output
+         MUST derive from the upstream business_context / research_objectives —
+         not from a narrow subset Sonnet finds compelling. If the brief covers
+         5 activity areas, the title must reflect the full scope.
+
+      7. **Tasks must cover the FULL upstream context.** Distribute tasks across
+         ALL research questions and target barriers — not just the ones that
+         seem most interesting. Each RQ-XXX and each major TB-XXX cluster should
+         have at least one task addressing it. Do NOT narrow all tasks to a
+         single sub-topic when the brief's scope is broader.
+
       Ground warm-up questions in the research objectives. Design task
       scenarios that test the target barriers. Retrospective questions
       should assess whether the research questions were addressed.
@@ -188,6 +205,11 @@ ai_generation_tasks:
       7. Timing must add up to exactly {{session_length}} minutes.
       8. Tasks/topics/concepts must be specific to {{research_focus}} — not
          generic placeholders. Each should test one of the research questions.
+      9. NEVER output raw JSON in the document. Upstream variables may arrive
+         as JSON arrays with brackets, curly braces, and null fields. You MUST
+         extract the human-readable content and format as clean markdown bullets.
+         Example: JSON like {"id":"RQ-001","question":"How do...","priority":null}
+         becomes "- **RQ-001** — How do..."
 
       METHODOLOGY-AWARE LABELING:
       {% if research_method == "usability_testing" %}
@@ -232,16 +254,16 @@ ai_generation_tasks:
       {% if upstream_research_objectives %}
       ---
 
-      ## Upstream context
+      ## Cascade summary
 
-      | Source | Variable | Status |
-      |--------|----------|--------|
-      | Research brief | Research objectives | Committed |
-      | Research brief | Research questions | Committed |
-      | Research brief | Methodology | Committed |
-      | Research brief | Target barriers | Grounding |
+      | Brief commitment | Count |
+      |------------------|-------|
+      | Research objectives | [count from upstream_research_objectives] |
+      | Research questions | [count from upstream_research_questions] |
+      | Target barriers | [count from upstream_target_barriers] |
+      | Methodology | {{upstream_methodology_selection}} |
       {% if upstream_participant_criteria %}
-      | Research brief | Participant criteria | Context |
+      | Participant criteria | [one-line summary from upstream_participant_criteria] |
       {% endif %}
 
       {% endif %}
@@ -662,21 +684,31 @@ ai_generation_tasks:
       These are provided for moderator reference — do not read aloud.*
 
       **Research objectives:**
-      {{upstream_research_objectives}}
+      [For each objective from upstream_research_objectives, write one bullet:
+       - **OBJ-001** — [objective text]
+       - **OBJ-002** — [objective text]
+       etc. Extract text from JSON if needed. NO brackets, braces, or null fields.]
 
       {% if upstream_research_questions %}
       **Research questions:**
-      {{upstream_research_questions}}
+      [For each question from upstream_research_questions, write one bullet:
+       - **RQ-001** — [question text]
+       - **RQ-002** — [question text]
+       etc. Extract text from JSON if needed. NO brackets, braces, or null fields.]
       {% endif %}
 
       {% if upstream_target_barriers %}
       **Target barriers:**
-      {{upstream_target_barriers}}
+      [For each barrier from upstream_target_barriers, write one bullet:
+       - **TB-001** — [barrier text]
+       - **TB-002** — [barrier text]
+       etc. Extract text from JSON if needed. NO brackets, braces, or null fields.]
       {% endif %}
 
       {% if upstream_participant_criteria %}
       **Participant criteria:**
-      {{upstream_participant_criteria}}
+      [Write as plain text summary — NO JSON. State participant count,
+       demographics, and key criteria in natural language.]
       {% endif %}
       {% endif %}
 
@@ -695,6 +727,7 @@ ai_generation_tasks:
       - Every RQ-XXX appears in at least one task (coverage check table is complete)
       - [targets TB-XXX] markers present where tasks probe specific barriers
       - Coverage check section has no GAPs (if gaps exist, add tasks or reassign)
+      - Appendix contains NO raw JSON (no brackets, braces, null fields, quotes around keys)
 
       Do NOT output a footer or "Generated by Qori" line — that is added automatically.
 
@@ -733,13 +766,19 @@ notes: |
   - Cascade-aware generation instructions added to prompt: [RQ-XXX] markers on
     every task/topic/concept/observation header, [targets TB-XXX] for barrier
     validation tasks, stable IDs, coverage check requirement.
-  - Output template additions: Upstream context summary table (after Summary),
+  - Output template additions: Cascade summary table (count-based, after Summary),
     Coverage check section (after Emergency procedures) with RQ and TB gap detection,
-    Upstream context appendix for moderator reference.
+    Upstream context appendix for moderator reference (formatted as readable lists).
   - All 7 method branches + fallback updated with cascade markers in headers.
   - Quality checks expanded: RQ coverage, TB targeting, gap detection.
   - Backward compatible: cascade sections are Jinja2-gated on upstream variable
     presence — guide generates cleanly without upstream context.
+  - Fix: scope drift — prompt now requires title and tasks to reflect full upstream
+    scope, not narrow to a single sub-topic when brief covers multiple areas.
+  - Fix: raw JSON leak — appendix upstream variables formatted as readable bullet
+    lists (OBJ-XXX, RQ-XXX, TB-XXX) instead of raw JSON interpolation.
+  - Fix: "Upstream context" table renamed to canonical "Cascade summary" with
+    count-based format matching research_plan v6.0 pattern.
 
   v6.2 Changes (Design Language Translation):
   - Translated locked design from docs/design-references/discussion_guide_reference.md
