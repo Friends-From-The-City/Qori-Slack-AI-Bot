@@ -601,7 +601,16 @@ function buildLabels(ticket, audience, studyName) {
 
   if (audience === 'accessibility') {
     if (ticket.wcag_criterion) {
-      labels.push(`wcag:${ticket.wcag_criterion}`);
+      // WCAG field may contain multiple criteria comma-separated — split into individual labels
+      // Also sanitize: GitHub labels can't contain commas
+      const criteria = ticket.wcag_criterion.split(',').map(c => c.trim()).filter(Boolean);
+      for (const criterion of criteria) {
+        // Extract just the number (e.g., "1.4.4" from "1.4.4 Resize Text")
+        const match = criterion.match(/(\d+\.\d+\.\d+)/);
+        if (match) {
+          labels.push(`wcag:${match[1]}`);
+        }
+      }
     }
     if (ticket.priority === 'P0_legal') {
       labels.push('compliance');
