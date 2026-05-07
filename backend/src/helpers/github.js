@@ -110,25 +110,44 @@ async function createOrUpdateFileOnGitHub(
     // 404 means "no existing file" → we'll create it
   }
 
-  // Prepare params, including sha only if updating
-  const params = {
-    owner,
-    repo,
-    path: filePath,
-    message: `chore: add ${filePath}`,
-    content: contentBase64,
-    branch: 'main',
-    ...(sha && { sha }),
-  };
+  // Retry loop handles SHA conflicts from parallel writes
+  const maxAttempts = 3;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const params = {
+      owner,
+      repo,
+      path: filePath,
+      message: `chore: add ${filePath}`,
+      content: contentBase64,
+      branch: 'main',
+      ...(sha && { sha }),
+    };
 
-  // Create or update the file
-  const { data } = await octokit.rest.repos.createOrUpdateFileContents(params);
-
-  return {
-    path: data.content.path,
-    sha: data.content.sha,
-    url: `https://github.com/${owner}/${repo}/tree/main/${filePath}`,
-  };
+    try {
+      const { data } = await octokit.rest.repos.createOrUpdateFileContents(params);
+      return {
+        path: data.content.path,
+        sha: data.content.sha,
+        url: `https://github.com/${owner}/${repo}/tree/main/${filePath}`,
+      };
+    } catch (err) {
+      if (err.status === 409 && attempt < maxAttempts) {
+        // SHA conflict from parallel write — re-fetch and retry
+        console.warn(`⚠️ SHA conflict on ${filePath}, retrying (${attempt}/${maxAttempts})...`);
+        try {
+          const { data: freshData } = await octokit.rest.repos.getContent({
+            owner, repo, path: filePath, ref: 'main',
+          });
+          sha = freshData.sha;
+        } catch (fetchErr) {
+          if (fetchErr.status === 404) sha = undefined;
+          else throw fetchErr;
+        }
+        continue;
+      }
+      throw err;
+    }
+  }
 }
 
 async function readFolderContents(folderPath, repo) {
