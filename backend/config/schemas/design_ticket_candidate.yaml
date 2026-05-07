@@ -2,9 +2,9 @@
 # Emitted by: designer_readout
 # Consumed by: github_issues_generator (review-before-create)
 #
-# v1.0 (May 7, 2026): Initial schema. Translates research findings into
-#   design-scoped tickets with persona impact, journey context, and
-#   design artifact requirements.
+# v1.1 (May 7, 2026): Production-grade fields: current_design_state,
+#   affected_screens, related_engineering_tickets.
+# v1.0 (May 7, 2026): Initial schema.
 type: object
 required: [id, title, description, addresses_findings, priority, effort]
 properties:
@@ -66,5 +66,21 @@ properties:
     type: array
     nullable: true
     description: "Other ticket IDs that must complete first"
+    items:
+      type: string
+  current_design_state:
+    type: string
+    nullable: true
+    description: "What the current design looks like — context for the redesign"
+  affected_screens:
+    type: array
+    nullable: true
+    description: "Specific screens or flows impacted (from journey_stages or research)"
+    items:
+      type: string
+  related_engineering_tickets:
+    type: array
+    nullable: true
+    description: "Engineering ticket IDs for coordinated implementation"
     items:
       type: string

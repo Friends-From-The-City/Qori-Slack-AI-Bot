@@ -4,7 +4,7 @@
 id: engineering_readout
 name: run_engineering_readout
 label: "⚙️ Engineering Readout"
-version: "v1.0"
+version: "v1.1"
 
 description: |
   Translate research findings into engineering-scoped work. Produces audience-specific
@@ -149,6 +149,19 @@ ai_generation_tasks:
          boundaries not in upstream variables. When technical specifics aren't in the
          upstream data, describe the problem generically rather than guessing implementation.
 
+      9. **Populate production fields per ticket:**
+         - current_behavior: Describe what's broken now — from research findings, observed
+           user behaviors, journey stage descriptions. Ground in specific evidence.
+         - effort_rationale: One sentence justifying the effort level. Reference stakeholder
+           constraints if available (e.g., "High because React Navigation v7 upgrade required
+           per engineering stakeholder"). If no stakeholder data, use generic reasoning.
+         - user_impact_metrics: Pull specific numbers from findings or target barriers
+           (e.g., "45% task abandonment", "22% wrong-section lookups"). Only real numbers
+           from upstream — never fabricate statistics.
+         - related_design_tickets: Leave as empty array [] for now (cross-template linking
+           is a future enhancement).
+         - related_accessibility_tickets: Leave as empty array [] for now.
+
       7. **Privacy preserved.** PT-XXX codes only.
 
       8. **No raw JSON in output.** Format all upstream data as readable text.
@@ -242,11 +255,13 @@ ai_generation_tasks:
 
       [Description: what needs to be built/changed, in 2-3 technical sentences]
 
-      **Addresses findings** — [finding-XX, finding-XX]
+      **Current behavior** — [What's broken now — from research findings and observed behaviors.
+      If not documented in upstream, write "Not documented in upstream research."]
 
-      {% if upstream_stakeholder_constraints %}
-      **Technical constraints** — [constraint-XXX references, or "None identified"]
-      {% endif %}
+      **User impact** — [Specific metrics from upstream: "45% task abandonment",
+      "22% wrong-section lookups". Only real numbers — if none exist, describe impact qualitatively.]
+
+      **Addresses findings** — [finding-XX, finding-XX]
 
       **Acceptance criteria:**
       - [Technical behavior: "Tab focus includes navigation on screen change"]
@@ -255,20 +270,21 @@ ai_generation_tasks:
       **Affected components:**
       - [Component/system names from upstream data or generic descriptions]
 
+      {% if upstream_stakeholder_constraints %}
+      **Technical constraints** — [constraint-XXX references, or "None documented in upstream research"]
+      {% endif %}
+
       **Testing approach:**
       - [How to verify: unit tests, integration tests, accessibility audits, etc.]
 
-      {% if effort_estimate_sprints %}
-      **Effort estimate** — [X sprints, grounded in stakeholder data]
-      {% endif %}
+      **Dependencies:**
+      - Blocked by: [Other ticket IDs, or "None"]
+      - Enables: [Tickets this unblocks, or "None"]
+      - Related design work: [Leave empty for now]
+      - Related accessibility work: [Leave empty for now]
 
-      {% if blocked_by %}
-      **Blocked by** — [Other ticket IDs]
-      {% endif %}
-
-      {% if enables %}
-      **Enables** — [Tickets this unblocks]
-      {% endif %}
+      **Effort** — [High/Medium/Low] — [One sentence rationale grounded in upstream data.
+      Reference stakeholder constraints if available.]
 
       ---
 

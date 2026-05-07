@@ -420,12 +420,19 @@ function formatIssueBody(ticket, audience, studyName, findingsMap = {}, nuggetDe
 
   sections.push(`## Description\n\n${ticket.description}`);
 
+  // ── Designer body ──
   if (audience === 'designer') {
+    if (ticket.current_design_state) {
+      sections.push(`## Current Design State\n\n${ticket.current_design_state}`);
+    }
     if (ticket.affected_personas?.length) {
       sections.push(`## Affected Personas\n\n${ticket.affected_personas.map(p => `- ${p}`).join('\n')}`);
     }
     if (ticket.affected_journey_stages?.length) {
       sections.push(`## Affected Journey Stages\n\n${ticket.affected_journey_stages.map(s => `- ${s}`).join('\n')}`);
+    }
+    if (ticket.affected_screens?.length) {
+      sections.push(`## Affected Screens\n\n${ticket.affected_screens.map(s => `- ${s}`).join('\n')}`);
     }
     if (ticket.acceptance_criteria?.length) {
       sections.push(`## Acceptance Criteria\n\n${ticket.acceptance_criteria.map(c => `- [ ] ${c}`).join('\n')}`);
@@ -436,32 +443,57 @@ function formatIssueBody(ticket, audience, studyName, findingsMap = {}, nuggetDe
     if (ticket.collaboration_needed?.length) {
       sections.push(`## Collaboration Needed\n\n${ticket.collaboration_needed.map(c => `- ${c}`).join('\n')}`);
     }
+    const designDeps = [];
+    designDeps.push(`- Blocked by: ${ticket.blocked_by?.length ? ticket.blocked_by.join(', ') : 'None'}`);
+    designDeps.push(`- Related engineering work: ${ticket.related_engineering_tickets?.length ? ticket.related_engineering_tickets.join(', ') : 'None'}`);
+    sections.push(`## Dependencies\n\n${designDeps.join('\n')}`);
   }
 
+  // ── Engineering body ──
   if (audience === 'engineering') {
+    if (ticket.user_impact_metrics?.length) {
+      sections.push(`## Why This Matters\n\n${ticket.user_impact_metrics.map(m => `- ${m}`).join('\n')}`);
+    }
+    if (ticket.current_behavior) {
+      sections.push(`## Current Behavior\n\n${ticket.current_behavior}`);
+    }
     if (ticket.technical_acceptance_criteria?.length) {
-      sections.push(`## Technical Acceptance Criteria\n\n${ticket.technical_acceptance_criteria.map(c => `- [ ] ${c}`).join('\n')}`);
+      sections.push(`## Definition of Done\n\n${ticket.technical_acceptance_criteria.map(c => `- [ ] ${c}`).join('\n')}`);
     }
     if (ticket.affected_components?.length) {
       sections.push(`## Affected Components\n\n${ticket.affected_components.map(c => `- ${c}`).join('\n')}`);
     }
     if (ticket.technical_constraints?.length) {
       sections.push(`## Technical Constraints\n\n${ticket.technical_constraints.map(c => `- ${c}`).join('\n')}`);
+    } else {
+      sections.push(`## Technical Constraints\n\nNone documented in upstream research`);
     }
     if (ticket.testing_approach?.length) {
       sections.push(`## Testing Approach\n\n${ticket.testing_approach.map(t => `- ${t}`).join('\n')}`);
     }
-    if (ticket.effort_estimate_sprints) {
-      sections.push(`## Effort Estimate\n\n${ticket.effort_estimate_sprints}`);
-    }
+    const engDeps = [];
+    engDeps.push(`- Blocked by: ${ticket.blocked_by?.length ? ticket.blocked_by.join(', ') : 'None'}`);
+    engDeps.push(`- Enables: ${ticket.enables?.length ? ticket.enables.join(', ') : 'None'}`);
+    engDeps.push(`- Related design work: ${ticket.related_design_tickets?.length ? ticket.related_design_tickets.join(', ') : 'None'}`);
+    engDeps.push(`- Related accessibility work: ${ticket.related_accessibility_tickets?.length ? ticket.related_accessibility_tickets.join(', ') : 'None'}`);
+    sections.push(`## Dependencies\n\n${engDeps.join('\n')}`);
+
+    const effortLine = ticket.effort_rationale
+      ? `${ticket.effort} — ${ticket.effort_rationale}`
+      : `${ticket.effort}${ticket.effort_estimate_sprints ? ` (${ticket.effort_estimate_sprints})` : ''}`;
+    sections.push(`## Effort Estimate\n\n${effortLine}`);
   }
 
+  // ── Accessibility body ──
   if (audience === 'accessibility') {
     if (ticket.wcag_criterion) {
       sections.push(`## WCAG Criterion\n\n${ticket.wcag_criterion}`);
     }
     if (ticket.section_508_implication) {
       sections.push(`## Section 508 Implication\n\n${ticket.section_508_implication}`);
+    }
+    if (ticket.compliance_priority_rationale) {
+      sections.push(`## Priority Rationale\n\n${ticket.compliance_priority_rationale}`);
     }
     if (ticket.affected_at_users?.length) {
       sections.push(`## Affected AT Users\n\n${ticket.affected_at_users.map(u => `- ${u}`).join('\n')}`);
@@ -475,6 +507,12 @@ function formatIssueBody(ticket, audience, studyName, findingsMap = {}, nuggetDe
     if (ticket.recommended_testing?.length) {
       sections.push(`## Recommended Testing\n\n${ticket.recommended_testing.map(t => `- ${t}`).join('\n')}`);
     }
+    if (ticket.regression_risk) {
+      sections.push(`## Regression Risk\n\n${ticket.regression_risk}`);
+    }
+    const a11yDeps = [];
+    a11yDeps.push(`- Related engineering work: ${ticket.related_engineering_tickets?.length ? ticket.related_engineering_tickets.join(', ') : 'None'}`);
+    sections.push(`## Dependencies\n\n${a11yDeps.join('\n')}`);
     if (ticket.compliance_deadline) {
       sections.push(`## Compliance Deadline\n\n${ticket.compliance_deadline}`);
     }

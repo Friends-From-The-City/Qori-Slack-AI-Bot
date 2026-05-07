@@ -2,9 +2,9 @@
 # Emitted by: accessibility_readout
 # Consumed by: github_issues_generator (review-before-create)
 #
-# v1.0 (May 7, 2026): Initial schema. Translates research findings into
-#   accessibility-scoped tickets with WCAG criteria, AT user impact,
-#   Section 508 implications, and compliance priority distinction.
+# v1.1 (May 7, 2026): Production-grade fields: regression_risk,
+#   compliance_priority_rationale, related_engineering_tickets.
+# v1.0 (May 7, 2026): Initial schema.
 type: object
 required: [id, title, description, wcag_criterion, priority]
 properties:
@@ -66,3 +66,17 @@ properties:
     type: string
     nullable: true
     description: "If linked to legal/compliance timeline from upstream data"
+  regression_risk:
+    type: string
+    nullable: true
+    description: "Could fixing this break something else for AT users?"
+  compliance_priority_rationale:
+    type: string
+    nullable: true
+    description: "Why this priority level (P0_severe vs P0_legal vs P1)"
+  related_engineering_tickets:
+    type: array
+    nullable: true
+    description: "Engineering ticket IDs implementing the technical fix"
+    items:
+      type: string

@@ -4,7 +4,7 @@
 id: designer_readout
 name: run_designer_readout
 label: "🎨 Designer Readout"
-version: "v1.0"
+version: "v1.1"
 
 description: |
   Translate research findings into design-scoped work. Produces audience-specific
@@ -155,6 +155,16 @@ ai_generation_tasks:
          referenced must exist in upstream variables. Don't invent design challenges
          not grounded in research.
 
+      9. **Populate production fields per ticket:**
+         - current_design_state: Describe what the current design looks like — from
+           journey stage descriptions, finding text, or persona frustrations. Ground in
+           research evidence. If not documented, write "Not documented in upstream research."
+         - affected_screens: List specific screens or flows from journey_stages or findings
+           (e.g., "Appointment scheduling flow", "Bottom navigation tabs"). Only screens
+           mentioned in upstream data.
+         - related_engineering_tickets: Leave as empty array [] for now (cross-template
+           linking is a future enhancement).
+
       7. **Privacy preserved.** PT-XXX participant codes only. No real names.
          Personas referenced by ID and archetype.
 
@@ -263,6 +273,9 @@ ai_generation_tasks:
 
       [Description: what needs to be designed and why, in 2-3 sentences]
 
+      **Current design state** — [What the current design looks like — from journey stage
+      descriptions or finding text. If not documented, write "Not documented in upstream research."]
+
       **Addresses findings** — [finding-XX, finding-XX]
 
       **Affected personas** — [persona IDs]
@@ -270,6 +283,9 @@ ai_generation_tasks:
       {% if upstream_journey_stages %}
       **Affected journey stages** — [stage IDs or "Cross-cutting"]
       {% endif %}
+
+      **Affected screens** — [Specific screens/flows from research: "Appointment scheduling",
+      "Bottom navigation tabs", etc. Only screens mentioned in upstream data.]
 
       **Acceptance criteria:**
       - [Design-specific criterion: "Mockup demonstrates..." or "Prototype shows..."]
@@ -280,9 +296,9 @@ ai_generation_tasks:
 
       **Collaboration needed** — [Teams: Engineering, Accessibility, Content, etc.]
 
-      {% if blocked_by %}
-      **Blocked by** — [Other ticket IDs]
-      {% endif %}
+      **Dependencies:**
+      - Blocked by: [Other ticket IDs, or "None"]
+      - Related engineering work: [Leave empty for now]
 
       ---
 

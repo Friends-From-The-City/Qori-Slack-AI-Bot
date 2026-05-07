@@ -4,7 +4,7 @@
 id: accessibility_readout
 name: run_accessibility_readout
 label: "♿ Accessibility Readout"
-version: "v1.0"
+version: "v1.1"
 
 description: |
   Translate research findings into accessibility compliance and AT user experience
@@ -151,6 +151,16 @@ ai_generation_tasks:
       6. **Anti-fabrication.** Don't invent WCAG criteria, ATs not in upstream evidence, or
          Section 508 deadlines not in upstream data. Better to mark fields null than fabricate.
 
+      9. **Populate production fields per ticket:**
+         - regression_risk: Could fixing this break something else for AT users? If the fix
+           involves focus management or navigation changes, note potential regressions.
+           If no risk identified, write null.
+         - compliance_priority_rationale: One sentence explaining why this priority level
+           (e.g., "P0_severe because screen reader users cannot complete core tasks"
+           or "P1 because visual degradation doesn't block task completion").
+         - related_engineering_tickets: Leave as empty array [] for now (cross-template
+           linking is a future enhancement).
+
       7. **Privacy preserved.** PT-XXX codes only. AT users may be more identifiable from
          their assistive technology setup — extra care with identifying details.
 
@@ -275,6 +285,15 @@ ai_generation_tasks:
       - [Specific AT setup: "VoiceOver on iOS 17+ with default settings"]
       - [Another test: "NVDA on Windows with Chrome"]
       - [Automated: "axe-core accessibility audit"]
+
+      **Priority rationale** — [One sentence: why this priority level. E.g., "P0_severe
+      because screen reader users cannot complete core tasks without this fix."]
+
+      **Regression risk** — [Could fixing this break something else for AT users?
+      If yes, describe. If no risk identified, write "None identified."]
+
+      **Dependencies:**
+      - Related engineering work: [Leave empty for now]
 
       [If a compliance deadline exists in upstream data, include:
        **Compliance deadline** — [date/context from upstream]]
