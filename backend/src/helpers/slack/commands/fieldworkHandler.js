@@ -14,7 +14,7 @@ const { addParticipantModal } = require('../ui/addParticipantModal');
 const { updateParticipantStatusModal } = require('../ui/outreach/updateParticipantStatusModal');
 const { requestObserveSessionModal } = require('../ui/requestObserveSessionModal');
 const { participantOutreachModal } = require('../ui/outreach/participantOutreachModal');
-const { uploadNotesModal } = require('../ui/uploadNotesModal');
+const { buildSessionNotesView } = require('../ui/sessionNotesModal');
 
 // ── Helpers ────────────────────────────────────────────────
 
@@ -334,17 +334,40 @@ const handleFieldworkUploadNotes = async ({ ack, body, client }) => {
   try {
     const { studyId, studyName } = JSON.parse(body.actions[0].value);
     const dashboardMeta = JSON.parse(body.view.private_metadata || '{}');
+    const userId = body.user.id;
 
-    // Get participants for the study
-    const participants = await studyParticipantService.getParticipantsByStudy(studyId);
-    const notesView = uploadNotesModal(participants);
+    // Upload notes uses the observer-gated session notes modal
+    const sessions = await sessionObserverService.getObserverByUser(userId);
+
+    if (!sessions || sessions.length === 0) {
+      await client.chat.postEphemeral({
+        channel: userId,
+        user: userId,
+        text: 'No approved sessions found. You need to be an approved observer to upload notes. Use "Request to observe" first.',
+      });
+      return;
+    }
+
+    const firstSession = sessions[0];
+    const initialState = {
+      tab: 'upload',
+      session: {
+        id: firstSession.id,
+        displayName: `${firstSession.study?.name || 'Unknown'} - ${firstSession.participant?.participant_name || 'Unknown'} (${firstSession.session_id || '?'})`,
+        study: firstSession.study,
+        participant: firstSession.participant,
+        session_id: firstSession.session_id,
+      },
+      sessions,
+      origin: {
+        channel: dashboardMeta.channelId,
+        user: userId,
+      },
+    };
 
     await client.views.push({
       trigger_id: body.trigger_id,
-      view: {
-        ...notesView,
-        private_metadata: JSON.stringify({ ...dashboardMeta, studyId, studyName, rootViewId: body.view.id }),
-      },
+      view: buildSessionNotesView(initialState),
     });
   } catch (error) {
     console.error('handleFieldworkUploadNotes error:', error.message);
