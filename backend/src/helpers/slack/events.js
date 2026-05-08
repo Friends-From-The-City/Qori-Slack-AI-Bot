@@ -26,7 +26,7 @@ const { handleMarkChangesCompleteAction, handleMarkChangesCompleteModal, handleA
 const { handleApprove, handleApproveSubmission, handleRequestChanges, handleRequestChangesSubmission } = require("./requestChangesHandler");
 const { sendStudyResultMessage, generateStudyResultBlocks } = require("./ui/studyResultBlocks");
 const { buildLearnModal, buildCondensedModal } = require("./ui/qoriLearnModal");
-const { handleParticipantOutreachSubmit, handleInitialRecruitmentSubmit, handleReschedulingRequestSubmit, handleSessionConfirmationSubmit, handleThankYouSubmit, handleFollowUpSubmit, handleSessionReminderSubmit, handleAddParticipantSubmit } = require("./commands/participantOutreachHandler");
+const { handleParticipantOutreachSubmit, handleInitialRecruitmentSubmit, handleReschedulingRequestSubmit, handleSessionConfirmationSubmit, handleThankYouSubmit, handleFollowUpSubmit, handleSessionReminderSubmit, handleAddParticipantSubmit, handleObserverModalButton } = require("./commands/participantOutreachHandler");
 const { handleLoadParticipantsButton, handleUpdateParticipantSubmission } = require("./commands/participantHandler");
 const { handleObserveSessionSubmission, handleObserverApproval, handleObserverDenial } = require("./commands/observeSessionHandler");
 const { copyEmailModal } = require("./ui/outreach/copyEmailModal");
