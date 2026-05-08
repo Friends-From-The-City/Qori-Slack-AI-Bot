@@ -765,11 +765,13 @@ async function searchVariablesAcrossStudies(variableKeys, searchTerms, options =
     where.study_name = studyName;
   }
 
-  // Text matching: OR across all search terms against value::text
+  // Text matching: any search term matches against value::text
   if (searchTerms && searchTerms.length > 0) {
-    where[Op.and] = searchTerms.map(term => literal(
-      `"value"::text ILIKE '%${term.replace(/'/g, "''")}%'`
-    ));
+    where[Op.and] = [
+      { [Op.or]: searchTerms.map(term => literal(
+        `"value"::text ILIKE '%${term.replace(/'/g, "''")}%'`
+      )) },
+    ];
   }
 
   const [rows, total] = await Promise.all([
