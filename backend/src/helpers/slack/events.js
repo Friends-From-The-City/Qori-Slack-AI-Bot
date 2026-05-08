@@ -47,7 +47,7 @@ const { startResearchHandler, handleAddTeamMember, handleCreateStudySubmission }
 const { parseDocuments, validateDocuments, createDocumentSummary } = require('../documentParser');
 const { createStudyModal } = require("./ui/createStudyModal");
 const { discoverHandler, handleDiscoverSubmission } = require("./commands/discoverHandler");
-const { fieldworkHandler, handleFieldworkStudyPickerSubmit } = require("./commands/fieldworkHandler");
+const { fieldworkHandler, handleFieldworkStudyPickerSubmit, handleFieldworkAddParticipant, handleFieldworkUpdateStatus, handleFieldworkObserve, handleFieldworkOutreach, handleFieldworkUploadNotes } = require("./commands/fieldworkHandler");
 const { askHandler, handleAskSubmit, handleShowMore } = require("./commands/askHandler");
 const { getActiveStudy: getActiveStudyState, setActiveStudy: setActiveStudyState } = require("../../services/slack-user-state.service");
 const { handleBriefSubmission } = require("./commands/briefHandler");
@@ -2640,6 +2640,11 @@ slackApp.view('discover_modal', handleDiscoverSubmission);
 // fieldwork dashboard (consolidates: participants, update-participant, observe, outreach, notes)
 slackApp.command("/qori-fieldwork", fieldworkHandler);
 slackApp.view("fieldwork_study_picker", handleFieldworkStudyPickerSubmit);
+slackApp.action("fieldwork_add_participant", handleFieldworkAddParticipant);
+slackApp.action("fieldwork_update_status", handleFieldworkUpdateStatus);
+slackApp.action("fieldwork_observe", handleFieldworkObserve);
+slackApp.action("fieldwork_outreach", handleFieldworkOutreach);
+slackApp.action("fieldwork_upload_notes", handleFieldworkUploadNotes);
 
 // knowledge layer
 slackApp.command("/qori-ask", askHandler);

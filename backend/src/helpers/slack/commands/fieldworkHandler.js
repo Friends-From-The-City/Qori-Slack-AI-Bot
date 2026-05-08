@@ -10,6 +10,11 @@ const studyParticipantService = require('../../../services/study_participant.ser
 const sessionObserverService = require('../../../services/session_observer.service');
 const { getActiveStudy, setActiveStudy } = require('../../../services/slack-user-state.service');
 const { buildFieldworkDashboard, buildFieldworkStudyPicker } = require('../ui/fieldworkDashboardModal');
+const { addParticipantModal } = require('../ui/addParticipantModal');
+const { updateParticipantStatusModal } = require('../ui/outreach/updateParticipantStatusModal');
+const { requestObserveSessionModal } = require('../ui/requestObserveSessionModal');
+const { participantOutreachModal } = require('../ui/outreach/participantOutreachModal');
+const { uploadNotesModal } = require('../ui/uploadNotesModal');
 
 // ── Helpers ────────────────────────────────────────────────
 
@@ -156,9 +161,204 @@ const refreshDashboardAfterAction = async (client, rootViewId, studyId, userId, 
   }
 };
 
+// ── Sub-modal action handlers ──────────────────────────────
+
+const handleFieldworkAddParticipant = async ({ ack, body, client }) => {
+  await ack();
+  try {
+    const { studyId, studyName } = JSON.parse(body.actions[0].value);
+    const dashboardMeta = JSON.parse(body.view.private_metadata || '{}');
+    const studies = await getStudiesByUser(body.user.id);
+
+    // Build study options and pre-select the current study
+    const studyOptions = studies.map(s => ({
+      text: { type: 'plain_text', text: s.name },
+      value: s.id.toString(),
+    }));
+
+    let blocks = JSON.parse(JSON.stringify(addParticipantModal.blocks));
+    const studyBlockIdx = blocks.findIndex(b => b.block_id === 'study_select_block');
+    if (studyBlockIdx !== -1 && studyOptions.length > 0) {
+      const initialOption = studyOptions.find(o => o.value === studyId.toString()) || studyOptions[0];
+      blocks[studyBlockIdx] = {
+        ...blocks[studyBlockIdx],
+        element: { ...blocks[studyBlockIdx].element, options: studyOptions, initial_option: initialOption },
+      };
+    }
+
+    await client.views.push({
+      trigger_id: body.trigger_id,
+      view: {
+        ...addParticipantModal,
+        blocks,
+        private_metadata: JSON.stringify({ ...dashboardMeta, studyId, studyName, rootViewId: body.view.id }),
+      },
+    });
+  } catch (error) {
+    console.error('handleFieldworkAddParticipant error:', error.message);
+  }
+};
+
+const handleFieldworkUpdateStatus = async ({ ack, body, client }) => {
+  await ack();
+  try {
+    const { studyId, studyName } = JSON.parse(body.actions[0].value);
+    const dashboardMeta = JSON.parse(body.view.private_metadata || '{}');
+    const studies = await getStudiesByUser(body.user.id);
+
+    const studyOptions = studies.map(s => ({
+      text: { type: 'plain_text', text: s.name },
+      value: s.id.toString(),
+    }));
+
+    let blocks = JSON.parse(JSON.stringify(updateParticipantStatusModal.blocks));
+    const studyBlockIdx = blocks.findIndex(b => b.block_id === 'study_selection_block');
+    if (studyBlockIdx !== -1 && studyOptions.length > 0) {
+      const initialOption = studyOptions.find(o => o.value === studyId.toString()) || studyOptions[0];
+      blocks[studyBlockIdx] = {
+        type: 'input',
+        block_id: 'study_selection_block',
+        label: { type: 'plain_text', text: 'Study' },
+        element: {
+          type: 'static_select',
+          action_id: 'update_participant_study_selection',
+          placeholder: { type: 'plain_text', text: 'Select study...' },
+          options: studyOptions,
+          initial_option: initialOption,
+        },
+        optional: false,
+      };
+    }
+
+    await client.views.push({
+      trigger_id: body.trigger_id,
+      view: {
+        ...updateParticipantStatusModal,
+        blocks,
+        private_metadata: JSON.stringify({ ...dashboardMeta, studyId, studyName, rootViewId: body.view.id }),
+      },
+    });
+  } catch (error) {
+    console.error('handleFieldworkUpdateStatus error:', error.message);
+  }
+};
+
+const handleFieldworkObserve = async ({ ack, body, client }) => {
+  await ack();
+  try {
+    const { studyId, studyName } = JSON.parse(body.actions[0].value);
+    const dashboardMeta = JSON.parse(body.view.private_metadata || '{}');
+    const userName = body.user.name || body.user.username || '';
+
+    // Get participants for session options
+    const participants = await studyParticipantService.getParticipantsByStudy(studyId);
+    const sessions = participants.map(p => {
+      const ptId = `PT-${String(p.id).padStart(3, '0')}`;
+      return {
+        id: ptId,
+        participantId: p.id,
+        date: p.scheduled_date || 'TBD',
+        time: p.scheduled_time || 'TBD',
+        assignedObservers: [],
+        maxObservers: 3,
+        requiresApproval: true,
+      };
+    });
+
+    if (sessions.length === 0) {
+      await client.chat.postEphemeral({
+        channel: body.user.id,
+        user: body.user.id,
+        text: 'No participants found in this study. Add participants first.',
+      });
+      return;
+    }
+
+    const observeView = requestObserveSessionModal(sessions, studyName, '', userName);
+    await client.views.push({
+      trigger_id: body.trigger_id,
+      view: {
+        ...observeView,
+        private_metadata: JSON.stringify({ ...dashboardMeta, studyId, studyName, userName, rootViewId: body.view.id }),
+      },
+    });
+  } catch (error) {
+    console.error('handleFieldworkObserve error:', error.message);
+  }
+};
+
+const handleFieldworkOutreach = async ({ ack, body, client }) => {
+  await ack();
+  try {
+    const { studyId, studyName } = JSON.parse(body.actions[0].value);
+    const dashboardMeta = JSON.parse(body.view.private_metadata || '{}');
+    const studies = await getStudiesByUser(body.user.id);
+
+    const studyOptions = studies.map(s => ({
+      text: { type: 'plain_text', text: s.name },
+      value: s.name,
+    }));
+
+    let blocks = JSON.parse(JSON.stringify(participantOutreachModal.blocks));
+    // Prepend study dropdown with pre-selection
+    const initialOption = studyOptions.find(o => o.value === studyName) || studyOptions[0];
+    blocks.unshift({
+      type: 'input',
+      block_id: 'study_select_block',
+      label: { type: 'plain_text', text: 'Select an existing study:' },
+      element: {
+        type: 'static_select',
+        action_id: 'study_select',
+        placeholder: { type: 'plain_text', text: 'Pick a study...' },
+        options: studyOptions,
+        initial_option: initialOption,
+      },
+      optional: false,
+    });
+
+    await client.views.push({
+      trigger_id: body.trigger_id,
+      view: {
+        ...participantOutreachModal,
+        blocks,
+        private_metadata: JSON.stringify({ ...dashboardMeta, studyId, studyName, rootViewId: body.view.id }),
+      },
+    });
+  } catch (error) {
+    console.error('handleFieldworkOutreach error:', error.message);
+  }
+};
+
+const handleFieldworkUploadNotes = async ({ ack, body, client }) => {
+  await ack();
+  try {
+    const { studyId, studyName } = JSON.parse(body.actions[0].value);
+    const dashboardMeta = JSON.parse(body.view.private_metadata || '{}');
+
+    // Get participants for the study
+    const participants = await studyParticipantService.getParticipantsByStudy(studyId);
+    const notesView = uploadNotesModal(participants);
+
+    await client.views.push({
+      trigger_id: body.trigger_id,
+      view: {
+        ...notesView,
+        private_metadata: JSON.stringify({ ...dashboardMeta, studyId, studyName, rootViewId: body.view.id }),
+      },
+    });
+  } catch (error) {
+    console.error('handleFieldworkUploadNotes error:', error.message);
+  }
+};
+
 module.exports = {
   fieldworkHandler,
   handleFieldworkStudyPickerSubmit,
   refreshDashboardAfterAction,
   fetchAndRenderDashboard,
+  handleFieldworkAddParticipant,
+  handleFieldworkUpdateStatus,
+  handleFieldworkObserve,
+  handleFieldworkOutreach,
+  handleFieldworkUploadNotes,
 };
