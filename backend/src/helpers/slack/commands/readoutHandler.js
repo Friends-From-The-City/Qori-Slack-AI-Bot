@@ -1,5 +1,6 @@
 const { buildReadoutModal } = require('../ui/readoutModal');
 const { getResearchStudyWithRoles, getStudiesByUser } = require('../../../services/research_study.service');
+const { getActiveStudy, setActiveStudy } = require('../../../services/slack-user-state.service');
 const { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo, fetchFileFromRepoByPath, readFolders, readFolderContents, parseGitHubIssues, createGitHubIssues } = require('../../github');
 const { processYamlTemplate } = require('../../yamlProcessor');
 const researchPlanService = require('../../../services/research_plan.service');
@@ -49,9 +50,12 @@ const openReadoutModal = async ({ ack, body, client, command }) => {
       { name: 'Accessibility metrics', type: 'metrics' }
     ];
 
+    const activeStudyId = await getActiveStudy(body.user_id);
+    const activeStudy = activeStudyId ? studies.find(s => s.id === activeStudyId) : null;
+
     const initialState = {
       availableStudies: studies,
-      selectedStudy: studies.length > 0 ? studies[0] : null,
+      selectedStudy: activeStudy || (studies.length > 0 ? studies[0] : null),
       reportType: 'research_readout',
       targetAudience: 'Design Team',
       teamMembers: '@team-lead',
@@ -182,6 +186,7 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }) => {
     }
 
     const selectedStudy = await getResearchStudyWithRoles(selectedStudyName);
+    if (selectedStudy) await setActiveStudy(body.user.id, selectedStudy.id);
     const folderPath = selectedStudy.path;
     const reportType = state.reportType;
 
@@ -578,6 +583,14 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }) => {
             text: {
               type: 'mrkdwn',
               text: `📊 *Report ready:*\n<${renderedYaml.result.url}|View Full Report on GitHub>`,
+            },
+          },
+          { type: 'divider' },
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: `*Next:* Run \`/qori-tickets\` to create engineering issues from findings.`,
             },
           },
         ],

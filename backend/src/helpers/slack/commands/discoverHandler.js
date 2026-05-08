@@ -324,6 +324,14 @@ async function handleDiscoverSubmission({ ack, view, body, client }) {
             },
           ],
         },
+        { type: 'divider' },
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `*Next:* Run \`/qori-brief\` to initiate a study informed by this discovery.`,
+          },
+        },
       ],
       text: `${typeConfig.label} complete for "${topic}". View: ${url}`,
     });

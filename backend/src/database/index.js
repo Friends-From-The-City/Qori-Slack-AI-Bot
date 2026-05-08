@@ -14,6 +14,7 @@ const ResearchPlan = require("./models/research_plan")
 const SessionSummary = require("./models/session_summary")
 const StudyVariable = require("./models/study_variable")
 const CreatedIssue = require("./models/created_issue")
+const SlackUserState = require("./models/slack_user_state")
 
 
 // Set environment and configuration
@@ -37,6 +38,7 @@ const modelDefiners = [
   SessionSummary,
   StudyVariable,
   CreatedIssue,
+  SlackUserState,
 ];
 
 // Register all models with Sequelize and pass DataTypes

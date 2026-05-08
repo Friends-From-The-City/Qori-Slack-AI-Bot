@@ -6,6 +6,7 @@
  * Supports designer, engineering, and accessibility audiences.
  */
 const { getStudiesByUser, getResearchStudyWithRoles } = require('../../../services/research_study.service');
+const { getActiveStudy, setActiveStudy } = require('../../../services/slack-user-state.service');
 
 const AUDIENCE_CONFIG = {
   designer: {
@@ -48,20 +49,24 @@ const ticketHandler = async ({ ack, body, client, command }) => {
       return;
     }
 
+    const activeStudyId = await getActiveStudy(userId);
     await client.views.open({
       trigger_id: command.trigger_id,
-      view: buildStep1Modal(studies, command),
+      view: buildStep1Modal(studies, command, activeStudyId),
     });
   } catch (error) {
     console.error('❌ ticketHandler error:', error.message);
   }
 };
 
-function buildStep1Modal(studies, command) {
+function buildStep1Modal(studies, command, activeStudyId) {
   const studyOptions = studies.slice(0, 10).map(s => ({
     text: { type: 'plain_text', text: s.name },
     value: s.id.toString(),
   }));
+  const initialStudyOption = activeStudyId
+    ? studyOptions.find(o => o.value === activeStudyId.toString())
+    : null;
 
   return {
     type: 'modal',
@@ -82,6 +87,7 @@ function buildStep1Modal(studies, command) {
           action_id: 'study_select_action',
           placeholder: { type: 'plain_text', text: 'Choose a study...' },
           options: studyOptions,
+          ...(initialStudyOption ? { initial_option: initialStudyOption } : {}),
         },
       },
       {
@@ -133,13 +139,14 @@ const handleStep1Submit = async ({ ack, body, view, client }) => {
     return;
   }
 
-  // Look up study
+  // Look up study and update active study
   const studies = await getStudiesByUser(body.user.id);
   const study = studies.find(s => s.id.toString() === studyId);
   if (!study) {
     await ack({ response_action: 'errors', errors: { study_select: 'Study not found' } });
     return;
   }
+  await setActiveStudy(body.user.id, study.id);
 
   // Query ticket_candidates from Postgres
   const sequelize = require('../../../database');

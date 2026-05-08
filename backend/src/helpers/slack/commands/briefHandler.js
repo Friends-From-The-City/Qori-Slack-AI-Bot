@@ -186,7 +186,7 @@ async function handleBriefSubmission({ ack, body, view, client }) {
     const im = await client.conversations.open({ users: body.user.id });
     await client.chat.postMessage({
       channel: im.channel.id,
-      text: `✅ *Research Brief Created*\n\n*Study:* ${studyName}\n*View:* <${url}|GitHub>\n\nThe brief has been sent to the study team for approval.`,
+      text: `✅ *Research Brief Created*\n\n*Study:* ${studyName}\n*View:* <${url}|GitHub>\n\nThe brief has been sent to the study team for approval.\n\n*Next:* Run \`/qori-plan\` to create an execution plan once approved.`,
     });
   } catch (error) {
     console.error('Failed to send confirmation to researcher:', error);

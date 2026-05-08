@@ -1,5 +1,6 @@
 const { analyzeNotesModal } = require("../ui/analyzeNotesModal");
 const { getStudiesByUser, getResearchStudyWithRoles } = require("../../../services/research_study.service");
+const { getActiveStudy, setActiveStudy } = require("../../../services/slack-user-state.service");
 const { studyNotesService } = require("../../../services");
 const sessionSummaryService = require("../../../services/session-summary.service");
 const sessionObserverService = require("../../../services/session_observer.service");
@@ -40,14 +41,16 @@ const analyzeNotesHandler = async ({ ack, body, client, command }) => {
 
     // Get research studies for the current user
     const studies = await getStudiesByUser(body.user_id);
+    const activeStudyId = await getActiveStudy(body.user_id);
 
-    // Initial state: Show only study dropdown
+    // Initial state: Show only study dropdown, pre-select active study
     await client.views.open({
       trigger_id: body.trigger_id,
       view: analyzeNotesModal(studies, [], [], {
         showStudy: true,
         showSession: false,
         showNotes: false,
+        selectedStudy: activeStudyId,
       })
     });
 
@@ -89,6 +92,9 @@ const handleAnalyzeNotesSubmission = async ({ ack, body, view, client }) => {
     if (!studyId || studyId === "no_studies") {
       throw new Error("No research study selected");
     }
+
+    // Update active study for cross-command pre-fill
+    await setActiveStudy(body.user.id, parseInt(studyId, 10));
 
     if (sessionId && sessionId !== "no_sessions") {
       console.log("Selected session ID:", sessionId);
@@ -261,6 +267,14 @@ const handleAnalyzeNotesSubmission = async ({ ack, body, view, client }) => {
           text: {
             type: 'mrkdwn',
             text: `<${result.url}|:github: View Session Summary on GitHub>`,
+          },
+        },
+        { type: 'divider' },
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `*Next:* Run \`/qori-synthesis\` to identify themes across sessions.`,
           },
         },
       ],

@@ -25,28 +25,31 @@ const { uploadSurveyDataModal } = require("./ui/uploadSurveyDataModal");
 const { handleMarkChangesCompleteAction, handleMarkChangesCompleteModal, handleApproveChanges } = require("./markChangesCompleteHandler");
 const { handleApprove, handleApproveSubmission, handleRequestChanges, handleRequestChangesSubmission } = require("./requestChangesHandler");
 const { sendStudyResultMessage, generateStudyResultBlocks } = require("./ui/studyResultBlocks");
-const { QORI_LEARN_TOPICS, buildWelcomeMessage, buildTopicPickerMessage, buildConfirmationMessage } = require("./ui/qoriLearnModal");
-const { participantOutreachHandler, handleParticipantOutreachSubmit, handleInitialRecruitmentSubmit, handleReschedulingRequestSubmit, handleSessionConfirmationSubmit, handleThankYouSubmit, handleFollowUpSubmit, handleSessionReminderSubmit, handleAddParticipantSubmit, handleObserverModalButton } = require("./commands/participantOutreachHandler");
-const { participantHandler, updateParticipantHandler, handleParticipantStudySelectionChange, handleLoadParticipantsButton, handleUpdateParticipantSubmission } = require("./commands/participantHandler");
-const { observeSessionHandler, handleObserveSessionSubmission, handleObserverApproval, handleObserverDenial } = require("./commands/observeSessionHandler");
+const { buildLearnModal, buildCondensedModal } = require("./ui/qoriLearnModal");
+const { handleParticipantOutreachSubmit, handleInitialRecruitmentSubmit, handleReschedulingRequestSubmit, handleSessionConfirmationSubmit, handleThankYouSubmit, handleFollowUpSubmit, handleSessionReminderSubmit, handleAddParticipantSubmit } = require("./commands/participantOutreachHandler");
+const { handleLoadParticipantsButton, handleUpdateParticipantSubmission } = require("./commands/participantHandler");
+const { handleObserveSessionSubmission, handleObserverApproval, handleObserverDenial } = require("./commands/observeSessionHandler");
 const { copyEmailModal } = require("./ui/outreach/copyEmailModal");
 const { sessionConfirmationModal } = require("./ui/outreach/sessionConfirmationModal");
 const { sessionReminderModal } = require("./ui/outreach/sessionReminderModal");
 const { reschedulingRequestModal } = require("./ui/outreach/reschedulingRequestModal");
 const { followupModal } = require("./ui/outreach/followupModal");
 const { thankyouModal } = require("./ui/outreach/thankyouModal");
-const { uploadNotesHandler, handleTabManual, handleTabUpload, handleSessionSelectionChange, handleSessionNotesSubmission } = require("./commands/sessionNotesHandler");
+const { handleTabManual, handleTabUpload, handleSessionSelectionChange, handleSessionNotesSubmission } = require("./commands/sessionNotesHandler");
 const { analyzeNotesHandler, handleAnalyzeNotesSubmission, handleStudySelectionChange: handleAnalyzeNotesStudyChange, handleSessionSelectionChange: handleAnalyzeNotesSessionChange } = require("./commands/analyzeNotesHandler");
 const { researchSynthesisHandler, handleResearchSynthesisSubmission, handleStudySelectionChange, handleFileCheckboxChange, handleLoadSynthesisFiles } = require("./commands/researchSynthesisHandler");
 const { openReadoutModal, handleReadoutModalInteraction, handleReadoutModalSubmission } = require("./commands/readoutHandler");
 const { ticketHandler, handleStep1Submit, handleStep2Submit } = require("./commands/ticketHandler");
 const { processSlackFiles } = require("../pdfProcessor");
 const research_planService = require("../../services/research_plan.service");
-const { requestResearchHandler, handleRequestResearchSubmission, handleCreateBriefFromRequest, handleCreateStudyFromRequest } = require("./commands/requestResearchHandler");
+// requestResearchHandler removed — /qori-request replaced by /qori-brief
 const { startResearchHandler, handleAddTeamMember, handleCreateStudySubmission } = require("./commands/createStudyHandler");
 const { parseDocuments, validateDocuments, createDocumentSummary } = require('../documentParser');
 const { createStudyModal } = require("./ui/createStudyModal");
 const { discoverHandler, handleDiscoverSubmission } = require("./commands/discoverHandler");
+const { fieldworkHandler, handleFieldworkStudyPickerSubmit } = require("./commands/fieldworkHandler");
+const { askHandler, handleAskSubmit, handleShowMore } = require("./commands/askHandler");
+const { getActiveStudy: getActiveStudyState, setActiveStudy: setActiveStudyState } = require("../../services/slack-user-state.service");
 const { handleBriefSubmission } = require("./commands/briefHandler");
 // Create an Express router for Slack routes
 const slackExpressRouter = express.Router();
@@ -235,70 +238,74 @@ slackApp.command('/qori', async ({ ack, command, client }) => {
 // QORI LEARN - INTERACTIVE TUTORIAL
 // ============================================
 
-// 1️⃣ Slash command: /qori-learn
-slackApp.command('/qori-learn', async ({ ack, command, respond }) => {
-  await ack();
-  
-  // Respond with ephemeral welcome message
-  const welcomeMessage = buildWelcomeMessage();
-  await respond(welcomeMessage);
-});
+// ── /qori-learn — First-run ceremony (4-screen modal tour) ─────
+const { isFirstRun, markOnboarded } = require("../../services/slack-user-state.service");
 
-// 2️⃣ Action handlers for button interactions
-slackApp.action('learn_start_tutorial', async ({ ack, body, respond }) => {
+slackApp.command('/qori-learn', async ({ ack, body, client, command }) => {
   await ack();
-  
-  const topicPickerMessage = buildTopicPickerMessage();
-  await respond(topicPickerMessage);
-});
+  const userId = command.user_id;
+  const channelId = command.channel_id;
+  const meta = { userId, channelId };
 
-slackApp.action('learn_back_to_welcome', async ({ ack, body, respond }) => {
-  await ack();
-  
-  const welcomeMessage = buildWelcomeMessage();
-  await respond(welcomeMessage);
-});
+  const firstRun = await isFirstRun(userId);
 
-slackApp.action('learn_back_to_topics', async ({ ack, body, respond }) => {
-  await ack();
-  
-  const topicPickerMessage = buildTopicPickerMessage();
-  await respond(topicPickerMessage);
-});
-
-slackApp.action('learn_dismiss', async ({ ack, body, respond }) => {
-  await ack();
-  
-  await respond({
-    delete_original: true
-  });
-});
-
-// Topic selection handlers
-slackApp.action(/^topic_(request|plan|participants|outreach|observe|notes|analyze|synthesis|report)$/, async ({ ack, body, action, respond }) => {
-  await ack();
-  
-  // Extract topic key from action_id (e.g., "topic_plan" -> "plan")
-  const topicKey = action.action_id.replace('topic_', '');
-  const topic = QORI_LEARN_TOPICS[topicKey];
-  
-  if (!topic) {
-    console.error(`Unknown topic: ${topicKey}`);
-    return;
+  if (firstRun) {
+    await client.views.open({ trigger_id: body.trigger_id, view: buildLearnModal(1, meta) });
+  } else {
+    await client.views.open({ trigger_id: body.trigger_id, view: buildCondensedModal(meta) });
   }
-  
-  const confirmationMessage = buildConfirmationMessage(topic);
-  await respond(confirmationMessage);
 });
 
-// Acknowledge URL button clicks (these open automatically, but we still need to ack)
-slackApp.action('learn_view_all', async ({ ack }) => {
+// Next / Back navigation — swap blocks via views.update
+slackApp.action('learn_next', async ({ ack, body, client }) => {
   await ack();
+  const targetScreen = parseInt(body.actions[0].value, 10);
+  const meta = JSON.parse(body.view.private_metadata || '{}');
+  await client.views.update({ view_id: body.view.id, view: buildLearnModal(targetScreen, meta) });
 });
 
-slackApp.action('learn_open_tutorial', async ({ ack }) => {
+slackApp.action('learn_prev', async ({ ack, body, client }) => {
   await ack();
+  const targetScreen = parseInt(body.actions[0].value, 10);
+  const meta = JSON.parse(body.view.private_metadata || '{}');
+  await client.views.update({ view_id: body.view.id, view: buildLearnModal(targetScreen, meta) });
 });
+
+// "Take the tour again" from condensed view
+slackApp.action('learn_restart_tour', async ({ ack, body, client }) => {
+  await ack();
+  const meta = JSON.parse(body.view.private_metadata || '{}');
+  await client.views.update({ view_id: body.view.id, view: buildLearnModal(1, meta) });
+});
+
+// Screen 4 submission — mark onboarded, route to chosen command
+slackApp.view('learn_ceremony_submit', async ({ ack, body, view, client }) => {
+  const meta = JSON.parse(view.private_metadata || '{}');
+  const userId = meta.userId || body.user.id;
+  const channelId = meta.channelId;
+  const choice = view.state.values.learn_role_select?.learn_role_choice?.selected_option?.value;
+
+  await markOnboarded(userId);
+
+  // Route based on choice — close modal, send DM with next step
+  const routeMessages = {
+    new_study: 'Welcome aboard! Start with `/qori-discover` to do pre-study discovery, or `/qori-brief` to initiate a study directly.',
+    analyze: 'Welcome aboard! Run `/qori-analyze` to upload and process your session transcripts.',
+    ask: 'Welcome aboard! Run `/qori-ask` to query past research across all studies.',
+    explore: 'Welcome aboard! When you\'re ready, start with `/qori-discover`. Type `/qori` anytime to see available commands.',
+  };
+
+  const message = routeMessages[choice] || routeMessages.explore;
+  await ack();
+
+  try {
+    const im = await client.conversations.open({ users: userId });
+    await client.chat.postMessage({ channel: im.channel.id, text: message });
+  } catch (err) { console.error('Failed to send /qori-learn DM:', err.message); }
+});
+
+// Noop callback for non-submittable screens (prevents Slack errors)
+slackApp.view('learn_ceremony_noop', async ({ ack }) => { await ack(); });
 
 // 1️⃣ Slash command: open modal with just a repo picker
 slackApp.command('/qori-repo', async ({ ack, command, client }) => {
@@ -580,6 +587,8 @@ slackApp.command('/qori-delete', async ({ ack, command, client }) => {
       text: { type: 'plain_text', text: study.name },
       value: String(study.id)
     }));
+    const activeStudyId = await getActiveStudyState(userId);
+    const activeDeleteOption = activeStudyId ? studyOptions.find(o => o.value === activeStudyId.toString()) : null;
 
     await client.views.open({
       trigger_id: command.trigger_id,
@@ -609,7 +618,8 @@ slackApp.command('/qori-delete', async ({ ack, command, client }) => {
               type: 'static_select',
               action_id: 'study_selected',
               placeholder: { type: 'plain_text', text: 'Choose a study...' },
-              options: studyOptions
+              options: studyOptions,
+              ...(activeDeleteOption ? { initial_option: activeDeleteOption } : {}),
             }
           },
           {
@@ -1014,6 +1024,7 @@ slackApp.command('/qori-plan', async ({ ack, body, client, command }) => {
 
   // Fetch studies created by this user
   const studies = await getStudiesByUser(userId);
+  const activeStudyId = await getActiveStudyState(userId);
 
   // Start with the modal's blocks
   let blocks = [...studySetupModalPlanStudy.blocks];
@@ -1029,13 +1040,15 @@ slackApp.command('/qori-plan', async ({ ack, body, client, command }) => {
       text: { type: 'plain_text', text: study.name },
       value: study.id.toString() // Use study ID as value
     }));
+    const activeOption = activeStudyId ? studyOptions.find(o => o.value === activeStudyId.toString()) : null;
 
     // Update the options in the existing input block
     blocks[studySelectionIndex] = {
       ...blocks[studySelectionIndex],
       element: {
         ...blocks[studySelectionIndex].element,
-        options: studyOptions
+        options: studyOptions,
+        ...(activeOption ? { initial_option: activeOption } : {}),
       }
     };
   } else if (studySelectionIndex !== -1) {
@@ -1344,6 +1357,15 @@ slackApp.view('research_plan_modal', async ({ ack, body, view, client }) => {
   await research_planService.createResearchPlan(planData);
   const blocks = generateStudyResultBlocks(studyName, study, url, channelId, 'plan');
   await sendStudyResultMessage(client, channelId, studyName, blocks, 'plan');
+
+  // Send DM with next-step suggestion
+  try {
+    const im = await client.conversations.open({ users: userId });
+    await client.chat.postMessage({
+      channel: im.channel.id,
+      text: `✅ *Research Plan Created*\n\n*Study:* ${studyName}\n*View:* <${url}|GitHub>\n\n*Next:* Run \`/qori-fieldwork\` to track participants, observers, and outreach.`,
+    });
+  } catch (dmErr) { console.error('Failed to send plan DM:', dmErr.message); }
 
   // Add study status for created file
   await addStudyStatus({
@@ -2615,21 +2637,14 @@ slackApp.view('upload_desk_research_modal', async ({ ack, view, body, client }) 
 slackApp.command("/qori-discover", discoverHandler);
 slackApp.view('discover_modal', handleDiscoverSubmission);
 
-// participant outreach
-slackApp.command("/qori-outreach", participantOutreachHandler);
+// fieldwork dashboard (consolidates: participants, update-participant, observe, outreach, notes)
+slackApp.command("/qori-fieldwork", fieldworkHandler);
+slackApp.view("fieldwork_study_picker", handleFieldworkStudyPickerSubmit);
 
-// request research
-slackApp.command("/qori-request", requestResearchHandler);
-
-// add participant
-slackApp.command("/qori-participants", participantHandler);
-
-// update participant
-slackApp.command("/qori-update-participant", updateParticipantHandler);
-
-// session notes
-// slackApp.command("/take-notes", sessionNotesHandler);
-slackApp.command("/qori-notes", uploadNotesHandler);
+// knowledge layer
+slackApp.command("/qori-ask", askHandler);
+slackApp.view("ask_qori_submit", handleAskSubmit);
+slackApp.action("ask_show_more", handleShowMore);
 
 // readout reports
 slackApp.command("/qori-report", openReadoutModal);
@@ -2685,7 +2700,7 @@ slackApp.action("load_participants_button", handleLoadParticipantsButton)
 slackApp.action(/^file_checkbox_/, handleFileCheckboxChange)
 
 
-slackApp.command("/qori-observe", observeSessionHandler);
+// Sub-modal view handlers (used by /qori-fieldwork sub-modals and legacy flows)
 slackApp.view("participant-outreach-modal", handleParticipantOutreachSubmit);
 slackApp.view("outreach_initial_recruitment_modal", handleInitialRecruitmentSubmit);
 slackApp.view("outreach_rescheduling_modal", handleReschedulingRequestSubmit);
@@ -2697,14 +2712,7 @@ slackApp.view("add-participant-modal", handleAddParticipantSubmit);
 slackApp.view("update-participant-status", handleUpdateParticipantSubmission);
 slackApp.view("request_observe_session_modal", handleObserveSessionSubmission);
 
-// Handle request research modal submission
-slackApp.view("request_research_modal", handleRequestResearchSubmission);
-
-// Handle "Create Brief from Request" button click
-slackApp.action("create_brief_from_request", handleCreateBriefFromRequest);
-
-// Handle "Create Study from Request" button click
-slackApp.action("create_study_from_request", handleCreateStudyFromRequest);
+// /qori-request removed — functionality replaced by /qori-brief direct flow
 
 // Handle "Create Research Study" button click from approved brief
 slackApp.action("create_study_from_brief", async ({ ack, body, client }) => {

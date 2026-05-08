@@ -1,5 +1,6 @@
 const { researchSynthesisModal } = require("../ui/researchSynthesisModal");
 const { getStudiesByUser, getResearchStudyWithRoles } = require("../../../services/research_study.service");
+const { getActiveStudy, setActiveStudy } = require("../../../services/slack-user-state.service");
 const { studyNotesService } = require("../../../services");
 const sessionSummaryService = require("../../../services/session-summary.service");
 const { getStudyStakeholderGuide } = require("../../../services/study-status.service");
@@ -15,11 +16,13 @@ const researchSynthesisHandler = async ({ ack, body, client, command }) => {
 
     // Get research studies for the current user
     const studies = await getStudiesByUser(body.user_id);
+    const activeStudyId = await getActiveStudy(body.user_id);
+    const activeStudy = activeStudyId ? studies.find(s => s.id === activeStudyId) : null;
 
-    // Open the research synthesis modal (empty state - files load when study is selected)
+    // Open the research synthesis modal, pre-selecting active study
     await client.views.open({
       trigger_id: body.trigger_id,
-      view: researchSynthesisModal(studies, null, [], [], null, [])
+      view: researchSynthesisModal(studies, activeStudy, [], [], null, [])
     });
 
   } catch (error) {
@@ -616,6 +619,9 @@ const handleResearchSynthesisSubmission = async ({ ack, body, view, client }) =>
     const selectedStudyId = view.state.values.study_select_block?.study_select_synthesize?.selected_option?.value;
     const analysisMethod = view.state.values.analysis_method_selection?.analysis_method?.selected_option?.value;
 
+    // Update active study for cross-command pre-fill
+    if (selectedStudyId) await setActiveStudy(body.user.id, parseInt(selectedStudyId, 10));
+
     // Extract selected session summaries from all checkbox blocks (may be split across multiple blocks)
     let selectedSessionSummaries = [];
     Object.keys(view.state.values).forEach(key => {
@@ -938,6 +944,14 @@ const handleResearchSynthesisSubmission = async ({ ack, body, view, client }) =>
             text: {
               type: 'mrkdwn',
               text: `<${renderedAnalysis.result.url}|:github: View on GitHub>`,
+            },
+          },
+          { type: 'divider' },
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: `*Next:* Run \`/qori-report\` to generate the research readout.`,
             },
           },
         ],

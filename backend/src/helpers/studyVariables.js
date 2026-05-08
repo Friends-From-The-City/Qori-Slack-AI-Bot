@@ -734,6 +734,57 @@ function createEmptyDiscoveryVariablesFile(team, discoveryType) {
   };
 }
 
+// ═══════════════════════════════════════════════════════════
+// CROSS-STUDY SEARCH (used by /qori-ask)
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * Search variables across all studies (or one study) by variable keys and text terms.
+ * Returns up to `limit` rows, sorted by source_date DESC.
+ *
+ * @param {string[]} variableKeys — e.g., ['atomic_nugget_core', 'validated_themes']
+ * @param {string[]} searchTerms — free-text terms to ILIKE match against value::text
+ * @param {Object} options
+ * @param {string} [options.studyName] — scope to a single study (omit for all studies)
+ * @param {number} [options.limit=30] — max rows
+ * @param {number} [options.offset=0] — for pagination
+ */
+async function searchVariablesAcrossStudies(variableKeys, searchTerms, options = {}) {
+  const { studyName, limit = 30, offset = 0 } = options;
+  const StudyVariable = getStudyVariableModel();
+  if (!StudyVariable) return { rows: [], total: 0 };
+
+  const { Op, literal } = require('sequelize');
+
+  // Build WHERE clause
+  const where = {
+    variable_key: { [Op.in]: variableKeys },
+    scope: 'study',
+  };
+  if (studyName) {
+    where.study_name = studyName;
+  }
+
+  // Text matching: OR across all search terms against value::text
+  if (searchTerms && searchTerms.length > 0) {
+    where[Op.and] = searchTerms.map(term => literal(
+      `"value"::text ILIKE '%${term.replace(/'/g, "''")}%'`
+    ));
+  }
+
+  const [rows, total] = await Promise.all([
+    StudyVariable.findAll({
+      where,
+      order: [['source_date', 'DESC'], ['id', 'DESC']],
+      limit,
+      offset,
+    }),
+    StudyVariable.count({ where }),
+  ]);
+
+  return { rows, total };
+}
+
 module.exports = {
   readStudyVariables,
   writeStudyVariables,
@@ -744,4 +795,5 @@ module.exports = {
   writeDiscoveryVariables,
   mergeDiscoveryVariables,
   readUpstreamDiscoveryVariables,
+  searchVariablesAcrossStudies,
 };

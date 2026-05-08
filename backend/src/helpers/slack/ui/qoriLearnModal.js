@@ -1,399 +1,283 @@
-// Qori Learn - Interactive Tutorial UI Components
+/**
+ * /qori-learn — First-run ceremony (4-screen modal tour).
+ *
+ * Uses views.update() to swap screens. State stored in private_metadata.
+ * Returning users see a condensed command map with "Take the tour again" button.
+ */
 
-// Topic mapping configuration
-const QORI_LEARN_TOPICS = {
-  request: {
-    label: "Research Requests",
-    command: "request",
-    slug: "request",
-    emoji: "📥",
-    phase: "Study Setup",
-    description: "submit and manage research requests from stakeholders"
-  },
-  plan: {
-    label: "Study Planning",
-    command: "plan",
-    slug: "plan",
-    emoji: "📋",
-    phase: "Study Setup",
-    description: "create research briefs, plans, discussion guides, and more"
-  },
-  participants: {
-    label: "Participants",
-    command: "participants",
-    slug: "participants",
-    emoji: "👥",
-    phase: "Sessions",
-    description: "add, track, and manage study participants"
-  },
-  outreach: {
-    label: "Outreach",
-    command: "outreach",
-    slug: "outreach",
-    emoji: "📬",
-    phase: "Sessions",
-    description: "generate recruitment emails, confirmations, and reminders"
-  },
-  observe: {
-    label: "Observing",
-    command: "observe",
-    slug: "observe",
-    emoji: "👀",
-    phase: "Sessions",
-    description: "request observer spots for upcoming research sessions"
-  },
-  notes: {
-    label: "Note Taking",
-    command: "notes",
-    slug: "notes",
-    emoji: "📝",
-    phase: "Sessions",
-    description: "capture and organize session notes with timestamps"
-  },
-  analyze: {
-    label: "Analysis",
-    command: "analyze",
-    slug: "analyze",
-    emoji: "🔬",
-    phase: "Analysis",
-    description: "run AI-powered analysis on session data and transcripts"
-  },
-  synthesis: {
-    label: "Synthesis",
-    command: "synthesis",
-    slug: "synthesis",
-    emoji: "🔍",
-    phase: "Analysis",
-    description: "find patterns and themes across multiple sessions"
-  },
-  report: {
-    label: "Reports",
-    command: "report",
-    slug: "report",
-    emoji: "📊",
-    phase: "Analysis",
-    description: "generate stakeholder-ready research reports"
-  }
+// Placeholder URL for cascade diagram — replace with actual hosted asset
+const CASCADE_DIAGRAM_URL = 'https://friends-innovation-lab.github.io/qori-slack/assets/cascade-diagram.gif';
+
+// ── Screen builders ────────────────────────────────────────
+
+function buildScreen1() {
+  return [
+    {
+      type: 'header',
+      text: { type: 'plain_text', text: 'Welcome to Qori' },
+    },
+    { type: 'divider' },
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: 'Qori turns scattered research into structured knowledge.\n\nEvery interview, every session, every finding — connected.\nEvery recommendation traceable to a real participant\'s words.',
+      },
+    },
+    { type: 'divider' },
+    {
+      type: 'actions',
+      block_id: 'learn_nav',
+      elements: [
+        {
+          type: 'button',
+          text: { type: 'plain_text', text: 'Show me how →' },
+          style: 'primary',
+          action_id: 'learn_next',
+          value: '2',
+        },
+      ],
+    },
+  ];
+}
+
+function buildScreen2() {
+  return [
+    {
+      type: 'header',
+      text: { type: 'plain_text', text: 'How Qori works' },
+    },
+    { type: 'divider' },
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: 'A participant says:\n> _"Benefits sounds like a brochure, not my actual money."_',
+      },
+    },
+    {
+      type: 'image',
+      image_url: CASCADE_DIAGRAM_URL,
+      alt_text: 'Cascade diagram showing how a quote flows through Qori: quote → nugget → theme → finding → ticket',
+    },
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: '→ Becomes a structured nugget\n→ Joins a validated theme\n→ Informs a finding with severity\n→ Creates an engineering ticket\n\nEvery link traceable. Nothing fabricated. Real evidence.',
+      },
+    },
+    { type: 'divider' },
+    {
+      type: 'actions',
+      block_id: 'learn_nav',
+      elements: [
+        {
+          type: 'button',
+          text: { type: 'plain_text', text: '← Back' },
+          action_id: 'learn_prev',
+          value: '1',
+        },
+        {
+          type: 'button',
+          text: { type: 'plain_text', text: 'Show me commands →' },
+          style: 'primary',
+          action_id: 'learn_next',
+          value: '3',
+        },
+      ],
+    },
+  ];
+}
+
+function buildScreen3() {
+  return [
+    {
+      type: 'header',
+      text: { type: 'plain_text', text: '11 commands, organized by phase' },
+    },
+    { type: 'divider' },
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: '*PLAN*\n`/qori-discover`  Pre-study discovery\n`/qori-brief`  Stakeholder-aligned brief\n`/qori-plan`  Execution planning',
+      },
+    },
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: '*FIELDWORK*\n`/qori-fieldwork`  Track participants, observers, outreach',
+      },
+    },
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: '*ANALYZE*\n`/qori-analyze`  Process session transcripts\n`/qori-synthesis`  Find themes across sessions',
+      },
+    },
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: '*REPORT*\n`/qori-report`  Research readout\n`/qori-tickets`  Engineering issues from findings',
+      },
+    },
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: '*KNOWLEDGE*\n`/qori-ask`  Query past research',
+      },
+    },
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: '*UTILITY*\n`/qori-learn`  This tour\n`/qori-delete`  Clean up studies',
+      },
+    },
+    {
+      type: 'context',
+      elements: [{ type: 'mrkdwn', text: 'Each command does one thing well. The system handles the rest.' }],
+    },
+    { type: 'divider' },
+    {
+      type: 'actions',
+      block_id: 'learn_nav',
+      elements: [
+        {
+          type: 'button',
+          text: { type: 'plain_text', text: '← Back' },
+          action_id: 'learn_prev',
+          value: '2',
+        },
+        {
+          type: 'button',
+          text: { type: 'plain_text', text: 'Try it →' },
+          style: 'primary',
+          action_id: 'learn_next',
+          value: '4',
+        },
+      ],
+    },
+  ];
+}
+
+function buildScreen4() {
+  return [
+    {
+      type: 'header',
+      text: { type: 'plain_text', text: 'What brings you to Qori?' },
+    },
+    { type: 'divider' },
+    {
+      type: 'input',
+      block_id: 'learn_role_select',
+      label: { type: 'plain_text', text: 'Choose your starting point' },
+      element: {
+        type: 'radio_buttons',
+        action_id: 'learn_role_choice',
+        options: [
+          {
+            text: { type: 'plain_text', text: "I'm starting a new study" },
+            value: 'new_study',
+          },
+          {
+            text: { type: 'plain_text', text: 'I have research to analyze' },
+            value: 'analyze',
+          },
+          {
+            text: { type: 'plain_text', text: 'I want to query past research' },
+            value: 'ask',
+          },
+          {
+            text: { type: 'plain_text', text: "I'm just exploring" },
+            value: 'explore',
+          },
+        ],
+      },
+    },
+    { type: 'divider' },
+    {
+      type: 'actions',
+      block_id: 'learn_nav',
+      elements: [
+        {
+          type: 'button',
+          text: { type: 'plain_text', text: '← Back' },
+          action_id: 'learn_prev',
+          value: '3',
+        },
+      ],
+    },
+  ];
+}
+
+// ── Condensed view for returning users ─────────────────────
+
+function buildCondensedView() {
+  return [
+    {
+      type: 'header',
+      text: { type: 'plain_text', text: 'Qori command map' },
+    },
+    { type: 'divider' },
+    ...buildScreen3().filter(b => b.type === 'section'),
+    { type: 'divider' },
+    {
+      type: 'actions',
+      block_id: 'learn_nav',
+      elements: [
+        {
+          type: 'button',
+          text: { type: 'plain_text', text: 'Take the tour again' },
+          action_id: 'learn_restart_tour',
+        },
+      ],
+    },
+  ];
+}
+
+// ── Modal builders ─────────────────────────────────────────
+
+const SCREEN_BUILDERS = {
+  1: buildScreen1,
+  2: buildScreen2,
+  3: buildScreen3,
+  4: buildScreen4,
 };
 
-const QORI_LEARN_BASE_URL = "https://friends-innovation-lab.github.io/qori-slack/learn";
+function buildLearnModal(screen, meta = {}) {
+  const blocks = (SCREEN_BUILDERS[screen] || buildScreen1)();
+  const isScreen4 = screen === 4;
 
-// Helper function to build welcome message blocks
-function buildWelcomeMessage() {
   return {
-    response_type: "ephemeral",
-    blocks: [
-      {
-        type: "header",
-        text: {
-          type: "plain_text",
-          text: "👋 Welcome to Qori!",
-          emoji: true
-        }
-      },
-      {
-        type: "section",
-        text: {
-          type: "mrkdwn",
-          text: "Your AI research assistant. I help VA research teams manage studies, participants, and synthesis — all from Slack.\n\n*Ready to learn?* Take a 2-minute interactive tour to see what I can do."
-        }
-      },
-      {
-        type: "actions",
-        block_id: "welcome_actions",
-        elements: [
-          {
-            type: "button",
-            text: {
-              type: "plain_text",
-              text: "🎓 Start Tutorial",
-              emoji: true
-            },
-            style: "primary",
-            action_id: "learn_start_tutorial"
-          },
-          {
-            type: "button",
-            text: {
-              type: "plain_text",
-              text: "📚 View All Commands",
-              emoji: true
-            },
-            url: `${QORI_LEARN_BASE_URL}/`,
-            action_id: "learn_view_all"
-          },
-          {
-            type: "button",
-            text: {
-              type: "plain_text",
-              text: "✕ Dismiss",
-              emoji: true
-            },
-            action_id: "learn_dismiss"
-          }
-        ]
-      },
-      {
-        type: "context",
-        elements: [
-          {
-            type: "mrkdwn",
-            text: "💡 You can also type */qori* anytime to see available commands"
-          }
-        ]
-      }
-    ]
+    type: 'modal',
+    callback_id: isScreen4 ? 'learn_ceremony_submit' : 'learn_ceremony_noop',
+    title: { type: 'plain_text', text: 'Qori' },
+    ...(isScreen4 ? { submit: { type: 'plain_text', text: 'Done' } } : {}),
+    close: { type: 'plain_text', text: 'Close' },
+    private_metadata: JSON.stringify({ ...meta, screen }),
+    blocks,
   };
 }
 
-// Helper function to build topic picker message blocks
-function buildTopicPickerMessage() {
+function buildCondensedModal(meta = {}) {
   return {
-    replace_original: true,
-    blocks: [
-      {
-        type: "section",
-        text: {
-          type: "mrkdwn",
-          text: "*What would you like to learn?*\nPick a topic and I'll open an interactive walkthrough."
-        }
-      },
-      {
-        type: "divider"
-      },
-      {
-        type: "section",
-        block_id: "topic_section_setup",
-        text: {
-          type: "mrkdwn",
-          text: "*Study Setup*"
-        }
-      },
-      {
-        type: "actions",
-        block_id: "topics_setup",
-        elements: [
-          {
-            type: "button",
-            text: {
-              type: "plain_text",
-              text: "📥 Research Requests",
-              emoji: true
-            },
-            action_id: "topic_request",
-            value: "request"
-          },
-          {
-            type: "button",
-            text: {
-              type: "plain_text",
-              text: "📋 Study Planning",
-              emoji: true
-            },
-            action_id: "topic_plan",
-            value: "plan"
-          }
-        ]
-      },
-      {
-        type: "section",
-        block_id: "topic_section_sessions",
-        text: {
-          type: "mrkdwn",
-          text: "*Sessions*"
-        }
-      },
-      {
-        type: "actions",
-        block_id: "topics_sessions",
-        elements: [
-          {
-            type: "button",
-            text: {
-              type: "plain_text",
-              text: "👥 Participants",
-              emoji: true
-            },
-            action_id: "topic_participants",
-            value: "participants"
-          },
-          {
-            type: "button",
-            text: {
-              type: "plain_text",
-              text: "📬 Outreach",
-              emoji: true
-            },
-            action_id: "topic_outreach",
-            value: "outreach"
-          },
-          {
-            type: "button",
-            text: {
-              type: "plain_text",
-              text: "👀 Observing",
-              emoji: true
-            },
-            action_id: "topic_observe",
-            value: "observe"
-          },
-          {
-            type: "button",
-            text: {
-              type: "plain_text",
-              text: "📝 Note Taking",
-              emoji: true
-            },
-            action_id: "topic_notes",
-            value: "notes"
-          }
-        ]
-      },
-      {
-        type: "section",
-        block_id: "topic_section_analysis",
-        text: {
-          type: "mrkdwn",
-          text: "*Analysis*"
-        }
-      },
-      {
-        type: "actions",
-        block_id: "topics_analysis",
-        elements: [
-          {
-            type: "button",
-            text: {
-              type: "plain_text",
-              text: "🔬 Analysis",
-              emoji: true
-            },
-            action_id: "topic_analyze",
-            value: "analyze"
-          },
-          {
-            type: "button",
-            text: {
-              type: "plain_text",
-              text: "🔍 Synthesis",
-              emoji: true
-            },
-            action_id: "topic_synthesis",
-            value: "synthesis"
-          },
-          {
-            type: "button",
-            text: {
-              type: "plain_text",
-              text: "📊 Reports",
-              emoji: true
-            },
-            action_id: "topic_report",
-            value: "report"
-          }
-        ]
-      },
-      {
-        type: "divider"
-      },
-      {
-        type: "actions",
-        block_id: "topic_nav",
-        elements: [
-          {
-            type: "button",
-            text: {
-              type: "plain_text",
-              text: "← Back",
-              emoji: true
-            },
-            action_id: "learn_back_to_welcome"
-          }
-        ]
-      },
-      {
-        type: "context",
-        elements: [
-          {
-            type: "mrkdwn",
-            text: "Opens in your browser · Takes about 2 minutes"
-          }
-        ]
-      }
-    ]
-  };
-}
-
-// Helper function to build confirmation message blocks
-function buildConfirmationMessage(topic) {
-  const tutorialUrl = `${QORI_LEARN_BASE_URL}/${topic.slug}/`;
-  
-  return {
-    replace_original: true,
-    blocks: [
-      {
-        type: "section",
-        text: {
-          type: "mrkdwn",
-          text: `🎓 *Tutorial: ${topic.label}*\n\nLearn how to use \`/qori-${topic.command}\` — ${topic.description}`
-        }
-      },
-      {
-        type: "divider"
-      },
-      {
-        type: "actions",
-        block_id: "confirmation_actions",
-        elements: [
-          {
-            type: "button",
-            text: {
-              type: "plain_text",
-              text: "🔗 Open Tutorial",
-              emoji: true
-            },
-            style: "primary",
-            url: tutorialUrl,
-            action_id: "learn_open_tutorial"
-          },
-          {
-            type: "button",
-            text: {
-              type: "plain_text",
-              text: "← Pick Another Topic",
-              emoji: true
-            },
-            action_id: "learn_back_to_topics"
-          },
-          {
-            type: "button",
-            text: {
-              type: "plain_text",
-              text: "✕ Dismiss",
-              emoji: true
-            },
-            action_id: "learn_dismiss"
-          }
-        ]
-      },
-      {
-        type: "context",
-        elements: [
-          {
-            type: "mrkdwn",
-            text: `Opens in your browser · <${tutorialUrl}|friends-innovation-lab.github.io>`
-          }
-        ]
-      }
-    ]
+    type: 'modal',
+    callback_id: 'learn_ceremony_noop',
+    title: { type: 'plain_text', text: 'Qori' },
+    close: { type: 'plain_text', text: 'Close' },
+    private_metadata: JSON.stringify({ ...meta, screen: 'condensed' }),
+    blocks: buildCondensedView(),
   };
 }
 
 module.exports = {
-  QORI_LEARN_TOPICS,
-  QORI_LEARN_BASE_URL,
-  buildWelcomeMessage,
-  buildTopicPickerMessage,
-  buildConfirmationMessage
+  buildLearnModal,
+  buildCondensedModal,
+  SCREEN_BUILDERS,
 };
-
