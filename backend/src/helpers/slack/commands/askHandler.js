@@ -247,12 +247,15 @@ async function formatResults(question, rows, total, scope, studyName) {
     maxTokens: 2048,
   });
 
-  // Build concise context from rows
+  // Build concise context from rows, unwrapping array values
   const context = rows.slice(0, 20).map(row => {
-    const val = row.value;
-    const text = typeof val === 'string' ? val
-      : (val?.text || val?.verbatim_quote || val?.finding_text || val?.theme_name || JSON.stringify(val)).substring(0, 300);
-    return `[${row.variable_key}] ${row.study_name} | ${row.participant_id || '-'}: ${text}`;
+    const items = Array.isArray(row.value) ? row.value : [row.value];
+    return items.slice(0, 2).map(item => {
+      if (!item || typeof item !== 'object') return String(item);
+      const text = item.text || item.finding || item.theme_name || item.summary
+        || item.verbatim_quote || item.recommendation || JSON.stringify(item);
+      return `[${row.variable_key}] ${row.study_name} | ${row.participant_id || item.participant || '-'}: ${String(text).substring(0, 300)}`;
+    }).join('\n');
   }).join('\n');
 
   const prompt = `You are Qori, a research knowledge assistant. A user asked: "${question}"
@@ -274,30 +277,75 @@ Write a concise summary (2-4 sentences) of what was found, highlighting the most
 
 // ── Block builders ─────────────────────────────────────────
 
-function extractPreview(row) {
-  const val = row.value;
-  if (!val) return `_${row.variable_key}_ (${row.study_name})`;
+/**
+ * Unwrap a value that may be a singleton JSON array (e.g., [{ ... }]).
+ * Many variable types store data as a single-element array in Postgres.
+ */
+function unwrap(val) {
+  if (Array.isArray(val)) return val;
+  return [val];
+}
 
-  let text;
-  if (typeof val === 'string') {
-    text = val;
-  } else if (val.verbatim_quote) {
-    text = `"${val.verbatim_quote}"`;
-  } else if (val.text) {
-    text = val.text;
-  } else if (val.finding_text) {
-    text = val.finding_text;
-  } else if (val.theme_name) {
-    text = `*${val.theme_name}*${val.theme_description ? ` — ${val.theme_description}` : ''}`;
-  } else if (val.recommendation_text) {
-    text = val.recommendation_text;
-  } else {
-    text = JSON.stringify(val).substring(0, 200);
+/**
+ * Format a single variable row into a readable Slack mrkdwn preview.
+ * Handles nuggets, findings, themes, and recommendations with their
+ * actual JSONB field names.
+ */
+function extractPreview(row) {
+  const raw = row.value;
+  if (!raw) return `_${row.variable_key}_ (${row.study_name})`;
+
+  const items = unwrap(raw);
+  const studyLabel = row.study_name.replace(/-/g, ' ');
+  const key = row.variable_key;
+
+  // For array-valued rows (themes, findings), format each item
+  if (items.length > 1 || (Array.isArray(raw) && items.length === 1)) {
+    return items.slice(0, 3).map(item => formatItem(item, key, studyLabel, row.participant_id)).join('\n\n');
   }
 
-  const pid = row.participant_id ? ` ${row.participant_id}` : '';
-  const severity = val.severity ? ` (severity ${val.severity})` : '';
-  return `${pid} (${row.study_name}${severity})\n${text.substring(0, 250)}`;
+  // Single object
+  return formatItem(items[0], key, studyLabel, row.participant_id);
+}
+
+function formatItem(item, key, studyLabel, participantId) {
+  if (!item || typeof item !== 'object') {
+    return typeof item === 'string' ? item.substring(0, 250) : String(item);
+  }
+
+  const severity = item.severity ? `  \`severity ${item.severity}\`` : '';
+  const study = `_${studyLabel}_`;
+
+  switch (key) {
+    case 'atomic_nugget_core':
+    case 'atomic_nugget_detail': {
+      const pid = item.participant || participantId || '';
+      const quote = item.text || item.verbatim_quote || '';
+      const type = item.nugget_type ? item.nugget_type.replace(/_/g, ' ') : '';
+      return `> ${quote}\n${pid} · ${study}${severity}${type ? ` · ${type}` : ''}`;
+    }
+    case 'prioritized_findings':
+    case 'findings': {
+      const finding = item.finding || item.finding_text || item.text || '';
+      const rec = item.recommendation ? `\n_Recommendation:_ ${item.recommendation.substring(0, 150)}` : '';
+      return `*${finding}*${severity} · ${study}${rec}`;
+    }
+    case 'validated_themes': {
+      const name = item.theme_name || item.name || '';
+      const summary = item.summary || '';
+      const conf = item.confidence ? ` · ${item.confidence} confidence` : '';
+      return `*${name}*${conf} · ${study}\n${summary.substring(0, 200)}`;
+    }
+    case 'recommendations':
+    case 'prioritized_recommendations': {
+      const text = item.recommendation || item.recommendation_text || item.text || '';
+      return `${text.substring(0, 250)}\n${study}`;
+    }
+    default: {
+      const text = item.text || item.summary || item.finding || item.name || JSON.stringify(item).substring(0, 200);
+      return `${text}\n${study}`;
+    }
+  }
 }
 
 function buildResultBlocks(rows, total, question, scope, studyName, summary) {
