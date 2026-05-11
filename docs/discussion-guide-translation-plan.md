@@ -1,3 +1,7 @@
+---
+render_with_liquid: false
+---
+
 # Discussion Guide Translation Plan
 
 **Date:** 2026-04-30
