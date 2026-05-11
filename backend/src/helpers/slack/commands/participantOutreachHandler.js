@@ -12,7 +12,7 @@ const { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo } = require("@/help
 const { processYamlTemplate } = require("@/helpers/yamlProcessor");
 const studyParticipantService = require("../../../services/study_participant.service");
 const { buildAddObserverModal } = require("../ui/addObserverModal");
-const { buildSessionsWithCounts } = require("./addObserverHandler");
+const sessionObserverService = require("../../../services/session_observer.service");
 
 
 const participantOutreachHandler = async ({ ack, body, client, command }) => {
@@ -1154,7 +1154,7 @@ const handleObserverModalButton = async ({ ack, body, client }) => {
     const channelId = body.channel?.id || body.user.id;
 
     // Build sessions with current observer counts
-    const sessions = await buildSessionsWithCounts(studyId);
+    const sessions = await sessionObserverService.buildSessionsWithCounts(studyId);
 
     if (sessions.length === 0) {
       await client.chat.postEphemeral({

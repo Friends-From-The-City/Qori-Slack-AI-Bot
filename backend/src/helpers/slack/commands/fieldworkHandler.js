@@ -13,7 +13,6 @@ const { buildFieldworkDashboard, buildFieldworkStudyPicker } = require('../ui/fi
 const { addParticipantModal } = require('../ui/addParticipantModal');
 const { updateParticipantStatusModal } = require('../ui/outreach/updateParticipantStatusModal');
 const { buildAddObserverModal } = require('../ui/addObserverModal');
-const { buildSessionsWithCounts } = require('./addObserverHandler');
 const { participantOutreachModal } = require('../ui/outreach/participantOutreachModal');
 const { buildSessionNotesView } = require('../ui/sessionNotesModal');
 
@@ -252,7 +251,7 @@ const handleFieldworkObserve = async ({ ack, body, client }) => {
     const channelId = dashboardMeta.channelId || body.user.id;
 
     // Build sessions with current observer counts
-    const sessions = await buildSessionsWithCounts(studyId);
+    const sessions = await sessionObserverService.buildSessionsWithCounts(studyId);
 
     if (sessions.length === 0) {
       await client.chat.postEphemeral({

@@ -9,41 +9,9 @@ const studyParticipantService = require('../../../services/study_participant.ser
 const { getStudiesByUser, getResearchStudyWithRoles } = require('../../../services/research_study.service');
 const { sendObserverGuideDM } = require('../ui/observerGuideDM');
 const { buildSelfJoinSessionPickerModal } = require('../ui/selfJoinSessionPickerModal');
-// Note: refreshDashboardAfterAction is imported lazily to avoid circular dependency
-// (fieldworkHandler imports buildSessionsWithCounts from this file)
-let _refreshDashboardAfterAction;
-const getRefreshDashboard = () => {
-  if (!_refreshDashboardAfterAction) {
-    _refreshDashboardAfterAction = require('./fieldworkHandler').refreshDashboardAfterAction;
-  }
-  return _refreshDashboardAfterAction;
-};
+const { refreshDashboardAfterAction } = require('./fieldworkHandler');
 
 // ── Helpers ────────────────────────────────────────────────
-
-/**
- * Build session options with current observer counts for a study.
- * Returns array of { id, sessionId, participantId, label, count }.
- */
-const buildSessionsWithCounts = async (studyId) => {
-  const participants = await studyParticipantService.getParticipantsByStudy(studyId);
-  const sessions = [];
-
-  for (const p of participants) {
-    const ptId = `PT-${String(p.id).padStart(3, '0')}`;
-    const dateStr = p.scheduled_date || 'TBD';
-    const count = await sessionObserverService.countConfirmedObserversForSession(ptId);
-    sessions.push({
-      id: `${ptId}|${p.id}`,
-      sessionId: ptId,
-      participantId: p.id,
-      label: `${ptId} — ${dateStr}`,
-      count,
-    });
-  }
-
-  return sessions;
-};
 
 /**
  * Parse the session value from the modal (format: "PT-001|1").
@@ -231,7 +199,7 @@ const handleAddObserverSubmission = async ({ ack, body, client, view }) => {
 
     // ── Refresh dashboard ───────────────────────────────
     if (rootViewId) {
-      await getRefreshDashboard()(client, rootViewId, studyId, userId, channelId, studyName);
+      await refreshDashboardAfterAction(client, rootViewId, studyId, userId, channelId, studyName);
     }
   } catch (error) {
     console.error('handleAddObserverSubmission error:', error.message);
@@ -247,7 +215,7 @@ const handleSelfJoinObserver = async ({ ack, body, client }) => {
     const { studyId, studyName, sessionIds } = JSON.parse(body.actions[0].value);
 
     // Build session list with current counts for the picker
-    const allSessions = await buildSessionsWithCounts(studyId);
+    const allSessions = await sessionObserverService.buildSessionsWithCounts(studyId);
     const ctaSessions = sessionIds
       ? allSessions.filter(s => sessionIds.includes(s.id))
       : allSessions;
@@ -336,7 +304,6 @@ const handleSelfJoinSubmission = async ({ ack, body, client, view }) => {
         continue;
       }
 
-      const { participantId } = parseSessionValue(sv);
       const { observer, created } = await sessionObserverService.addConfirmedObserver({
         session_id: sessionId,
         study_id: studyId,
@@ -400,5 +367,4 @@ module.exports = {
   handleAddObserverSubmission,
   handleSelfJoinObserver,
   handleSelfJoinSubmission,
-  buildSessionsWithCounts,
 };

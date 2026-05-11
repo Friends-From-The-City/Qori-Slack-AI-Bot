@@ -363,30 +363,37 @@ class SessionObserverService {
         where: { study_id: studyId, status: 'denied' }
       });
 
-      // Session coverage: how many distinct sessions have at least one active observer
-      const activeObservers = await sequelize.models.SessionObserver.findAll({
-        where: {
-          study_id: studyId,
-          status: { [Op.in]: ['confirmed', 'approved'] },
-        },
-        attributes: ['session_id'],
-        group: ['session_id'],
-        raw: true,
-      });
+      // Session coverage
+      let sessions_covered = 0;
+      let sessions_at_cap = 0;
+      let totalSessions = 0;
 
-      const sessionCounts = {};
-      for (const row of activeObservers) {
-        const count = await this.countConfirmedObserversForSession(row.session_id);
-        sessionCounts[row.session_id] = count;
+      try {
+        const activeBySession = await sequelize.models.SessionObserver.findAll({
+          where: {
+            study_id: studyId,
+            status: { [Op.in]: ['confirmed', 'approved'] },
+          },
+          attributes: [
+            'session_id',
+            [sequelize.fn('COUNT', sequelize.col('id')), 'cnt'],
+          ],
+          group: ['session_id'],
+          raw: true,
+        });
+        sessions_covered = activeBySession.length;
+        sessions_at_cap = activeBySession.filter(r => parseInt(r.cnt, 10) >= MAX_OBSERVERS_PER_SESSION).length;
+      } catch (e) {
+        console.error('Error computing session coverage:', e.message);
       }
 
-      const sessions_covered = activeObservers.length;
-      const sessions_at_cap = Object.values(sessionCounts).filter(c => c >= MAX_OBSERVERS_PER_SESSION).length;
-
-      // Total sessions from study participants
-      const totalSessions = await sequelize.models.StudyParticipant.count({
-        where: { study_id: studyId },
-      });
+      try {
+        totalSessions = await sequelize.models.StudyParticipant.count({
+          where: { study_id: studyId },
+        });
+      } catch (e) {
+        console.error('Error counting total sessions:', e.message);
+      }
 
       return {
         total_observers: totalObservers,
@@ -453,7 +460,33 @@ class SessionObserverService {
   }
 }
 
+/**
+ * Build session options with current observer counts for a study.
+ * Returns array of { id, sessionId, participantId, label, count }.
+ */
+const buildSessionsWithCounts = async (studyId) => {
+  const studyParticipantService = require('./study_participant.service');
+  const participants = await studyParticipantService.getParticipantsByStudy(studyId);
+  const sessions = [];
+
+  for (const p of participants) {
+    const ptId = `PT-${String(p.id).padStart(3, '0')}`;
+    const dateStr = p.scheduled_date || 'TBD';
+    const count = await service.countConfirmedObserversForSession(ptId);
+    sessions.push({
+      id: `${ptId}|${p.id}`,
+      sessionId: ptId,
+      participantId: p.id,
+      label: `${ptId} — ${dateStr}`,
+      count,
+    });
+  }
+
+  return sessions;
+};
+
 const service = new SessionObserverService();
 service.MAX_OBSERVERS_PER_SESSION = MAX_OBSERVERS_PER_SESSION;
+service.buildSessionsWithCounts = buildSessionsWithCounts;
 
 module.exports = service;
