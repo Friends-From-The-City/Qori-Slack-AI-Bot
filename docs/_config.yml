@@ -1,0 +1,13 @@
+theme: jekyll-theme-primer
+
+# Disable Liquid processing for markdown files that contain
+# template syntax examples (Handlebars, Jinja, etc.)
+defaults:
+  - scope:
+      path: ""
+    values:
+      render_with_liquid: false
+  - scope:
+      path: "learn"
+    values:
+      render_with_liquid: false
