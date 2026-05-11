@@ -10,8 +10,36 @@ const { getStudiesByUser, getResearchStudyWithRoles } = require('../../../servic
 const { sendObserverGuideDM } = require('../ui/observerGuideDM');
 const { buildSelfJoinSessionPickerModal } = require('../ui/selfJoinSessionPickerModal');
 const { refreshDashboardAfterAction } = require('./fieldworkHandler');
+const { processObserverYamlTemplate } = require('../../observerYamlProcessor');
+const { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo } = require('../../github');
 
 // ── Helpers ────────────────────────────────────────────────
+
+/**
+ * Update the GitHub participant tracker with current observer data.
+ * Non-fatal — logs a warning on failure so the main flow isn't blocked.
+ */
+const updateObserverTracker = async (studyId, studyName, studyPath) => {
+  try {
+    const yamlFile = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, 'participant_tracker.yaml');
+    if (!yamlFile || !yamlFile.content) return;
+
+    const allObservers = await sessionObserverService.getObserversByStudy(studyId);
+    const allParticipants = await studyParticipantService.getParticipantsByStudy(studyId);
+
+    await processObserverYamlTemplate(
+      yamlFile.content,
+      { study_id: studyId, study_name: studyName, current_date: new Date().toISOString().split('T')[0] },
+      studyPath || '',
+      'primary-research',
+      allObservers,
+      allParticipants,
+    );
+    console.log('✅ Observer tracker updated for study:', studyName);
+  } catch (err) {
+    console.warn('⚠️ Could not update observer tracker:', err.message);
+  }
+};
 
 /**
  * Parse the session value from the modal (format: "PT-001|1").
@@ -197,6 +225,10 @@ const handleAddObserverSubmission = async ({ ack, body, client, view }) => {
       });
     }
 
+    // ── Update participant tracker on GitHub ──────────────
+    const study = await getResearchStudyWithRoles(studyName);
+    await updateObserverTracker(studyId, studyName, study?.path);
+
     // ── Refresh dashboard ───────────────────────────────
     if (rootViewId) {
       await refreshDashboardAfterAction(client, rootViewId, studyId, userId, channelId, studyName);
@@ -357,6 +389,12 @@ const handleSelfJoinSubmission = async ({ ack, body, client, view }) => {
         user: joinerUserId,
         text: parts.join(' '),
       });
+    }
+
+    // ── Update participant tracker on GitHub ──────────────
+    if (joinedSessions.length > 0) {
+      const studyForTracker = await getResearchStudyWithRoles(studyName);
+      await updateObserverTracker(studyId, studyName, studyForTracker?.path);
     }
   } catch (error) {
     console.error('handleSelfJoinSubmission error:', error.message);

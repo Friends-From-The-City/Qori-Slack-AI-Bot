@@ -412,6 +412,28 @@ class SessionObserverService {
   }
 
   /**
+   * Get all observers for a study (confirmed + approved).
+   */
+  async getObserversByStudy(studyId) {
+    try {
+      return await sequelize.models.SessionObserver.findAll({
+        where: {
+          study_id: studyId,
+          status: { [Op.in]: ['confirmed', 'approved'] },
+        },
+        include: [
+          { model: sequelize.models.ResearchStudy, as: 'study', attributes: ['id', 'name', 'path', 'researcher_name'] },
+          { model: sequelize.models.StudyParticipant, as: 'participant', attributes: ['id', 'participant_name', 'scheduled_date', 'scheduled_time'] },
+        ],
+        order: [['created_at', 'DESC']],
+      });
+    } catch (error) {
+      console.error('Error fetching observers by study:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Mark guidelines as sent
    */
   async markGuidelinesSent(observerId) {

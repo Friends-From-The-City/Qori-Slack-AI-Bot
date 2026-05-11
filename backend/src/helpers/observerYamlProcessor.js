@@ -77,7 +77,7 @@ function generateSessionObservers(observerRequests, participants) {
   const sessionMap = {};
 
   observerRequests.forEach(request => {
-    if (request.status === 'approved') {
+    if (request.status === 'approved' || request.status === 'confirmed') {
       const sessionId = request.session_id;
       if (!sessionMap[sessionId]) {
         sessionMap[sessionId] = {
@@ -133,7 +133,7 @@ function generateObserverRoleDistribution(observerRequests) {
   };
 
   observerRequests.forEach(request => {
-    if (request.status === 'approved') {
+    if (request.status === 'approved' || request.status === 'confirmed') {
       if (roleCounts[request.role]) {
         roleCounts[request.role].count++;
         if (!roleCounts[request.role].sessions.includes(request.session_id)) {
