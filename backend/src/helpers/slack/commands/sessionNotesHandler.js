@@ -214,9 +214,22 @@ const handleSessionNotesSubmission = async ({ ack, body, view, client }) => {
     // Extract session selection
     const selectedSessionId = values.session_select?.session_select_change?.selected_option?.value;
 
-    // Fetch sessions data when needed
-    const sessions = await sessionObserverService.getObserverByUser(metadata.userId);
-    const selectedSession = sessions.find(s => s.id.toString() === selectedSessionId);
+    // Resolve selected session — observer path or researcher path
+    let selectedSession;
+    if (metadata.mode === 'researcher' && selectedSessionId?.startsWith('p_')) {
+      const participantId = parseInt(selectedSessionId.replace('p_', ''), 10);
+      const participant = await sessionParticipantService.getParticipantById(participantId);
+      if (participant) {
+        selectedSession = {
+          session_id: `PT-${String(participantId).padStart(3, '0')}`,
+          study: participant.study || { name: 'Unknown Study' },
+          participant,
+        };
+      }
+    } else {
+      const sessions = await sessionObserverService.getObserverByUser(metadata.userId);
+      selectedSession = sessions.find(s => s.id.toString() === selectedSessionId);
+    }
 
     if (!selectedSession || selectedSessionId === 'no_sessions') {
       await client.chat.postMessage({

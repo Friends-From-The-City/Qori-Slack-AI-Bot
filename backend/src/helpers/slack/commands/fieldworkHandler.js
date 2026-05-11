@@ -340,21 +340,37 @@ const handleFieldworkUploadNotes = async ({ ack, body, client }) => {
     const dashboardMeta = JSON.parse(body.view.private_metadata || '{}');
     const userId = body.user.id;
 
-    // Upload notes uses the observer-gated session notes modal
-    const sessions = await sessionObserverService.getObserverByUser(userId);
+    // Try observer sessions first
+    let sessions = await sessionObserverService.getObserverByUser(userId);
+    let mode = 'observer';
 
+    // Researcher fallback: show all study participants as uploadable sessions
     if (!sessions || sessions.length === 0) {
-      await client.chat.postEphemeral({
-        channel: userId,
-        user: userId,
-        text: 'No sessions found. You need to be an observer to upload notes. Ask the researcher to add you via "Add observer."',
-      });
-      return;
+      const participants = await studyParticipantService.getParticipantsByStudy(studyId);
+
+      if (!participants || participants.length === 0) {
+        await client.chat.postEphemeral({
+          channel: userId,
+          user: userId,
+          text: 'No participants found for this study. Add participants first via the fieldwork dashboard.',
+        });
+        return;
+      }
+
+      mode = 'researcher';
+      sessions = participants.map((p, idx) => ({
+        id: `p_${p.id}`,
+        study: p.study || { id: studyId, name: studyName },
+        participant: p,
+        session_id: `PT-${String(idx + 1).padStart(3, '0')}`,
+      }));
     }
 
     const firstSession = sessions[0];
     const initialState = {
       tab: 'upload',
+      mode,
+      studyId,
       session: {
         id: firstSession.id,
         displayName: `${firstSession.study?.name || 'Unknown'} - ${firstSession.participant?.participant_name || 'Unknown'} (${firstSession.session_id || '?'})`,

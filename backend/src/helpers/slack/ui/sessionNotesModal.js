@@ -12,7 +12,9 @@ const buildSessionNotesView = (state = {}) => {
     userId: state.origin?.user,
     teamId: state.origin?.team,
     channelId: state.origin?.channel,
-    selectedSessionId: state.session?.id
+    selectedSessionId: state.session?.id,
+    mode: state.mode || 'observer',
+    studyId: state.studyId || null,
   };
 
   return {
