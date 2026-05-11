@@ -35,11 +35,19 @@ const buildFieldworkDashboard = (study, participantStats, observerStats, outreac
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: [
-          '*Observers*',
-          `  Approved: *${observerStats.approved_observers}* of ${observerStats.total_observers}`,
-          `  Pending: *${observerStats.pending_observers}*`,
-        ].join('\n'),
+        text: (() => {
+          const active = (observerStats.confirmed_observers || 0) + (observerStats.approved_observers || 0);
+          const covered = observerStats.sessions_covered || 0;
+          const total = observerStats.total_sessions || 0;
+          const lines = [`*Observers* — ${active} (${covered} of ${total} sessions covered)`];
+          const details = [];
+          if (observerStats.confirmed_observers > 0) details.push(`${observerStats.confirmed_observers} confirmed`);
+          if (observerStats.approved_observers > 0) details.push(`${observerStats.approved_observers} approved`);
+          if (observerStats.pending_observers > 0) details.push(`${observerStats.pending_observers} pending`);
+          if (observerStats.sessions_at_cap > 0) details.push(`${observerStats.sessions_at_cap} session${observerStats.sessions_at_cap === 1 ? '' : 's'} at cap`);
+          if (details.length > 0) lines.push(`  ${details.join(' · ')}`);
+          return lines.join('\n');
+        })(),
       },
     },
 
@@ -77,7 +85,7 @@ const buildFieldworkDashboard = (study, participantStats, observerStats, outreac
         },
         {
           type: 'button',
-          text: { type: 'plain_text', text: 'Request to observe' },
+          text: { type: 'plain_text', text: 'Add observer' },
           action_id: 'fieldwork_observe',
           value: JSON.stringify({ studyId: study.id, studyName }),
         },

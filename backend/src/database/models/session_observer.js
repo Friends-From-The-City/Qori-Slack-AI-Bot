@@ -70,7 +70,7 @@ module.exports = (sequelize) => {
         },
       },
       role: {
-        type: DataTypes.ENUM('note_taker', 'silent_observer', 'pm_observer', 'stakeholder'),
+        type: DataTypes.ENUM('note_taker', 'silent_observer', 'pm_observer', 'stakeholder', 'observer'),
         allowNull: false,
         comment: 'Observer role type',
       },
@@ -80,10 +80,15 @@ module.exports = (sequelize) => {
         comment: 'Reason for wanting to observe',
       },
       status: {
-        type: DataTypes.ENUM('pending', 'approved', 'denied', 'removed'),
+        type: DataTypes.ENUM('pending', 'approved', 'denied', 'removed', 'confirmed'),
         allowNull: false,
         defaultValue: 'pending',
         comment: 'Current status of the observer request',
+      },
+      joined_via: {
+        type: DataTypes.STRING(20),
+        allowNull: true,
+        comment: 'How observer was added: researcher_add, channel_cta, request',
       },
       approved_by: {
         type: DataTypes.STRING,

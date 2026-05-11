@@ -11,7 +11,8 @@ const { getResearchStudyWithRoles, getStudiesByUser } = require("../../../servic
 const { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo } = require("@/helpers/github");
 const { processYamlTemplate } = require("@/helpers/yamlProcessor");
 const studyParticipantService = require("../../../services/study_participant.service");
-const { requestObserveSessionModal } = require("../ui/requestObserveSessionModal");
+const { buildAddObserverModal } = require("../ui/addObserverModal");
+const { buildSessionsWithCounts } = require("./addObserverHandler");
 
 
 const participantOutreachHandler = async ({ ack, body, client, command }) => {
@@ -1143,60 +1144,54 @@ const handleAddParticipantSubmit = async ({ ack, body, view, client }) => {
   }
 };
 
-// Handler for the observer modal button click
+// Handler for the observer modal button click (from outreach flow)
 const handleObserverModalButton = async ({ ack, body, client }) => {
   try {
     await ack();
 
     const { value } = body.actions[0];
-    const { studyId, studyName, participantCount } = JSON.parse(value);
+    const { studyId, studyName } = JSON.parse(value);
+    const channelId = body.channel?.id || body.user.id;
 
-    // Get study details to get researcher name
-    
-    const study = await getResearchStudyWithRoles(studyName);
-    const studyResearcherName = study?.researcher_name || "";
+    // Build sessions with current observer counts
+    const sessions = await buildSessionsWithCounts(studyId);
 
-    // Get user's display name
-    const userName = body.user.real_name || body.user.name || body.user.username || "";
+    if (sessions.length === 0) {
+      await client.chat.postEphemeral({
+        channel: channelId,
+        user: body.user.id,
+        text: 'Add a session to the study before inviting observers.',
+      });
+      return;
+    }
 
-    // Get participants for this study to create session options
-    const participants = await studyParticipantService.getParticipantsByStudy(studyId);
+    // Resolve channel display name
+    let channelName = 'channel';
+    try {
+      const channelInfo = await client.conversations.info({ channel: channelId });
+      channelName = channelInfo.channel?.name || 'channel';
+    } catch (e) { /* fallback */ }
 
-    // Create session options from participants
-    const sessions = participants.map((participant, index) => ({
-      id: participant.participant_name,
-      participantId: participant.id, // Include the actual participant ID
-      date: participant.scheduled_date || 'TBD',
-      time: participant.scheduled_time || 'TBD',
-      assignedObservers: [],
-      maxObservers: 3,
-      requiresApproval: false,
-    }));
-
-    // Open the observer modal
+    const observeView = buildAddObserverModal(sessions, channelName);
     await client.views.open({
       trigger_id: body.trigger_id,
       view: {
-        ...requestObserveSessionModal(sessions, studyName, studyResearcherName, userName),
+        ...observeView,
         private_metadata: JSON.stringify({
-          channelId: body.channel.id,
+          channelId,
           userId: body.user.id,
-          userName: userName,
           studyId,
           studyName,
-          studyResearcherName,
         }),
       },
     });
 
   } catch (error) {
-    console.error("🚨 Error handling observer modal button:", error);
-
-    // Send error message to user
+    console.error("Error handling observer modal button:", error);
     await client.chat.postEphemeral({
-      channel: body.channel.id,
+      channel: body.channel?.id || body.user.id,
       user: body.user.id,
-      text: "❌ Sorry, there was an error opening the observer modal. Please try again.",
+      text: "Sorry, there was an error opening the observer modal. Please try again.",
     });
   }
 };

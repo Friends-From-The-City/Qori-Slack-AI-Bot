@@ -12,7 +12,8 @@ const { getActiveStudy, setActiveStudy } = require('../../../services/slack-user
 const { buildFieldworkDashboard, buildFieldworkStudyPicker } = require('../ui/fieldworkDashboardModal');
 const { addParticipantModal } = require('../ui/addParticipantModal');
 const { updateParticipantStatusModal } = require('../ui/outreach/updateParticipantStatusModal');
-const { requestObserveSessionModal } = require('../ui/requestObserveSessionModal');
+const { buildAddObserverModal } = require('../ui/addObserverModal');
+const { buildSessionsWithCounts } = require('./addObserverHandler');
 const { participantOutreachModal } = require('../ui/outreach/participantOutreachModal');
 const { buildSessionNotesView } = require('../ui/sessionNotesModal');
 
@@ -248,38 +249,42 @@ const handleFieldworkObserve = async ({ ack, body, client }) => {
   try {
     const { studyId, studyName } = JSON.parse(body.actions[0].value);
     const dashboardMeta = JSON.parse(body.view.private_metadata || '{}');
-    const userName = body.user.name || body.user.username || '';
+    const channelId = dashboardMeta.channelId || body.user.id;
 
-    // Get participants for session options
-    const participants = await studyParticipantService.getParticipantsByStudy(studyId);
-    const sessions = participants.map(p => {
-      const ptId = `PT-${String(p.id).padStart(3, '0')}`;
-      return {
-        id: ptId,
-        participantId: p.id,
-        date: p.scheduled_date || 'TBD',
-        time: p.scheduled_time || 'TBD',
-        assignedObservers: [],
-        maxObservers: 3,
-        requiresApproval: true,
-      };
-    });
+    // Build sessions with current observer counts
+    const sessions = await buildSessionsWithCounts(studyId);
 
     if (sessions.length === 0) {
       await client.chat.postEphemeral({
         channel: body.user.id,
         user: body.user.id,
-        text: 'No participants found in this study. Add participants first.',
+        text: 'Add a session to the study before inviting observers.',
       });
       return;
     }
 
-    const observeView = requestObserveSessionModal(sessions, studyName, '', userName);
+    // Resolve channel display name for the CTA checkbox label
+    let channelName = 'channel';
+    try {
+      const channelInfo = await client.conversations.info({ channel: channelId });
+      channelName = channelInfo.channel?.name || 'channel';
+    } catch (e) {
+      // Fallback — may be a DM channel or inaccessible
+    }
+
+    const observeView = buildAddObserverModal(sessions, channelName);
     await client.views.push({
       trigger_id: body.trigger_id,
       view: {
         ...observeView,
-        private_metadata: JSON.stringify({ ...dashboardMeta, studyId, studyName, userName, rootViewId: body.view.id }),
+        private_metadata: JSON.stringify({
+          ...dashboardMeta,
+          studyId,
+          studyName,
+          channelId,
+          userId: body.user.id,
+          rootViewId: body.view.id,
+        }),
       },
     });
   } catch (error) {
@@ -343,7 +348,7 @@ const handleFieldworkUploadNotes = async ({ ack, body, client }) => {
       await client.chat.postEphemeral({
         channel: userId,
         user: userId,
-        text: 'No approved sessions found. You need to be an approved observer to upload notes. Use "Request to observe" first.',
+        text: 'No sessions found. You need to be an observer to upload notes. Ask the researcher to add you via "Add observer."',
       });
       return;
     }

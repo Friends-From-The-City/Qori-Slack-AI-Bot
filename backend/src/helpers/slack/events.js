@@ -28,7 +28,7 @@ const { sendStudyResultMessage, generateStudyResultBlocks } = require("./ui/stud
 const { buildLearnModal, buildCondensedModal } = require("./ui/qoriLearnModal");
 const { handleParticipantOutreachSubmit, handleInitialRecruitmentSubmit, handleReschedulingRequestSubmit, handleSessionConfirmationSubmit, handleThankYouSubmit, handleFollowUpSubmit, handleSessionReminderSubmit, handleAddParticipantSubmit, handleObserverModalButton } = require("./commands/participantOutreachHandler");
 const { handleLoadParticipantsButton, handleUpdateParticipantSubmission } = require("./commands/participantHandler");
-const { handleObserveSessionSubmission, handleObserverApproval, handleObserverDenial } = require("./commands/observeSessionHandler");
+const { handleAddObserverSubmission, handleSelfJoinObserver, handleSelfJoinSubmission } = require("./commands/addObserverHandler");
 const { copyEmailModal } = require("./ui/outreach/copyEmailModal");
 const { sessionConfirmationModal } = require("./ui/outreach/sessionConfirmationModal");
 const { sessionReminderModal } = require("./ui/outreach/sessionReminderModal");
@@ -2715,7 +2715,8 @@ slackApp.view("outreach_follow_up_modal", handleFollowUpSubmit);
 slackApp.view("outreach_session_reminder_modal", handleSessionReminderSubmit);
 slackApp.view("add-participant-modal", handleAddParticipantSubmit);
 slackApp.view("update-participant-status", handleUpdateParticipantSubmission);
-slackApp.view("request_observe_session_modal", handleObserveSessionSubmission);
+slackApp.view("add_observer_modal", handleAddObserverSubmission);
+slackApp.view("self_join_session_picker_modal", handleSelfJoinSubmission);
 
 // /qori-request removed — functionality replaced by /qori-brief direct flow
 
@@ -2799,10 +2800,8 @@ slackApp.action("open_observer_modal", handleObserverModalButton);
 // Upload notes modal button handlers
 // slackApp.action("select_session_notes", handleSelectSessionNotes);
 
-// Observer approval handlers
-slackApp.action("approve_observer_request", handleObserverApproval)
-
-slackApp.action("deny_observer_request", handleObserverDenial)
+// Self-join observer CTA button handler
+slackApp.action("self_join_observer", handleSelfJoinObserver);
 
 // Handle overflow menu for generating other message types
 slackApp.action("generate_other_message_type", async ({ ack, body, client, action }) => {
