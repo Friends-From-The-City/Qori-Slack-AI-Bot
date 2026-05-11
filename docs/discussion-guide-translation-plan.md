@@ -1,7 +1,3 @@
----
-render_with_liquid: false
----
-
 # Discussion Guide Translation Plan
 
 **Date:** 2026-04-30
@@ -48,6 +44,7 @@ render_with_liquid: false
 
 ### Current conditionals in v6.1 (in task `section_2_activities`)
 
+{% raw %}
 ```
 {% if research_method == "usability_testing" %}
   → Generates Task 1/2/3 format with Scenario/Instruction/Success Criteria/Observe/Probe
@@ -59,6 +56,7 @@ render_with_liquid: false
   → Generates generic Activity 1/2 with Setup/Instructions/What to Capture
 {% endif %}
 ```
+{% endraw %}
 
 **Variables driving branching:** `research_method` (from modal static_select)
 **Source:** Modal input, not AI-task output
@@ -303,7 +301,7 @@ Pulling the research plan into the discussion guide would require: fetching it f
 
 **Recommendation: Jinja2 conditionals (current approach).**
 
-The existing `{% if research_method == "usability_testing" %}` pattern works and is proven. A single prompt with conditional branches is cleaner than 7 separate prompts. The LLM sees the full context (method, session length, task count, research focus) and generates the appropriate structure.
+The existing `{% raw %}{% if research_method == "usability_testing" %}{% endraw %}` pattern works and is proven. A single prompt with conditional branches is cleaner than 7 separate prompts. The LLM sees the full context (method, session length, task count, research focus) and generates the appropriate structure.
 
 Alternative (structured prompts where the LLM decides) would be less deterministic — the Jinja2 approach guarantees the right structure.
 
