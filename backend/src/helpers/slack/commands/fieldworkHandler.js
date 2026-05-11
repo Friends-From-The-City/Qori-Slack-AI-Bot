@@ -366,19 +366,27 @@ const handleFieldworkUploadNotes = async ({ ack, body, client }) => {
       }));
     }
 
-    const firstSession = sessions[0];
+    // Convert Sequelize models to plain objects so template literals work consistently
+    const plainSessions = sessions.map(s => ({
+      id: s.id,
+      study: s.study?.dataValues ? s.study.toJSON() : s.study,
+      participant: s.participant?.dataValues ? s.participant.toJSON() : s.participant,
+      session_id: s.session_id,
+    }));
+
+    const firstSession = plainSessions[0];
     const initialState = {
       tab: 'upload',
       mode,
       studyId,
       session: {
         id: firstSession.id,
-        displayName: `${firstSession.study?.name || 'Unknown'} - ${firstSession.participant?.participant_name || 'Unknown'} (${firstSession.session_id || '?'})`,
+        displayName: `${firstSession.study?.name || 'Unknown Study'} - ${firstSession.participant?.participant_name || 'Unknown Participant'} (${firstSession.session_id || 'Unknown Session'})`,
         study: firstSession.study,
         participant: firstSession.participant,
         session_id: firstSession.session_id,
       },
-      sessions,
+      sessions: plainSessions,
       origin: {
         channel: dashboardMeta.channelId,
         user: userId,
@@ -390,7 +398,12 @@ const handleFieldworkUploadNotes = async ({ ack, body, client }) => {
       view: buildSessionNotesView(initialState),
     });
   } catch (error) {
-    console.error('handleFieldworkUploadNotes error:', error.message);
+    console.error('handleFieldworkUploadNotes error:', error.message, error.data || '');
+    await client.chat.postEphemeral({
+      channel: body.user.id,
+      user: body.user.id,
+      text: `Failed to open notes modal: ${error.message}`,
+    }).catch(() => {});
   }
 };
 
