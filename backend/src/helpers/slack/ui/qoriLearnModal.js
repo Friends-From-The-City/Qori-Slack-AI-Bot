@@ -5,8 +5,7 @@
  * Returning users see a condensed command map with "Take the tour again" button.
  */
 
-// Placeholder URL for cascade diagram — replace with actual hosted asset
-const CASCADE_DIAGRAM_URL = 'https://friends-innovation-lab.github.io/qori-slack/assets/cascade-diagram.gif';
+const CASCADE_DIAGRAM_URL = 'https://friends-innovation-lab.github.io/qori-slack/assets/cascade-diagram.png';
 
 // ── Screen builders ────────────────────────────────────────
 
@@ -49,25 +48,17 @@ function buildScreen2() {
     },
     { type: 'divider' },
     {
-      type: 'section',
-      text: {
-        type: 'mrkdwn',
-        text: 'A participant says:\n> _"Benefits sounds like a brochure, not my actual money."_',
-      },
-    },
-    {
       type: 'image',
       image_url: CASCADE_DIAGRAM_URL,
-      alt_text: 'Cascade diagram showing how a quote flows through Qori: quote → nugget → theme → finding → ticket',
+      alt_text: 'Diagram: a real participant quote ("Benefits sounds like a brochure, not my actual money.") connected by an arrow to an engineering ticket (qori-eng-12: Rewrite benefits page copy in plain financial terms.). Caption reads: Every link traceable to real evidence.',
     },
     {
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: '→ Becomes a structured nugget\n→ Joins a validated theme\n→ Informs a finding with severity\n→ Creates an engineering ticket\n\nEvery link traceable. Nothing fabricated. Real evidence.',
+        text: 'Qori turns interviews into engineering tickets. Every output traces back to the research that produced it.',
       },
     },
-    { type: 'divider' },
     {
       type: 'actions',
       block_id: 'learn_nav',
