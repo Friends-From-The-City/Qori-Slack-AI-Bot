@@ -8,7 +8,7 @@ Investigation-only report. No fixes applied.
 
 ### Root Cause: Parallel execution of chained AI tasks
 
-`usability_issues_extractor.yaml` has **6 sequentially-dependent tasks** where each task's prompt references the output of the previous task via `{{ai_generated.*}}`. But `executeAiGenerationTasks` in `langchain.js:117-138` runs all tasks with `Promise.all` — they all launch simultaneously before any results exist.
+`usability_issues_extractor.yaml` has **6 sequentially-dependent tasks** where each task's prompt references the output of the previous task via {% raw %}`{{ai_generated.*}}`{% endraw %}. But `executeAiGenerationTasks` in `langchain.js:117-138` runs all tasks with `Promise.all` — they all launch simultaneously before any results exist.
 
 **Why only Usability Issues is affected:** Every other working synthesis template (affinity_mapping, journey_mapping, personas, etc.) uses **1 single consolidated task**. Affinity mapping's own YAML comments (lines 316-330) document that it was redesigned from 6 tasks to 1 specifically because of this same parallel-execution problem. Usability Issues was never given that same redesign.
 
@@ -17,8 +17,8 @@ Investigation-only report. No fixes applied.
 1. `researchSynthesisHandler.js:620` dispatches `usability_issues_extractor.yaml` to `processYamlTemplate`
 2. `yamlProcessor.js:36` calls `executeAiGenerationTasks` with all 6 tasks
 3. `langchain.js:117` launches all 6 via `Promise.all`
-4. Tasks 2-6 reference `{{ai_generated.file_discovery_summary}}`, `{{ai_generated.usability_scope_analysis}}`, etc.
-5. Nunjucks (`langchain.js:123`, configured with `autoescape: false`) silently renders all `{{ai_generated.*}}` references as **empty string** — no error raised
+4. Tasks 2-6 reference {% raw %}`{{ai_generated.file_discovery_summary}}`{% endraw %}, {% raw %}`{{ai_generated.usability_scope_analysis}}`{% endraw %}, etc.
+5. Nunjucks (`langchain.js:123`, configured with `autoescape: false`) silently renders all {% raw %}`{{ai_generated.*}}`{% endraw %} references as **empty string** — no error raised
 6. Tasks 2-6 send prompts with empty context to the LLM → produce garbage or fail at `PromptTemplate.format` (`langchain.js:130`) because the regex at line 126 (`\w+`) doesn't match dotted variable names like `ai_generated.task_id`
 7. If any task throws, `Promise.all` rejects
 8. `researchSynthesisHandler.js:700-710` **swallows the error** — it catches, logs to console, and posts an ephemeral "Analysis is being processed..." message to the user. No result ever arrives. The user sees the processing message indefinitely.
@@ -28,16 +28,16 @@ Investigation-only report. No fixes applied.
 | Task # | task_id | References from prior tasks |
 |--------|---------|----------------------------|
 | 1 | `file_discovery_summary` | None (independent) |
-| 2 | `usability_scope_analysis` | `{{ai_generated.file_discovery_summary}}` (line 137) |
-| 3 | `issue_identification` | `{{ai_generated.usability_scope_analysis}}` (line 160) |
-| 4 | `behavior_expectation_analysis` | `{{ai_generated.issue_identification}}` (line 193) |
-| 5 | `severity_impact_assessment` | `{{ai_generated.behavior_expectation_analysis}}` (line 225) |
-| 6 | `fix_recommendation_generation` | `{{ai_generated.severity_impact_assessment}}` + `{{ai_generated.behavior_expectation_analysis}}` (lines 263-264) |
-| 6b | `evidence_quote_validation` | `{{ai_generated.behavior_expectation_analysis}}` + `{{ai_generated.severity_impact_assessment}}` (lines 306-307) |
+| 2 | `usability_scope_analysis` | {% raw %}`{{ai_generated.file_discovery_summary}}`{% endraw %} (line 137) |
+| 3 | `issue_identification` | {% raw %}`{{ai_generated.usability_scope_analysis}}`{% endraw %} (line 160) |
+| 4 | `behavior_expectation_analysis` | {% raw %}`{{ai_generated.issue_identification}}`{% endraw %} (line 193) |
+| 5 | `severity_impact_assessment` | {% raw %}`{{ai_generated.behavior_expectation_analysis}}`{% endraw %} (line 225) |
+| 6 | `fix_recommendation_generation` | {% raw %}`{{ai_generated.severity_impact_assessment}}`{% endraw %} + {% raw %}`{{ai_generated.behavior_expectation_analysis}}`{% endraw %} (lines 263-264) |
+| 6b | `evidence_quote_validation` | {% raw %}`{{ai_generated.behavior_expectation_analysis}}`{% endraw %} + {% raw %}`{{ai_generated.severity_impact_assessment}}`{% endraw %} (lines 306-307) |
 
 ### Secondary issue: output_template uses non-existent auto_variables
 
-The `output_template` (lines 362-397) references `{{num_issues}}`, `{{severity_overview}}`, and `{{github_file_link}}`. These are defined in `auto_variables` (lines 495-500) as computed expressions, but `yamlProcessor.js` **never reads or processes `auto_variables`**. All three render as empty strings in the Handlebars output.
+The `output_template` (lines 362-397) references {% raw %}`{{num_issues}}`{% endraw %}, {% raw %}`{{severity_overview}}`{% endraw %}, and {% raw %}`{{github_file_link}}`{% endraw %}. These are defined in `auto_variables` (lines 495-500) as computed expressions, but `yamlProcessor.js` **never reads or processes `auto_variables`**. All three render as empty strings in the Handlebars output.
 
 ### Suggested fix
 
@@ -95,7 +95,7 @@ The query also requires `study_name = studyName` (exact string match). `study_na
 
 **Problem C (secondary) — `blueprint_scope` never provided.**
 
-`service_blueprint.yaml:185` references `{{blueprint_scope}}` but `analysisData` (line 604-615) never sets it. The modal has no scope selector UI. The LLM receives a blank scope.
+`service_blueprint.yaml:185` references {% raw %}`{{blueprint_scope}}`{% endraw %} but `analysisData` (line 604-615) never sets it. The modal has no scope selector UI. The LLM receives a blank scope.
 
 ### What the YAML template expects vs. what it gets
 

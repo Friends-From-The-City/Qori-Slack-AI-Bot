@@ -37,7 +37,7 @@ Fixes that resolve known alpha bugs with small/trivial complexity. Ordered by us
 | Field | Value |
 |-------|-------|
 | **Bug it solves** | 🟡 Generation dates on synthesis files are incorrect (ALPHA_POLISH). Also fixes empty dates in research_plan, service_blueprint, stakeholder_synthesis, stakeholder_interview_guide, survey_synthesis, journey_mapping. |
-| **Root cause** | `yamlProcessor.js:16` adds `current_date` to Handlebars output context but NOT to `inputValues` passed to `executeAiGenerationTasks`. Any `{{current_date}}` in AI prompt strings resolves to empty. |
+| **Root cause** | `yamlProcessor.js:16` adds `current_date` to Handlebars output context but NOT to `inputValues` passed to `executeAiGenerationTasks`. Any {% raw %}`{{current_date}}`{% endraw %} in AI prompt strings resolves to empty. |
 | **Files to change** | `backend/src/helpers/yamlProcessor.js` — one line change at ~line 37: spread `current_date` into `inputValues` before passing to `executeAiGenerationTasks` |
 | **Effort** | XS (one-liner) |
 | **Risk** | Low — only enriches the context object; no downstream consumers affected |
@@ -88,7 +88,7 @@ Fixes for 🔴 severity bugs from ALPHA_POLISH. Higher complexity but must be do
 |-------|-------|
 | **Bug it solves** | 🔴 Project Timeline in Research Plan doesn't read from date inputs (ALPHA_POLISH) |
 | **Root cause** | JS at events.js:1501-1503 extracts `start_date`, `end_date`, `key_milestones` but YAML's AI prompts use `timeline_date` (line 298) and `current_date` (lines 317-318) which are never provided. The extracted date values are dead keys — JS provides them but YAML doesn't reference them. |
-| **Files to change** | (1) `beta-test/YAML Templates/research_plan.yaml` — add `{{start_date}}`, `{{end_date}}` references in the timeline prompt section, alias or remove `{{timeline_date}}`. (2) Optionally add `timeline_date` to the JS data object if YAML keeps using that name. |
+| **Files to change** | (1) `beta-test/YAML Templates/research_plan.yaml` — add {% raw %}`{{start_date}}`{% endraw %}, {% raw %}`{{end_date}}`{% endraw %} references in the timeline prompt section, alias or remove {% raw %}`{{timeline_date}}`{% endraw %}. (2) Optionally add `timeline_date` to the JS data object if YAML keeps using that name. |
 | **Effort** | S (YAML prompt editing + testing the timeline section output) |
 | **Risk** | Low — only changes prompt text, no structural changes |
 | **Verification** | Run `/qori-plan` → enter specific dates → confirm timeline section reflects those dates |
@@ -170,7 +170,7 @@ Audit findings not currently causing reported bugs but will eventually.
 
 | Field | Value |
 |-------|-------|
-| **Bug it solves** | `{% if user_findings %}` conditional blocks in the YAML never fire — entire sections of the guide are silently omitted |
+| **Bug it solves** | {% raw %}`{% if user_findings %}`{% endraw %} conditional blocks in the YAML never fire — entire sections of the guide are silently omitted |
 | **Root cause** | JS merges `userFindings` into `research_questions` (events.js:2336) instead of providing it as a separate `user_findings` key. |
 | **Files to change** | `backend/src/helpers/slack/events.js` ~line 2336 — provide `user_findings` as its own key |
 | **Effort** | XS (one-liner) |

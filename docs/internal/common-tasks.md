@@ -10,6 +10,7 @@ How to perform common administrative and development tasks for Qori.
 
 1. Create YAML file in `/config/prompts/`:
 
+{% raw %}
 ```yaml
 id: new_feature
 label: "New Feature"
@@ -42,6 +43,7 @@ output_options:
   path: "folder/"
   filename: "output_{{current_date}}.md"
 ```
+{% endraw %}
 
 2. Update `/config/command-mapping.json`
 
@@ -103,6 +105,7 @@ output_options:
 
 Edit the `output_template` section in the prompt YAML:
 
+{% raw %}
 ```yaml
 output_template: |
   # {{title}}
@@ -111,6 +114,7 @@ output_template: |
 
   {{ai_generated.content}}
 ```
+{% endraw %}
 
 ---
 

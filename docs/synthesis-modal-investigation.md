@@ -51,7 +51,7 @@ User checks files + selects analysis method + clicks Submit
   → combined_file_content = all file contents joined with '\n\n---\n\n'
   → detected_files = list of relative paths (one per line)
   → analysisData object passed to processYamlTemplate
-  → YAML template's {{combined_file_content}} receives all the content
+  → YAML template's {% raw %}{{combined_file_content}}{% endraw %} receives all the content
   → LLM processes and generates output
 ```
 

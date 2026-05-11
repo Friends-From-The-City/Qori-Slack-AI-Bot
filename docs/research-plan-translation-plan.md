@@ -227,7 +227,7 @@ The placeholder text guides: "What problem does this research address? What prod
 
 ## What's preserved from current v4.5
 
-- Timeline task with `{{start_date}}` date logic
+- Timeline task with {% raw %}`{{start_date}}`{% endraw %} date logic
 - Background expansion from decision context
 - Risk assessment generation
 - Participant criteria formatting

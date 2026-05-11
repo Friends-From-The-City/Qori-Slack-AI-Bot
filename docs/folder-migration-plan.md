@@ -136,7 +136,7 @@ None — all 23 `beta-test/YAML Templates/` files exist in `config/prompts/`. (T
 | Template | Status | Risk |
 |----------|--------|------|
 | `usability_issues_extractor.yaml` | **Major divergence** — beta-test is the v3.0 rewrite (14KB), config/prompts has the old v2.0 (22KB) | Must copy beta→config. Config version is broken (6-task chain). |
-| `research_plan.yaml` | Beta-test has the `{{start_date}}` fix from this session | Must copy beta→config |
+| `research_plan.yaml` | Beta-test has the {% raw %}`{{start_date}}`{% endraw %} fix from this session | Must copy beta→config |
 | `session_notes.yaml` | Beta-test has the `ai_generation_tasks` key fix | Must copy beta→config |
 | `service_blueprint.yaml` | Beta-test has the output path fix | Must copy beta→config |
 | `discussion_guide.yaml` | 3-byte difference, likely whitespace | Low risk — verify and copy |

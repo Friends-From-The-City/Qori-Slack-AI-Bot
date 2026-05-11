@@ -100,7 +100,7 @@ Below the metadata line, lists clickable links to source documents. Use middle-d
 **Sources** — [Doc 1](path) · [Doc 2](path) · [Doc 3](path)
 ```
 
-> **Lesson from v5.4.1:** Source paths must come from `{{detected_files}}` verbatim — never constructed from patterns. The LLM should copy exact filenames from the detected files list and prepend `../` for relative linking. Pattern-based path construction (e.g., `../03-fieldwork/session-summaries/PT-001-session-summary.md`) produces 404s when real filenames differ from the pattern (trailing hyphens, different casing, date suffixes). The backend (`readoutHandler.js`) populates `{{detected_files}}` with real paths scanned from the study folder.
+> **Lesson from v5.4.1:** Source paths must come from {% raw %}`{{detected_files}}`{% endraw %} verbatim — never constructed from patterns. The LLM should copy exact filenames from the detected files list and prepend `../` for relative linking. Pattern-based path construction (e.g., `../03-fieldwork/session-summaries/PT-001-session-summary.md`) produces 404s when real filenames differ from the pattern (trailing hyphens, different casing, date suffixes). The backend (`readoutHandler.js`) populates {% raw %}`{{detected_files}}`{% endraw %} with real paths scanned from the study folder.
 
 ### 4.7 Confidence levels
 
@@ -233,7 +233,7 @@ Traceability is document-type-specific. Not all documents make claims that requi
 
 Each numbered claim/finding includes:
 - **Confidence** indicator (Strong / Moderate / Limited) with parenthetical reasoning
-- **Sources** line with middle-dot-separated links to source documents (using `{{detected_files}}` as ground truth)
+- **Sources** line with middle-dot-separated links to source documents (using {% raw %}`{{detected_files}}`{% endraw %} as ground truth)
 
 Use for findings documents with discrete numbered claims:
 - Research readout
@@ -291,20 +291,20 @@ Some templates produce different content based on context (e.g., targeted_readou
 
 ### 6.1 Source path ground truth
 
-Source paths must come from `{{detected_files}}` verbatim — never constructed from patterns. The LLM copies exact filenames from the detected files list and prepends `../` for relative linking from the output folder.
+Source paths must come from {% raw %}`{{detected_files}}`{% endraw %} verbatim — never constructed from patterns. The LLM copies exact filenames from the detected files list and prepends `../` for relative linking from the output folder.
 
 Pattern-based path construction (e.g., `../03-fieldwork/session-summaries/PT-001-session-summary.md`) produces 404s when real filenames differ from the expected pattern (trailing hyphens, different casing, date suffixes).
 
-**Where `{{detected_files}}` is populated:**
+**Where {% raw %}`{{detected_files}}`{% endraw %} is populated:**
 - `readoutHandler.js` — for research readout and targeted readouts (scans study folders including analysis-layer)
 - `researchSynthesisHandler.js` — for all 7 synthesis templates (built from `filesWithContent` entries)
-- If a future template needs `{{detected_files}}` and doesn't have it wired, that's a backend change in the relevant handler.
+- If a future template needs {% raw %}`{{detected_files}}`{% endraw %} and doesn't have it wired, that's a backend change in the relevant handler.
 
 The backend deduplicates when multiple date-stamped versions of the same file exist — only the latest version appears in the list.
 
 ### 6.2 Related Artifacts
 
-The Related Artifacts table (in appendix `<details>` blocks) must be populated with actual paths from `{{detected_files}}`, organized by category:
+The Related Artifacts table (in appendix `<details>` blocks) must be populated with actual paths from {% raw %}`{{detected_files}}`{% endraw %}, organized by category:
 
 - **Planning:** research plan, research brief, discussion guide
 - **Fieldwork:** session summaries (one row per file), coded transcripts
@@ -358,8 +358,8 @@ Templates that participate in the cascade contract (consuming upstream variables
 When a template consumes upstream variables, it:
 
 1. Declares `consumes:` in the YAML with source, required, and inject_as fields
-2. Accesses upstream values via `{{upstream_*}}` Handlebars variables in the generate prompt
-3. Conditionally renders cascade-dependent sections using `{% if upstream_* %}` guards
+2. Accesses upstream values via {% raw %}`{{upstream_*}}`{% endraw %} Handlebars variables in the generate prompt
+3. Conditionally renders cascade-dependent sections using {% raw %}`{% if upstream_* %}`{% endraw %} guards
 4. Suppresses cascade sections entirely when upstream variables are absent (graceful degradation)
 
 ### 8.2 Emit pattern

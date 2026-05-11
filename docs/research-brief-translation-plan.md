@@ -44,7 +44,7 @@
 ### Footer
 
 Backend `buildTraceabilityFooter()` handles all traceability. Remove from output_template:
-- `*Created by {{lead_researcher}} • {{current_date}}*`
+- {% raw %}`*Created by {{lead_researcher}} • {{current_date}}*`{% endraw %}
 - `> **Status:** Pending stakeholder approval` (moved to Approval section)
 
 ---
@@ -196,7 +196,7 @@ Per `docs/qori-template-standards.md` Section 6, Pattern C means:
 | No per-finding Confidence indicators | ✅ N/A (brief has no findings) |
 | No per-finding Sources lines | ✅ N/A |
 | No References list | ✅ N/A |
-| Backend footer only | ✅ Remove `*Created by {{lead_researcher}}*` from template |
+| Backend footer only | ✅ Remove {% raw %}`*Created by {{lead_researcher}}*`{% endraw %} from template |
 | Document-level metadata table | ✅ Backend buildTraceabilityFooter handles |
 
 **Exception:** Brief DOES include an Approval section (unlike other Pattern C docs) because brief IS the approval gate per new architecture.
@@ -247,8 +247,8 @@ Per `docs/qori-template-standards.md` Section 6, Pattern C means:
 - Add Approval section with checkboxes
 
 ### Step 4: End-to-End Test
-- Verify file lands in `qori-studies/{{selected_study}}/primary-research/01-planning/`
-- Verify filename: `{{study_name}}-research-brief-{{current_date_iso}}.md`
+- Verify file lands in {% raw %}`qori-studies/{{selected_study}}/primary-research/01-planning/`{% endraw %}
+- Verify filename: {% raw %}`{{study_name}}-research-brief-{{current_date_iso}}.md`{% endraw %}
 - Verify Slack notification with approval buttons
 - Verify methodology shows display label not raw value
 
@@ -295,8 +295,8 @@ Per `docs/qori-template-standards.md` Section 6, Pattern C means:
 **Decision needed:** _______________
 
 ### 5. Filename pattern
-**Current:** `{{project_title}}_research_brief_{{current_date}}.md`
-**Proposed:** `{{study_name}}-research-brief-{{current_date_iso}}.md`
+**Current:** {% raw %}`{{project_title}}_research_brief_{{current_date}}.md`{% endraw %}
+**Proposed:** {% raw %}`{{study_name}}-research-brief-{{current_date_iso}}.md`{% endraw %}
 
 Matches research_plan convention (hyphens, ISO date, study name instead of project title).
 
@@ -308,7 +308,7 @@ Matches research_plan convention (hyphens, ISO date, study name instead of proje
 
 The `config/templates/primary-research/` folder structure shows `01-planning/` exists. The YAML path is correct; `output_use` text is stale.
 
-**Proposed:** Keep `01-planning/` — verify research_plan uses same path. Full path: `{{study.path}}/primary-research/01-planning/{{filename}}`
+**Proposed:** Keep `01-planning/` — verify research_plan uses same path. Full path: {% raw %}`{{study.path}}/primary-research/01-planning/{{filename}}`{% endraw %}
 
 **Decision needed:** _______________
 
