@@ -49,7 +49,7 @@ const sendObserverGuideDM = async (client, userId, studyName, githubUrl) => {
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: '*To take notes during the session, use this command:* `/take-notes`',
+        text: '*To upload notes during the session, use:* `/qori-fieldnotes` → Upload notes',
       },
     },
   );
