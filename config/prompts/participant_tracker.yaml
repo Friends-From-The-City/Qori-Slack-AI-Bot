@@ -177,7 +177,7 @@ output_template: |
   | Session | Date/Time | Observers | Capacity | Pending Requests | Guidelines Sent |
   |---------|-----------|-----------|----------|------------------|-----------------|
   {{#each session_observers}}
-  | {{session_id}} | {{date_time}} | {{observers}} ({{observer_role}}) | {{capacity}}/3 | {{pending_count}} | ✅ Sent |
+  | {{session_id}} | {{date_time}} | {{observers}} | {{capacity}}/3 | {{pending_count}} | ✅ Sent |
   {{/each}}
 
   **Role Distribution:**

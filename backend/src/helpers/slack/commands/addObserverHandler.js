@@ -41,6 +41,13 @@ const updateObserverTracker = async (studyId, studyName, studyPath) => {
   }
 };
 
+const ROLE_DISPLAY = {
+  note_taker: '📝 Note-taker',
+  silent_observer: '👁️ Silent Observer',
+  pm_observer: '📊 PM Observer',
+  stakeholder: '🏛️ Stakeholder',
+};
+
 /**
  * Parse the session value from the modal (format: "PT-001|1").
  */
@@ -72,6 +79,7 @@ const handleAddObserverSubmission = async ({ ack, body, client, view }) => {
   // Extract form values
   const selectedSessionValues = values.observer_sessions_block?.observer_sessions?.selected_options?.map(o => o.value) || [];
   const selectedUsers = values.observer_people_block?.observer_people?.selected_users || [];
+  const selectedRole = values.observer_role_block?.observer_role?.selected_option?.value || 'silent_observer';
   const ctaChecked = (values.observer_channel_cta_block?.observer_channel_cta?.selected_options || [])
     .some(o => o.value === 'post_channel_cta');
 
@@ -91,17 +99,19 @@ const handleAddObserverSubmission = async ({ ack, body, client, view }) => {
     });
   }
 
-  // Atomic cap check for curated path
+  // Atomic cap check for curated path (overall + per-role)
   if (selectedUsers.length > 0) {
     for (const sv of selectedSessionValues) {
       const { sessionId } = parseSessionValue(sv);
-      const { allowed, slotsRemaining } = await sessionObserverService.canAddObserversToSession(sessionId, selectedUsers.length);
-      if (!allowed) {
+      const result = await sessionObserverService.canAddObserversToSession(sessionId, selectedUsers.length, selectedRole);
+      if (!result.allowed) {
+        const roleLabel = ROLE_DISPLAY[selectedRole] || selectedRole;
+        const msg = result.reason === 'role_full'
+          ? `${roleLabel} slot is full for ${sessionId}. Try a different role.`
+          : `${sessionId} has ${result.slotsRemaining} slot${result.slotsRemaining === 1 ? '' : 's'} remaining. Cannot add ${selectedUsers.length} observer${selectedUsers.length === 1 ? '' : 's'}.`;
         return ack({
           response_action: 'errors',
-          errors: {
-            observer_sessions_block: `${sessionId} has ${slotsRemaining} slot${slotsRemaining === 1 ? '' : 's'} remaining. Cannot add ${selectedUsers.length} observer${selectedUsers.length === 1 ? '' : 's'}.`,
-          },
+          errors: { observer_sessions_block: msg },
         });
       }
     }
@@ -134,6 +144,7 @@ const handleAddObserverSubmission = async ({ ack, body, client, view }) => {
             requester_id: slackUserId,
             requester_name: displayName,
             joined_via: 'researcher_add',
+            role: selectedRole,
           });
           if (created) {
             await sessionObserverService.markGuidelinesSent(observer.id);
@@ -212,7 +223,8 @@ const handleAddObserverSubmission = async ({ ack, body, client, view }) => {
     const parts = [];
     if (addedUsers.length > 0) {
       const sessionLabels = selectedSessionValues.map(sv => parseSessionValue(sv).sessionId);
-      parts.push(`Added ${addedUsers.length} observer${addedUsers.length === 1 ? '' : 's'} across ${sessionLabels.join(', ')}.`);
+      const roleLabel = ROLE_DISPLAY[selectedRole] || selectedRole;
+      parts.push(`Added ${addedUsers.length} observer${addedUsers.length === 1 ? '' : 's'} (${roleLabel}) across ${sessionLabels.join(', ')}.`);
     }
     if (ctaPosted) {
       parts.push(`Posted invite to #${ctaChannelName}.`);
@@ -286,6 +298,7 @@ const handleSelfJoinSubmission = async ({ ack, body, client, view }) => {
   const { studyId, studyName, userId: joinerUserId, channelId } = meta;
 
   const selectedSessionValues = values.self_join_sessions_block?.self_join_sessions?.selected_options?.map(o => o.value) || [];
+  const selectedRole = values.self_join_role_block?.self_join_role?.selected_option?.value || 'silent_observer';
 
   if (selectedSessionValues.length === 0) {
     return ack({
@@ -294,7 +307,7 @@ const handleSelfJoinSubmission = async ({ ack, body, client, view }) => {
     });
   }
 
-  // Cap check
+  // Cap check (overall + per-role)
   for (const sv of selectedSessionValues) {
     const { sessionId } = parseSessionValue(sv);
 
@@ -302,13 +315,15 @@ const handleSelfJoinSubmission = async ({ ack, body, client, view }) => {
     const alreadyObserver = await sessionObserverService.isObserverForSession(sessionId, joinerUserId);
     if (alreadyObserver) continue;
 
-    const { allowed, slotsRemaining } = await sessionObserverService.canAddObserversToSession(sessionId, 1);
-    if (!allowed) {
+    const result = await sessionObserverService.canAddObserversToSession(sessionId, 1, selectedRole);
+    if (!result.allowed) {
+      const roleLabel = ROLE_DISPLAY[selectedRole] || selectedRole;
+      const msg = result.reason === 'role_full'
+        ? `${roleLabel} slot is full for ${sessionId}. Try a different role.`
+        : `${sessionId} is at capacity (${sessionObserverService.MAX_OBSERVERS_PER_SESSION}/${sessionObserverService.MAX_OBSERVERS_PER_SESSION}). Choose a different session.`;
       return ack({
         response_action: 'errors',
-        errors: {
-          self_join_sessions_block: `${sessionId} is at capacity (${sessionObserverService.MAX_OBSERVERS_PER_SESSION}/${sessionObserverService.MAX_OBSERVERS_PER_SESSION}). Choose a different session.`,
-        },
+        errors: { self_join_sessions_block: msg },
       });
     }
   }
@@ -343,6 +358,7 @@ const handleSelfJoinSubmission = async ({ ack, body, client, view }) => {
         requester_id: joinerUserId,
         requester_name: joinerName,
         joined_via: 'channel_cta',
+        role: selectedRole,
       });
 
       if (created) {
@@ -366,9 +382,10 @@ const handleSelfJoinSubmission = async ({ ack, body, client, view }) => {
           const participant = participants.find(p => `PT-${String(p.id).padStart(3, '0')}` === sessionId);
           const dateStr = participant?.scheduled_date || 'TBD';
 
+          const roleLabel = ROLE_DISPLAY[selectedRole] || selectedRole;
           await client.chat.postMessage({
             channel: study.created_by,
-            text: `${joinerName} joined ${sessionId} (${dateStr}) as an observer for ${studyName}.`,
+            text: `${joinerName} joined ${sessionId} (${dateStr}) as ${roleLabel} for ${studyName}.`,
           });
         }
       }
@@ -377,7 +394,8 @@ const handleSelfJoinSubmission = async ({ ack, body, client, view }) => {
     // Ephemeral confirmation to self-joiner
     const parts = [];
     if (joinedSessions.length > 0) {
-      parts.push(`You've been added as an observer for ${joinedSessions.join(', ')}. Check your DMs for the observer guide.`);
+      const roleLabel = ROLE_DISPLAY[selectedRole] || selectedRole;
+      parts.push(`You've been added as ${roleLabel} for ${joinedSessions.join(', ')}. Check your DMs for the observer guide.`);
     }
     if (skippedSessions.length > 0) {
       parts.push(`You were already an observer for ${skippedSessions.join(', ')}.`);

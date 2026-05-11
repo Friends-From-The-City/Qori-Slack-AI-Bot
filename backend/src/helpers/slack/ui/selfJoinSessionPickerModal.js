@@ -63,11 +63,28 @@ const buildSelfJoinSessionPickerModal = (sessions, studyName) => {
       },
     },
     {
+      type: 'input',
+      block_id: 'self_join_role_block',
+      label: { type: 'plain_text', text: 'Your role' },
+      element: {
+        type: 'static_select',
+        action_id: 'self_join_role',
+        placeholder: { type: 'plain_text', text: 'Select a role...' },
+        options: [
+          { text: { type: 'plain_text', text: '📝 Note-taker' }, value: 'note_taker' },
+          { text: { type: 'plain_text', text: '👁️ Silent Observer' }, value: 'silent_observer' },
+          { text: { type: 'plain_text', text: '📊 PM Observer' }, value: 'pm_observer' },
+          { text: { type: 'plain_text', text: '🏛️ Stakeholder' }, value: 'stakeholder' },
+        ],
+        initial_option: { text: { type: 'plain_text', text: '👁️ Silent Observer' }, value: 'silent_observer' },
+      },
+    },
+    {
       type: 'context',
       elements: [
         {
           type: 'mrkdwn',
-          text: `Cap: ${MAX_OBSERVERS} observers per session. You'll receive the observer guide via DM.`,
+          text: `Cap: ${MAX_OBSERVERS} total per session · 1 Note-taker · 1 Stakeholder · 2 PM Observers · 3 Silent Observers. You'll receive the observer guide via DM.`,
         },
       ],
     },

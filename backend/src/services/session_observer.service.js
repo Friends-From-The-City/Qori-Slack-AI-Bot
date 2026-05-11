@@ -4,6 +4,12 @@ const { Op } = require("sequelize");
 const sequelize = require("../database");
 
 const MAX_OBSERVERS_PER_SESSION = 3;
+const ROLE_LIMITS = {
+  note_taker: 1,
+  stakeholder: 1,
+  pm_observer: 2,
+  silent_observer: 3,
+};
 
 class SessionObserverService {
   /**
@@ -97,7 +103,7 @@ class SessionObserverService {
    * Add a confirmed observer directly (no approval step).
    * Idempotent: if the user is already an observer for this session, returns the existing row.
    */
-  async addConfirmedObserver({ session_id, study_id, participant_id, requester_id, requester_name, joined_via }) {
+  async addConfirmedObserver({ session_id, study_id, participant_id, requester_id, requester_name, joined_via, role = 'silent_observer' }) {
     try {
       // Check if this user is already an observer for this session
       const existing = await this._findObserverForSession(session_id, requester_id);
@@ -111,7 +117,7 @@ class SessionObserverService {
         participant_id: participant_id || null,
         requester_id: this._toArray(requester_id),
         requester_name: this._toArray(requester_name),
-        role: 'observer',
+        role,
         status: 'confirmed',
         joined_via,
       });
@@ -163,15 +169,41 @@ class SessionObserverService {
   }
 
   /**
-   * Check if more observers can be added to a session.
+   * Count active observers for a session filtered by role.
    */
-  async canAddObserversToSession(sessionId, count = 1) {
+  async countObserversByRoleForSession(sessionId, role) {
+    return sequelize.models.SessionObserver.count({
+      where: {
+        session_id: sessionId,
+        role,
+        status: { [Op.in]: ['confirmed', 'approved'] },
+      },
+    });
+  }
+
+  /**
+   * Check if more observers can be added to a session.
+   * When role is provided, checks both the overall session cap and the per-role limit.
+   */
+  async canAddObserversToSession(sessionId, count = 1, role = null) {
     const current = await this.countConfirmedObserversForSession(sessionId);
     const slotsRemaining = MAX_OBSERVERS_PER_SESSION - current;
-    return {
-      allowed: count <= slotsRemaining,
-      slotsRemaining,
-    };
+
+    // Overall session cap
+    if (count > slotsRemaining) {
+      return { allowed: false, slotsRemaining, reason: 'session_full' };
+    }
+
+    // Per-role limit
+    if (role && ROLE_LIMITS[role]) {
+      const roleCount = await this.countObserversByRoleForSession(sessionId, role);
+      const roleLimit = ROLE_LIMITS[role];
+      if (roleCount + count > roleLimit) {
+        return { allowed: false, slotsRemaining, reason: 'role_full', role, roleLimit };
+      }
+    }
+
+    return { allowed: true, slotsRemaining };
   }
 
   async getObserverByUser(userId) {
@@ -509,6 +541,7 @@ const buildSessionsWithCounts = async (studyId) => {
 
 const service = new SessionObserverService();
 service.MAX_OBSERVERS_PER_SESSION = MAX_OBSERVERS_PER_SESSION;
+service.ROLE_LIMITS = ROLE_LIMITS;
 service.buildSessionsWithCounts = buildSessionsWithCounts;
 
 module.exports = service;

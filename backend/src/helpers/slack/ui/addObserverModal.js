@@ -45,6 +45,23 @@ const buildAddObserverModal = (sessions, channelName) => {
     },
     {
       type: 'input',
+      block_id: 'observer_role_block',
+      label: { type: 'plain_text', text: 'Observer role' },
+      element: {
+        type: 'static_select',
+        action_id: 'observer_role',
+        placeholder: { type: 'plain_text', text: 'Select a role...' },
+        options: [
+          { text: { type: 'plain_text', text: '📝 Note-taker' }, value: 'note_taker' },
+          { text: { type: 'plain_text', text: '👁️ Silent Observer' }, value: 'silent_observer' },
+          { text: { type: 'plain_text', text: '📊 PM Observer' }, value: 'pm_observer' },
+          { text: { type: 'plain_text', text: '🏛️ Stakeholder' }, value: 'stakeholder' },
+        ],
+        initial_option: { text: { type: 'plain_text', text: '👁️ Silent Observer' }, value: 'silent_observer' },
+      },
+    },
+    {
+      type: 'input',
       block_id: 'observer_channel_cta_block',
       optional: true,
       label: { type: 'plain_text', text: 'Channel invite' },
@@ -71,7 +88,7 @@ const buildAddObserverModal = (sessions, channelName) => {
       elements: [
         {
           type: 'mrkdwn',
-          text: `Cap: ${MAX_OBSERVERS} observers per session. Both paths trigger the observer guide DM.`,
+          text: `Cap: ${MAX_OBSERVERS} total per session · 1 Note-taker · 1 Stakeholder · 2 PM Observers · 3 Silent Observers. Both paths trigger the observer guide DM.`,
         },
       ],
     },
