@@ -97,7 +97,7 @@ class SessionObserverService {
    * Add a confirmed observer directly (no approval step).
    * Idempotent: if the user is already an observer for this session, returns the existing row.
    */
-  async addConfirmedObserver({ session_id, study_id, requester_id, requester_name, joined_via }) {
+  async addConfirmedObserver({ session_id, study_id, participant_id, requester_id, requester_name, joined_via }) {
     try {
       // Check if this user is already an observer for this session
       const existing = await this._findObserverForSession(session_id, requester_id);
@@ -108,6 +108,7 @@ class SessionObserverService {
       const observer = await sequelize.models.SessionObserver.create({
         session_id,
         study_id,
+        participant_id: participant_id || null,
         requester_id: this._toArray(requester_id),
         requester_name: this._toArray(requester_name),
         role: 'observer',

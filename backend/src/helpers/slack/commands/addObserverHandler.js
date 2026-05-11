@@ -134,6 +134,7 @@ const handleAddObserverSubmission = async ({ ack, body, client, view }) => {
           const { observer, created } = await sessionObserverService.addConfirmedObserver({
             session_id: sessionId,
             study_id: studyId,
+            participant_id: participantId,
             requester_id: slackUserId,
             requester_name: displayName,
             joined_via: 'researcher_add',
@@ -335,9 +336,11 @@ const handleSelfJoinSubmission = async ({ ack, body, client, view }) => {
         continue;
       }
 
+      const { participantId } = parseSessionValue(sv);
       const { observer, created } = await sessionObserverService.addConfirmedObserver({
         session_id: sessionId,
         study_id: studyId,
+        participant_id: participantId,
         requester_id: joinerUserId,
         requester_name: joinerName,
         joined_via: 'channel_cta',
