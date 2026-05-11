@@ -77,8 +77,9 @@ function generateSessionObservers(observerRequests, participants) {
   const sessionMap = {};
 
   observerRequests.forEach(request => {
-    if (request.status === 'approved' || request.status === 'confirmed') {
-      const sessionId = request.session_id;
+    const status = request.dataValues?.status ?? request.status;
+    const sessionId = request.dataValues?.session_id ?? request.session_id;
+    if (status === 'approved' || status === 'confirmed') {
       if (!sessionMap[sessionId]) {
         sessionMap[sessionId] = {
           session_id: sessionId,
@@ -88,26 +89,35 @@ function generateSessionObservers(observerRequests, participants) {
         };
       }
 
-      // Find participant for date/time
-      const participant = participants.find(p => `PT${String(p.id).padStart(3, '0')}` === sessionId);
+      // Find participant for date/time — use the included association first, fall back to list match
+      const assocParticipant = request.participant || request.dataValues?.participant;
+      const participant = assocParticipant || participants.find(p => {
+        const pId = `PT${String(p.id).padStart(3, '0')}`;
+        const normalized = sessionId.replace(/-/g, '').toUpperCase();
+        return pId === normalized;
+      });
       if (participant) {
-        sessionMap[sessionId].date_time = `${participant.scheduled_date} ${participant.scheduled_time}`;
+        const pData = participant.dataValues || participant;
+        sessionMap[sessionId].date_time = `${pData.scheduled_date || ''} ${pData.scheduled_time || ''}`.trim() || 'TBD';
       }
 
       // requester_name is a JSON array (e.g., ["Alice", "Bob"]), not a plain string.
-      // Iterate over each individual observer in the array.
-      const names = Array.isArray(request.requester_name) ? request.requester_name : [request.requester_name];
-      names.forEach(name => {
-        sessionMap[sessionId].observers.push(`${name} (${getObserverRoleDisplay(request.role)})`);
+      // Handle both Sequelize model instances and plain objects.
+      const rawName = request.dataValues?.requester_name ?? request.requester_name;
+      const names = Array.isArray(rawName) ? rawName : (rawName ? [rawName] : []);
+      const roleDisplay = getObserverRoleDisplay(request.dataValues?.role ?? request.role);
+      names.filter(Boolean).forEach(name => {
+        sessionMap[sessionId].observers.push(`${name} (${roleDisplay})`);
       });
     }
   });
 
   // Count pending requests
   observerRequests.forEach(request => {
-    if (request.status === 'pending') {
-      const sessionId = request.session_id;
-      if (sessionMap[sessionId]) {
+    const reqStatus = request.dataValues?.status ?? request.status;
+    const reqSessionId = request.dataValues?.session_id ?? request.session_id;
+    if (reqStatus === 'pending') {
+      if (sessionMap[reqSessionId]) {
         sessionMap[sessionId].pending_count++;
       }
     }
@@ -133,11 +143,14 @@ function generateObserverRoleDistribution(observerRequests) {
   };
 
   observerRequests.forEach(request => {
-    if (request.status === 'approved' || request.status === 'confirmed') {
-      if (roleCounts[request.role]) {
-        roleCounts[request.role].count++;
-        if (!roleCounts[request.role].sessions.includes(request.session_id)) {
-          roleCounts[request.role].sessions.push(request.session_id);
+    const status = request.dataValues?.status ?? request.status;
+    const role = request.dataValues?.role ?? request.role;
+    const sessionId = request.dataValues?.session_id ?? request.session_id;
+    if (status === 'approved' || status === 'confirmed') {
+      if (roleCounts[role]) {
+        roleCounts[role].count++;
+        if (!roleCounts[role].sessions.includes(sessionId)) {
+          roleCounts[role].sessions.push(sessionId);
         }
       }
     }
