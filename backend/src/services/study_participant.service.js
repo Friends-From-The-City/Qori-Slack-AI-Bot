@@ -3,6 +3,7 @@
 const sequelize = require("../database");
 const { processParticipantYamlTemplate } = require("../helpers/participantYamlProcessor");
 const { fetchFileFromRepo } = require("../helpers/github");
+const { PARTICIPANT_STATUS, ACTIVE_STATUSES } = require("../constants/participantStatus");
 
 class StudyParticipantService {
   /**
@@ -272,29 +273,37 @@ class StudyParticipantService {
       const confirmedSessions = await sequelize.models.StudyParticipant.count({
         where: {
           study_id: studyId,
-          status_select: 'Confirmed'
+          status_select: PARTICIPANT_STATUS.CONFIRMED,
         }
       });
 
-      const pendingResponses = await sequelize.models.StudyParticipant.count({
+      const contactedCount = await sequelize.models.StudyParticipant.count({
         where: {
           study_id: studyId,
-          status_select: 'Pending'
+          status_select: PARTICIPANT_STATUS.CONTACTED,
         }
       });
 
       const completedSessions = await sequelize.models.StudyParticipant.count({
         where: {
           study_id: studyId,
-          status_select: 'Completed'
+          status_select: PARTICIPANT_STATUS.COMPLETED,
+        }
+      });
+
+      const activeCount = await sequelize.models.StudyParticipant.count({
+        where: {
+          study_id: studyId,
+          status_select: ACTIVE_STATUSES,
         }
       });
 
       return {
         total_participants_count: totalParticipants,
         confirmed_sessions_count: confirmedSessions,
-        pending_responses_count: pendingResponses,
-        completed_sessions_count: completedSessions
+        contacted_count: contactedCount,
+        completed_sessions_count: completedSessions,
+        active_count: activeCount,
       };
     } catch (error) {
       console.error('Error fetching participant stats:', error);

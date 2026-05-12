@@ -1,5 +1,12 @@
 /* eslint-disable max-len */
 /* eslint-disable quotes */
+const { PARTICIPANT_STATUS_VALUES, PARTICIPANT_STATUS_LABELS } = require('../../../../constants/participantStatus');
+
+const statusOptions = PARTICIPANT_STATUS_VALUES.map((value) => ({
+  text: { type: 'plain_text', text: PARTICIPANT_STATUS_LABELS[value] },
+  value,
+}));
+
 const updateParticipantStatusModal = {
   type: "modal",
   callback_id: "update-participant-status",
@@ -124,43 +131,7 @@ const updateParticipantStatusModal = {
           type: "plain_text",
           text: "Select new status...",
         },
-        options: [
-          {
-            text: {
-              type: "plain_text",
-              text: "📄 Recruited (initial contact made)",
-            },
-            value: "recruited",
-          },
-          {
-            text: {
-              type: "plain_text",
-              text: "✅ Confirmed (session scheduled)",
-            },
-            value: "confirmed",
-          },
-          {
-            text: {
-              type: "plain_text",
-              text: "⏳ Pending response",
-            },
-            value: "pending_response",
-          },
-          {
-            text: {
-              type: "plain_text",
-              text: "🕐 Rescheduling needed",
-            },
-            value: "rescheduling_needed",
-          },
-          {
-            text: {
-              type: "plain_text",
-              text: "🔄 Backup participant",
-            },
-            value: "backup_participant",
-          },
-        ],
+        options: statusOptions,
       },
       label: {
         type: "plain_text",

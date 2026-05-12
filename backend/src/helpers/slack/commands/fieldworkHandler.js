@@ -10,6 +10,7 @@ const studyParticipantService = require('../../../services/study_participant.ser
 const sessionObserverService = require('../../../services/session_observer.service');
 const { getActiveStudy, setActiveStudy } = require('../../../services/slack-user-state.service');
 const { buildFieldworkDashboard, buildFieldworkStudyPicker } = require('../ui/fieldworkDashboardModal');
+const { PARTICIPANT_STATUS } = require('../../../constants/participantStatus');
 const { addParticipantModal } = require('../ui/addParticipantModal');
 const { updateParticipantStatusModal } = require('../ui/outreach/updateParticipantStatusModal');
 const { buildAddObserverModal } = require('../ui/addObserverModal');
@@ -24,11 +25,11 @@ const { buildSessionNotesView } = require('../ui/sessionNotesModal');
 const buildDashboardContext = (allParticipants, study) => {
   const outreachStats = {
     total_contacted: allParticipants.length,
-    awaiting_response: allParticipants.filter(p =>
-      p.status_select === 'Pending' || p.status_select === 'Contacted'
+    awaiting_response: allParticipants.filter((p) =>
+      p.status_select === PARTICIPANT_STATUS.CONTACTED || p.status_select === PARTICIPANT_STATUS.NOT_CONTACTED
     ).length,
-    responses_received: allParticipants.filter(p =>
-      p.status_select && p.status_select !== 'Pending' && p.status_select !== 'Contacted'
+    responses_received: allParticipants.filter((p) =>
+      p.status_select && ![PARTICIPANT_STATUS.CONTACTED, PARTICIPANT_STATUS.NOT_CONTACTED].includes(p.status_select)
     ).length,
   };
 

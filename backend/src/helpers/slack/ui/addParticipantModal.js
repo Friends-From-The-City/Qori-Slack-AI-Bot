@@ -1,3 +1,10 @@
+const { PARTICIPANT_STATUS_VALUES, PARTICIPANT_STATUS_LABELS } = require('../../../constants/participantStatus');
+
+const statusOptions = PARTICIPANT_STATUS_VALUES.map((value) => ({
+  text: { type: 'plain_text', text: PARTICIPANT_STATUS_LABELS[value] },
+  value,
+}));
+
 const addParticipantModal = {
   type: "modal",
   callback_id: "add-participant-modal",
@@ -98,16 +105,8 @@ const addParticipantModal = {
         type: "static_select",
         action_id: "current_status",
         placeholder: { type: "plain_text", text: "Select status" },
-        options: [
-          { text: { type: "plain_text", text: "📞 Recruited (initial contact made)" }, value: "recruited" },
-          { text: { type: "plain_text", text: "✅ Confirmed (session scheduled)" }, value: "confirmed" },
-          { text: { type: "plain_text", text: "⏳ Pending (awaiting response)" }, value: "pending" },
-          { text: { type: "plain_text", text: "🔄 Rescheduling needed" }, value: "rescheduling" },
-          { text: { type: "plain_text", text: "📄 Backup participant" }, value: "backup" },
-          { text: { type: "plain_text", text: "🎯 Completed" }, value: "completed" },
-          { text: { type: "plain_text", text: "❌ Canceled/No-show" }, value: "canceled" },
-          { text: { type: "plain_text", text: "🚫 Disqualified" }, value: "disqualified" },
-        ],
+        options: statusOptions,
+        initial_option: statusOptions[0],
       },
     },
 

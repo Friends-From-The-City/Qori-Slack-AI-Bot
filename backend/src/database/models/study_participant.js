@@ -1,6 +1,7 @@
 // models/study_participant.js
 
 const { DataTypes, Model } = require("sequelize");
+const { PARTICIPANT_STATUS, PARTICIPANT_STATUS_VALUES } = require("../../constants/participantStatus");
 
 module.exports = (sequelize) => {
   class StudyParticipant extends Model {
@@ -52,7 +53,10 @@ module.exports = (sequelize) => {
       status_select: {
         type: DataTypes.STRING,
         allowNull: true,
-        defaultValue: 'Pending',
+        defaultValue: PARTICIPANT_STATUS.CONTACTED,
+        validate: {
+          isIn: [PARTICIPANT_STATUS_VALUES],
+        },
       },
       notes_field: {
         type: DataTypes.TEXT,

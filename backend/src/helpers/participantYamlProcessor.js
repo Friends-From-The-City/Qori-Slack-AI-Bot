@@ -5,6 +5,7 @@ const { format } = require('date-fns');
 const path = require('path');
 const { createOrUpdateFileOnGitHub, fetchFileFromRepo } = require('./github');
 const SessionObserverService = require('../services/session_observer.service');
+const { PARTICIPANT_STATUS, PARTICIPANT_STATUS_LABELS } = require('../constants/participantStatus');
 
 // Helper function to calculate recruitment breakdown
 function calculateRecruitmentBreakdown(participants) {
@@ -44,9 +45,9 @@ function generateImmediateActions(participants) {
   const actions = [];
 
   // Check for participants that need immediate attention
-  const pendingParticipants = participants.filter(p => p.status_select === 'pending');
-  const reschedulingParticipants = participants.filter(p => p.status_select === 'rescheduling');
-  const confirmedParticipants = participants.filter(p => p.status_select === 'confirmed');
+  const pendingParticipants = participants.filter((p) => p.status_select === PARTICIPANT_STATUS.CONTACTED);
+  const reschedulingParticipants = participants.filter((p) => p.status_select === PARTICIPANT_STATUS.NEEDS_RESCHEDULE);
+  const confirmedParticipants = participants.filter((p) => p.status_select === PARTICIPANT_STATUS.CONFIRMED);
 
   if (pendingParticipants.length > 0) {
     actions.push(`Follow up with ${pendingParticipants.length} pending participant(s)`);
@@ -72,23 +73,23 @@ function generateFollowupNeeded(participants) {
   const followups = [];
 
   participants.forEach(participant => {
-    if (participant.status_select === 'pending') {
+    if (participant.status_select === PARTICIPANT_STATUS.CONTACTED) {
       followups.push({
         participant_id: participant.id,
         action: 'Send follow-up email',
-        status: 'pending'
+        status: PARTICIPANT_STATUS.CONTACTED,
       });
-    } else if (participant.status_select === 'rescheduling') {
+    } else if (participant.status_select === PARTICIPANT_STATUS.NEEDS_RESCHEDULE) {
       followups.push({
         participant_id: participant.id,
         action: 'Coordinate new session time',
-        status: 'rescheduling'
+        status: PARTICIPANT_STATUS.NEEDS_RESCHEDULE,
       });
-    } else if (participant.status_select === 'recruited' && !participant.scheduled_date) {
+    } else if (participant.status_select === PARTICIPANT_STATUS.NOT_CONTACTED && !participant.scheduled_date) {
       followups.push({
         participant_id: participant.id,
         action: 'Schedule initial session',
-        status: 'recruited'
+        status: PARTICIPANT_STATUS.NOT_CONTACTED,
       });
     }
   });
@@ -272,9 +273,9 @@ function getLocationTypeDisplay(value) {
 function generateRecruitmentAnalysis(participants) {
   if (participants.length === 0) return 'No recruitment data available';
 
-  const confirmedCount = participants.filter(p => p.status_select === 'confirmed').length;
-  const pendingCount = participants.filter(p => p.status_select === 'pending_response').length;
-  const completedCount = participants.filter(p => p.status_select === 'completed').length;
+  const confirmedCount = participants.filter((p) => p.status_select === PARTICIPANT_STATUS.CONFIRMED).length;
+  const contactedCount = participants.filter((p) => p.status_select === PARTICIPANT_STATUS.CONTACTED).length;
+  const completedCount = participants.filter((p) => p.status_select === PARTICIPANT_STATUS.COMPLETED).length;
 
   const conversionRate = participants.length > 0 ? Math.round((confirmedCount / participants.length) * 100) : 0;
 
@@ -289,17 +290,17 @@ function generateNextStepsRecommendations(participants, totalCount) {
     recommendations.push(`Continue recruiting to reach minimum of 3 participants (${3 - totalCount} more needed)`);
   }
 
-  const pendingCount = participants.filter(p => p.status_select === 'pending_response').length;
+  const pendingCount = participants.filter((p) => p.status_select === PARTICIPANT_STATUS.CONTACTED).length;
   if (pendingCount > 0) {
     recommendations.push(`Follow up with ${pendingCount} pending participant(s)`);
   }
 
-  const reschedulingCount = participants.filter(p => p.status_select === 'rescheduling_needed').length;
+  const reschedulingCount = participants.filter((p) => p.status_select === PARTICIPANT_STATUS.NEEDS_RESCHEDULE).length;
   if (reschedulingCount > 0) {
     recommendations.push(`Reschedule ${reschedulingCount} session(s)`);
   }
 
-  const confirmedCount = participants.filter(p => p.status_select === 'confirmed').length;
+  const confirmedCount = participants.filter((p) => p.status_select === PARTICIPANT_STATUS.CONFIRMED).length;
   if (confirmedCount === 0) {
     recommendations.push('Schedule first confirmed session');
   }
@@ -467,9 +468,9 @@ async function processParticipantYamlTemplate(rawYamlContent, inputValues, baseF
 
     // Calculate various counts
     const totalParticipantsCount = allParticipants.length;
-    const confirmedSessionsCount = allParticipants.filter(p => p.status_select === 'confirmed').length;
-    const pendingResponsesCount = allParticipants.filter(p => p.status_select === 'pending_response').length;
-    const completedSessionsCount = allParticipants.filter(p => p.status_select === 'completed').length;
+    const confirmedSessionsCount = allParticipants.filter((p) => p.status_select === PARTICIPANT_STATUS.CONFIRMED).length;
+    const pendingResponsesCount = allParticipants.filter((p) => p.status_select === PARTICIPANT_STATUS.CONTACTED).length;
+    const completedSessionsCount = allParticipants.filter((p) => p.status_select === PARTICIPANT_STATUS.COMPLETED).length;
 
     // Create enhanced data object with database information
     const enhancedData = {
@@ -498,9 +499,9 @@ async function processParticipantYamlTemplate(rawYamlContent, inputValues, baseF
       immediate_actions: generateImmediateActions(allParticipants),
       followup_needed: generateFollowupNeeded(allParticipants),
       // Add additional fields for the template
-      confirmed_sessions: allParticipants.filter(p => p.status_select === 'confirmed'),
-      pending_sessions: allParticipants.filter(p => p.status_select === 'pending_response'),
-      rescheduling_sessions: allParticipants.filter(p => p.status_select === 'rescheduling_needed'),
+      confirmed_sessions: allParticipants.filter((p) => p.status_select === PARTICIPANT_STATUS.CONFIRMED),
+      pending_sessions: allParticipants.filter((p) => p.status_select === PARTICIPANT_STATUS.CONTACTED),
+      rescheduling_sessions: allParticipants.filter((p) => p.status_select === PARTICIPANT_STATUS.NEEDS_RESCHEDULE),
       session_observers: await (async () => {
         try {
           if (!inputValues.study_id) return [];
@@ -565,9 +566,9 @@ async function processParticipantYamlTemplate(rawYamlContent, inputValues, baseF
         ...inputValues,
         participants: updatedParticipants,
         total_participants_count: updatedParticipants.length,
-        confirmed_sessions_count: updatedParticipants.filter(p => p.status_select === 'Confirmed').length,
-        pending_responses_count: updatedParticipants.filter(p => p.status_select === 'Pending').length,
-        completed_sessions_count: updatedParticipants.filter(p => p.status_select === 'Completed').length,
+        confirmed_sessions_count: updatedParticipants.filter((p) => p.status_select === PARTICIPANT_STATUS.CONFIRMED).length,
+        pending_responses_count: updatedParticipants.filter((p) => p.status_select === PARTICIPANT_STATUS.CONTACTED).length,
+        completed_sessions_count: updatedParticipants.filter((p) => p.status_select === PARTICIPANT_STATUS.COMPLETED).length,
         total_observer_assignments: 0,
         current_date: format(new Date(), 'MMMM d, yyyy'),
         added_by: inputValues.added_by || 'Unknown'
