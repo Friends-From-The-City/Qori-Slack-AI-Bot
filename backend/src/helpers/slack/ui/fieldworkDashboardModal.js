@@ -29,129 +29,65 @@ const buildFieldworkDashboard = (study, participantStats, observerStats, outreac
   const studyName = study.name;
   const btnValue = JSON.stringify({ studyId: study.id, studyName });
 
-  const blocks = [];
-
-  // ── Header ──────────────────────────────────────────────
-  blocks.push(
-    { type: 'header', text: { type: 'plain_text', text: 'Fieldwork' } },
-    { type: 'divider' },
-  );
-
-  // ── Top context block (study metadata) ──────────────────
-  const metaParts = [studyName, 'In study'];
-  if (context.sessionDateRange) metaParts.push(context.sessionDateRange);
+  // ── Top context (study name + last updated) ─────────────
+  const metaParts = [studyName];
   if (context.lastUpdated) metaParts.push(`Last updated ${timeAgo(context.lastUpdated)}`);
-  blocks.push({
-    type: 'context',
-    elements: [{ type: 'mrkdwn', text: metaParts.join('  ·  ') }],
-  });
 
   // ── Participants ────────────────────────────────────────
   const pTotal = participantStats.total_participants_count || 0;
   const pConfirmed = participantStats.confirmed_sessions_count || 0;
-  const pPending = participantStats.pending_responses_count || 0;
-  const pCompleted = participantStats.completed_sessions_count || 0;
-  const pDeclined = participantStats.declined_count || 0;
-  const pNotContacted = Math.max(0, pTotal - pConfirmed - pPending - pCompleted - pDeclined);
-
   const pText = pTotal === 0
-    ? '👥  *Participants* — none yet'
-    : `👥  *Participants* — ${pConfirmed} of ${pTotal} confirmed`;
-
-  blocks.push({
-    type: 'section',
-    text: { type: 'mrkdwn', text: pText },
-    accessory: {
-      type: 'button',
-      text: { type: 'plain_text', text: 'Add participant' },
-      action_id: 'fieldwork_add_participant',
-      value: btnValue,
-    },
-  });
-
-  if (pTotal > 0) {
-    const pParts = [];
-    if (pConfirmed > 0) pParts.push(`✅ ${pConfirmed} confirmed`);
-    if (pPending > 0) pParts.push(`⏳ ${pPending} pending`);
-    if (pDeclined > 0) pParts.push(`❌ ${pDeclined} declined`);
-    if (pNotContacted > 0) pParts.push(`${pNotContacted} not contacted`);
-    if (pParts.length > 0) {
-      blocks.push({
-        type: 'context',
-        elements: [{ type: 'mrkdwn', text: pParts.join('  ·  ') }],
-      });
-    }
-  }
+    ? '*Participants* — no participants yet'
+    : `*Participants* — ${pConfirmed} of ${pTotal} confirmed`;
 
   // ── Observers ───────────────────────────────────────────
   const oActive = (observerStats.confirmed_observers || 0) + (observerStats.approved_observers || 0);
-  const oCovered = observerStats.sessions_covered || 0;
-  const oTotalSessions = observerStats.total_sessions || 0;
-  const oPending = observerStats.pending_observers || 0;
-  const oAtCap = observerStats.sessions_at_cap || 0;
-
-  const oText = oActive === 0 && oPending === 0
-    ? '👁️  *Observers* — none yet'
-    : `👁️  *Observers* — ${oActive} (${oCovered} of ${oTotalSessions} sessions covered)`;
-
-  blocks.push({
-    type: 'section',
-    text: { type: 'mrkdwn', text: oText },
-    accessory: {
-      type: 'button',
-      text: { type: 'plain_text', text: 'Add observer' },
-      action_id: 'fieldwork_observe',
-      value: btnValue,
-    },
-  });
-
-  if (oActive > 0 || oPending > 0) {
-    const oParts = [];
-    if (observerStats.confirmed_observers > 0) oParts.push(`✅ ${observerStats.confirmed_observers} confirmed`);
-    if (oPending > 0) oParts.push(`⏳ ${oPending} pending`);
-    if (oAtCap > 0) oParts.push(`${oAtCap} session${oAtCap === 1 ? '' : 's'} at cap`);
-    if (oParts.length > 0) {
-      blocks.push({
-        type: 'context',
-        elements: [{ type: 'mrkdwn', text: oParts.join('  ·  ') }],
-      });
-    }
-  }
+  const oText = oActive === 0
+    ? '*Observers* — none yet'
+    : `*Observers* — ${oActive} confirmed`;
 
   // ── Outreach ────────────────────────────────────────────
   const rTotal = outreachStats.total_contacted || 0;
-  const rAwaiting = outreachStats.awaiting_response || 0;
   const rResponses = outreachStats.responses_received || 0;
-
   const rText = rTotal === 0
-    ? '✉️  *Outreach* — none sent yet'
-    : `✉️  *Outreach* — ${rTotal} contacted, ${rAwaiting} awaiting reply`;
+    ? '*Outreach* — no outreach sent'
+    : `*Outreach* — ${rTotal} sent, ${rResponses} responses`;
 
-  blocks.push({
-    type: 'section',
-    text: { type: 'mrkdwn', text: rText },
-    accessory: {
-      type: 'button',
-      text: { type: 'plain_text', text: 'Send outreach' },
-      action_id: 'fieldwork_outreach',
-      value: btnValue,
-    },
-  });
-
-  if (rTotal > 0) {
-    const rParts = [];
-    if (context.lastOutreachSent) {
-      rParts.push(`Last sent ${timeAgo(context.lastOutreachSent)}`);
-    }
-    rParts.push(`${rResponses} responses received`);
-    blocks.push({
+  const blocks = [
+    {
       type: 'context',
-      elements: [{ type: 'mrkdwn', text: rParts.join('  ·  ') }],
-    });
-  }
-
-  // ── Bottom actions ──────────────────────────────────────
-  blocks.push(
+      elements: [{ type: 'mrkdwn', text: metaParts.join('  ·  ') }],
+    },
+    {
+      type: 'section',
+      text: { type: 'mrkdwn', text: pText },
+      accessory: {
+        type: 'button',
+        text: { type: 'plain_text', text: 'Add participant' },
+        action_id: 'fieldwork_add_participant',
+        value: btnValue,
+      },
+    },
+    {
+      type: 'section',
+      text: { type: 'mrkdwn', text: oText },
+      accessory: {
+        type: 'button',
+        text: { type: 'plain_text', text: 'Add observer' },
+        action_id: 'fieldwork_observe',
+        value: btnValue,
+      },
+    },
+    {
+      type: 'section',
+      text: { type: 'mrkdwn', text: rText },
+      accessory: {
+        type: 'button',
+        text: { type: 'plain_text', text: 'Send outreach' },
+        action_id: 'fieldwork_outreach',
+        value: btnValue,
+      },
+    },
     { type: 'divider' },
     {
       type: 'actions',
@@ -171,7 +107,7 @@ const buildFieldworkDashboard = (study, participantStats, observerStats, outreac
         },
       ],
     },
-  );
+  ];
 
   return {
     type: 'modal',
