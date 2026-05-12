@@ -356,7 +356,7 @@ ai_generation_tasks:
 
       **Recruitment** — [1-2 sentences about channels appropriate for this population]
 
-      **Compensation** — [Standard rate, typically $50-$100 per participant for 60-90 min]
+      **Compensation** — {{per_participant_compensation}}
 
       ---
 

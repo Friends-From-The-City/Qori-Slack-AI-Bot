@@ -1329,6 +1329,9 @@ slackApp.view('research_plan_modal', async ({ ack, body, view, client }) => {
 
   // Extract form values — plan only collects execution details
   // Scope (objectives, method, participants, context) comes from cascade
+  const { calculatePerPersonCompensation } = require('../../utils/compensationCalculator');
+  const perParticipantComp = calculatePerPersonCompensation(study);
+
   const data = {
     selected_study: studyName,
     project_title: studyName,
@@ -1337,6 +1340,9 @@ slackApp.view('research_plan_modal', async ({ ack, body, view, client }) => {
     observer: extract('observer_block', 'observer_input') || '',
     recruitment_sources: extract('recruitment_source_block', 'recruitment_source_input') || '',
     operational_risks: extract('operational_risks_block', 'operational_risks_input') || '',
+    per_participant_compensation: perParticipantComp
+      ? `$${perParticipantComp} per participant (calculated from $${parseFloat(study.parsed_budget_amount)} ÷ ${study.target_participants} target participants)`
+      : '[Standard rate, typically $50-$100 per participant for 60-90 min]',
   };
   
   console.log(`📋 Extracted research plan data: ${Object.keys(data).length} fields, study: ${data.study_name || 'unknown'}`);
