@@ -12,6 +12,7 @@ const { processYamlTemplate } = require('../../yamlProcessor');
 const { addStudyStatus } = require('../../../services/study-status.service');
 const { sendStudyResultMessage, generateStudyResultBlocks } = require('../ui/studyResultBlocks');
 const { loadDiscoveryArtifacts, aggregateDiscoveryVariables } = require('../../discoveryLoader');
+const { parseBudget, parseParticipantTarget } = require('../../../utils/budgetParser');
 
 /**
  * Handle research_brief_modal submission.
@@ -134,6 +135,21 @@ async function handleBriefSubmission({ ack, body, view, client }) {
     decision_deadline: extract('decision_deadline_block', 'decision_deadline_picker') || '',
     budget: extract('budget_block', 'budget_input') || '',
   };
+
+  // Parse budget and target participants, save to study row
+  const parsedBudget = parseBudget(data.budget);
+  const targetParticipants = parseParticipantTarget(data.participant_approach);
+  const studyUpdates = {};
+  if (parsedBudget !== null) studyUpdates.parsed_budget_amount = parsedBudget;
+  if (targetParticipants !== null) studyUpdates.target_participants = targetParticipants;
+  if (Object.keys(studyUpdates).length > 0) {
+    try {
+      await study.update({ ...studyUpdates, updated_at: new Date() });
+      console.log(`💰 Parsed budget: ${parsedBudget}, target: ${targetParticipants} for study ${studyName}`);
+    } catch (budgetErr) {
+      console.warn('⚠️ Failed to save parsed budget/target:', budgetErr.message);
+    }
+  }
 
   // Discovery injection — brief handler does manual loading (not YAML consumes).
   // Researcher selects which artifacts to include via modal checkboxes.

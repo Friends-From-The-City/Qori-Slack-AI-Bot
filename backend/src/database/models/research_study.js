@@ -90,6 +90,14 @@ module.exports = (sequelize) => {
         allowNull: false,
         defaultValue: 0,
       },
+      parsed_budget_amount: {
+        type: DataTypes.DECIMAL(10, 2),
+        allowNull: true,
+      },
+      target_participants: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+      },
       created_at: {
         type: DataTypes.DATE,
         allowNull: false,

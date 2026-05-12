@@ -241,7 +241,9 @@ const handleInitialRecruitmentSubmit = async ({ ack, body, view, client }) => {
     const user = body.user.id;
 
     const tone = "friendly"; // Default to friendly since it's no longer in modal
-    
+    const { calculatePerPersonCompensation: calcComp2 } = require('../../../utils/compensationCalculator');
+    const compAmt = calcComp2(study);
+
     const data = {
       message_type: "initial_recruitment",
       participant_id,
@@ -249,12 +251,12 @@ const handleInitialRecruitmentSubmit = async ({ ack, body, view, client }) => {
       study_name,
       researcher_name,
       researcher_email,
-      researcher_phone: "", // No longer in modal, can be empty or get from study if available
-      contact_method: "email", // Default to email since it's no longer in modal
+      researcher_phone: "",
+      contact_method: "email",
       tone,
-      study_description: "", // Will be pulled from study automatically
+      study_description: "",
       signup_instructions,
-      incentive_amount: "", // Will be pulled from study automatically
+      incentive_amount: compAmt ? `$${compAmt}` : '',
     }
     const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, "participant_outreach.yaml");
     const renderedYaml = await processYamlTemplate(file.content, data, study.path);
@@ -634,8 +636,9 @@ const handleThankYouSubmit = async ({ ack, body, view, client }) => {
     const researcher_name = study?.researcher_name || meta.researcher_name || "";
     const researcher_email = study?.researcher_email || meta.researcher_email || "";
     
-    // Incentive amount will be pulled from study automatically
-    const incentive_amount = ""; // Will be pulled from study automatically
+    const { calculatePerPersonCompensation: calcComp } = require('../../../utils/compensationCalculator');
+    const compAmount = calcComp(study);
+    const incentive_amount = compAmount ? `$${compAmount}` : '';
 
     const data = {
       message_type: "thank_you",
@@ -1023,6 +1026,10 @@ const handleAddParticipantSubmit = async ({ ack, body, view, client }) => {
 
     const study = await getResearchStudyWithRoles(study_name);
 
+    // Snapshot per-person compensation from study budget
+    const { calculatePerPersonCompensation } = require('../../../utils/compensationCalculator');
+    const compensation = calculatePerPersonCompensation(study);
+
     // Save participant to database
     const participantData = {
       study_id: study.id,
@@ -1033,7 +1040,8 @@ const handleAddParticipantSubmit = async ({ ack, body, view, client }) => {
       status_select: data.status_select,
       notes_field: data.notes_field,
       demographics_info: data.demographics_info,
-      added_by: data.added_by
+      added_by: data.added_by,
+      compensation_amount: compensation,
     };
 
 

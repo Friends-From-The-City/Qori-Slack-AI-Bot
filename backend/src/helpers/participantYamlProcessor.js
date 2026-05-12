@@ -398,16 +398,17 @@ function updateFileWithParticipants(fileContent, participants) {
       console.log('🚀 ~ updateFileWithParticipants ~ Found participant table header');
       inParticipantTable = true;
       tableHeaderFound = true;
-      updatedLines.push('| ID | Name/Alias | Contact | Recruited Via | Outreach Sent | Scheduled | Status | Notes & Accommodations |');
-      updatedLines.push('|----|-----------|---------|-----------------|---------------|-----------|--------|----------------------|');
+      updatedLines.push('| ID | Name/Alias | Contact | Recruited Via | Outreach Sent | Compensation | Scheduled | Status | Notes & Accommodations |');
+      updatedLines.push('|----|-----------|---------|-----------------|---------------|--------------|-----------|--------|----------------------|');
 
       // Add all participants
       participants.forEach((participant) => {
         const outreachDisplay = participant.outreach_sent_at
           ? `${new Date(participant.outreach_sent_at).toISOString().split('T')[0]}${(participant.outreach_count || 0) > 1 ? ` (${participant.outreach_count} sent)` : ''}`
           : 'Not sent';
+        const compDisplay = participant.compensation_amount ? `$${parseFloat(participant.compensation_amount)}` : '\u2014';
         const statusDisplay = PARTICIPANT_STATUS_LABELS[participant.status_select] || participant.status_select;
-        const participantRow = `| ${participant.id} | ${participant.participant_name} | ${participant.contact_details} | ${participant.recruitment_source} | ${outreachDisplay} | ${participant.scheduled_date} ${participant.scheduled_time || ''} | ${statusDisplay} | ${participant.notes_field} |`;
+        const participantRow = `| ${participant.id} | ${participant.participant_name} | ${participant.contact_details} | ${participant.recruitment_source} | ${outreachDisplay} | ${compDisplay} | ${participant.scheduled_date} ${participant.scheduled_time || ''} | ${statusDisplay} | ${participant.notes_field} |`;
         console.log('🚀 ~ updateFileWithParticipants ~ Adding participant row:', participantRow);
         updatedLines.push(participantRow);
       });

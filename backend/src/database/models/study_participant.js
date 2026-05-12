@@ -80,6 +80,10 @@ module.exports = (sequelize) => {
         type: DataTypes.JSON,
         allowNull: true,
       },
+      compensation_amount: {
+        type: DataTypes.DECIMAL(10, 2),
+        allowNull: true,
+      },
       outreach_sent_at: {
         type: DataTypes.DATE,
         allowNull: true,
