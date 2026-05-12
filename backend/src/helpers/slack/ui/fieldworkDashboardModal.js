@@ -44,7 +44,7 @@ const buildFieldworkDashboard = (study, participantStats, observerStats, outreac
   const oActive = (observerStats.confirmed_observers || 0) + (observerStats.approved_observers || 0);
   const oText = oActive === 0
     ? '*Observers* — none yet'
-    : `*Observers* — ${oActive} confirmed`;
+    : `*Observers* — ${oActive} active`;
 
   // ── Outreach ────────────────────────────────────────────
   const rTotal = outreachStats.total_contacted || 0;
