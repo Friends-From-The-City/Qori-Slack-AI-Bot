@@ -81,7 +81,7 @@ function buildScreen2() {
 }
 
 /**
- * Shared command map blocks — used by /qori-learn Screen 3, /qori-help, and condensed view.
+ * Shared command map blocks — used by /qori-learn Screen 3 and condensed view.
  */
 function buildCommandMapBlocks() {
   return [
@@ -124,7 +124,7 @@ function buildCommandMapBlocks() {
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: '*UTILITY*\n`/qori-help`  Show all commands\n`/qori-learn`  First-run tour\n`/qori-delete`  Clean up studies',
+        text: '*UTILITY*\n`/qori-learn`  This tour\n`/qori-delete`  Clean up studies',
       },
     },
   ];
@@ -134,7 +134,7 @@ function buildScreen3() {
   return [
     {
       type: 'header',
-      text: { type: 'plain_text', text: '12 commands, organized by phase' },
+      text: { type: 'plain_text', text: '11 commands, organized by phase' },
     },
     { type: 'divider' },
     ...buildCommandMapBlocks(),
@@ -278,6 +278,5 @@ function buildCondensedModal(meta = {}) {
 module.exports = {
   buildLearnModal,
   buildCondensedModal,
-  buildCommandMapBlocks,
   SCREEN_BUILDERS,
 };

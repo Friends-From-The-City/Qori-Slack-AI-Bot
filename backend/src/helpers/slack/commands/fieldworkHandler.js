@@ -19,23 +19,56 @@ const { buildSessionNotesView } = require('../ui/sessionNotesModal');
 // ── Helpers ────────────────────────────────────────────────
 
 /**
+ * Derive outreach stats and dashboard context from raw participant list.
+ */
+const buildDashboardContext = (allParticipants, study) => {
+  const outreachStats = {
+    total_contacted: allParticipants.length,
+    awaiting_response: allParticipants.filter(p =>
+      p.status_select === 'Pending' || p.status_select === 'Contacted'
+    ).length,
+    responses_received: allParticipants.filter(p =>
+      p.status_select && p.status_select !== 'Pending' && p.status_select !== 'Contacted'
+    ).length,
+  };
+
+  // Session date range from scheduled_date fields
+  const dates = allParticipants
+    .map(p => p.scheduled_date)
+    .filter(Boolean)
+    .sort();
+  const sessionDateRange = dates.length === 0
+    ? null
+    : dates.length === 1
+      ? `Sessions ${dates[0]}`
+      : `Sessions ${dates[0]} – ${dates[dates.length - 1]}`;
+
+  // Last updated: most recent updated_at across participants, fallback to study
+  const timestamps = allParticipants
+    .map(p => p.updated_at || p.updatedAt)
+    .filter(Boolean)
+    .map(d => new Date(d).getTime());
+  const lastUpdated = timestamps.length > 0
+    ? new Date(Math.max(...timestamps))
+    : (study.updated_at || study.updatedAt || study.created_at || study.createdAt);
+
+  return {
+    outreachStats,
+    context: { sessionDateRange, lastUpdated },
+  };
+};
+
+/**
  * Fetch all stats needed for the dashboard and render it.
  * Used both on initial open and after sub-modal actions refresh the parent.
  */
 const fetchAndRenderDashboard = async (client, viewId, study, meta) => {
   const participantStats = await studyParticipantService.getParticipantStats(study.id);
   const observerStats = await sessionObserverService.getObserverStats(study.id);
-
-  // Outreach stats derived from participant statuses for now
   const allParticipants = await studyParticipantService.getParticipantsByStudy(study.id);
-  const outreachStats = {
-    total_contacted: allParticipants.length,
-    awaiting_response: allParticipants.filter(p =>
-      p.status_select === 'Pending' || p.status_select === 'Contacted'
-    ).length,
-  };
+  const { outreachStats, context } = buildDashboardContext(allParticipants, study);
 
-  const dashboard = buildFieldworkDashboard(study, participantStats, observerStats, outreachStats);
+  const dashboard = buildFieldworkDashboard(study, participantStats, observerStats, outreachStats, context);
   dashboard.private_metadata = JSON.stringify(meta);
 
   await client.views.update({ view_id: viewId, view: dashboard });
@@ -70,14 +103,9 @@ const fieldworkHandler = async ({ ack, body, client, command }) => {
       const participantStats = await studyParticipantService.getParticipantStats(study.id);
       const observerStats = await sessionObserverService.getObserverStats(study.id);
       const allParticipants = await studyParticipantService.getParticipantsByStudy(study.id);
-      const outreachStats = {
-        total_contacted: allParticipants.length,
-        awaiting_response: allParticipants.filter(p =>
-          p.status_select === 'Pending' || p.status_select === 'Contacted'
-        ).length,
-      };
+      const { outreachStats, context } = buildDashboardContext(allParticipants, study);
 
-      const dashboard = buildFieldworkDashboard(study, participantStats, observerStats, outreachStats);
+      const dashboard = buildFieldworkDashboard(study, participantStats, observerStats, outreachStats, context);
       dashboard.private_metadata = JSON.stringify({ channelId, userId, studyId: study.id, studyName: study.name });
 
       await client.views.open({ trigger_id: body.trigger_id, view: dashboard });
@@ -118,15 +146,10 @@ const handleFieldworkStudyPickerSubmit = async ({ ack, body, view, client }) => 
     const participantStats = await studyParticipantService.getParticipantStats(study.id);
     const observerStats = await sessionObserverService.getObserverStats(study.id);
     const allParticipants = await studyParticipantService.getParticipantsByStudy(study.id);
-    const outreachStats = {
-      total_contacted: allParticipants.length,
-      awaiting_response: allParticipants.filter(p =>
-        p.status_select === 'Pending' || p.status_select === 'Contacted'
-      ).length,
-    };
+    const { outreachStats, context } = buildDashboardContext(allParticipants, study);
 
     const dashboardMeta = { ...meta, studyId: study.id, studyName: study.name };
-    const dashboard = buildFieldworkDashboard(study, participantStats, observerStats, outreachStats);
+    const dashboard = buildFieldworkDashboard(study, participantStats, observerStats, outreachStats, context);
     dashboard.private_metadata = JSON.stringify(dashboardMeta);
 
     await ack({ response_action: 'update', view: dashboard });
