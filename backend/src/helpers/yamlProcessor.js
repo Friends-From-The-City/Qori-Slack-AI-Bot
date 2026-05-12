@@ -3,6 +3,22 @@ const yaml = require('js-yaml');
 const Handlebars = require('handlebars');
 const { format } = require('date-fns');
 const path = require('path');
+
+/**
+ * Thrown when a template's cascade contract is violated — a required
+ * upstream variable is missing. Handlers should catch this and surface
+ * a user-friendly message instead of producing broken output.
+ */
+class TemplateContractError extends Error {
+  constructor(templateId, variableKey, message) {
+    super(message || `Required cascade variable '${variableKey}' is missing for template '${templateId}'.`);
+    this.name = 'TemplateContractError';
+    this.templateId = templateId;
+    this.variableKey = variableKey;
+    this.userMessage = `The research brief is missing required data (*${variableKey}*). `
+      + `This variable must be emitted by an upstream template before *${templateId}* can render.`;
+  }
+}
 const { createOrUpdateFileOnGitHub } = require('./github');
 const { executeAiGenerationTasks } = require('./langchain');
 const { extractVariables } = require('./variableExtractor');
@@ -105,6 +121,19 @@ async function processYamlTemplate(rawYamlContent, inputValues, baseFolderEncode
             yamlConfig.consumes,
           )
         : await readUpstreamVariables(baseFolder, yamlConfig.consumes);
+
+      // Enforce cascade contracts: required variables must be present
+      for (const spec of yamlConfig.consumes) {
+        if (spec.required && !upstream[spec.key]) {
+          throw new TemplateContractError(
+            yamlConfig.id,
+            spec.key,
+            `Required cascade variable '${spec.key}' is missing for template '${yamlConfig.id}'. ` +
+            `Upstream template '${spec.source || 'unknown'}' must emit '${spec.key}' before '${yamlConfig.id}' can render.`
+          );
+        }
+      }
+
       if (Object.keys(upstream).length > 0) {
         // Inject upstream variables into inputValues so they're available to Generate prompts
         inputValues.upstream_variables = upstream;
@@ -136,6 +165,8 @@ async function processYamlTemplate(rawYamlContent, inputValues, baseFolderEncode
         }
       }
     } catch (error) {
+      // Contract errors must propagate — they indicate a missing prerequisite
+      if (error instanceof TemplateContractError) throw error;
       console.warn(`⚠️ Transform phase failed for ${yamlConfig.id}, continuing without upstream variables:`, error.message);
       // Continue without upstream variables — Generate still works, just without cascade context
     }
@@ -241,4 +272,4 @@ async function processYamlTemplate(rawYamlContent, inputValues, baseFolderEncode
   }
 }
 
-module.exports = { processYamlTemplate };
+module.exports = { processYamlTemplate, TemplateContractError };

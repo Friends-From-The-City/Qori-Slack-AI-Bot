@@ -18,7 +18,7 @@ jest.mock('../../helpers/github', () => require('../__mocks__/github.mock'));
 jest.mock('../../helpers/studyVariables', () => require('../__mocks__/studyVariables.mock'));
 jest.mock('../../helpers/variableExtractor', () => require('../__mocks__/variableExtractor.mock'));
 
-const { processYamlTemplate } = require('../../helpers/yamlProcessor');
+const { processYamlTemplate, TemplateContractError } = require('../../helpers/yamlProcessor');
 const { makePlanInputs, makeBriefUpstream } = require('../__fixtures__/brief.fixture');
 const { mockReadUpstream } = require('../__mocks__/studyVariables.mock');
 
@@ -100,5 +100,42 @@ describe('research_plan template', () => {
     );
 
     expect(result.outputTemplate).toContain('This is AI-generated plan content for test verification.');
+  });
+
+  test('throws TemplateContractError when a required upstream variable is missing', async () => {
+    // Return upstream data missing target_barriers (required: true in research_plan.yaml)
+    const incomplete = makeBriefUpstream();
+    delete incomplete.target_barriers;
+    mockReadUpstream.mockResolvedValueOnce(incomplete);
+
+    const inputs = makePlanInputs();
+
+    await expect(
+      processYamlTemplate(
+        rawYaml,
+        inputs,
+        encodeURIComponent('studies/test-study'),
+        'primary-research',
+        false,
+      )
+    ).rejects.toThrow(TemplateContractError);
+  });
+
+  test('TemplateContractError includes the missing variable name', async () => {
+    const incomplete = makeBriefUpstream();
+    delete incomplete.research_objectives;
+    mockReadUpstream.mockResolvedValueOnce(incomplete);
+
+    const inputs = makePlanInputs();
+
+    await expect(
+      processYamlTemplate(
+        rawYaml,
+        inputs,
+        encodeURIComponent('studies/test-study'),
+        'primary-research',
+        false,
+      )
+    ).rejects.toThrow(/research_objectives/);
   });
 });

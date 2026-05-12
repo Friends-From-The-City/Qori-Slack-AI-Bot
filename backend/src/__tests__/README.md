@@ -57,6 +57,14 @@ Factory functions with override support. Always returns a fresh object.
 - Handlebars variables (researcher name, study title, etc.) appear in output
 - AI-generated content slots into the correct position
 
+## Cascade contract enforcement
+
+Templates declare upstream dependencies via `consumes` blocks in their YAML. When a consumed variable has `required: true`, the processor throws a `TemplateContractError` if that variable is missing from the study's variable store. This prevents silent rendering of broken documents.
+
+Handlers that call `processYamlTemplate` should catch `TemplateContractError` and send the researcher a clear DM explaining what's missing and which upstream command to run. See `planHandler.js` for the reference pattern.
+
+A variable is "missing" when no row exists in `study_variables` for that key, or the value is null/undefined. Empty arrays `[]` and empty objects `{}` are valid — they mean the upstream ran but produced no data.
+
 ## What these tests do NOT verify
 
 - Actual LLM output quality (LLM is always mocked)
