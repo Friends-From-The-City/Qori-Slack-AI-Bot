@@ -5,7 +5,7 @@
  * Returning users see a condensed command map with "Take the tour again" button.
  */
 
-const CASCADE_DIAGRAM_URL = 'https://friends-innovation-lab.github.io/qori-slack/assets/cascade-diagram.png';
+const CASCADE_DIAGRAM_URL = 'https://friends-innovation-lab.github.io/qori-slack/assets/cascade-diagram.png?v=2';
 
 // ── Screen builders ────────────────────────────────────────
 
@@ -20,10 +20,9 @@ function buildScreen1() {
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: 'Qori turns scattered research into structured knowledge.\n\nEvery interview, every session, every finding — connected.\nEvery recommendation traceable to a real participant\'s words.',
+        text: '*Research that ships.*\n\n•  Synthesis in minutes, not days.\n•  From interview to engineering ticket.\n•  Every recommendation traces back to its source.',
       },
     },
-    { type: 'divider' },
     {
       type: 'actions',
       block_id: 'learn_nav',
@@ -48,16 +47,16 @@ function buildScreen2() {
     },
     { type: 'divider' },
     {
-      type: 'image',
-      image_url: CASCADE_DIAGRAM_URL,
-      alt_text: 'Diagram: a real participant quote ("Benefits sounds like a brochure, not my actual money.") connected by an arrow to an engineering ticket (qori-eng-12: Rewrite benefits page copy in plain financial terms.). Caption reads: Every link traceable to real evidence.',
-    },
-    {
       type: 'section',
       text: {
         type: 'mrkdwn',
         text: 'Qori turns interviews into engineering tickets. Every output traces back to the research that produced it.',
       },
+    },
+    {
+      type: 'image',
+      image_url: CASCADE_DIAGRAM_URL,
+      alt_text: 'Diagram: a real participant quote ("Benefits sounds like a brochure, not my actual money.") connected by an arrow to an engineering ticket (qori-eng-12: Rewrite benefits page copy in plain financial terms.). Caption reads: Every link traceable to real evidence.',
     },
     {
       type: 'actions',
@@ -81,13 +80,11 @@ function buildScreen2() {
   ];
 }
 
-function buildScreen3() {
+/**
+ * Shared command map blocks — used by /qori-learn Screen 3, /qori-help, and condensed view.
+ */
+function buildCommandMapBlocks() {
   return [
-    {
-      type: 'header',
-      text: { type: 'plain_text', text: '11 commands, organized by phase' },
-    },
-    { type: 'divider' },
     {
       type: 'section',
       text: {
@@ -127,9 +124,20 @@ function buildScreen3() {
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: '*UTILITY*\n`/qori-learn`  This tour\n`/qori-delete`  Clean up studies',
+        text: '*UTILITY*\n`/qori-help`  Show all commands\n`/qori-learn`  First-run tour\n`/qori-delete`  Clean up studies',
       },
     },
+  ];
+}
+
+function buildScreen3() {
+  return [
+    {
+      type: 'header',
+      text: { type: 'plain_text', text: '12 commands, organized by phase' },
+    },
+    { type: 'divider' },
+    ...buildCommandMapBlocks(),
     {
       type: 'context',
       elements: [{ type: 'mrkdwn', text: 'Each command does one thing well. The system handles the rest.' }],
@@ -216,7 +224,7 @@ function buildCondensedView() {
       text: { type: 'plain_text', text: 'Qori command map' },
     },
     { type: 'divider' },
-    ...buildScreen3().filter(b => b.type === 'section'),
+    ...buildCommandMapBlocks(),
     { type: 'divider' },
     {
       type: 'actions',
@@ -270,5 +278,6 @@ function buildCondensedModal(meta = {}) {
 module.exports = {
   buildLearnModal,
   buildCondensedModal,
+  buildCommandMapBlocks,
   SCREEN_BUILDERS,
 };

@@ -26,6 +26,7 @@ const { handleMarkChangesCompleteAction, handleMarkChangesCompleteModal, handleA
 const { handleApprove, handleApproveSubmission, handleRequestChanges, handleRequestChangesSubmission } = require("./requestChangesHandler");
 const { sendStudyResultMessage, generateStudyResultBlocks } = require("./ui/studyResultBlocks");
 const { buildLearnModal, buildCondensedModal } = require("./ui/qoriLearnModal");
+const { handleQoriHelp } = require("./commands/helpHandler");
 const { handleParticipantOutreachSubmit, handleInitialRecruitmentSubmit, handleReschedulingRequestSubmit, handleSessionConfirmationSubmit, handleThankYouSubmit, handleFollowUpSubmit, handleSessionReminderSubmit, handleAddParticipantSubmit, handleObserverModalButton } = require("./commands/participantOutreachHandler");
 const { handleLoadParticipantsButton, handleUpdateParticipantSubmission } = require("./commands/participantHandler");
 const { handleAddObserverSubmission, handleSelfJoinObserver, handleSelfJoinSubmission } = require("./commands/addObserverHandler");
@@ -133,7 +134,7 @@ slackApp.command('/qori', async ({ ack, command, client }) => {
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: '*`/qori`* → Show all commands'
+        text: '*`/qori-help`* → Show all commands'
       }
     },
     {
@@ -292,7 +293,7 @@ slackApp.view('learn_ceremony_submit', async ({ ack, body, view, client }) => {
     new_study: 'Welcome aboard! Start with `/qori-discover` to do pre-study discovery, or `/qori-brief` to initiate a study directly.',
     analyze: 'Welcome aboard! Run `/qori-analyze` to upload and process your session transcripts.',
     ask: 'Welcome aboard! Run `/qori-ask` to query past research across all studies.',
-    explore: 'Welcome aboard! When you\'re ready, start with `/qori-discover`. Type `/qori` anytime to see available commands.',
+    explore: 'Welcome aboard! When you\'re ready, start with `/qori-discover`. Run `/qori-help` anytime to see all commands.',
   };
 
   const message = routeMessages[choice] || routeMessages.explore;
@@ -306,6 +307,9 @@ slackApp.view('learn_ceremony_submit', async ({ ack, body, view, client }) => {
 
 // Noop callback for non-submittable screens (prevents Slack errors)
 slackApp.view('learn_ceremony_noop', async ({ ack }) => { await ack(); });
+
+// ── /qori-help — Show command map modal ──────────────────────
+slackApp.command('/qori-help', handleQoriHelp);
 
 // 1️⃣ Slash command: open modal with just a repo picker
 slackApp.command('/qori-repo', async ({ ack, command, client }) => {
