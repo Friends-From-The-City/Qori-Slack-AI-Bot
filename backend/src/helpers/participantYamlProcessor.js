@@ -331,7 +331,7 @@ function extractExistingParticipants(fileContent) {
     const line = lines[i].trim();
 
     // Check if we're entering the participant details table
-    if (line.includes('| ID | Name/Alias | Contact | Recruited Via | Scheduled | Status | Notes & Accommodations |')) {
+    if (line.includes('| ID | Name/Alias | Contact | Recruited Via |') && line.includes('| Status |')) {
       inParticipantTable = true;
       continue;
     }
@@ -394,16 +394,20 @@ function updateFileWithParticipants(fileContent, participants) {
     const line = lines[i];
 
     // Check if we're entering the participant details table
-    if (line.includes('| ID | Name/Alias | Contact | Recruited Via | Scheduled | Status | Notes & Accommodations |')) {
+    if (line.includes('| ID | Name/Alias | Contact | Recruited Via |') && line.includes('| Status |')) {
       console.log('🚀 ~ updateFileWithParticipants ~ Found participant table header');
       inParticipantTable = true;
       tableHeaderFound = true;
-      updatedLines.push(line);
-      updatedLines.push('|----|-----------|---------|-----------------|-----------|--------|----------------------|');
+      updatedLines.push('| ID | Name/Alias | Contact | Recruited Via | Outreach Sent | Scheduled | Status | Notes & Accommodations |');
+      updatedLines.push('|----|-----------|---------|-----------------|---------------|-----------|--------|----------------------|');
 
       // Add all participants
-      participants.forEach(participant => {
-        const participantRow = `| ${participant.id} | ${participant.participant_name} | ${participant.contact_details} | ${participant.recruitment_source} | ${participant.scheduled_date} ${participant.scheduled_time || ''} | ${participant.status_select} | ${participant.notes_field} |`;
+      participants.forEach((participant) => {
+        const outreachDisplay = participant.outreach_sent_at
+          ? `${new Date(participant.outreach_sent_at).toISOString().split('T')[0]}${(participant.outreach_count || 0) > 1 ? ` (${participant.outreach_count} sent)` : ''}`
+          : 'Not sent';
+        const statusDisplay = PARTICIPANT_STATUS_LABELS[participant.status_select] || participant.status_select;
+        const participantRow = `| ${participant.id} | ${participant.participant_name} | ${participant.contact_details} | ${participant.recruitment_source} | ${outreachDisplay} | ${participant.scheduled_date} ${participant.scheduled_time || ''} | ${statusDisplay} | ${participant.notes_field} |`;
         console.log('🚀 ~ updateFileWithParticipants ~ Adding participant row:', participantRow);
         updatedLines.push(participantRow);
       });

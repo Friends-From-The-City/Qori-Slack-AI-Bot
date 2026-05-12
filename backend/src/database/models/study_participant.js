@@ -13,6 +13,20 @@ module.exports = (sequelize) => {
         onDelete: "CASCADE",
       });
     }
+
+    /**
+     * Record an outreach event. Auto-advances not_contacted → contacted.
+     */
+    async recordOutreachSent(method = 'email') {
+      this.outreach_sent_at = new Date();
+      this.outreach_method = method;
+      this.outreach_count = (this.outreach_count || 0) + 1;
+      this.updated_at = new Date();
+      if (this.status_select === PARTICIPANT_STATUS.NOT_CONTACTED) {
+        this.status_select = PARTICIPANT_STATUS.CONTACTED;
+      }
+      await this.save();
+    }
   }
 
   StudyParticipant.init(
@@ -65,6 +79,22 @@ module.exports = (sequelize) => {
       demographics_info: {
         type: DataTypes.JSON,
         allowNull: true,
+      },
+      outreach_sent_at: {
+        type: DataTypes.DATE,
+        allowNull: true,
+      },
+      outreach_method: {
+        type: DataTypes.STRING(20),
+        allowNull: true,
+        validate: {
+          isIn: [['email', 'slack', 'phone', 'other']],
+        },
+      },
+      outreach_count: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        defaultValue: 0,
       },
       added_by: {
         type: DataTypes.STRING,

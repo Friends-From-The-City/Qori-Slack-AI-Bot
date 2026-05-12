@@ -27,30 +27,20 @@ const initialRecruitmentModal = {
       type: "divider",
     },
     {
-      type: "section",
-      text: {
-        type: "mrkdwn",
-        text: "*👤 Participant*",
-      },
-    },
-    {
       type: "input",
       block_id: "participant_id_block",
       label: {
         type: "plain_text",
-        text: "Participant ID or alias *",
-      },
-      hint: {
-        type: "plain_text",
-        text: "Use ID (e.g., P001) or alias (e.g., Alex M.) — no full names for privacy",
+        text: "Participant",
       },
       element: {
-        type: "plain_text_input",
+        type: "static_select",
         action_id: "participant_id",
         placeholder: {
           type: "plain_text",
-          text: "e.g., P001 or Alex M.",
+          text: "Select participant...",
         },
+        options: [{ text: { type: "plain_text", text: "Loading..." }, value: "loading" }],
       },
     },
     {

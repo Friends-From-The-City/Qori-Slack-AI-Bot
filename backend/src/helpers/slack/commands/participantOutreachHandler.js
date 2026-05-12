@@ -145,52 +145,37 @@ const handleParticipantOutreachSubmit = async ({ ack, body, view, client }) => {
 
   try {
     console.log("🚀 ~ Opening next modal for:", selectedValue);
-    
-    // For initial recruitment modal, study info is passed via metadata (no pre-filling needed)
-    // Other modals may still need pre-filling, so we keep the logic but only apply it if blocks exist
-    const modalWithPrefilledValues = {
+
+    // Load participants for the study to populate the dropdown
+    const participants = await studyParticipantService.getParticipantsByStudy(study.id);
+    const participantOptions = participants.length > 0
+      ? participants.map((p) => ({
+        text: { type: 'plain_text', text: p.participant_name },
+        value: p.id.toString(),
+      }))
+      : [{ text: { type: 'plain_text', text: 'No participants — add via /qori-fieldwork' }, value: 'no_participants' }];
+
+    // Inject participant options into the modal blocks
+    const modalWithParticipants = {
       ...nextModal,
-      blocks: nextModal.blocks.map(block => {
-        // Only pre-fill if the block exists in the modal
-        if (block.type === 'input' && block.block_id === 'study_selection') {
-          const option = { text: { type: 'plain_text', text: study.name || finalSelectedStudy }, value: String(study.id || finalSelectedStudy) };
+      blocks: nextModal.blocks.map((block) => {
+        if (block.type === 'input' && block.block_id === 'participant_id_block') {
           return {
             ...block,
             element: {
               ...block.element,
-              options: [option],
-              initial_option: option,
-            }
-          };
-        }
-        if (block.type === 'input' && block.block_id === 'researcher_name') {
-          return {
-            ...block,
-            element: {
-              ...block.element,
-              initial_value: study.researcher_name || ''
-            }
-          };
-        }
-        if (block.type === 'input' && block.block_id === 'researcher_email') {
-          return {
-            ...block,
-            element: {
-              ...block.element,
-              initial_value: study.researcher_email || ''
-            }
+              options: participantOptions,
+            },
           };
         }
         return block;
-      })
+      }),
     };
 
-    // For view submissions, we can return a response_action to push a new view
-    // This is the proper way to navigate to a new modal after a view submission
     await ack({
       response_action: "push",
       view: {
-        ...modalWithPrefilledValues,
+        ...modalWithParticipants,
         private_metadata: JSON.stringify({ channelId, userId, studyName: study.name || finalSelectedStudy, studyId: String(study.id || ''), researcher_name: study.researcher_name, researcher_email: study.researcher_email }),
       },
     });
@@ -237,8 +222,9 @@ const handleInitialRecruitmentSubmit = async ({ ack, body, view, client }) => {
     const state = view.state.values;
     const meta = JSON.parse(view.private_metadata || '{}');
     
-    // Get participant ID from new block structure
-    const participant_id = state.participant_id_block?.participant_id?.value || "";
+    // Get participant from dropdown selection
+    const participantDbId = state.participant_id_block?.participant_id?.selected_option?.value;
+    const participant_id = state.participant_id_block?.participant_id?.selected_option?.text?.text || "";
     
     // Get study info from metadata (passed from previous modal)
     const study_name = meta.studyName || "";
@@ -273,6 +259,12 @@ const handleInitialRecruitmentSubmit = async ({ ack, body, view, client }) => {
     const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, "participant_outreach.yaml");
     const renderedYaml = await processYamlTemplate(file.content, data, study.path);
     console.log("🚀 ~ handleInitialRecruitmentSubmit ~ renderedYaml:", renderedYaml)
+
+    // Record outreach event on the participant row
+    if (participantDbId && participantDbId !== 'no_participants') {
+      const participant = await studyParticipantService.getParticipantById(parseInt(participantDbId, 10));
+      if (participant) await participant.recordOutreachSent('email');
+    }
 
     // 3. Update the modal with the final content using views.update
     // Note: After response_action: "update", we need to use the view_id from the updated view
@@ -369,8 +361,9 @@ const handleReschedulingRequestSubmit = async ({ ack, body, view, client }) => {
     const state = view.state.values;
     const meta = JSON.parse(view.private_metadata || '{}');
     
-    // Get participant ID from new block structure
-    const participant_id = state.participant_id_block?.participant_id?.value || "";
+    // Get participant from dropdown selection
+    const participantDbId = state.participant_id_block?.participant_id?.selected_option?.value;
+    const participant_id = state.participant_id_block?.participant_id?.selected_option?.text?.text || "";
     
     // Get study info from metadata (passed from previous modal)
     const study_name = meta.studyName || "";
@@ -399,6 +392,11 @@ const handleReschedulingRequestSubmit = async ({ ack, body, view, client }) => {
     const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, "participant_outreach.yaml");
     const renderedYaml = await processYamlTemplate(file.content, data, study.path);
     console.log("🚀 ~ handleReschedulingRequestSubmit ~ renderedYaml:", renderedYaml);
+
+    if (participantDbId && participantDbId !== 'no_participants') {
+      const participant = await studyParticipantService.getParticipantById(parseInt(participantDbId, 10));
+      if (participant) await participant.recordOutreachSent('email');
+    }
 
     // 3. Update the modal with the final content using views.update
     try {
@@ -492,8 +490,9 @@ const handleSessionConfirmationSubmit = async ({ ack, body, view, client }) => {
     const state = view.state.values;
     const meta = JSON.parse(view.private_metadata || '{}');
     
-    // Get participant ID from new block structure
-    const participant_id = state.participant_id_block?.participant_id?.value || "";
+    // Get participant from dropdown selection
+    const participantDbId = state.participant_id_block?.participant_id?.selected_option?.value;
+    const participant_id = state.participant_id_block?.participant_id?.selected_option?.text?.text || "";
     
     // Get study info from metadata (passed from previous modal)
     const study_name = meta.studyName || "";
@@ -524,6 +523,11 @@ const handleSessionConfirmationSubmit = async ({ ack, body, view, client }) => {
     const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, "participant_outreach.yaml");
     const renderedYaml = await processYamlTemplate(file.content, data, study.path);
     console.log("🚀 ~ handleSessionConfirmationSubmit ~ renderedYaml:", renderedYaml);
+
+    if (participantDbId && participantDbId !== 'no_participants') {
+      const participant = await studyParticipantService.getParticipantById(parseInt(participantDbId, 10));
+      if (participant) await participant.recordOutreachSent('email');
+    }
 
     // 3. Update the modal with the final content using views.update
     try {
@@ -617,8 +621,9 @@ const handleThankYouSubmit = async ({ ack, body, view, client }) => {
     const state = view.state.values;
     const meta = JSON.parse(view.private_metadata || '{}');
     
-    // Get participant ID from new block structure
-    const participant_id = state.participant_id_block?.participant_id?.value || "";
+    // Get participant from dropdown selection
+    const participantDbId = state.participant_id_block?.participant_id?.selected_option?.value;
+    const participant_id = state.participant_id_block?.participant_id?.selected_option?.text?.text || "";
     
     // Get study info from metadata (passed from previous modal)
     const study_name = meta.studyName || "";
@@ -646,6 +651,11 @@ const handleThankYouSubmit = async ({ ack, body, view, client }) => {
     const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, "participant_outreach.yaml");
     const renderedYaml = await processYamlTemplate(file.content, data, study.path);
     console.log("🚀 ~ handleThankYouSubmit ~ renderedYaml:", renderedYaml)
+
+    if (participantDbId && participantDbId !== 'no_participants') {
+      const participant = await studyParticipantService.getParticipantById(parseInt(participantDbId, 10));
+      if (participant) await participant.recordOutreachSent('email');
+    }
 
     // 3. Update the modal with the final content using views.update
     // Note: After response_action: "update", we need to use the view_id from the updated view
@@ -737,8 +747,9 @@ const handleFollowUpSubmit = async ({ ack, body, view, client }) => {
     const state = view.state.values;
     const meta = JSON.parse(view.private_metadata || '{}');
     
-    // Get participant ID from new block structure
-    const participant_id = state.participant_id_block?.participant_id?.value || "";
+    // Get participant from dropdown selection
+    const participantDbId = state.participant_id_block?.participant_id?.selected_option?.value;
+    const participant_id = state.participant_id_block?.participant_id?.selected_option?.text?.text || "";
     
     // Get study info from metadata (passed from previous modal)
     const study_name = meta.studyName || "";
@@ -762,6 +773,11 @@ const handleFollowUpSubmit = async ({ ack, body, view, client }) => {
     const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, "participant_outreach.yaml");
     const renderedYaml = await processYamlTemplate(file.content, data, study.path);
     console.log("🚀 ~ handleFollowUpSubmit ~ renderedYaml:", renderedYaml)
+
+    if (participantDbId && participantDbId !== 'no_participants') {
+      const participant = await studyParticipantService.getParticipantById(parseInt(participantDbId, 10));
+      if (participant) await participant.recordOutreachSent('email');
+    }
 
     // 3. Update the modal with the final content using views.update
     // Note: After response_action: "update", we need to use the view_id from the updated view
@@ -853,8 +869,9 @@ const handleSessionReminderSubmit = async ({ ack, body, view, client }) => {
     const state = view.state.values;
     const meta = JSON.parse(view.private_metadata || '{}');
     
-    // Get participant ID from new block structure
-    const participant_id = state.participant_id_block?.participant_id?.value || "";
+    // Get participant from dropdown selection
+    const participantDbId = state.participant_id_block?.participant_id?.selected_option?.value;
+    const participant_id = state.participant_id_block?.participant_id?.selected_option?.text?.text || "";
     
     // Get study info from metadata (passed from previous modal)
     const study_name = meta.studyName || "";
@@ -885,6 +902,11 @@ const handleSessionReminderSubmit = async ({ ack, body, view, client }) => {
     const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, "participant_outreach.yaml");
     const renderedYaml = await processYamlTemplate(file.content, data, study.path);
     console.log("🚀 ~ handleSessionReminderSubmit ~ renderedYaml:", renderedYaml);
+
+    if (participantDbId && participantDbId !== 'no_participants') {
+      const participant = await studyParticipantService.getParticipantById(parseInt(participantDbId, 10));
+      if (participant) await participant.recordOutreachSent('email');
+    }
 
     // 3. Update the modal with the final content using views.update
     try {
