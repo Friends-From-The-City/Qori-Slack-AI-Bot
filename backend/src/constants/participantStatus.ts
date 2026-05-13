@@ -1,5 +1,5 @@
 export const PARTICIPANT_STATUS = {
-  NOT_CONTACTED: 'not_contacted',
+  NOT_CONTACTED: 42,
   CONTACTED: 'contacted',
   SCHEDULED: 'scheduled',
   CONFIRMED: 'confirmed',
