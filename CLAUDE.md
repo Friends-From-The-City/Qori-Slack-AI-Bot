@@ -58,11 +58,12 @@ All commands run from `backend/`:
 cd backend
 npm install
 npm run dev          # Dev server with nodemon (port 3000)
-npm run build        # Babel compile src/ → dist/
+npm run build        # Babel compile src/ → dist/ (handles .js and .ts)
 npm start            # Run compiled dist/bin/www.js
+npm run typecheck    # TypeScript type check (no emit)
 npm run lint         # ESLint (airbnb-base)
 npm run lint:fix     # ESLint autofix
-npm test             # Mocha + Chai tests
+npm test             # Jest tests
 npm run db:migrate   # Sequelize migrations
 ```
 
@@ -93,7 +94,9 @@ docker-compose up    # Starts app (3000), postgres (5432), redis (6379)
 
 3. **Postgres public URL for migrations.** Railway's internal Postgres hostname (`postgres.railway.internal`) only resolves inside the private network. To run `npx sequelize-cli db:migrate` from your local machine or via `railway run`, use the **public** connection URL (with `DATABASE_PUBLIC_URL` fields) from the Postgres service's Connect tab (it has a `railway.app` hostname and a mapped port). The internal URL works for the backend service at runtime since it's on the same private network.
 
-**Deploy flow:** Push to `main` → Railway auto-deploys. No CI/CD pipeline config needed — Railway watches the repo directly.
+**Start command:** Railway must use `npm start` (runs compiled `dist/`), **not** `npm run prod` (runs raw source). The `prod` script runs `node src/app.js` directly, which cannot load `.ts` files. Nixpacks runs `npm run build` during deploy, which compiles all `.js` and `.ts` source to `dist/` via Babel. If Railway crashes with `Cannot find module` errors on a `.ts` file, the start command is wrong.
+
+**Deploy flow:** Push to `main` → Railway auto-deploys. Nixpacks runs `npm run build` then `npm start`. GitHub Actions CI also runs typecheck + tests on every PR.
 
 ## Key Directories
 
