@@ -4,6 +4,27 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Language and type safety
+
+This codebase is migrating from JavaScript to TypeScript. Phase 1 is complete: the toolchain works, CI/CD gates PRs on type-check and tests.
+
+Behavior during the migration:
+
+- **New code is TypeScript.** Any new files should be `.ts`, with proper type annotations.
+- **Modified code is TypeScript when feasible.** If you're substantially modifying a `.js` file (more than a few lines), migrate it to `.ts` as part of the change. If the change is trivial (typo fix, comment update), leaving as `.js` is fine.
+- **Strict mode is on.** Avoid `any` types. If genuinely needed, annotate with `// @ts-expect-error` and a comment explaining why.
+- **The full migration is sequenced.** See `docs/typescript-migration-plan.md` for the phases. You may be working in a specific phase; check the migration plan to see what's in scope.
+- **Pre-commit checks.** Before claiming work is done, run `npm run typecheck` and `npm test`. CI runs the same checks on PR submission.
+
+When migrating a JavaScript file to TypeScript:
+1. Rename `.js` → `.ts`
+2. Add type annotations to function signatures, exported values, and any internal data structures with non-obvious shapes
+3. Use existing types from `backend/src/types/` (defined in Phase 2) when available
+4. Run `npm run typecheck` to surface any issues
+5. Resolve type errors before submitting
+
+The pattern for choosing types: function arguments and return values should always be typed. Internal variables can rely on inference. Public exports should have explicit types so consumers don't have to navigate to the implementation to understand the contract.
+
 ## What is Qori?
 
 Qori is an AI-powered research operations platform for VA (Veterans Affairs) UX research teams. Users interact through Slack slash commands (e.g., `/qori-plan`, `/qori-analyze`) which open Block Kit modals, collect input, run chained LLM tasks defined in YAML configs, and store generated documents in GitHub repositories.

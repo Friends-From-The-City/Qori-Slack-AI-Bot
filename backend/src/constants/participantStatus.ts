@@ -1,4 +1,4 @@
-const PARTICIPANT_STATUS = Object.freeze({
+export const PARTICIPANT_STATUS = {
   NOT_CONTACTED: 'not_contacted',
   CONTACTED: 'contacted',
   SCHEDULED: 'scheduled',
@@ -8,11 +8,13 @@ const PARTICIPANT_STATUS = Object.freeze({
   DECLINED: 'declined',
   NO_RESPONSE: 'no_response',
   CANCELED: 'canceled',
-});
+} as const;
 
-const PARTICIPANT_STATUS_VALUES = Object.values(PARTICIPANT_STATUS);
+export type ParticipantStatus = typeof PARTICIPANT_STATUS[keyof typeof PARTICIPANT_STATUS];
 
-const PARTICIPANT_STATUS_LABELS = {
+export const PARTICIPANT_STATUS_VALUES: readonly ParticipantStatus[] = Object.values(PARTICIPANT_STATUS);
+
+export const PARTICIPANT_STATUS_LABELS: Record<ParticipantStatus, string> = {
   not_contacted: 'Not contacted',
   contacted: 'Contacted',
   scheduled: 'Scheduled',
@@ -26,7 +28,7 @@ const PARTICIPANT_STATUS_LABELS = {
 
 // States that count as 'active' for dashboard purposes
 // (in pipeline, not terminal)
-const ACTIVE_STATUSES = [
+export const ACTIVE_STATUSES: readonly ParticipantStatus[] = [
   PARTICIPANT_STATUS.CONTACTED,
   PARTICIPANT_STATUS.SCHEDULED,
   PARTICIPANT_STATUS.CONFIRMED,
@@ -34,13 +36,14 @@ const ACTIVE_STATUSES = [
 ];
 
 // Terminal statuses (no further action expected)
-const TERMINAL_STATUSES = [
+export const TERMINAL_STATUSES: readonly ParticipantStatus[] = [
   PARTICIPANT_STATUS.COMPLETED,
   PARTICIPANT_STATUS.DECLINED,
   PARTICIPANT_STATUS.NO_RESPONSE,
   PARTICIPANT_STATUS.CANCELED,
 ];
 
+// CommonJS export for backward compatibility with existing require() calls
 module.exports = {
   PARTICIPANT_STATUS,
   PARTICIPANT_STATUS_VALUES,

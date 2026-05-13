@@ -12,12 +12,13 @@
     "email": "tanzeelsaleem10@gmail.com"
   },
   "scripts": {
-    "build": "babel src --out-dir dist",
+    "build": "babel src --out-dir dist --extensions '.js,.ts'",
     "start": "node ./dist/bin/www.js",
     "prod": "node --require module-alias/register src/app.js",
-    "dev": "nodemon --require module-alias/register src/app.js",
+    "dev": "nodemon --ext js,ts --require module-alias/register src/app.js",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
+    "typecheck": "tsc --noEmit",
     "test": "NODE_ENV=test jest --config jest.config.js",
     "test:mocha": "NODE_ENV=test mocha --require @babel/register --exit",
     "test:watch": "NODE_ENV=test jest --config jest.config.js --watch",
@@ -72,7 +73,10 @@
     "@babel/core": "^7.9.6",
     "@babel/node": "^7.8.7",
     "@babel/preset-env": "^7.9.6",
+    "@babel/preset-typescript": "^7.28.5",
     "@babel/register": "^7.9.0",
+    "@types/express": "^5.0.6",
+    "@types/jest": "^30.0.0",
     "@types/node": "^22.14.1",
     "@types/superagent": "^8.1.9",
     "babel-plugin-module-resolver": "^4.0.0",
@@ -85,7 +89,9 @@
     "jest": "^30.4.2",
     "mocha": "^7.1.2",
     "nodemon": "^2.0.3",
-    "sequelize-cli": "^6.4.1"
+    "sequelize-cli": "^6.4.1",
+    "ts-jest": "^29.4.9",
+    "typescript": "^6.0.3"
   },
   "engines": {
     "node": ">=16.0.0 <=22.11.0",
