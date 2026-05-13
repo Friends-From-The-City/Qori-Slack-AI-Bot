@@ -1,22 +1,40 @@
+import type { ResearchPlan } from '../database/models/research_plan';
+import type { ResearchStudy } from '../database/models/research_study';
+
 const sequelize = require('../database');
 
-class ResearchPlanService {
-  constructor() {
-    this.ResearchPlan = sequelize.models.ResearchPlan;
-    this.ResearchStudy = sequelize.models.ResearchStudy;
-  }
+// Typed model references — cast once, use everywhere. See Phase 3 notes.
+const ResearchPlanModel = sequelize.models.ResearchPlan as typeof ResearchPlan;
+const ResearchStudyModel = sequelize.models.ResearchStudy as typeof ResearchStudy;
 
+interface QueryOptions {
+  limit?: number;
+  offset?: number;
+}
+
+interface SearchCriteria {
+  study_name?: string;
+  filename?: string;
+}
+
+interface PlanInput {
+  study_id?: number;
+  study_name?: string;
+  created_at?: Date;
+  updated_at?: Date;
+  [key: string]: unknown;
+}
+
+class ResearchPlanService {
   /**
    * Create a new research plan
-   * @param {Object} planData - The plan data to create
-   * @returns {Promise<Object>} The created plan
    */
-  async createResearchPlan(planData) {
+  async createResearchPlan(planData: PlanInput): Promise<ResearchPlan> {
     try {
       // Handle case where study_id might be null
       if (!planData.study_id) {
         // Try to find the study by name if study_id is not provided
-        const study = await this.ResearchStudy.findOne({
+        const study = await ResearchStudyModel.findOne({
           where: { name: planData.study_name }
         });
         if (study) {
@@ -29,25 +47,23 @@ class ResearchPlanService {
       planData.created_at = now;
       planData.updated_at = now;
 
-      const plan = await this.ResearchPlan.create(planData);
+      const plan = await ResearchPlanModel.create(planData as any);
       return plan;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating research plan:', error);
       throw new Error(`Failed to create research plan: ${error.message}`);
     }
   }
 
   /**
-        * Get a research plan by ID
-   * @param {number} id - The plan ID
-   * @returns {Promise<Object>} The research plan
+   * Get a research plan by ID
    */
-  async getResearchPlanById(id) {
+  async getResearchPlanById(id: number): Promise<ResearchPlan> {
     try {
-      const plan = await this.ResearchPlan.findByPk(id, {
+      const plan = await ResearchPlanModel.findByPk(id, {
         include: [
           {
-            model: this.ResearchStudy,
+            model: ResearchStudyModel,
             as: 'study',
             attributes: ['id', 'name', 'path', 'description']
           }
@@ -59,7 +75,7 @@ class ResearchPlanService {
       }
 
       return plan;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error getting research plan by ID:', error);
       throw new Error(`Failed to get research plan: ${error.message}`);
     }
@@ -67,19 +83,16 @@ class ResearchPlanService {
 
   /**
    * Get research plans by study ID
-   * @param {number} studyId - The study ID
-   * @param {Object} options - Query options
-   * @returns {Promise<Array>} Array of research plans
    */
-  async getResearchPlansByStudyId(studyId, options = {}) {
+  async getResearchPlansByStudyId(studyId: number, options: QueryOptions = {}): Promise<ResearchPlan[]> {
     try {
       const where = { study_id: studyId };
 
-      const plans = await this.ResearchPlan.findAll({
+      const plans = await ResearchPlanModel.findAll({
         where,
         include: [
           {
-            model: this.ResearchStudy,
+            model: ResearchStudyModel,
             as: 'study',
             attributes: ['id', 'name', 'path']
           }
@@ -90,7 +103,7 @@ class ResearchPlanService {
       });
 
       return plans;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error getting research plans by study ID:', error);
       throw new Error(`Failed to get research plans: ${error.message}`);
     }
@@ -98,19 +111,16 @@ class ResearchPlanService {
 
   /**
    * Get research plans by user ID
-   * @param {string} userId - The Slack user ID
-   * @param {Object} options - Query options
-   * @returns {Promise<Array>} Array of research plans
    */
-  async getResearchPlansByUserId(userId, options = {}) {
+  async getResearchPlansByUserId(userId: string, options: QueryOptions = {}): Promise<ResearchPlan[]> {
     try {
       const where = { created_by: userId };
 
-      const plans = await this.ResearchPlan.findAll({
+      const plans = await ResearchPlanModel.findAll({
         where,
         include: [
           {
-            model: this.ResearchStudy,
+            model: ResearchStudyModel,
             as: 'study',
             attributes: ['id', 'name', 'path']
           }
@@ -121,7 +131,7 @@ class ResearchPlanService {
       });
 
       return plans;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error getting research plans by user ID:', error);
       throw new Error(`Failed to get research plans: ${error.message}`);
     }
@@ -129,11 +139,8 @@ class ResearchPlanService {
 
   /**
    * Get research plans by exact study name match
-   * @param {string} studyName - The exact name of the research study
-   * @param {Object} options - Query options
-   * @returns {Promise<Array>} Array of research plans
    */
-  async getResearchPlansByStudyName(studyName, options = {}) {
+  async getResearchPlansByStudyName(studyName: string, options: QueryOptions = {}): Promise<ResearchPlan[]> {
     try {
       if (!studyName) {
         throw new Error('Study name is required');
@@ -143,11 +150,11 @@ class ResearchPlanService {
         study_name: studyName
       };
 
-      const plans = await this.ResearchPlan.findAll({
+      const plans = await ResearchPlanModel.findAll({
         where,
         include: [
           {
-            model: this.ResearchStudy,
+            model: ResearchStudyModel,
             as: 'study',
             attributes: ['id', 'name', 'path', 'description']
           }
@@ -158,7 +165,7 @@ class ResearchPlanService {
       });
 
       return plans;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error getting research plans by exact study name:', error);
       throw new Error(`Failed to get research plans by exact study name: ${error.message}`);
     }
@@ -166,13 +173,10 @@ class ResearchPlanService {
 
   /**
    * Search research plans
-   * @param {Object} searchCriteria - Search criteria
-   * @param {Object} options - Query options
-   * @returns {Promise<Array>} Array of matching research plans
    */
-  async searchResearchPlans(searchCriteria, options = {}) {
+  async searchResearchPlans(searchCriteria: SearchCriteria, options: QueryOptions = {}): Promise<ResearchPlan[]> {
     try {
-      const where = {};
+      const where: Record<string, unknown> = {};
 
       // Add search criteria
       if (searchCriteria.study_name) {
@@ -183,11 +187,11 @@ class ResearchPlanService {
         where.filename = { [sequelize.Op.iLike]: `%${searchCriteria.filename}%` };
       }
 
-      const plans = await this.ResearchPlan.findAll({
+      const plans = await ResearchPlanModel.findAll({
         where,
         include: [
           {
-            model: this.ResearchStudy,
+            model: ResearchStudyModel,
             as: 'study',
             attributes: ['id', 'name', 'path']
           }
@@ -198,7 +202,7 @@ class ResearchPlanService {
       });
 
       return plans;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error searching research plans:', error);
       throw new Error(`Failed to search research plans: ${error.message}`);
     }
@@ -206,13 +210,10 @@ class ResearchPlanService {
 
   /**
    * Update a research plan
-   * @param {number} id - The plan ID
-   * @param {Object} updateData - The data to update
-   * @returns {Promise<Object>} The updated plan
    */
-  async updateResearchPlan(id, updateData) {
+  async updateResearchPlan(id: number, updateData: Partial<PlanInput>): Promise<ResearchPlan> {
     try {
-      const plan = await this.ResearchPlan.findByPk(id);
+      const plan = await ResearchPlanModel.findByPk(id);
 
       if (!plan) {
         throw new Error('Research plan not found');
@@ -225,7 +226,7 @@ class ResearchPlanService {
       await plan.update(updateData);
 
       return plan;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating research plan:', error);
       throw new Error(`Failed to update research plan: ${error.message}`);
     }
@@ -233,12 +234,10 @@ class ResearchPlanService {
 
   /**
    * Delete a research plan
-   * @param {number} id - The plan ID
-   * @returns {Promise<boolean>} Success status
    */
-  async deleteResearchPlan(id) {
+  async deleteResearchPlan(id: number): Promise<boolean> {
     try {
-      const plan = await this.ResearchPlan.findByPk(id);
+      const plan = await ResearchPlanModel.findByPk(id);
 
       if (!plan) {
         throw new Error('Research plan not found');
@@ -246,7 +245,7 @@ class ResearchPlanService {
 
       await plan.destroy();
       return true;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error deleting research plan:', error);
       throw new Error(`Failed to delete research plan: ${error.message}`);
     }
@@ -254,15 +253,13 @@ class ResearchPlanService {
 
   /**
    * Get all research plans
-   * @param {Object} options - Query options
-   * @returns {Promise<Array>} Array of all research plans
    */
-  async getAllResearchPlans(options = {}) {
+  async getAllResearchPlans(options: QueryOptions = {}): Promise<ResearchPlan[]> {
     try {
-      const plans = await this.ResearchPlan.findAll({
+      const plans = await ResearchPlanModel.findAll({
         include: [
           {
-            model: this.ResearchStudy,
+            model: ResearchStudyModel,
             as: 'study',
             attributes: ['id', 'name', 'path', 'description']
           }
@@ -273,7 +270,7 @@ class ResearchPlanService {
       });
 
       return plans;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error getting all research plans:', error);
       throw new Error(`Failed to get research plans: ${error.message}`);
     }

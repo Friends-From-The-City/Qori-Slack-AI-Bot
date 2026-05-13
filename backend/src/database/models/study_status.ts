@@ -1,14 +1,39 @@
-// models/research_study.js
+// models/study_status.ts
 
-const { DataTypes, Model } = require('sequelize');
+import {
+  DataTypes,
+  Model,
+  type InferAttributes,
+  type InferCreationAttributes,
+  type CreationOptional,
+  type Sequelize,
+} from 'sequelize';
+import type { StudyApprovalStatus } from '../../types/common';
 
-module.exports = (sequelize) => {
-  class StudyStatus extends Model {
-    static associate() {
-      // …
-    }
+class StudyStatus extends Model<
+  InferAttributes<StudyStatus>,
+  InferCreationAttributes<StudyStatus>
+> {
+  // — Attributes —
+  declare id: CreationOptional<number>;
+  declare study_name: string | null;
+  declare approved_by: string | null;
+  declare requested_by: string | null;
+  declare reason: string | null;
+  declare status: CreationOptional<StudyApprovalStatus>;
+  declare path: string | null;
+  declare file_name: string | null;
+  declare approved_at: CreationOptional<Date>;
+  declare updated_at: CreationOptional<Date>;
+  declare created_by: string | null;
+
+  // — Associations —
+  static associate() {
+    // No associations
   }
+}
 
+module.exports = (sequelize: Sequelize) => {
   StudyStatus.init(
     {
       id: {
@@ -70,3 +95,5 @@ module.exports = (sequelize) => {
 
   return StudyStatus;
 };
+
+export type { StudyStatus };

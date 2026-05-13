@@ -1,23 +1,37 @@
+import type { SessionSummary } from '../database/models/session_summary';
+import type { ResearchStudy } from '../database/models/research_study';
+
 const sequelize = require('../database');
 
-class SessionSummaryService {
-  constructor() {
-    this.SessionSummary = sequelize.models.SessionSummary;
-    this.ResearchStudy = sequelize.models.ResearchStudy;
-  }
+// Typed model references — cast once, use everywhere. See Phase 3 notes.
+const SessionSummaryModel = sequelize.models.SessionSummary as typeof SessionSummary;
+const ResearchStudyModel = sequelize.models.ResearchStudy as typeof ResearchStudy;
 
+interface QueryOptions {
+  limit?: number;
+  offset?: number;
+}
+
+interface SummaryInput {
+  study_id?: number;
+  study_name?: string;
+  filename?: string;
+  created_at?: Date;
+  updated_at?: Date;
+  [key: string]: unknown;
+}
+
+class SessionSummaryService {
   /**
    * Create or update a session summary
    * If a summary with the same study_id and filename exists, it will be updated
-   * @param {Object} summaryData - The summary data to create or update
-   * @returns {Promise<Object>} The created or updated summary
    */
-  async createOrUpdateSessionSummary(summaryData) {
+  async createOrUpdateSessionSummary(summaryData: SummaryInput): Promise<SessionSummary> {
     try {
       // Handle case where study_id might be null
       if (!summaryData.study_id) {
         // Try to find the study by name if study_id is not provided
-        const study = await this.ResearchStudy.findOne({
+        const study = await ResearchStudyModel.findOne({
           where: { name: summaryData.study_name }
         });
         if (study) {
@@ -28,7 +42,7 @@ class SessionSummaryService {
       }
 
       // Check if a summary with the same study_id and filename already exists
-      const existingSummary = await this.SessionSummary.findOne({
+      const existingSummary = await SessionSummaryModel.findOne({
         where: {
           study_id: summaryData.study_id,
           filename: summaryData.filename
@@ -49,10 +63,10 @@ class SessionSummaryService {
       } else {
         // Create new summary
         summaryData.created_at = now;
-        const summary = await this.SessionSummary.create(summaryData);
+        const summary = await SessionSummaryModel.create(summaryData as any);
         return summary;
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating/updating session summary:', error);
       throw new Error(`Failed to create/update session summary: ${error.message}`);
     }
@@ -60,15 +74,13 @@ class SessionSummaryService {
 
   /**
    * Get a session summary by ID
-   * @param {number} id - The summary ID
-   * @returns {Promise<Object>} The session summary
    */
-  async getSessionSummaryById(id) {
+  async getSessionSummaryById(id: number): Promise<SessionSummary> {
     try {
-      const summary = await this.SessionSummary.findByPk(id, {
+      const summary = await SessionSummaryModel.findByPk(id, {
         include: [
           {
-            model: this.ResearchStudy,
+            model: ResearchStudyModel,
             as: 'study',
             attributes: ['id', 'name', 'path', 'description']
           }
@@ -80,7 +92,7 @@ class SessionSummaryService {
       }
 
       return summary;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error getting session summary by ID:', error);
       throw new Error(`Failed to get session summary: ${error.message}`);
     }
@@ -88,19 +100,16 @@ class SessionSummaryService {
 
   /**
    * Get session summaries by study ID
-   * @param {number} studyId - The study ID
-   * @param {Object} options - Query options
-   * @returns {Promise<Array>} Array of session summaries
    */
-  async getSessionSummariesByStudyId(studyId, options = {}) {
+  async getSessionSummariesByStudyId(studyId: number, options: QueryOptions = {}): Promise<SessionSummary[]> {
     try {
       const where = { study_id: studyId };
 
-      const summaries = await this.SessionSummary.findAll({
+      const summaries = await SessionSummaryModel.findAll({
         where,
         include: [
           {
-            model: this.ResearchStudy,
+            model: ResearchStudyModel,
             as: 'study',
             attributes: ['id', 'name', 'path']
           }
@@ -113,7 +122,7 @@ class SessionSummaryService {
       });
 
       return summaries;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error getting session summaries by study ID:', error);
       throw new Error(`Failed to get session summaries: ${error.message}`);
     }
@@ -121,16 +130,14 @@ class SessionSummaryService {
 
   /**
    * Get session summaries by study name
-   * @param {string} studyName - The study name
-   * @returns {Promise<Array>} Array of session summaries
    */
-  async getSessionSummariesByStudyName(studyName) {
+  async getSessionSummariesByStudyName(studyName: string): Promise<SessionSummary[]> {
     try {
-      const summaries = await this.SessionSummary.findAll({
+      const summaries = await SessionSummaryModel.findAll({
         where: { study_name: studyName },
         include: [
           {
-            model: this.ResearchStudy,
+            model: ResearchStudyModel,
             as: 'study',
             attributes: ['id', 'name', 'path']
           }
@@ -141,7 +148,7 @@ class SessionSummaryService {
       });
 
       return summaries;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error getting session summaries by study name:', error);
       throw new Error(`Failed to get session summaries: ${error.message}`);
     }
@@ -149,15 +156,13 @@ class SessionSummaryService {
 
   /**
    * Get all session summaries
-   * @param {Object} options - Query options
-   * @returns {Promise<Array>} Array of session summaries
    */
-  async getAllSessionSummaries(options = {}) {
+  async getAllSessionSummaries(options: QueryOptions = {}): Promise<SessionSummary[]> {
     try {
-      const summaries = await this.SessionSummary.findAll({
+      const summaries = await SessionSummaryModel.findAll({
         include: [
           {
-            model: this.ResearchStudy,
+            model: ResearchStudyModel,
             as: 'study',
             attributes: ['id', 'name', 'path']
           }
@@ -170,7 +175,7 @@ class SessionSummaryService {
       });
 
       return summaries;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error getting all session summaries:', error);
       throw new Error(`Failed to get session summaries: ${error.message}`);
     }
@@ -178,12 +183,10 @@ class SessionSummaryService {
 
   /**
    * Delete a session summary by ID
-   * @param {number} id - The summary ID
-   * @returns {Promise<boolean>} True if deleted successfully
    */
-  async deleteSessionSummary(id) {
+  async deleteSessionSummary(id: number): Promise<boolean> {
     try {
-      const summary = await this.SessionSummary.findByPk(id);
+      const summary = await SessionSummaryModel.findByPk(id);
 
       if (!summary) {
         throw new Error('Session summary not found');
@@ -191,7 +194,7 @@ class SessionSummaryService {
 
       await summary.destroy();
       return true;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error deleting session summary:', error);
       throw new Error(`Failed to delete session summary: ${error.message}`);
     }
@@ -199,4 +202,3 @@ class SessionSummaryService {
 }
 
 module.exports = new SessionSummaryService();
-

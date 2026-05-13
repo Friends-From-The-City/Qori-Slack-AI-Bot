@@ -1,0 +1,172 @@
+// models/research_study.ts
+
+import {
+  DataTypes,
+  Model,
+  type InferAttributes,
+  type InferCreationAttributes,
+  type CreationOptional,
+  type NonAttribute,
+  type HasManyGetAssociationsMixin,
+  type HasManyAddAssociationMixin,
+  type HasManyCountAssociationsMixin,
+  type Sequelize,
+} from 'sequelize';
+import type { StudyParticipant } from './study_participant';
+import type { ResearchStudyUserRole } from './research_study_user_role';
+import type { StudyNotes } from './study_notes';
+import type { ResearchPlan } from './research_plan';
+import type { SessionSummary } from './session_summary';
+
+class ResearchStudy extends Model<
+  InferAttributes<ResearchStudy>,
+  InferCreationAttributes<ResearchStudy>
+> {
+  // — Attributes —
+  declare id: CreationOptional<number>;
+  declare name: string;
+  declare channel_name: string;
+  declare description: string | null;
+  declare link: string | null;
+  declare path: string | null;
+  declare sha4: string | null;
+  declare created_by: string;
+  declare researcher_name: string;
+  declare researcher_email: string;
+  declare total_participants: CreationOptional<number>;
+  /** DECIMAL(10,2) — model getter coerces to number. See ADR 0014. */
+  declare parsed_budget_amount: number | null;
+  declare target_participants: number | null;
+  declare created_at: CreationOptional<Date>;
+  declare updated_at: CreationOptional<Date>;
+
+  // — Association mixins (participants) —
+  declare getParticipants: HasManyGetAssociationsMixin<StudyParticipant>;
+  declare addParticipant: HasManyAddAssociationMixin<StudyParticipant, number>;
+  declare countParticipants: HasManyCountAssociationsMixin;
+  declare participants?: NonAttribute<StudyParticipant[]>;
+
+  // — Association mixins (other associations) —
+  declare getUserRoles: HasManyGetAssociationsMixin<ResearchStudyUserRole>;
+  declare getStudyNotes: HasManyGetAssociationsMixin<StudyNotes>;
+  declare getPlans: HasManyGetAssociationsMixin<ResearchPlan>;
+  declare getSessionSummaries: HasManyGetAssociationsMixin<SessionSummary>;
+
+  // — Associations —
+  static associate(models: Record<string, any>) {
+    this.hasMany(models.ResearchStudyUserRole, {
+      foreignKey: 'research_id',
+      as: 'userRoles',
+      onDelete: 'CASCADE',
+    });
+
+    this.hasMany(models.StudyParticipant, {
+      foreignKey: 'study_id',
+      as: 'participants',
+      onDelete: 'CASCADE',
+    });
+
+    this.hasMany(models.StudyNotes, {
+      foreignKey: 'study_id',
+      as: 'studyNotes',
+      onDelete: 'CASCADE',
+    });
+
+    this.hasMany(models.ResearchPlan, {
+      foreignKey: 'study_id',
+      as: 'plans',
+      onDelete: 'CASCADE',
+    });
+
+    this.hasMany(models.SessionSummary, {
+      foreignKey: 'study_id',
+      as: 'sessionSummaries',
+      onDelete: 'CASCADE',
+    });
+  }
+}
+
+module.exports = (sequelize: Sequelize) => {
+  ResearchStudy.init(
+    {
+      id: {
+        type: DataTypes.INTEGER,
+        primaryKey: true,
+        autoIncrement: true,
+      },
+      name: {
+        type: DataTypes.STRING,
+        allowNull: false,
+      },
+      channel_name: {
+        type: DataTypes.STRING,
+        allowNull: false,
+      },
+      description: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+      },
+      link: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      path: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      sha4: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      created_by: {
+        type: DataTypes.STRING,
+        allowNull: false,
+      },
+      researcher_name: {
+        type: DataTypes.STRING,
+        allowNull: false,
+      },
+      researcher_email: {
+        type: DataTypes.STRING,
+        allowNull: false,
+      },
+      total_participants: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        defaultValue: 0,
+      },
+      parsed_budget_amount: {
+        type: DataTypes.DECIMAL(10, 2),
+        allowNull: true,
+        get() {
+          const raw = this.getDataValue('parsed_budget_amount');
+          return raw === null || raw === undefined ? null : parseFloat(raw as unknown as string);
+        },
+      },
+      target_participants: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+      },
+      created_at: {
+        type: DataTypes.DATE,
+        allowNull: false,
+        defaultValue: sequelize.literal('CURRENT_TIMESTAMP'),
+      },
+      updated_at: {
+        type: DataTypes.DATE,
+        allowNull: false,
+        defaultValue: sequelize.literal('CURRENT_TIMESTAMP'),
+      },
+    },
+    {
+      tableName: 'research_studies',
+      underscored: true,
+      timestamps: false,
+      sequelize,
+    },
+  );
+
+  return ResearchStudy;
+};
+
+export type { ResearchStudy };

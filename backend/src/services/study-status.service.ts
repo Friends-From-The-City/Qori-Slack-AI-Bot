@@ -1,10 +1,24 @@
+import type { StudyStatus } from '../database/models/study_status';
+import { Op } from 'sequelize';
+
 const sequelize = require('../database');
-const { Op } = require('sequelize');
 
-const addStudyStatus = async (data) => {
+// Typed model reference — cast once, use everywhere. See Phase 3 notes.
+const StudyStatusModel = sequelize.models.StudyStatus as typeof StudyStatus;
+
+interface StudyStatusInput {
+  file_name?: string;
+  path?: string;
+  study_name?: string;
+  status?: string;
+  reason?: string | null;
+  requested_by?: string | null;
+  approved_by?: string | null;
+  [key: string]: unknown;
+}
+
+const addStudyStatus = async (data: StudyStatusInput): Promise<StudyStatus> => {
   try {
-    const { StudyStatus } = sequelize.models;
-
     // Extract file_name from URL if path is provided
     let fileName = data.file_name;
     if (!fileName && data.path) {
@@ -14,13 +28,13 @@ const addStudyStatus = async (data) => {
 
 
     // Check if a record with this file_name already exists
-    const existingRecord = await StudyStatus.findOne({
+    const existingRecord = await StudyStatusModel.findOne({
       where: { file_name: fileName },
     });
 
     if (existingRecord) {
       // Update existing record
-      const updateData = {
+      const updateData: Record<string, unknown> = {
         study_name: data.study_name,
         path: data.path,
         status: data.status,
@@ -50,7 +64,7 @@ const addStudyStatus = async (data) => {
       file_name: fileName,
     };
 
-    const record = await StudyStatus.create(createData);
+    const record = await StudyStatusModel.create(createData as any);
     return record;
   } catch (err) {
     console.error('addStudyStatus error:', err);
@@ -58,11 +72,9 @@ const addStudyStatus = async (data) => {
   }
 };
 
-const getStudyStatusByStudyName = async (studyName) => {
+const getStudyStatusByStudyName = async (studyName: string): Promise<StudyStatus[]> => {
   try {
-    const { StudyStatus } = sequelize.models;
-
-    const records = await StudyStatus.findAll({
+    const records = await StudyStatusModel.findAll({
       where: { study_name: studyName },
       order: [['updated_at', 'DESC']], // Most recent first
     });
@@ -74,10 +86,9 @@ const getStudyStatusByStudyName = async (studyName) => {
   }
 };
 
-const getStudyStatusByFileName = async (fileName) => {
+const getStudyStatusByFileName = async (fileName: string): Promise<StudyStatus[]> => {
   try {
-    const { StudyStatus } = sequelize.models;
-    const records = await StudyStatus.findAll({
+    const records = await StudyStatusModel.findAll({
       where: { file_name: fileName },
       order: [['updated_at', 'DESC']],
     });
@@ -88,10 +99,9 @@ const getStudyStatusByFileName = async (fileName) => {
   }
 };
 
-const getStudyStatusById = async (id) => {
+const getStudyStatusById = async (id: number): Promise<StudyStatus | null> => {
   try {
-    const { StudyStatus } = sequelize.models;
-    const record = await StudyStatus.findByPk(id);
+    const record = await StudyStatusModel.findByPk(id);
     return record;
   } catch (err) {
     console.error('getStudyStatusById error:', err);
@@ -99,26 +109,24 @@ const getStudyStatusById = async (id) => {
   }
 };
 
-const getStudyStakeholderGuide = async (studyName) => {
+const getStudyStakeholderGuide = async (studyName?: string): Promise<StudyStatus[]> => {
   try {
-    const { StudyStatus } = sequelize.models;
-    
-    const whereClause = {
+    const whereClause: Record<string, unknown> = {
       file_name: {
         [Op.iLike]: '%stakeholder%' // Case-insensitive search for "stakeholder" in filename
       }
     };
-    
+
     // Add study_name filter if provided
     if (studyName) {
       whereClause.study_name = studyName;
     }
-    
-    const records = await StudyStatus.findAll({
+
+    const records = await StudyStatusModel.findAll({
       where: whereClause,
       order: [['updated_at', 'DESC']], // Most recent first
     });
-    
+
     return records;
   } catch (err) {
     console.error('getStudyStakeholderGuide error:', err);

@@ -1,8 +1,31 @@
-const { DataTypes, Model } = require('sequelize');
+// models/created_issue.ts
 
-module.exports = (sequelize) => {
-  class CreatedIssue extends Model {}
+import {
+  DataTypes,
+  Model,
+  type InferAttributes,
+  type InferCreationAttributes,
+  type CreationOptional,
+  type Sequelize,
+} from 'sequelize';
 
+class CreatedIssue extends Model<
+  InferAttributes<CreatedIssue>,
+  InferCreationAttributes<CreatedIssue>
+> {
+  // — Attributes —
+  declare id: CreationOptional<number>;
+  declare study_name: string;
+  declare audience: string;
+  declare ticket_id: string;
+  declare github_issue_number: number;
+  declare github_url: string;
+  declare github_repo: string;
+  declare created_by: string;
+  declare created_at: CreationOptional<Date>;
+}
+
+module.exports = (sequelize: Sequelize) => {
   CreatedIssue.init(
     {
       id: {
@@ -49,8 +72,10 @@ module.exports = (sequelize) => {
       underscored: true,
       timestamps: false,
       sequelize,
-    }
+    },
   );
 
   return CreatedIssue;
 };
+
+export type { CreatedIssue };
