@@ -1,8 +1,42 @@
-const { DataTypes, Model } = require('sequelize');
+// models/study_variable.ts
 
-module.exports = (sequelize) => {
-  class StudyVariable extends Model {}
+import {
+  DataTypes,
+  Model,
+  type InferAttributes,
+  type InferCreationAttributes,
+  type CreationOptional,
+  type Sequelize,
+} from 'sequelize';
 
+class StudyVariable extends Model<
+  InferAttributes<StudyVariable>,
+  InferCreationAttributes<StudyVariable>
+> {
+  // — Attributes —
+  declare id: CreationOptional<number>;
+  declare study_name: string;
+  declare variable_key: string;
+  declare variable_type: string | null;
+  declare item_key: string | null;
+  declare value: unknown;
+  declare participant_id: string | null;
+  declare source_template: string;
+  declare source_version: string | null;
+  declare source_date: Date | null;
+  declare value_hash: string | null;
+  declare entry_count: number | null;
+  declare is_pool: CreationOptional<boolean>;
+  declare confidence: string | null;
+  declare scope: CreationOptional<string | null>;
+  declare discovery_artifact_id: string | null;
+  declare stale: CreationOptional<boolean>;
+  declare extracted_at: CreationOptional<Date>;
+  declare created_at: CreationOptional<Date>;
+  declare updated_at: CreationOptional<Date>;
+}
+
+module.exports = (sequelize: Sequelize) => {
   StudyVariable.init(
     {
       id: {
@@ -17,27 +51,22 @@ module.exports = (sequelize) => {
       variable_key: {
         type: DataTypes.STRING,
         allowNull: false,
-        comment: 'Variable type name (e.g., atomic_nugget_core, target_barriers)',
       },
       variable_type: {
         type: DataTypes.STRING,
         allowNull: true,
-        comment: 'Semantic type from schema (pool, object, array)',
       },
       item_key: {
         type: DataTypes.STRING,
         allowNull: true,
-        comment: 'For pool items: unique item ID. NULL for singletons.',
       },
       value: {
         type: DataTypes.JSONB,
         allowNull: true,
-        comment: 'The actual variable data',
       },
       participant_id: {
         type: DataTypes.STRING(50),
         allowNull: true,
-        comment: 'For per-participant pools: PT-XXX',
       },
       source_template: {
         type: DataTypes.STRING,
@@ -103,8 +132,10 @@ module.exports = (sequelize) => {
       underscored: true,
       timestamps: false,
       sequelize,
-    }
+    },
   );
 
   return StudyVariable;
 };
+
+export type { StudyVariable };

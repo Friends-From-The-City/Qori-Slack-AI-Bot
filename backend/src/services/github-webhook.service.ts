@@ -1,14 +1,38 @@
-// src/services/github-webhook.service.js
+// src/services/github-webhook.service.ts
+
+import type { StudyStatus } from '../database/models/study_status';
+
 const crypto = require('crypto');
 const { getStudyStatusByFileName } = require('./study-status.service');
 const slackApiClient = require('../helpers/slackApiClient');
 
+interface GitCommit {
+  id: string;
+  message: string;
+  added?: string[];
+  removed?: string[];
+  modified?: string[];
+}
+
+interface PushPayload {
+  commits?: GitCommit[];
+  [key: string]: unknown;
+}
+
+interface ChangedFiles {
+  added: string[];
+  removed: string[];
+  modified: string[];
+}
+
 class GithubWebhookService {
-  constructor(secret) {
+  private secret: string;
+
+  constructor(secret: string) {
     this.secret = secret;
   }
 
-  verifySignature(signature, payload) {
+  verifySignature(signature: string, payload: string): boolean {
     // payload is the raw body string
     const hmac = crypto.createHmac('sha256', this.secret);
     const digest = 'sha256=' + hmac.update(payload, 'utf8').digest('hex');
@@ -24,23 +48,23 @@ class GithubWebhookService {
     return crypto.timingSafeEqual(digestBuffer, signatureBuffer);
   }
 
-  static extractFileName(filePath) {
+  static extractFileName(filePath: string | null): string | null {
     if (!filePath) return null;
     const parts = filePath.split('/');
     return parts[parts.length - 1];
   }
 
-  async handleEvent(event, payload) {
+  async handleEvent(event: string, payload: PushPayload): Promise<void> {
     console.log("🚀 ~ GithubWebhookService ~ handleEvent ~ payload:", payload)
     switch (event) {
       case 'push': {
         const commits = payload.commits || [];
-        const changedFiles = {
+        const changedFiles: ChangedFiles = {
           added: [],
           removed: [],
           modified: []
         };
-        commits.forEach(commit => {
+        commits.forEach((commit: GitCommit) => {
           if (Array.isArray(commit.added)) changedFiles.added.push(...commit.added);
           if (Array.isArray(commit.removed)) changedFiles.removed.push(...commit.removed);
           if (Array.isArray(commit.modified)) changedFiles.modified.push(...commit.modified);
@@ -51,7 +75,7 @@ class GithubWebhookService {
         for (const filePath of changedFiles.modified) {
           const fileName = GithubWebhookService.extractFileName(filePath);
           console.log("🚀 ~ GithubWebhookService ~ handleEvent ~ fileName:", fileName)
-          const statuses = await getStudyStatusByFileName(fileName);
+          const statuses: StudyStatus[] = await getStudyStatusByFileName(fileName);
           console.log("🚀 ~ GithubWebhookService ~ handleEvent ~ statuses:", statuses)
           if (!statuses || statuses.length === 0) continue;
           const status = statuses[0]; // Most recent
@@ -64,12 +88,12 @@ class GithubWebhookService {
           const channelId = imRes.data.channel.id;
 
           // Find the most recent 'need_changes' status for this file
-          const prevRequest = statuses.find(s => s.status === 'need_changes');
+          const prevRequest = statuses.find((s: StudyStatus) => s.status === 'need_changes');
           const previousReason = prevRequest ? prevRequest.reason : 'No previous request.';
           const requestedBy = prevRequest ? prevRequest.requested_by : null;
 
           // Find the commit for this file
-          const commit = commits.find(c => c.modified && c.modified.includes(filePath));
+          const commit = commits.find((c: GitCommit) => c.modified && c.modified.includes(filePath));
           const commitMsg = commit ? `${commit.id.slice(0, 7)}: ${commit.message}` : 'Unknown commit';
 
           const path = status.path;
@@ -111,4 +135,4 @@ class GithubWebhookService {
   }
 }
 
-module.exports = GithubWebhookService; 
+module.exports = GithubWebhookService;

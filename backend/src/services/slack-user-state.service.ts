@@ -1,12 +1,16 @@
+import type { SlackUserState } from '../database/models/slack_user_state';
+
 const sequelize = require('../database');
+
+// Typed model reference — cast once, use everywhere. See Phase 3 notes.
+const SlackUserStateModel = sequelize.models.SlackUserState as typeof SlackUserState;
 
 /**
  * Get or create a SlackUserState row for the given Slack user.
  * All public functions below go through this so the row always exists.
  */
-const ensureRow = async (slackUserId) => {
-  const { SlackUserState } = sequelize.models;
-  const [row] = await SlackUserState.findOrCreate({
+const ensureRow = async (slackUserId: string): Promise<SlackUserState> => {
+  const [row] = await SlackUserStateModel.findOrCreate({
     where: { slack_user_id: slackUserId },
     defaults: { slack_user_id: slackUserId },
   });
@@ -15,7 +19,7 @@ const ensureRow = async (slackUserId) => {
 
 // ── Active study ──────────────────────────────────────────────
 
-const setActiveStudy = async (slackUserId, studyId) => {
+const setActiveStudy = async (slackUserId: string, studyId: number): Promise<void> => {
   const row = await ensureRow(slackUserId);
   await row.update({
     active_study_id: studyId,
@@ -23,12 +27,12 @@ const setActiveStudy = async (slackUserId, studyId) => {
   });
 };
 
-const getActiveStudy = async (slackUserId) => {
+const getActiveStudy = async (slackUserId: string): Promise<number | null> => {
   const row = await ensureRow(slackUserId);
   return row.active_study_id;
 };
 
-const clearActiveStudy = async (slackUserId) => {
+const clearActiveStudy = async (slackUserId: string): Promise<void> => {
   const row = await ensureRow(slackUserId);
   await row.update({
     active_study_id: null,
@@ -38,7 +42,7 @@ const clearActiveStudy = async (slackUserId) => {
 
 // ── Onboarding ────────────────────────────────────────────────
 
-const markOnboarded = async (slackUserId) => {
+const markOnboarded = async (slackUserId: string): Promise<void> => {
   const row = await ensureRow(slackUserId);
   await row.update({
     onboarded_at: new Date(),
@@ -46,7 +50,7 @@ const markOnboarded = async (slackUserId) => {
   });
 };
 
-const isFirstRun = async (slackUserId) => {
+const isFirstRun = async (slackUserId: string): Promise<boolean> => {
   const row = await ensureRow(slackUserId);
   return row.onboarded_at === null;
 };

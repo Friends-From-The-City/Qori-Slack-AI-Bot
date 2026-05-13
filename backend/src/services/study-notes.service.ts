@@ -1,22 +1,42 @@
+import type { StudyNotes } from '../database/models/study_notes';
+import type { ResearchStudy } from '../database/models/research_study';
+
 const sequelize = require('../database');
 
-class StudyNotesService {
-  constructor() {
-    this.StudyNotes = sequelize.models.StudyNotes;
-    this.ResearchStudy = sequelize.models.ResearchStudy;
-  }
+// Typed model references — cast once, use everywhere. See Phase 3 notes.
+const StudyNotesModel = sequelize.models.StudyNotes as typeof StudyNotes;
+const ResearchStudyModel = sequelize.models.ResearchStudy as typeof ResearchStudy;
 
+interface QueryOptions {
+  limit?: number;
+  offset?: number;
+}
+
+interface SearchCriteria {
+  study_name?: string;
+  filename?: string;
+  participant_name?: string;
+}
+
+interface NoteInput {
+  study_id?: number;
+  study_name?: string;
+  filename?: string;
+  created_at?: Date;
+  updated_at?: Date;
+  [key: string]: unknown;
+}
+
+class StudyNotesService {
   /**
    * Create a new study note
-   * @param {Object} noteData - The note data to create
-   * @returns {Promise<Object>} The created note
    */
-  async createStudyNote(noteData) {
+  async createStudyNote(noteData: NoteInput): Promise<StudyNotes> {
     try {
       // Handle case where study_id might be null
       if (!noteData.study_id) {
         // Try to find the study by name if study_id is not provided
-        const study = await this.ResearchStudy.findOne({
+        const study = await ResearchStudyModel.findOne({
           where: { name: noteData.study_name }
         });
         if (study) {
@@ -28,7 +48,7 @@ class StudyNotesService {
       // already exists, update it instead of creating a new one.
       // This handles double-submit from slow modal responses.
       if (noteData.filename && noteData.study_id) {
-        const existing = await this.StudyNotes.findOne({
+        const existing = await StudyNotesModel.findOne({
           where: { filename: noteData.filename, study_id: noteData.study_id }
         });
         if (existing) {
@@ -43,9 +63,9 @@ class StudyNotesService {
       noteData.created_at = now;
       noteData.updated_at = now;
 
-      const note = await this.StudyNotes.create(noteData);
+      const note = await StudyNotesModel.create(noteData as any);
       return note;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating study note:', error);
       throw new Error(`Failed to create study note: ${error.message}`);
     }
@@ -53,15 +73,13 @@ class StudyNotesService {
 
   /**
    * Get a study note by ID
-   * @param {number} id - The note ID
-   * @returns {Promise<Object>} The study note
    */
-  async getStudyNoteById(id) {
+  async getStudyNoteById(id: number): Promise<StudyNotes> {
     try {
-      const note = await this.StudyNotes.findByPk(id, {
+      const note = await StudyNotesModel.findByPk(id, {
         include: [
           {
-            model: this.ResearchStudy,
+            model: ResearchStudyModel,
             as: 'study',
             attributes: ['id', 'name', 'path', 'description']
           }
@@ -73,7 +91,7 @@ class StudyNotesService {
       }
 
       return note;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error getting study note by ID:', error);
       throw new Error(`Failed to get study note: ${error.message}`);
     }
@@ -81,19 +99,16 @@ class StudyNotesService {
 
   /**
    * Get study notes by study ID
-   * @param {number} studyId - The study ID
-   * @param {Object} options - Query options
-   * @returns {Promise<Array>} Array of study notes
    */
-  async getStudyNotesByStudyId(studyId, options = {}) {
+  async getStudyNotesByStudyId(studyId: number, options: QueryOptions = {}): Promise<StudyNotes[]> {
     try {
       const where = { study_id: studyId };
 
-      const notes = await this.StudyNotes.findAll({
+      const notes = await StudyNotesModel.findAll({
         where,
         include: [
           {
-            model: this.ResearchStudy,
+            model: ResearchStudyModel,
             as: 'study',
             attributes: ['id', 'name', 'path']
           }
@@ -107,7 +122,7 @@ class StudyNotesService {
       });
 
       return notes;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error getting study notes by study ID:', error);
       throw new Error(`Failed to get study notes: ${error.message}`);
     }
@@ -115,19 +130,16 @@ class StudyNotesService {
 
   /**
    * Get study notes by user ID
-   * @param {string} userId - The Slack user ID
-   * @param {Object} options - Query options
-   * @returns {Promise<Array>} Array of study notes
    */
-  async getStudyNotesByUserId(userId, options = {}) {
+  async getStudyNotesByUserId(userId: string, options: QueryOptions = {}): Promise<StudyNotes[]> {
     try {
       const where = { created_by: userId };
 
-      const notes = await this.StudyNotes.findAll({
+      const notes = await StudyNotesModel.findAll({
         where,
         include: [
           {
-            model: this.ResearchStudy,
+            model: ResearchStudyModel,
             as: 'study',
             attributes: ['id', 'name', 'path']
           }
@@ -138,7 +150,7 @@ class StudyNotesService {
       });
 
       return notes;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error getting study notes by user ID:', error);
       throw new Error(`Failed to get study notes: ${error.message}`);
     }
@@ -146,11 +158,8 @@ class StudyNotesService {
 
   /**
    * Get study notes by exact study name match
-   * @param {string} studyName - The exact name of the research study
-   * @param {Object} options - Query options
-   * @returns {Promise<Array>} Array of study notes
    */
-  async getStudyNotesByStudyName(studyName, transcript, options = {}) {
+  async getStudyNotesByStudyName(studyName: string, transcript: boolean, options: QueryOptions = {}): Promise<StudyNotes[]> {
     try {
       if (!studyName) {
         throw new Error('Study name is required');
@@ -161,11 +170,11 @@ class StudyNotesService {
         transcript: transcript
       };
 
-      const notes = await this.StudyNotes.findAll({
+      const notes = await StudyNotesModel.findAll({
         where,
         include: [
           {
-            model: this.ResearchStudy,
+            model: ResearchStudyModel,
             as: 'study',
             attributes: ['id', 'name', 'path', 'description']
           }
@@ -179,13 +188,13 @@ class StudyNotesService {
       });
 
       return notes;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error getting study notes by exact study name:', error);
       throw new Error(`Failed to get study notes by exact study name: ${error.message}`);
     }
   }
 
-  async getStudyNotesByParticipantName(participantName, options = {}) {
+  async getStudyNotesByParticipantName(participantName: string, options: QueryOptions = {}): Promise<StudyNotes[]> {
     try {
       if (!participantName) {
         throw new Error('Participant name is required');
@@ -195,11 +204,11 @@ class StudyNotesService {
         participant_name: participantName
       };
 
-      const notes = await this.StudyNotes.findAll({
+      const notes = await StudyNotesModel.findAll({
         where,
         include: [
           {
-            model: this.ResearchStudy,
+            model: ResearchStudyModel,
             as: 'study',
             attributes: ['id', 'name', 'path', 'description']
           }
@@ -213,7 +222,7 @@ class StudyNotesService {
       });
 
       return notes;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error getting study notes by exact study name:', error);
       throw new Error(`Failed to get study notes by exact study name: ${error.message}`);
     }
@@ -221,13 +230,10 @@ class StudyNotesService {
 
   /**
    * Search study notes
-   * @param {Object} searchCriteria - Search criteria
-   * @param {Object} options - Query options
-   * @returns {Promise<Array>} Array of matching study notes
    */
-  async searchStudyNotes(searchCriteria, options = {}) {
+  async searchStudyNotes(searchCriteria: SearchCriteria, options: QueryOptions = {}): Promise<StudyNotes[]> {
     try {
-      const where = {};
+      const where: Record<string, unknown> = {};
 
       // Add search criteria
       if (searchCriteria.study_name) {
@@ -242,11 +248,11 @@ class StudyNotesService {
         where.participant_name = { [sequelize.Op.iLike]: `%${searchCriteria.participant_name}%` };
       }
 
-      const notes = await this.StudyNotes.findAll({
+      const notes = await StudyNotesModel.findAll({
         where,
         include: [
           {
-            model: this.ResearchStudy,
+            model: ResearchStudyModel,
             as: 'study',
             attributes: ['id', 'name', 'path']
           }
@@ -257,7 +263,7 @@ class StudyNotesService {
       });
 
       return notes;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error searching study notes:', error);
       throw new Error(`Failed to search study notes: ${error.message}`);
     }
@@ -265,13 +271,10 @@ class StudyNotesService {
 
   /**
    * Update a study note
-   * @param {number} id - The note ID
-   * @param {Object} updateData - The data to update
-   * @returns {Promise<Object>} The updated note
    */
-  async updateStudyNote(id, updateData) {
+  async updateStudyNote(id: number, updateData: Partial<NoteInput>): Promise<StudyNotes> {
     try {
-      const note = await this.StudyNotes.findByPk(id);
+      const note = await StudyNotesModel.findByPk(id);
 
       if (!note) {
         throw new Error('Study note not found');
@@ -284,7 +287,7 @@ class StudyNotesService {
       await note.update(updateData);
 
       return note;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating study note:', error);
       throw new Error(`Failed to update study note: ${error.message}`);
     }
@@ -292,12 +295,10 @@ class StudyNotesService {
 
   /**
    * Delete a study note
-   * @param {number} id - The note ID
-   * @returns {Promise<boolean>} Success status
    */
-  async deleteStudyNote(id) {
+  async deleteStudyNote(id: number): Promise<boolean> {
     try {
-      const note = await this.StudyNotes.findByPk(id);
+      const note = await StudyNotesModel.findByPk(id);
 
       if (!note) {
         throw new Error('Study note not found');
@@ -305,7 +306,7 @@ class StudyNotesService {
 
       await note.destroy();
       return true;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error deleting study note:', error);
       throw new Error(`Failed to delete study note: ${error.message}`);
     }

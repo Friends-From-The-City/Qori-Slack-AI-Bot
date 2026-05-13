@@ -9,8 +9,8 @@
  * service and handler types to describe what data they expect.
  *
  * DECIMAL fields (parsed_budget_amount, compensation_amount) are typed as
- * string | null because Sequelize returns DECIMAL values as strings.
- * Phase 3 may add boundary coercion so consumers see numbers. See ADR 0014.
+ * number | null. Sequelize returns DECIMAL as strings, but model getters
+ * coerce to number so consumers see a consistent numeric type. See ADR 0014.
  */
 
 import type {
@@ -79,8 +79,8 @@ export interface ResearchStudyAttributes {
   researcher_name: string;
   researcher_email: string;
   total_participants: number;
-  /** DECIMAL(10,2) — Sequelize returns as string. See ADR 0014. */
-  parsed_budget_amount: string | null;
+  /** DECIMAL(10,2) — model getter coerces to number. See ADR 0014. */
+  parsed_budget_amount: number | null;
   target_participants: number | null;
   created_at: Date;
   updated_at: Date;
@@ -96,7 +96,7 @@ export interface ResearchStudyCreationAttributes
   link?: string | null;
   path?: string | null;
   sha4?: string | null;
-  parsed_budget_amount?: string | null;
+  parsed_budget_amount?: number | null;
   target_participants?: number | null;
 }
 
@@ -153,8 +153,8 @@ export interface StudyParticipantAttributes {
   status_select: ParticipantStatus | null;
   notes_field: string | null;
   demographics_info: Record<string, unknown> | null;
-  /** DECIMAL(10,2) — Sequelize returns as string. See ADR 0014. */
-  compensation_amount: string | null;
+  /** DECIMAL(10,2) — model getter coerces to number. See ADR 0014. */
+  compensation_amount: number | null;
   outreach_sent_at: Date | null;
   outreach_method: OutreachMethod | null;
   outreach_count: number;
@@ -178,7 +178,7 @@ export interface StudyParticipantCreationAttributes
   status_select?: ParticipantStatus | null;
   notes_field?: string | null;
   demographics_info?: Record<string, unknown> | null;
-  compensation_amount?: string | null;
+  compensation_amount?: number | null;
   outreach_sent_at?: Date | null;
   outreach_method?: OutreachMethod | null;
 }

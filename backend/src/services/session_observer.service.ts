@@ -1,34 +1,94 @@
-// services/session_observer.service.js
+// services/session_observer.service.ts
 
-const { Op } = require("sequelize");
-const sequelize = require("../database");
+import type { SessionObserver } from '../database/models/session_observer';
+import type { ResearchStudy } from '../database/models/research_study';
+import type { StudyParticipant } from '../database/models/study_participant';
+import type { ObserverRole, ObserverStatus } from '../types/common';
+import { Op } from 'sequelize';
+
+const sequelize = require('../database');
+
+// Typed model references — cast once, use everywhere. See Phase 3 notes.
+const SessionObserverModel = sequelize.models.SessionObserver as typeof SessionObserver;
+const ResearchStudyModel = sequelize.models.ResearchStudy as typeof ResearchStudy;
+const StudyParticipantModel = sequelize.models.StudyParticipant as typeof StudyParticipant;
 
 const MAX_OBSERVERS_PER_SESSION = 3;
-const ROLE_LIMITS = {
+const ROLE_LIMITS: Record<string, number> = {
   note_taker: 1,
   stakeholder: 1,
   pm_observer: 2,
   silent_observer: 3,
 };
 
+interface ObserverInput {
+  session_id: string;
+  study_id?: number;
+  participant_id?: number | null;
+  requester_id: string | string[];
+  requester_name: string | string[];
+  role?: ObserverRole;
+  reason?: string;
+  status?: ObserverStatus;
+  joined_via?: string;
+  [key: string]: unknown;
+}
+
+interface ConfirmedObserverInput {
+  session_id: string;
+  study_id: number;
+  participant_id?: number | null;
+  requester_id: string;
+  requester_name: string;
+  joined_via: string;
+  role?: ObserverRole;
+}
+
+interface CanAddResult {
+  allowed: boolean;
+  slotsRemaining: number;
+  reason?: string;
+  role?: string;
+  roleLimit?: number;
+}
+
+interface ObserverStats {
+  total_observers: number;
+  confirmed_observers: number;
+  approved_observers: number;
+  pending_observers: number;
+  denied_observers: number;
+  sessions_covered: number;
+  sessions_at_cap: number;
+  total_sessions: number;
+}
+
+interface SessionWithCount {
+  id: string;
+  sessionId: string;
+  participantId: number;
+  label: string;
+  count: number;
+}
+
 class SessionObserverService {
   /**
    * Helper: Ensure value is array
    * Handles: arrays, JSON strings (like '["U09PAF33A8H"]'), plain strings
    */
-  _toArray(value) {
+  _toArray(value: unknown): string[] {
     if (!value) return [];
-    
+
     // If already an array, return as is
     if (Array.isArray(value)) {
       return value;
     }
-    
+
     // If it's a string that looks like JSON, try to parse it
     if (typeof value === 'string') {
       const trimmed = value.trim();
       // Check if it's a JSON string (starts with [ or {)
-      if ((trimmed.startsWith('[') && trimmed.endsWith(']')) || 
+      if ((trimmed.startsWith('[') && trimmed.endsWith(']')) ||
           (trimmed.startsWith('{') && trimmed.endsWith('}'))) {
         try {
           const parsed = JSON.parse(value);
@@ -41,15 +101,15 @@ class SessionObserverService {
       // Plain string - return as single-item array
       return [value];
     }
-    
+
     // For other types, wrap in array
-    return [value];
+    return [String(value)];
   }
 
   /**
    * Helper: Add unique values to array
    */
-  _addUnique(existingArray, newValue) {
+  _addUnique(existingArray: unknown, newValue: string): string[] {
     const arr = this._toArray(existingArray);
     return arr.includes(newValue) ? arr : [...arr, newValue];
   }
@@ -57,15 +117,15 @@ class SessionObserverService {
   /**
    * Create or update an observer request based on session_id
    */
-  async createObserverRequest(observerData) {
+  async createObserverRequest(observerData: ObserverInput): Promise<SessionObserver> {
     try {
-      const [observer, created] = await sequelize.models.SessionObserver.findOrCreate({
+      const [observer, created] = await SessionObserverModel.findOrCreate({
         where: { session_id: observerData.session_id },
         defaults: {
           ...observerData,
           requester_id: this._toArray(observerData.requester_id),
           requester_name: this._toArray(observerData.requester_name),
-        }
+        } as any
       });
 
       if (!created) {
@@ -84,7 +144,7 @@ class SessionObserverService {
           requester_name: this._addUnique(currentRequesterNames, newRequesterName),
           updated_at: new Date()
         });
-        
+
         const updatedObserver = await observer.reload();
         const requesterIds = this._toArray(updatedObserver.requester_id || updatedObserver.dataValues?.requester_id);
         console.log('✅ Observer updated:', observer.id, 'Requesters:', requesterIds.length, requesterIds);
@@ -103,7 +163,7 @@ class SessionObserverService {
    * Add a confirmed observer directly (no approval step).
    * Idempotent: if the user is already an observer for this session, returns the existing row.
    */
-  async addConfirmedObserver({ session_id, study_id, participant_id, requester_id, requester_name, joined_via, role = 'silent_observer' }) {
+  async addConfirmedObserver({ session_id, study_id, participant_id, requester_id, requester_name, joined_via, role = 'silent_observer' }: ConfirmedObserverInput): Promise<{ observer: SessionObserver; created: boolean }> {
     try {
       // Check if this user is already an observer for this session
       const existing = await this._findObserverForSession(session_id, requester_id);
@@ -111,7 +171,7 @@ class SessionObserverService {
         return { observer: existing, created: false };
       }
 
-      const observer = await sequelize.models.SessionObserver.create({
+      const observer = await SessionObserverModel.create({
         session_id,
         study_id,
         participant_id: participant_id || null,
@@ -120,7 +180,7 @@ class SessionObserverService {
         role,
         status: 'confirmed',
         joined_via,
-      });
+      } as any);
 
       console.log('✅ Confirmed observer added:', observer.id, 'session:', session_id);
       return { observer, created: true };
@@ -134,7 +194,7 @@ class SessionObserverService {
    * Check if a user is already an observer for a specific session.
    * Returns true if any active row (not removed/denied) exists.
    */
-  async isObserverForSession(sessionId, userId) {
+  async isObserverForSession(sessionId: string, userId: string): Promise<boolean> {
     const existing = await this._findObserverForSession(sessionId, userId);
     return !!existing;
   }
@@ -142,15 +202,15 @@ class SessionObserverService {
   /**
    * Internal: find an active observer row for a session + user.
    */
-  async _findObserverForSession(sessionId, userId) {
-    const observers = await sequelize.models.SessionObserver.findAll({
+  async _findObserverForSession(sessionId: string, userId: string): Promise<SessionObserver | null> {
+    const observers = await SessionObserverModel.findAll({
       where: {
         session_id: sessionId,
         status: { [Op.notIn]: ['removed', 'denied'] },
       },
     });
 
-    return observers.find(obs => {
+    return observers.find((obs: SessionObserver) => {
       const ids = this._toArray(obs.requester_id);
       return ids.includes(userId);
     }) || null;
@@ -159,8 +219,8 @@ class SessionObserverService {
   /**
    * Count active (confirmed + approved) observers for a session.
    */
-  async countConfirmedObserversForSession(sessionId) {
-    return sequelize.models.SessionObserver.count({
+  async countConfirmedObserversForSession(sessionId: string): Promise<number> {
+    return SessionObserverModel.count({
       where: {
         session_id: sessionId,
         status: { [Op.in]: ['confirmed', 'approved'] },
@@ -171,8 +231,8 @@ class SessionObserverService {
   /**
    * Count active observers for a session filtered by role.
    */
-  async countObserversByRoleForSession(sessionId, role) {
-    return sequelize.models.SessionObserver.count({
+  async countObserversByRoleForSession(sessionId: string, role: string): Promise<number> {
+    return SessionObserverModel.count({
       where: {
         session_id: sessionId,
         role,
@@ -185,7 +245,7 @@ class SessionObserverService {
    * Check if more observers can be added to a session.
    * When role is provided, checks both the overall session cap and the per-role limit.
    */
-  async canAddObserversToSession(sessionId, count = 1, role = null) {
+  async canAddObserversToSession(sessionId: string, count: number = 1, role: string | null = null): Promise<CanAddResult> {
     const current = await this.countConfirmedObserversForSession(sessionId);
     const slotsRemaining = MAX_OBSERVERS_PER_SESSION - current;
 
@@ -206,20 +266,20 @@ class SessionObserverService {
     return { allowed: true, slotsRemaining };
   }
 
-  async getObserverByUser(userId) {
+  async getObserverByUser(userId: string): Promise<SessionObserver[]> {
     console.log("🚀 ~ SessionObserverService ~ getObserverByUser ~ userId:", userId)
     try {
       // Fetch all active observers and filter where user is in requester_id array
-      const allObservers = await sequelize.models.SessionObserver.findAll({
+      const allObservers = await SessionObserverModel.findAll({
         where: { status: { [Op.in]: ['approved', 'confirmed'] } },
         include: [
           {
-            model: sequelize.models.ResearchStudy,
+            model: ResearchStudyModel,
             as: 'study',
             attributes: ['id', 'name', 'path', 'researcher_name']
           },
           {
-            model: sequelize.models.StudyParticipant,
+            model: StudyParticipantModel,
             as: 'participant',
             attributes: ['id', 'participant_name', 'scheduled_date', 'scheduled_time', 'status_select']
           }
@@ -229,23 +289,23 @@ class SessionObserverService {
       console.log("🚀 ~ SessionObserverService ~ getObserverByUser ~ allObservers:", allObservers)
 
       // Filter using helper method - handle both getter property and raw dataValues
-      const filtered = allObservers.filter(observer => {
+      const filtered = allObservers.filter((observer: SessionObserver) => {
         // Get requester_id from property (uses getter) or from raw dataValues
-        const requesterId = observer.requester_id !== undefined 
-          ? observer.requester_id 
+        const requesterId = observer.requester_id !== undefined
+          ? observer.requester_id
           : (observer.dataValues?.requester_id);
-        
+
         // Normalize to array (handles JSON strings, arrays, plain strings)
         const requesterIds = this._toArray(requesterId);
         const includes = requesterIds.includes(userId);
-        
+
         if (includes) {
           console.log(`✅ Found matching observer ${observer.id} for user ${userId}. Requesters:`, requesterIds);
         }
-        
+
         return includes;
       });
-      
+
       console.log("🚀 ~ SessionObserverService ~ getObserverByUser ~ filtered count:", filtered.length);
       return filtered;
     } catch (error) {
@@ -257,14 +317,14 @@ class SessionObserverService {
   /**
    * Update observer request status
    */
-  async updateObserverStatus(observerId, status, approvedBy = null) {
+  async updateObserverStatus(observerId: number, status: ObserverStatus, approvedBy: string | null = null): Promise<SessionObserver> {
     try {
-      const observer = await sequelize.models.SessionObserver.findByPk(observerId);
+      const observer = await SessionObserverModel.findByPk(observerId);
       if (!observer) {
         throw new Error('Observer request not found');
       }
 
-      const updateData = {
+      const updateData: Record<string, unknown> = {
         status,
         updated_at: new Date()
       };
@@ -286,18 +346,18 @@ class SessionObserverService {
   /**
    * Get observer requests by study
    */
-  async getObserverRequestsByStudy(studyId) {
+  async getObserverRequestsByStudy(studyId: number): Promise<SessionObserver[]> {
     try {
-      const observers = await sequelize.models.SessionObserver.findAll({
+      const observers = await SessionObserverModel.findAll({
         where: { study_id: studyId },
         include: [
           {
-            model: sequelize.models.ResearchStudy,
+            model: ResearchStudyModel,
             as: 'study',
             attributes: ['id', 'name']
           },
           {
-            model: sequelize.models.StudyParticipant,
+            model: StudyParticipantModel,
             as: 'participant',
             attributes: ['id', 'participant_name', 'scheduled_date', 'scheduled_time']
           }
@@ -314,18 +374,18 @@ class SessionObserverService {
   /**
    * Get observer requests by session
    */
-  async getObserverRequestsBySession(sessionId) {
+  async getObserverRequestsBySession(sessionId: string): Promise<SessionObserver[]> {
     try {
-      const observers = await sequelize.models.SessionObserver.findAll({
+      const observers = await SessionObserverModel.findAll({
         where: { session_id: sessionId },
         include: [
           {
-            model: sequelize.models.ResearchStudy,
+            model: ResearchStudyModel,
             as: 'study',
             attributes: ['id', 'name']
           },
           {
-            model: sequelize.models.StudyParticipant,
+            model: StudyParticipantModel,
             as: 'participant',
             attributes: ['id', 'participant_name', 'scheduled_date', 'scheduled_time']
           }
@@ -342,21 +402,21 @@ class SessionObserverService {
   /**
    * Get observer requests by status
    */
-  async getObserverRequestsByStatus(studyId, status) {
+  async getObserverRequestsByStatus(studyId: number, status: ObserverStatus): Promise<SessionObserver[]> {
     try {
-      const observers = await sequelize.models.SessionObserver.findAll({
+      const observers = await SessionObserverModel.findAll({
         where: {
           study_id: studyId,
           status: status
         },
         include: [
           {
-            model: sequelize.models.ResearchStudy,
+            model: ResearchStudyModel,
             as: 'study',
             attributes: ['id', 'name']
           },
           {
-            model: sequelize.models.StudyParticipant,
+            model: StudyParticipantModel,
             as: 'participant',
             attributes: ['id', 'participant_name', 'scheduled_date', 'scheduled_time']
           }
@@ -373,25 +433,25 @@ class SessionObserverService {
   /**
    * Get observer statistics for a study, including session coverage.
    */
-  async getObserverStats(studyId) {
+  async getObserverStats(studyId: number): Promise<ObserverStats> {
     try {
-      const totalObservers = await sequelize.models.SessionObserver.count({
+      const totalObservers = await SessionObserverModel.count({
         where: { study_id: studyId }
       });
 
-      const confirmedObservers = await sequelize.models.SessionObserver.count({
+      const confirmedObservers = await SessionObserverModel.count({
         where: { study_id: studyId, status: 'confirmed' }
       });
 
-      const approvedObservers = await sequelize.models.SessionObserver.count({
+      const approvedObservers = await SessionObserverModel.count({
         where: { study_id: studyId, status: 'approved' }
       });
 
-      const pendingObservers = await sequelize.models.SessionObserver.count({
+      const pendingObservers = await SessionObserverModel.count({
         where: { study_id: studyId, status: 'pending' }
       });
 
-      const deniedObservers = await sequelize.models.SessionObserver.count({
+      const deniedObservers = await SessionObserverModel.count({
         where: { study_id: studyId, status: 'denied' }
       });
 
@@ -401,29 +461,30 @@ class SessionObserverService {
       let totalSessions = 0;
 
       try {
-        const activeBySession = await sequelize.models.SessionObserver.findAll({
+        const activeBySession = await SessionObserverModel.findAll({
           where: {
             study_id: studyId,
             status: { [Op.in]: ['confirmed', 'approved'] },
           },
           attributes: [
             'session_id',
+            // as any — Sequelize fn/col aggregates don't map to model attributes
             [sequelize.fn('COUNT', sequelize.col('id')), 'cnt'],
           ],
           group: ['session_id'],
           raw: true,
         });
         sessions_covered = activeBySession.length;
-        sessions_at_cap = activeBySession.filter(r => parseInt(r.cnt, 10) >= MAX_OBSERVERS_PER_SESSION).length;
-      } catch (e) {
+        sessions_at_cap = activeBySession.filter((r: any) => parseInt(r.cnt, 10) >= MAX_OBSERVERS_PER_SESSION).length;
+      } catch (e: any) {
         console.error('Error computing session coverage:', e.message);
       }
 
       try {
-        totalSessions = await sequelize.models.StudyParticipant.count({
+        totalSessions = await StudyParticipantModel.count({
           where: { study_id: studyId },
         });
-      } catch (e) {
+      } catch (e: any) {
         console.error('Error counting total sessions:', e.message);
       }
 
@@ -446,16 +507,16 @@ class SessionObserverService {
   /**
    * Get all observers for a study (confirmed + approved).
    */
-  async getObserversByStudy(studyId) {
+  async getObserversByStudy(studyId: number): Promise<SessionObserver[]> {
     try {
-      return await sequelize.models.SessionObserver.findAll({
+      return await SessionObserverModel.findAll({
         where: {
           study_id: studyId,
           status: { [Op.in]: ['confirmed', 'approved'] },
         },
         include: [
-          { model: sequelize.models.ResearchStudy, as: 'study', attributes: ['id', 'name', 'path', 'researcher_name'] },
-          { model: sequelize.models.StudyParticipant, as: 'participant', attributes: ['id', 'participant_name', 'scheduled_date', 'scheduled_time'] },
+          { model: ResearchStudyModel, as: 'study', attributes: ['id', 'name', 'path', 'researcher_name'] },
+          { model: StudyParticipantModel, as: 'participant', attributes: ['id', 'participant_name', 'scheduled_date', 'scheduled_time'] },
         ],
         order: [['created_at', 'DESC']],
       });
@@ -468,9 +529,9 @@ class SessionObserverService {
   /**
    * Mark guidelines as sent
    */
-  async markGuidelinesSent(observerId) {
+  async markGuidelinesSent(observerId: number): Promise<SessionObserver> {
     try {
-      const observer = await sequelize.models.SessionObserver.findByPk(observerId);
+      const observer = await SessionObserverModel.findByPk(observerId);
       if (!observer) {
         throw new Error('Observer request not found');
       }
@@ -492,9 +553,9 @@ class SessionObserverService {
   /**
    * Remove observer from session
    */
-  async removeObserver(observerId, removedBy) {
+  async removeObserver(observerId: number, removedBy: string): Promise<SessionObserver> {
     try {
-      const observer = await sequelize.models.SessionObserver.findByPk(observerId);
+      const observer = await SessionObserverModel.findByPk(observerId);
       if (!observer) {
         throw new Error('Observer request not found');
       }
@@ -518,10 +579,10 @@ class SessionObserverService {
  * Build session options with current observer counts for a study.
  * Returns array of { id, sessionId, participantId, label, count }.
  */
-const buildSessionsWithCounts = async (studyId) => {
+const buildSessionsWithCounts = async (studyId: number): Promise<SessionWithCount[]> => {
   const studyParticipantService = require('./study_participant.service');
-  const participants = await studyParticipantService.getParticipantsByStudy(studyId);
-  const sessions = [];
+  const participants: StudyParticipant[] = await studyParticipantService.getParticipantsByStudy(studyId);
+  const sessions: SessionWithCount[] = [];
 
   for (const p of participants) {
     const ptId = `PT-${String(p.id).padStart(3, '0')}`;
@@ -540,8 +601,8 @@ const buildSessionsWithCounts = async (studyId) => {
 };
 
 const service = new SessionObserverService();
-service.MAX_OBSERVERS_PER_SESSION = MAX_OBSERVERS_PER_SESSION;
-service.ROLE_LIMITS = ROLE_LIMITS;
-service.buildSessionsWithCounts = buildSessionsWithCounts;
+(service as any).MAX_OBSERVERS_PER_SESSION = MAX_OBSERVERS_PER_SESSION;
+(service as any).ROLE_LIMITS = ROLE_LIMITS;
+(service as any).buildSessionsWithCounts = buildSessionsWithCounts;
 
 module.exports = service;
