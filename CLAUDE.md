@@ -204,3 +204,23 @@ Discovery research (desk research, stakeholder interviews, survey synthesis) mov
 **Existing study-scoped discovery files preserved as-is.** No migration. Studies that already ran desk_research have files in their study folders — those remain untouched.
 
 **Handler wiring deferred to Step 2** (`/qori-discover` command). Current handlers still pass `study.path` as the base path — they'll be updated when the new slash command is built.
+
+## Architecture Decision Records
+
+This project tracks significant architectural decisions in `docs/architecture-decisions/`. When working on a change that meets any of these criteria, propose writing an ADR before completing the change:
+
+- The change affects more than one file or service
+- The change constrains how future work will be done
+- The choice was non-obvious (multiple reasonable options existed)
+- A reviewer (internal or external) is likely to ask "why was this done this way?"
+- The reasoning involves tradeoffs that future-you might forget
+
+When you notice such a decision being made (whether proposed by the user or emerging from discussion), say so directly: "This feels like an ADR-worthy decision. Want me to draft one when we're done?"
+
+If the user agrees, the ADR draft happens before the change is considered complete. The draft can be revised — what matters is that the reasoning is captured.
+
+If the user declines, note it briefly and proceed. Don't push.
+
+ADRs are added to the index in `docs/architecture-decisions/README.md`. New ADRs are numbered sequentially. Lessons-from-failure ADRs use the `L` prefix. Scaffold a new ADR with `npm run adr "title"` or `npm run adr:lesson "title"` from the backend directory.
+
+The quarterly architecture audit at `docs/audits/quarterly-architecture-audit.md` reviews existing ADRs for drift. When you're aware of a quarter ending, propose running the audit.

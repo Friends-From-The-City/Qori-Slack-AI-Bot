@@ -1,5 +1,23 @@
 # Qori Development Plan
 
+## Pending ADRs
+
+Decisions made in conversation that should be documented but haven't been written up yet.
+
+When closing out a sprint or before a quarterly audit, work through this list and either:
+- Write the ADR, or
+- Move the item to "Decided not to ADR" with a one-line reason
+
+### Backlog
+
+- [ ] (add items here as decisions are made in conversation)
+
+### Decided not to ADR
+
+_(nothing yet)_
+
+---
+
 ## Completed Work
 
 ### 2025-01-30: Learn Qori Landing Page Redesign

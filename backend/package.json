@@ -21,7 +21,9 @@
     "test": "NODE_ENV=test jest --config jest.config.js",
     "test:mocha": "NODE_ENV=test mocha --require @babel/register --exit",
     "test:watch": "NODE_ENV=test jest --config jest.config.js --watch",
-    "db:migrate": "npx sequelize-cli db:migrate"
+    "db:migrate": "npx sequelize-cli db:migrate",
+    "adr": "../scripts/new-adr.sh",
+    "adr:lesson": "../scripts/new-adr-lesson.sh"
   },
   "dependencies": {
     "@chroma-core/default-embed": "^0.1.8",
