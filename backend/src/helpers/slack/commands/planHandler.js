@@ -129,6 +129,14 @@ async function handlePlanSubmission({ ack, body, view, client }) {
     console.warn('⚠️ Plan handler: upstream load for iteration failed, template will use AI-only:', err.message);
   }
 
+  // ── Transform objectives: brief emits plain strings, template needs {id, objective} ──
+  // Defensive: handles both string arrays (current brief schema) and object arrays
+  // (future schema evolution) so the transform works either way.
+  const objectives = (Array.isArray(upstreamObjectives) ? upstreamObjectives : []).map((item, index) => ({
+    id: `OBJ-${String(index + 1).padStart(3, '0')}`,
+    objective: typeof item === 'string' ? item : item.objective || '',
+  }));
+
   // ── Assemble the complete data object ──
   const data = {
     // Pass-through identifiers
@@ -149,13 +157,13 @@ async function handlePlanSubmission({ ack, body, view, client }) {
     timeline_preference: timelinePref,
 
     // Upstream arrays for Handlebars iteration
-    objectives: Array.isArray(upstreamObjectives) ? upstreamObjectives : [],
+    objectives,
     research_questions: Array.isArray(upstreamQuestions) ? upstreamQuestions : [],
     target_barriers: Array.isArray(upstreamBarriers) ? upstreamBarriers : [],
     methodology: methodology,
 
     // Counts (mechanical)
-    objectives_count: Array.isArray(upstreamObjectives) ? upstreamObjectives.length : 0,
+    objectives_count: objectives.length,
     research_questions_count: Array.isArray(upstreamQuestions) ? upstreamQuestions.length : 0,
     target_barriers_count: Array.isArray(upstreamBarriers) ? upstreamBarriers.length : 0,
   };

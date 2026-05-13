@@ -121,6 +121,24 @@ describe('research_plan template v7.0', () => {
     expect(output).toContain('[OBJ-002]');
   });
 
+  test('renders objectives correctly when transformed from plain strings', async () => {
+    // Brief emits research_objectives as plain strings. The handler transforms
+    // them into {id, objective} objects with sequential OBJ-XXX IDs.
+    // This test verifies the transformed shape renders correctly.
+    const rawStrings = ['Understand veteran navigation patterns', 'Identify accessibility barriers'];
+    const transformed = rawStrings.map((text, i) => ({
+      id: `OBJ-${String(i + 1).padStart(3, '0')}`,
+      objective: text,
+    }));
+
+    const output = await renderPlan({ objectives: transformed, objectives_count: 2 });
+    expect(output).toContain('[OBJ-001]');
+    expect(output).toContain('Understand veteran navigation patterns');
+    expect(output).toContain('[OBJ-002]');
+    expect(output).toContain('Identify accessibility barriers');
+    expect(output).toContain('| Research objectives | 2 |');
+  });
+
   test('renders research questions from upstream cascade data', async () => {
     const output = await renderPlan({
       research_questions: [
