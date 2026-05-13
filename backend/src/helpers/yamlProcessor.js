@@ -138,11 +138,14 @@ async function processYamlTemplate(rawYamlContent, inputValues, baseFolderEncode
         // Inject upstream variables into inputValues so they're available to Generate prompts
         inputValues.upstream_variables = upstream;
 
-        // Also flatten for direct template access: {{upstream_target_barriers}}
+        // Flatten for AI prompt access (stringified): {{upstream_target_barriers}}
+        // AND for Handlebars iteration (raw arrays): {{#each upstream_target_barriers_data}}
         for (const [key, variable] of Object.entries(upstream)) {
           inputValues[`upstream_${key}`] = typeof variable.value === 'string'
             ? variable.value
             : JSON.stringify(variable.value, null, 2);
+          // Raw value for Handlebars iteration in output_template
+          inputValues[`upstream_${key}_data`] = variable.value;
         }
 
         console.log(`✅ Transform: Injected ${Object.keys(upstream).length} upstream variables for ${yamlConfig.id}`);
@@ -181,9 +184,33 @@ async function processYamlTemplate(rawYamlContent, inputValues, baseFolderEncode
     aiResponses = {};
   }
 
+  // 4.5 Parse structured AI outputs (output_format: json)
+  // JSON tasks produce arrays/objects for Handlebars iteration, not prose strings.
+  const parsedStructured = {};
+  if (yamlConfig.ai_generation_tasks) {
+    for (const task of yamlConfig.ai_generation_tasks) {
+      if (task.output_format === 'json' && aiResponses[task.task_id]) {
+        try {
+          // Strip markdown code fences if the LLM wrapped the JSON
+          let raw = aiResponses[task.task_id];
+          const fenceMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
+          if (fenceMatch) raw = fenceMatch[1];
+          parsedStructured[task.task_id] = JSON.parse(raw.trim());
+        } catch (e) {
+          throw new TemplateContractError(
+            yamlConfig.id,
+            task.task_id,
+            `AI task '${task.task_id}' in template '${yamlConfig.id}' returned invalid JSON: ${e.message}`
+          );
+        }
+      }
+    }
+  }
+
   // 5. Build the output content using the responses from LLM (if any)
   const outputTemplate = generateOutputTemplate(yamlConfig.output_template, {
     ...inputValues,
+    ...parsedStructured,  // parsed JSON arrays available as top-level template vars
     aiGenerated: aiResponses,
   });
 

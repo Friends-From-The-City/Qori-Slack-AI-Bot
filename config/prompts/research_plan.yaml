@@ -4,15 +4,17 @@
 id: research_plan
 name: run_research_plan
 label: "📋 Research Plan"
-version: "v6.0"
+version: "v7.0"
 
 description: |
   Transform your research concept into a stakeholder-ready execution plan.
   Lean output focused on methodology, participants, timeline, and deliverables.
+  v7.0: Interleaved Handlebars/AI architecture — computed values render
+  mechanically, LLM only writes bounded prose sections.
 
 author: Qori R&D
 created: 2025-06-26
-last_updated: 2026-05-06
+last_updated: 2026-05-13
 
 # ═══════════════════════════════════════════════════════════
 # CONFIGURATION
@@ -27,30 +29,21 @@ input_variables:
   - project_title:
       type: "text"
       required: true
-  - decision_context:
-      type: "textarea"
-      required: true
-  - research_goal:
-      type: "textarea"
-      required: true
-  - methodology:
-      type: "select"
-      required: true
-  - target_participants:
-      type: "textarea"
-      required: true
-  - participant_count:
-      type: "select"
-      required: true
-  - start_date:
-      type: "date"
-      required: true
-  - timeline_preference:
-      type: "radio"
-      required: true
   - lead_researcher:
       type: "text"
       required: true
+  - start_date:
+      type: "date"
+      required: false
+  - timeline_preference:
+      type: "radio"
+      required: false
+  - recruitment_sources:
+      type: "text"
+      required: false
+  - operational_risks:
+      type: "textarea"
+      required: false
 
 # ═══════════════════════════════════════════════════════════
 # CASCADE CONTRACT
@@ -87,13 +80,11 @@ consumes:
     required: false
     inject_as: commitment
     description: "Composition and count from brief"
-  # Context from brief
   - key: business_context
     source: research_brief
     required: false
     inject_as: context
     description: "Problem framing from brief"
-  # Constraints from brief — plan must work within these
   - key: out_of_scope
     source: research_brief
     required: false
@@ -150,242 +141,101 @@ emits:
     extract_from: "ALL deliverables — extract EVERY deliverable as a separate array item"
 
 # ═══════════════════════════════════════════════════════════
-# AI GENERATION
+# AI GENERATION — focused, bounded tasks
 # ═══════════════════════════════════════════════════════════
 ai_generation_tasks:
-  - task_id: "plan_complete"
+  - task_id: "summary"
     prompt: |
-      You are generating a complete research execution plan. This plan
-      operationalizes an approved research brief into actionable steps.
-
-      ============================================================
-      CRITICAL RULES
-      ============================================================
-
-      1. GENERATE ALL SECTIONS. Output the COMPLETE plan in one pass.
-         Do NOT ask for more information. Do NOT output meta-responses
-         like "I'd be happy to help" or "Could you please provide..."
-      2. Use markdown dash (-) for bullets, never Unicode bullets (•).
-      3. Do not wrap text in quotes. Use display-friendly dates (Month DD, YYYY).
-      4. Do NOT invent team names. Use generic categories only:
-         Design, Engineering, Accessibility, Product, Content, Research.
-      5. TODAY'S DATE IS {{current_date}} ({{current_date_iso}}). All timeline
-         calculations MUST use dates in 2026 or later. NEVER output dates
-         before today. Start date from modal: {{start_date}}. If start_date
-         is empty, use one week from today.
-      6. CASCADE CITATION MARKERS. When referencing brief commitments inline:
-         - [RQ-XXX] when a plan element addresses a research question
-         - [TB-XXX] when a task is designed to test a target barrier
-         - [Ob-XXX] when a deliverable addresses a research objective
-         These markers create traceability between plan and brief.
-
-      ============================================================
-      RESEARCHER INPUT (from modal)
-      ============================================================
+      Write a 2-3 sentence summary for a research execution plan.
 
       Study: {{project_title}}
-      Context: {{decision_context}}
-      Goal: {{research_goal}}
       Method: {{methodology}}
-      Participants: {{participant_count}} — {{target_participants}}
-      Start date: {{start_date}}
-      Timeline preference: {{timeline_preference}}
-      Lead researcher: {{lead_researcher}}
-      Recruitment sources: {{recruitment_sources}}
-      Operational risks: {{operational_risks}}
+      Participants: {{target_participants}}
 
       {% if upstream_research_objectives %}
-      ============================================================
-      CASCADE — BRIEF COMMITMENTS (binding)
-      ============================================================
-
-      The research brief has been approved. This plan MUST operationalize
-      these commitments. Do not deviate from the approved scope.
-
-      APPROVED OBJECTIVES:
-      {{upstream_research_objectives}}
-
-      APPROVED RESEARCH QUESTIONS:
-      {{upstream_research_questions}}
-
-      APPROVED METHOD: {{upstream_methodology_selection}}
-
-      TARGET BARRIERS (plan must design tasks to test these):
-      {{upstream_target_barriers}}
-
-      APPROVED PARTICIPANT CRITERIA:
-      {{upstream_participant_criteria}}
-
-      {% if upstream_participant_approach %}
-      APPROVED APPROACH: {{upstream_participant_approach}}
+      APPROVED OBJECTIVES: {{upstream_research_objectives}}
       {% endif %}
-
       {% if upstream_business_context %}
       BUSINESS CONTEXT: {{upstream_business_context}}
       {% endif %}
 
-      ============================================================
-      CASCADE — CONSTRAINTS (hard envelopes)
-      ============================================================
+      Output ONLY the summary paragraph. No heading, no preamble.
+      Focus: what the study will do, the method, participant target,
+      and what decision the findings will inform.
 
-      {% if upstream_decision_deadline %}
-      DEADLINE: {{upstream_decision_deadline}} — all phases must complete before this.
+  - task_id: "background"
+    prompt: |
+      Write a 3-4 sentence background paragraph for a research plan.
+
+      Study: {{project_title}}
+      Method: {{methodology}}
+
+      {% if upstream_business_context %}
+      BUSINESS CONTEXT: {{upstream_business_context}}
+      {% endif %}
+      {% if upstream_research_objectives %}
+      OBJECTIVES: {{upstream_research_objectives}}
       {% endif %}
 
-      {% if upstream_budget %}
-      BUDGET: {{upstream_budget}} — plan costs must fit within this.
+      Output ONLY the paragraph. No heading, no preamble.
+      Focus: why this research matters now, what's known, what the gap is.
+      Do not introduce scope beyond what the brief approved.
+
+  - task_id: "method_approach"
+    prompt: |
+      Write 2-3 sentences describing the methodology approach for this study.
+
+      Method: {{methodology}}
+      {% if upstream_target_barriers %}
+      TARGET BARRIERS to test: {{upstream_target_barriers}}
+      {% endif %}
+      {% if upstream_research_questions %}
+      RESEARCH QUESTIONS: {{upstream_research_questions}}
       {% endif %}
 
-      {% if upstream_out_of_scope %}
-      OUT OF SCOPE: {{upstream_out_of_scope}} — plan must not exceed these boundaries.
+      Output ONLY the sentences. No heading, no label.
+      Be specific to the methodology. Mention what sessions will explore and
+      how the protocol will elicit evidence about the target barriers.
+
+  - task_id: "session_format_detail"
+    prompt: |
+      Write 1-2 sentences about session format for {{methodology}} sessions.
+
+      Output ONLY the sentences. Cover: remote/in-person, accessibility
+      accommodations, alternative formats if applicable.
+
+  - task_id: "data_collection_methods"
+    prompt: |
+      Write 1-2 sentences about data collection methods for {{methodology}}.
+
+      Output ONLY the sentences. Mention specific methods: think-aloud,
+      screen recording, observer notes, post-session interviews, etc.
+      Be specific to the methodology.
+
+  - task_id: "participant_composition_prose"
+    prompt: |
+      Write a short bullet list explaining required participant composition.
+
+      {% if upstream_participant_criteria %}
+      APPROVED CRITERIA: {{upstream_participant_criteria}}
+      {% endif %}
+      {% if upstream_participant_approach %}
+      APPROACH: {{upstream_participant_approach}}
       {% endif %}
 
-      {% if upstream_timeline_preference %}
-      TIMELINE PREFERENCE: {{upstream_timeline_preference}}
-      {% endif %}
-      {% endif %}
+      Output ONLY the bullet list (use markdown dash -). Each distinct
+      criterion gets its own bullet. Include accessibility needs and
+      demographic diversity requirements if relevant.
 
-      ============================================================
-      OUTPUT FORMAT — GENERATE ALL SECTIONS BELOW
-      ============================================================
-
-      ## Summary
-
-      [2-3 sentences: what the study will do, how many participants and what
-      method, and what decision the findings will inform. If brief commitments
-      exist above, reference them as the approved scope being operationalized.]
-
-      | | |
-      |---|---|
-      | **Method** | {{methodology}} |
-      | **Participants** | {{participant_count}} |
-      | **Timeline** | [X weeks, starting Month DD, YYYY — calculate from {{timeline_preference}} and {{start_date}}] |
-      | **Deliverables** | Research readout, design recommendations |
-
-      ---
+  - task_id: "deliverables_narrative"
+    prompt: |
+      Write a bullet list of deliverables this {{methodology}} study will produce.
 
       {% if upstream_research_objectives %}
-      ## Cascade summary
-
-      This plan operationalizes the approved research brief.
-
-      | Brief commitment | Count |
-      |------------------|-------|
-      | Research objectives | [n] |
-      | Research questions | [n] |
-      | Target barriers | [n] |
-      | Methodology | {{methodology}} |
-      | Participant criteria | [summary] |
-      | Decision deadline | [date or N/A] |
-      | Budget | [amount or N/A] |
-
-      ---
-
+      OBJECTIVES: {{upstream_research_objectives}}
       {% endif %}
 
-      ## Background
-
-      [3-4 sentences expanding the business context. If brief's business_context
-      exists above, ground in that approved framing. Do not introduce scope
-      beyond what the brief approved.]
-
-      ---
-
-      ## Objectives
-
-      What we aim to learn through this research:
-
-      [If brief commitments exist above, reformulate the APPROVED OBJECTIVES as
-      learning-focused verbs (Identify, Understand, Evaluate, Document). Preserve
-      their intent — do not add or remove objectives.
-      If no brief commitments, generate 3-4 from the research goal.]
-
-      - **Identify** [what barriers/issues we aim to find]
-      - **Understand** [what mental models/behaviors we aim to learn]
-      - **Evaluate** [what we aim to assess]
-      - **Document** [what we aim to record for future reference]
-
-      ---
-
-      ## Research questions
-
-      [If brief commitments exist above, use the APPROVED RESEARCH QUESTIONS.
-      Add brief parenthetical context about how each will be investigated via
-      {{methodology}}. Preserve the approved questions — do not add or remove.
-      If no brief commitments, generate 3-4 from the study context.]
-
-      1. [RQ-001] [Question] — _(investigated via [specific {{methodology}} technique])_
-      2. [RQ-002] [Question] — _(investigated via [technique])_
-      3. [RQ-003] [Question] — _(investigated via [technique])_
-
-      ---
-
-      ## Method
-
-      **Approach** — [2-3 sentences: what sessions will explore, protocol, data
-      collection. Be specific to {{methodology}}.]
-
-      **Session format** — [Format, duration, setup. Note remote/in-person and
-      accessibility accommodations.]
-
-      **Data collection** — [List methods: think-aloud, screen recording,
-      observer notes, post-session interviews, etc.]
-
-      **Tasks** — [List 4-5 realistic task scenarios specific to this study.
-      If target barriers exist above, design tasks that will elicit evidence
-      about those barriers. Mark each task with which barrier it tests:
-      e.g., "Navigate to disability benefits [targets TB-001, TB-002]"]
-
-      Close with a note that detailed task scripts and discussion guide will
-      be developed separately and reviewed before fielding.
-
-      ---
-
-      ## Participants
-
-      **Sample size** — {{participant_count}}
-
-      **Required composition:**
-
-      [If APPROVED PARTICIPANT CRITERIA exists above, use it. Otherwise use
-      the modal's target_participants. Format as bulleted list — each distinct
-      criterion gets its own bullet.]
-
-      - [Criterion 1]
-      - [Criterion 2]
-
-      **Recruitment** — [1-2 sentences about channels appropriate for this population]
-
-      **Compensation** — {{per_participant_compensation}}
-
-      ---
-
-      ## Timeline
-
-      [Calculate phase dates from {{start_date}} using {{timeline_preference}} durations:
-      - standard: Planning 7d, Recruitment 10d, Fieldwork 7d, Analysis 3d, Reporting 2d
-      - accelerated: Planning 2d, Recruitment 4d, Fieldwork 4d, Analysis 2d, Reporting 2d
-      - extended: Planning 14d, Recruitment 14d, Fieldwork 14d, Analysis 7d, Reporting 7d
-
-      If a decision deadline constraint exists above, compress phases to fit.
-      Planning and Recruitment absorb the most compression.]
-
-      | Phase | Dates | Duration |
-      |-------|-------|---------:|
-      | Planning and stakeholder alignment | [calculated] | [duration] |
-      | Recruitment | [calculated] | [duration] |
-      | Fieldwork (sessions) | [calculated] | [duration] |
-      | Analysis | [calculated] | [duration] |
-      | Reporting | [calculated] | [duration] |
-
-      > [!NOTE]
-      > Timeline begins after stakeholder approval of this plan.
-
-      ---
-
-      ## Deliverables
-
-      [Select deliverables appropriate for {{methodology}}:
+      Select deliverables appropriate for {{methodology}}:
       - Usability Testing: Session summaries, Affinity map, Journey map, Research readout, Design recommendations
       - User Interviews: Session summaries, Affinity map, Personas, Research readout
       - Card Sorting: Card sort analysis, IA recommendations, Research readout
@@ -393,72 +243,57 @@ ai_generation_tasks:
       - Concept Testing: Session summaries, Concept reaction synthesis, Research readout, Design recommendations
       - Mixed Methods: Session summaries, Affinity map, Journey map, Research readout
 
-      If brief objectives exist above, note which objective(s) each deliverable addresses.]
+      Output ONLY the bullet list. Format each as:
+      - **[Deliverable]** — [one-line description]
 
-      - **[Deliverable]** — [description] _(addresses objective N)_
+      Close with: "All artifacts will be stored in the study's research folder for ongoing reference."
 
-      All artifacts will be stored in the study's research folder for ongoing reference.
+  - task_id: "risks"
+    output_format: json
+    prompt: |
+      Generate 3 study-specific risks for this research plan as a JSON array.
 
-      ---
-
-      ## Team and roles
-
-      | Role | Person |
-      |------|--------|
-      | Lead researcher | {{lead_researcher}} |
-      | Note-taker | To be assigned |
-      | Observer | To be assigned |
-      | Stakeholder reviewer | To be assigned |
-
-      ---
-
-      ## Risks and mitigations
-
-      [Generate 3 study-specific risks. NOT generic project management risks.
-      If target barriers exist above, at least one risk should address challenges
-      testing those barriers. If deadline/budget constraints exist, address those.]
-
-      | Risk | Likelihood | Mitigation |
-      |------|:----------:|------------|
-      | [Study-specific risk] | [High/Medium/Low] | [Specific mitigation] |
-      | [Study-specific risk] | [High/Medium/Low] | [Specific mitigation] |
-      | [Study-specific risk] | [High/Medium/Low] | [Specific mitigation] |
-
-      {% if upstream_research_objectives %}
-      ---
-
-      ## Brief commitments operationalized
-
-      | Brief commitment | How this plan addresses it |
-      |------------------|---------------------------|
-      | **Objectives** | Plan objectives elaborate the brief's approved learning goals |
-      | **Research questions** | [RQ-XXX] markers show which plan elements address each question |
-      | **Method** | {{methodology}} detailed in Method section |
-      | **Participants** | Recruitment criteria match brief's participant commitment |
-      | **Target barriers** | [TB-XXX] markers show which tasks test each barrier |
-      | **Timeline** | Phased schedule fits within brief's constraints |
-
-      ---
-
-      ## Upstream context
-
-      This plan operationalizes the approved research brief.
-
-      | Source | Used for |
-      |--------|----------|
-      | research_brief | Objectives, questions, method, participants, barriers, constraints |
-
-      Citation markers throughout:
-      - [RQ-XXX] = research question this element addresses
-      - [TB-XXX] = target barrier this task tests
-      - [Ob-XXX] = research objective this deliverable serves
-
+      Study: {{project_title}}
+      Method: {{methodology}}
+      {% if upstream_target_barriers %}
+      TARGET BARRIERS: {{upstream_target_barriers}}
+      {% endif %}
+      {% if operational_risks %}
+      RESEARCHER-NOTED RISKS: {{operational_risks}}
       {% endif %}
 
-      Do NOT output a footer or "Generated by Qori" line — that is added automatically.
+      Rules:
+      1. Risks must be study-specific, NOT generic project management risks.
+      2. If target barriers exist, at least one risk should address challenges testing those barriers.
+      3. If the researcher noted operational risks, incorporate them.
+
+      Output ONLY valid JSON. No prose, no code fences.
+      Schema: [{"risk": "string", "likelihood": "High|Medium|Low", "mitigation": "string"}]
+
+  - task_id: "brief_operationalization"
+    output_format: json
+    prompt: |
+      Map each brief commitment to how this research plan addresses it.
+
+      {% if upstream_research_objectives %}
+      OBJECTIVES: {{upstream_research_objectives}}
+      {% endif %}
+      {% if upstream_research_questions %}
+      QUESTIONS: {{upstream_research_questions}}
+      {% endif %}
+      Method: {{methodology}}
+      {% if upstream_target_barriers %}
+      BARRIERS: {{upstream_target_barriers}}
+      {% endif %}
+
+      Output ONLY valid JSON. No prose, no code fences.
+      Schema: [{"commitment": "string", "address": "string"}]
+
+      Generate entries for: Objectives, Research questions, Method,
+      Participants, Target barriers, Timeline.
 
 # ═══════════════════════════════════════════════════════════
-# OUTPUT
+# OUTPUT — interleaved Handlebars + AI prose
 # ═══════════════════════════════════════════════════════════
 output_template: |
   # Research Plan: {{project_title}}
@@ -467,7 +302,133 @@ output_template: |
 
   ---
 
-  {{ai_generated.plan_complete}}
+  ## Summary
+
+  {{ai_generated.summary}}
+
+  | | |
+  |---|---|
+  | **Method** | {{methodology}} |
+  | **Participants** | {{target_participants}} |
+  | **Timeline** | {{timeline_preference}} |
+
+  ---
+
+  ## Background
+
+  {{ai_generated.background}}
+
+  ---
+
+  ## Objectives
+
+  What we aim to learn through this research:
+
+  {{#each objectives}}
+  - **[{{this.id}}]** {{this.objective}}
+  {{/each}}
+
+  ---
+
+  ## Research questions
+
+  {{#each research_questions}}
+  - **[{{this.id}}]** {{this.question}}{{#if this.priority}} _({{this.priority}})_{{/if}}
+  {{/each}}
+
+  ---
+
+  ## Method
+
+  **Approach** — {{ai_generated.method_approach}}
+
+  **Session format** — {{ai_generated.session_format_detail}}
+
+  **Data collection** — {{ai_generated.data_collection_methods}}
+
+  ---
+
+  ## Participants
+
+  **Sample size** — {{target_participants}}
+
+  **Required composition:**
+
+  {{ai_generated.participant_composition_prose}}
+
+  **Recruitment** — {{recruitment_sources}}
+
+  {{#if per_participant_compensation}}
+  **Compensation** — ${{per_participant_compensation}} per participant (calculated from ${{parsed_budget_amount}} budget ÷ {{target_participants}} target participants)
+  {{else}}
+  **Compensation** — Standard rate, typically $50-$100 per participant for 60-90 min
+  {{/if}}
+
+  ---
+
+  ## Timeline
+
+  | Phase | Dates | Duration |
+  |-------|-------|---------:|
+  {{#each timeline_phases}}
+  | {{this.phase}} | {{this.dates}} | {{this.duration}} |
+  {{/each}}
+
+  > [!NOTE]
+  > Timeline begins after stakeholder approval of this plan.
+
+  ---
+
+  ## Deliverables
+
+  {{ai_generated.deliverables_narrative}}
+
+  ---
+
+  ## Risks and mitigations
+
+  | Risk | Likelihood | Mitigation |
+  |------|:----------:|------------|
+  {{#each risks}}
+  | {{this.risk}} | {{this.likelihood}} | {{this.mitigation}} |
+  {{/each}}
+
+  ---
+
+  ## Brief commitments operationalized
+
+  | Brief commitment | How this plan addresses it |
+  |------------------|---------------------------|
+  {{#each brief_operationalization}}
+  | **{{this.commitment}}** | {{this.address}} |
+  {{/each}}
+
+  ---
+
+  ---
+
+  ## Cascade summary
+
+  This plan operationalizes the approved research brief.
+
+  | Brief commitment | Count |
+  |------------------|-------|
+  | Research objectives | {{objectives_count}} |
+  | Research questions | {{research_questions_count}} |
+  | Target barriers | {{target_barriers_count}} |
+  | Methodology | {{methodology}} |
+  | Budget | {{#if parsed_budget_amount}}${{parsed_budget_amount}}{{else}}N/A{{/if}} |
+
+  **Upstream context**
+
+  | Source | Used for |
+  |--------|----------|
+  | research_brief | Objectives, questions, method, participants, barriers, constraints |
+
+  Citation markers throughout:
+  - [RQ-XXX] = research question this element addresses
+  - [TB-XXX] = target barrier this task tests
+  - [Ob-XXX] = research objective this deliverable serves
 
 output_options:
   path: "01-planning/"
@@ -477,41 +438,28 @@ output_options:
 # METADATA (documentation only — not read by backend)
 # ═══════════════════════════════════════════════════════════
 processing_workflow:
-  1. validate_modal_inputs
-  2. execute_plan_complete
-  3. render_output_template
-  4. save_to_planning_folder
-
-notify:
-  - role: team
-    action: "Research plan generated"
-    channel: "{{study_channel}}"
-    message: "Research plan for {{project_title}} is ready for review."
+  1. handler_loads_upstream_and_computes_mechanical_values
+  2. execute_focused_ai_tasks
+  3. parse_json_ai_outputs
+  4. render_interleaved_output_template
+  5. save_to_planning_folder
 
 notes: |
-  v6.0: Single-task architecture migration.
-  - Migrated from 10 separate AI tasks to 1 consolidated "plan_complete" task.
-    Eliminates 10x API calls, cascade variable fragmentation, and meta-response
-    leakage. Matches architecture of brief, session_summary, affinity, persona,
-    journey, readout, discussion_guide, stakeholder_synthesis.
-  - All cascade variables available in single prompt context.
-  - Output template simplified to masthead + {{ai_generated.plan_complete}}.
-  - Anti-fabrication: team roles default to "To be assigned" (not fabricated categories).
-  - Method section: removed "End with:" meta-instruction that leaked into output.
-  - Cascade-aware: brief commitments (objectives, questions, method, participants)
-    treated as binding scope. Constraints (deadline, budget, out_of_scope) as
-    hard envelopes. Tasks designed to test target barriers.
+  v7.0: Interleaved Handlebars/AI architecture (reference implementation).
+  - Output template is now the source of structure. Computed values
+    (compensation, timeline, counts, objectives, research questions)
+    render mechanically via Handlebars. LLM only writes prose.
+  - Single monolithic plan_complete task replaced by 9 focused tasks:
+    7 prose tasks + 2 structured JSON tasks (risks, brief_operationalization).
+  - JSON tasks parsed by yamlProcessor (output_format: json), injected as
+    template-ready arrays for {{#each}} iteration.
+  - Handler assembles all mechanical data (timeline phases with calculated
+    dates, compensation with explanatory math, cascade counts).
+  - Team and roles section removed (lead researcher in masthead,
+    observers/note-takers managed via /qori-fieldwork).
+  - Cascade summary moved to bottom, preceded by double horizontal rule
+    separator distinguishing body from meta-information.
 
-  v5.0-v5.1: Cascade-aware retrofit (superseded by v6.0 migration).
-
-  v4.7 Changes (Lean Rewrite):
-  - Research brief = approval gate. Research plan = execution doc.
-  - VA-specific sections removed: OCTO Priorities, User Journey, Implementation Plan
-  - Modal simplified from 15 fields to 8 with sensible defaults
-  - Output collapsed from ~292 lines to ~145 lines
-
-output_use: |
-  Generate a stakeholder-ready research execution plan from an approved
-  research brief. Plan operationalizes brief commitments: objectives become
-  study tasks, methodology becomes execution protocol, participant criteria
-  become recruitment spec, timeline fits within brief constraints.
+  v6.0: Single-task architecture (superseded by v7.0).
+  v5.0-v5.1: Cascade-aware retrofit (superseded by v6.0).
+  v4.7: Lean rewrite — brief = approval gate, plan = execution doc.

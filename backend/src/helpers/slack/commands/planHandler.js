@@ -2,39 +2,86 @@
  * planHandler.js — /qori-plan submission handler
  *
  * Extracted from events.js for maintainability. Handles the research_plan_modal
- * submission: form extraction, compensation calculation, cascade variable
- * consumption, YAML processing, and result messaging.
+ * submission: form extraction, compensation calculation, timeline computation,
+ * cascade variable consumption, YAML processing, and result messaging.
+ *
+ * This handler is the DATA ASSEMBLY POINT for the research plan template.
+ * The template is dumb — it iterates and interpolates. Computed values
+ * (compensation, dates, counts) are calculated here, not by the LLM.
  */
+const { addDays, format, parseISO, isValid } = require('date-fns');
 const { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo } = require('../../github');
 const { getResearchStudyWithRoles } = require('../../../services/research_study.service');
 const { processYamlTemplate, TemplateContractError } = require('../../yamlProcessor');
 const { addStudyStatus } = require('../../../services/study-status.service');
 const { sendStudyResultMessage, generateStudyResultBlocks } = require('../ui/studyResultBlocks');
 const { calculatePerPersonCompensation } = require('../../../utils/compensationCalculator');
+const { readUpstreamVariables } = require('../../studyVariables');
 const research_planService = require('../../../services/research_plan.service');
 
+// ─── Timeline computation ───────────────────────────────────────────
+
+// Alpha-phase durations (hardcoded). Revisit when we have signal from real runs.
+const PHASE_DURATIONS = {
+  standard:    { planning: 3, recruitment: 7, fieldwork: 5, analysis: 1, reporting: 1 },
+  accelerated: { planning: 2, recruitment: 4, fieldwork: 3, analysis: 1, reporting: 1 },
+  extended:    { planning: 7, recruitment: 14, fieldwork: 10, analysis: 3, reporting: 2 },
+};
+
 /**
- * Handle research_plan_modal submission.
+ * Build timeline phases with calculated dates.
+ * Returns an array of { phase, dates, duration } objects for Handlebars iteration.
  */
+function buildTimelinePhases(startDateStr, timelinePref) {
+  const durations = PHASE_DURATIONS[timelinePref] || PHASE_DURATIONS.standard;
+
+  let cursor;
+  if (startDateStr) {
+    const parsed = parseISO(startDateStr);
+    cursor = isValid(parsed) ? parsed : addDays(new Date(), 7);
+  } else {
+    cursor = addDays(new Date(), 7);
+  }
+
+  const phases = [
+    { name: 'Planning and stakeholder alignment', days: durations.planning },
+    { name: 'Recruitment', days: durations.recruitment },
+    { name: 'Fieldwork (sessions)', days: durations.fieldwork },
+    { name: 'Analysis', days: durations.analysis },
+    { name: 'Reporting', days: durations.reporting },
+  ];
+
+  return phases.map(p => {
+    const phaseStart = new Date(cursor);
+    const phaseEnd = addDays(phaseStart, p.days - 1);
+    const result = {
+      phase: p.name,
+      dates: `${format(phaseStart, 'MMM d')} – ${format(phaseEnd, 'MMM d, yyyy')}`,
+      duration: `${p.days} day${p.days > 1 ? 's' : ''}`,
+    };
+    cursor = addDays(phaseEnd, 1); // next phase starts day after
+    return result;
+  });
+}
+
+// ─── Handler ────────────────────────────────────────────────────────
+
 async function handlePlanSubmission({ ack, body, view, client }) {
   await ack();
 
   const values = view.state.values;
   const { channelId, studyName: metaStudyName, userId } = JSON.parse(view.private_metadata || '{}');
 
-  // Get study name from study_folder_block if available, otherwise use metadata
   const studyName = values.study_folder_block?.study_folder_input?.value || metaStudyName;
-
   if (!studyName) {
     throw new Error('No study selected or provided');
   }
 
   console.log("🚀 ~ Research Plan Generator ~ studyName:", studyName);
 
-  // Fetch the full study with roles
   const study = await getResearchStudyWithRoles(studyName);
 
-  // Helper function to extract values from different input types
+  // Form extraction helper
   const extract = (blockId, actionId) => {
     const block = values[blockId];
     if (!block) return null;
@@ -47,24 +94,73 @@ async function handlePlanSubmission({ ack, body, view, client }) {
     return null;
   };
 
-  // Extract form values — plan only collects execution details
-  // Scope (objectives, method, participants, context) comes from cascade
+  // ── Modal inputs ──
+  const leadResearcher = extract('lead_researcher_block', 'lead_researcher_input') || '';
+  const recruitmentSources = extract('recruitment_source_block', 'recruitment_source_input') || '';
+  const operationalRisks = extract('operational_risks_block', 'operational_risks_input') || '';
+  const startDate = extract('start_date_block', 'start_date_picker') || '';
+  const timelinePref = extract('timeline_block', 'timeline_radio') || 'standard';
+
+  // ── Compensation (mechanical) ──
   const perParticipantComp = calculatePerPersonCompensation(study);
 
+  // ── Timeline phases (mechanical) ──
+  const timelinePhases = buildTimelinePhases(startDate, timelinePref);
+
+  // ── Load upstream cascade variables for template iteration ──
+  // The processor also loads them (via consumes block) for AI prompt injection,
+  // but we need raw arrays here for Handlebars iteration in the output_template.
+  let upstreamObjectives = [];
+  let upstreamQuestions = [];
+  let upstreamBarriers = [];
+  let methodology = '';
+  try {
+    const upstream = await readUpstreamVariables(study.path, [
+      { key: 'research_objectives', required: false },
+      { key: 'research_questions', required: false },
+      { key: 'target_barriers', required: false },
+      { key: 'methodology_selection', required: false },
+    ]);
+    upstreamObjectives = upstream.research_objectives?.value || [];
+    upstreamQuestions = upstream.research_questions?.value || [];
+    upstreamBarriers = upstream.target_barriers?.value || [];
+    methodology = upstream.methodology_selection?.value || '';
+  } catch (err) {
+    console.warn('⚠️ Plan handler: upstream load for iteration failed, template will use AI-only:', err.message);
+  }
+
+  // ── Assemble the complete data object ──
   const data = {
+    // Pass-through identifiers
     selected_study: studyName,
     project_title: studyName,
-    lead_researcher: extract('lead_researcher_block', 'lead_researcher_input'),
-    note_taker: extract('note_taker_block', 'note_taker_input') || '',
-    observer: extract('observer_block', 'observer_input') || '',
-    recruitment_sources: extract('recruitment_source_block', 'recruitment_source_input') || '',
-    operational_risks: extract('operational_risks_block', 'operational_risks_input') || '',
-    per_participant_compensation: perParticipantComp
-      ? `$${perParticipantComp} per participant (calculated from $${parseFloat(study.parsed_budget_amount)} ÷ ${study.target_participants} target participants)`
-      : '[Standard rate, typically $50-$100 per participant for 60-90 min]',
+    lead_researcher: leadResearcher,
+    recruitment_sources: recruitmentSources,
+    operational_risks: operationalRisks,
+
+    // Compensation (mechanical)
+    per_participant_compensation: perParticipantComp,
+    parsed_budget_amount: study.parsed_budget_amount ? parseFloat(study.parsed_budget_amount) : null,
+    target_participants: study.target_participants,
+
+    // Timeline (mechanical)
+    timeline_phases: timelinePhases,
+    start_date: startDate,
+    timeline_preference: timelinePref,
+
+    // Upstream arrays for Handlebars iteration
+    objectives: Array.isArray(upstreamObjectives) ? upstreamObjectives : [],
+    research_questions: Array.isArray(upstreamQuestions) ? upstreamQuestions : [],
+    target_barriers: Array.isArray(upstreamBarriers) ? upstreamBarriers : [],
+    methodology: methodology,
+
+    // Counts (mechanical)
+    objectives_count: Array.isArray(upstreamObjectives) ? upstreamObjectives.length : 0,
+    research_questions_count: Array.isArray(upstreamQuestions) ? upstreamQuestions.length : 0,
+    target_barriers_count: Array.isArray(upstreamBarriers) ? upstreamBarriers.length : 0,
   };
 
-  console.log(`📋 Extracted research plan data: ${Object.keys(data).length} fields, study: ${data.study_name || 'unknown'}`);
+  console.log(`📋 Assembled plan data: ${Object.keys(data).length} fields, ${data.objectives_count} objectives, ${data.research_questions_count} RQs, study: ${studyName}`);
 
   try {
     const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, "research_plan.yaml");
@@ -94,7 +190,6 @@ async function handlePlanSubmission({ ack, body, view, client }) {
       });
     } catch (dmErr) { console.error('Failed to send plan DM:', dmErr.message); }
 
-    // Add study status for created file
     await addStudyStatus({
       study_name: studyName,
       path: url,
@@ -103,7 +198,6 @@ async function handlePlanSubmission({ ack, body, view, client }) {
     });
   } catch (err) {
     if (err instanceof TemplateContractError) {
-      // Surface contract errors as a clear DM to the researcher
       console.warn(`⚠️ Cascade contract error for plan: ${err.message}`);
       try {
         const im = await client.conversations.open({ users: userId });
@@ -113,9 +207,9 @@ async function handlePlanSubmission({ ack, body, view, client }) {
         });
       } catch (dmErr) { console.error('Failed to send contract error DM:', dmErr.message); }
     } else {
-      throw err; // Re-throw non-contract errors
+      throw err;
     }
   }
 }
 
-module.exports = { handlePlanSubmission };
+module.exports = { handlePlanSubmission, buildTimelinePhases };

@@ -42,22 +42,57 @@ function makeBriefUpstream(overrides = {}) {
 
 /**
  * The input values a plan handler would pass to processYamlTemplate.
- * These are the direct modal inputs plus system-injected fields.
+ * Matches the data assembly in planHandler.js v7.0:
+ * - Raw numbers for compensation (not formatted strings)
+ * - Arrays for Handlebars iteration (objectives, questions, barriers)
+ * - Calculated timeline phases
+ * - Counts for cascade summary
  */
 function makePlanInputs(overrides = {}) {
   return {
+    // Pass-through identifiers
     selected_study: 'test-study',
     project_title: 'Test Study',
     lead_researcher: 'Test Researcher',
-    methodology: 'Usability Testing',
-    participant_count: '10',
-    start_date: '2026-06-01',
-    timeline_preference: 'standard',
-    note_taker: '',
-    observer: '',
     recruitment_sources: 'Existing VA panel',
     operational_risks: 'Participant no-shows during summer months',
-    per_participant_compensation: '$80 per participant (calculated from $800 ÷ 10 target participants)',
+
+    // Compensation (mechanical — raw values, template formats)
+    per_participant_compensation: 80,
+    parsed_budget_amount: 800,
+    target_participants: 10,
+
+    // Timeline (mechanical — calculated by handler)
+    start_date: '2026-06-01',
+    timeline_preference: 'standard',
+    timeline_phases: [
+      { phase: 'Planning and stakeholder alignment', dates: 'Jun 1 – Jun 3, 2026', duration: '3 days' },
+      { phase: 'Recruitment', dates: 'Jun 4 – Jun 10, 2026', duration: '7 days' },
+      { phase: 'Fieldwork (sessions)', dates: 'Jun 11 – Jun 15, 2026', duration: '5 days' },
+      { phase: 'Analysis', dates: 'Jun 16 – Jun 16, 2026', duration: '1 day' },
+      { phase: 'Reporting', dates: 'Jun 17 – Jun 17, 2026', duration: '1 day' },
+    ],
+
+    // Upstream arrays for Handlebars iteration
+    objectives: [
+      { id: 'OBJ-001', objective: 'Understand veteran navigation patterns' },
+      { id: 'OBJ-002', objective: 'Identify accessibility barriers in mobile interface' },
+    ],
+    research_questions: [
+      { id: 'RQ-001', question: 'How do veterans locate the prescription refill feature?', priority: 'Primary' },
+      { id: 'RQ-002', question: 'What workarounds do veterans use when navigation fails?', priority: 'Secondary' },
+    ],
+    target_barriers: [
+      { id: 'TB-001', barrier: 'Veterans cannot locate prescription refill interface' },
+      { id: 'TB-002', barrier: 'Notification delays prevent timely awareness of refill status' },
+    ],
+    methodology: 'Usability Testing',
+
+    // Counts (mechanical)
+    objectives_count: 2,
+    research_questions_count: 2,
+    target_barriers_count: 2,
+
     ...overrides,
   };
 }
