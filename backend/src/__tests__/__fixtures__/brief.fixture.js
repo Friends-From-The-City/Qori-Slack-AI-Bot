@@ -73,6 +73,9 @@ function makePlanInputs(overrides = {}) {
       { phase: 'Reporting', dates: 'Jun 17 – Jun 17, 2026', duration: '1 day' },
     ],
 
+    // Timeline summary (computed from phases)
+    timeline_summary: '3 weeks, starting Jun 1, 2026',
+
     // Upstream arrays for Handlebars iteration
     objectives: [
       { id: 'OBJ-001', objective: 'Understand veteran navigation patterns' },

@@ -273,7 +273,7 @@ ai_generation_tasks:
   - task_id: "brief_operationalization"
     output_format: json
     prompt: |
-      Map each brief commitment to how this research plan addresses it.
+      Map each top-level brief commitment to how this research plan addresses it.
 
       {% if upstream_research_objectives %}
       OBJECTIVES: {{upstream_research_objectives}}
@@ -286,11 +286,22 @@ ai_generation_tasks:
       BARRIERS: {{upstream_target_barriers}}
       {% endif %}
 
+      RULES:
+      1. Maximum 7 entries. Only top-level commitment categories.
+      2. Use EXACTLY these category names as the "commitment" field:
+         Objectives, Research questions, Method, Participants,
+         Target barriers, Timeline, Budget.
+      3. Do NOT list individual research questions (RQ-001, RQ-002) as
+         separate entries — summarize ALL questions in one row.
+      4. Do NOT list individual target barriers (TB-001, TB-002) as
+         separate entries — summarize ALL barriers in one row.
+      5. Each "address" field is ONE sentence explaining how the plan
+         operationalizes that category.
+      6. Omit a category if the brief didn't specify it (e.g., skip
+         Budget if no budget was provided).
+
       Output ONLY valid JSON. No prose, no code fences.
       Schema: [{"commitment": "string", "address": "string"}]
-
-      Generate entries for: Objectives, Research questions, Method,
-      Participants, Target barriers, Timeline.
 
 # ═══════════════════════════════════════════════════════════
 # OUTPUT — interleaved Handlebars + AI prose
@@ -310,7 +321,7 @@ output_template: |
   |---|---|
   | **Method** | {{methodology}} |
   | **Participants** | {{target_participants}} |
-  | **Timeline** | {{timeline_preference}} |
+  | **Timeline** | {{timeline_summary}} |
 
   ---
 

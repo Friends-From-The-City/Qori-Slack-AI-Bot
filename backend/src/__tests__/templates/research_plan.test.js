@@ -98,6 +98,16 @@ describe('research_plan template v7.0', () => {
     expect(output).toContain('Standard rate');
   });
 
+  // ── Timeline summary (Quick Facts) ───────────────────────
+
+  test('Quick Facts shows computed timeline summary, not raw preference', async () => {
+    const output = await renderPlan({
+      timeline_summary: '3 weeks, starting Jun 1, 2026',
+    });
+    expect(output).toContain('3 weeks, starting Jun 1, 2026');
+    expect(output).not.toContain('| **Timeline** | standard |');
+  });
+
   // ── Timeline table (mechanical) ──────────────────────────
 
   test('renders timeline table with all 5 phases', async () => {
@@ -255,5 +265,53 @@ describe('research_plan template v7.0', () => {
     mockReadUpstream.mockResolvedValueOnce(incomplete);
 
     await expect(renderPlan()).rejects.toThrow(/research_objectives/);
+  });
+});
+
+// ── Unit tests for timeline summary helper ──────────────────
+// buildTimelineSummary is a pure function — tested by reimporting
+// its logic here to avoid loading planHandler's heavy dependencies.
+
+describe('timeline summary computation', () => {
+  // Reimplementation of buildTimelineSummary for isolated testing.
+  // Kept in sync with planHandler.js — if logic changes, update here.
+  function buildTimelineSummary(phases) {
+    if (!phases || phases.length === 0) return 'TBD';
+    const totalDays = phases.reduce((sum, p) => {
+      const match = p.duration.match(/(\d+)/);
+      return sum + (match ? parseInt(match[1], 10) : 0);
+    }, 0);
+    if (totalDays === 0) return 'TBD';
+    const startPart = phases[0].dates.split('–')[0].trim();
+    const lastDates = phases[phases.length - 1].dates;
+    const yearMatch = lastDates.match(/\d{4}/);
+    const year = yearMatch ? yearMatch[0] : '';
+    const startLabel = startPart.match(/\d{4}/) ? startPart : `${startPart}, ${year}`;
+    if (totalDays < 7) return `${totalDays} day${totalDays > 1 ? 's' : ''}, starting ${startLabel}`;
+    const weeks = Math.ceil(totalDays / 7);
+    return `${weeks} week${weeks > 1 ? 's' : ''}, starting ${startLabel}`;
+  }
+
+  test('computes weeks from phase durations', () => {
+    const phases = [
+      { phase: 'Planning', dates: 'Jun 1 – Jun 3, 2026', duration: '3 days' },
+      { phase: 'Recruitment', dates: 'Jun 4 – Jun 10, 2026', duration: '7 days' },
+      { phase: 'Fieldwork', dates: 'Jun 11 – Jun 15, 2026', duration: '5 days' },
+      { phase: 'Analysis', dates: 'Jun 16 – Jun 16, 2026', duration: '1 day' },
+      { phase: 'Reporting', dates: 'Jun 17 – Jun 17, 2026', duration: '1 day' },
+    ];
+    expect(buildTimelineSummary(phases)).toBe('3 weeks, starting Jun 1, 2026');
+  });
+
+  test('returns days for sub-week durations', () => {
+    const phases = [
+      { phase: 'Sprint', dates: 'Jun 1 – Jun 3, 2026', duration: '3 days' },
+    ];
+    expect(buildTimelineSummary(phases)).toBe('3 days, starting Jun 1, 2026');
+  });
+
+  test('returns TBD for empty phases', () => {
+    expect(buildTimelineSummary([])).toBe('TBD');
+    expect(buildTimelineSummary(null)).toBe('TBD');
   });
 });

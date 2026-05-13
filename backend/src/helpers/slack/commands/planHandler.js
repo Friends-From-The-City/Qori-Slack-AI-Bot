@@ -64,6 +64,37 @@ function buildTimelinePhases(startDateStr, timelinePref) {
   });
 }
 
+/**
+ * Compute a human-readable timeline summary from the phases array.
+ * Returns e.g. "3 weeks, starting Jun 1, 2026" or "12 days, starting Jun 1, 2026".
+ */
+function buildTimelineSummary(timelinePhases) {
+  if (!timelinePhases || timelinePhases.length === 0) return 'TBD';
+
+  // Sum days from duration strings like "3 days", "1 day"
+  const totalDays = timelinePhases.reduce((sum, p) => {
+    const match = p.duration.match(/(\d+)/);
+    return sum + (match ? parseInt(match[1], 10) : 0);
+  }, 0);
+
+  if (totalDays === 0) return 'TBD';
+
+  // Extract start date from the first phase's dates string (e.g. "Jun 1 – Jun 3, 2026")
+  const startPart = timelinePhases[0].dates.split('–')[0].trim();
+  // Append the year from the last phase's end date
+  const lastDates = timelinePhases[timelinePhases.length - 1].dates;
+  const yearMatch = lastDates.match(/\d{4}/);
+  const year = yearMatch ? yearMatch[0] : '';
+  const startLabel = startPart.match(/\d{4}/) ? startPart : `${startPart}, ${year}`;
+
+  if (totalDays < 7) {
+    return `${totalDays} day${totalDays > 1 ? 's' : ''}, starting ${startLabel}`;
+  }
+
+  const weeks = Math.ceil(totalDays / 7);
+  return `${weeks} week${weeks > 1 ? 's' : ''}, starting ${startLabel}`;
+}
+
 // ─── Handler ────────────────────────────────────────────────────────
 
 async function handlePlanSubmission({ ack, body, view, client }) {
@@ -106,6 +137,7 @@ async function handlePlanSubmission({ ack, body, view, client }) {
 
   // ── Timeline phases (mechanical) ──
   const timelinePhases = buildTimelinePhases(startDate, timelinePref);
+  const timelineSummary = buildTimelineSummary(timelinePhases);
 
   // ── Load upstream cascade variables for template iteration ──
   // The processor also loads them (via consumes block) for AI prompt injection,
@@ -153,6 +185,7 @@ async function handlePlanSubmission({ ack, body, view, client }) {
 
     // Timeline (mechanical)
     timeline_phases: timelinePhases,
+    timeline_summary: timelineSummary,
     start_date: startDate,
     timeline_preference: timelinePref,
 
@@ -220,4 +253,4 @@ async function handlePlanSubmission({ ack, body, view, client }) {
   }
 }
 
-module.exports = { handlePlanSubmission, buildTimelinePhases };
+module.exports = { handlePlanSubmission, buildTimelinePhases, buildTimelineSummary };
