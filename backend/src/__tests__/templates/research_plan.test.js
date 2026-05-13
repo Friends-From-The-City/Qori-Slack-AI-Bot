@@ -76,6 +76,19 @@ describe('research_plan template v7.0', () => {
     expect(output).toContain('10 target participants');
   });
 
+  test('renders $100/participant for $1000 budget with 10 participants', async () => {
+    const output = await renderPlan({
+      per_participant_compensation: 100,
+      parsed_budget_amount: 1000,
+      target_participants: 10,
+    });
+    expect(output).toContain('$100 per participant');
+    expect(output).toContain('$1000 budget');
+    expect(output).toContain('10 target participants');
+    // Must NOT contain the fallback
+    expect(output).not.toContain('Standard rate');
+  });
+
   test('renders fallback when compensation is null', async () => {
     const output = await renderPlan({
       per_participant_compensation: null,

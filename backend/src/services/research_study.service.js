@@ -59,7 +59,7 @@ const getResearchStudyWithRoles = async (name) => {
   // findOne by name, include user roles
   const study = await ResearchStudy.findOne({
     where: { name },
-    attributes: ['id', 'name', 'description', 'path', 'created_by', 'researcher_name', 'researcher_email', 'created_at', 'updated_at', 'link'],
+    attributes: ['id', 'name', 'description', 'path', 'created_by', 'researcher_name', 'researcher_email', 'created_at', 'updated_at', 'link', 'total_participants', 'parsed_budget_amount', 'target_participants'],
     include: [{
       model: UserRole,
       as: 'userRoles',
