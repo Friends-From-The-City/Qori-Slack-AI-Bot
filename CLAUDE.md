@@ -94,9 +94,9 @@ docker-compose up    # Starts app (3000), postgres (5432), redis (6379)
 
 3. **Postgres public URL for migrations.** Railway's internal Postgres hostname (`postgres.railway.internal`) only resolves inside the private network. To run `npx sequelize-cli db:migrate` from your local machine or via `railway run`, use the **public** connection URL (with `DATABASE_PUBLIC_URL` fields) from the Postgres service's Connect tab (it has a `railway.app` hostname and a mapped port). The internal URL works for the backend service at runtime since it's on the same private network.
 
-**Start command:** Railway must use `npm start` (runs compiled `dist/`), **not** `npm run prod` (runs raw source). The `prod` script runs `node src/app.js` directly, which cannot load `.ts` files. Nixpacks runs `npm run build` during deploy, which compiles all `.js` and `.ts` source to `dist/` via Babel. If Railway crashes with `Cannot find module` errors on a `.ts` file, the start command is wrong.
+**Start command:** Railway's Custom Start Command is `npm run build && npm start`. This compiles `src/` → `dist/` via Babel (handling both `.js` and `.ts` files), then runs `node ./dist/bin/www.js`. Do **not** use `npm run prod` (runs raw source, can't load `.ts` files). Do **not** put the build in Pre-deploy Command — Railway runs pre-deploy in a separate ephemeral container whose filesystem doesn't persist to the start container.
 
-**Deploy flow:** Push to `main` → Railway auto-deploys. Nixpacks runs `npm run build` then `npm start`. GitHub Actions CI also runs typecheck + tests on every PR.
+**Deploy flow:** Push to `main` → Railway auto-deploys. GitHub Actions CI runs typecheck + tests on every PR.
 
 ## Key Directories
 
