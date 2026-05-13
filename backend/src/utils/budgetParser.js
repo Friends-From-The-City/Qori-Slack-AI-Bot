@@ -20,11 +20,15 @@ function parseBudget(rawText) {
   // Reject addition/multiple components
   if (/\+/.test(trimmed)) return null;
 
+  // Strip thousands-separator commas before matching
+  // "$1,000" → "$1000", "$2,500.00" → "$2500.00"
+  const normalized = trimmed.replace(/(\d),(\d{3})/g, '$1$2');
+
   // Extract the first dollar amount pattern
-  const match = trimmed.match(/\$?(\d{1,7}(?:[.,]\d{1,2})?)/);
+  const match = normalized.match(/\$?(\d{1,7}(?:\.\d{1,2})?)/);
   if (!match) return null;
 
-  const amount = parseFloat(match[1].replace(',', '.'));
+  const amount = parseFloat(match[1]);
   if (Number.isNaN(amount) || amount <= 0) return null;
 
   return amount;
