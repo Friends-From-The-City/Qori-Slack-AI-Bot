@@ -170,8 +170,14 @@ slackApp.command('/qori', qoriMainCommand);
 slackApp.command('/qori-start', startResearchHandler);
 slackApp.command('/qori-brief', async ({ ack, body, client, command }: any) => {
   await ack();
-  const studies = await getStudiesByUser(command.user_id);
-  const modal = buildBriefEntryModal(studies, command.channel_id);
+  let leadResearcher = '';
+  try {
+    const userInfo = await client.users.info({ user: command.user_id });
+    leadResearcher = userInfo.user?.real_name || userInfo.user?.profile?.display_name || '';
+  } catch (err: any) {
+    console.warn('Could not fetch Slack profile for brief modal:', err.message);
+  }
+  const modal = await buildBriefEntryModal(leadResearcher, command.channel_id);
   await client.views.open({ trigger_id: command.trigger_id, view: modal });
 });
 slackApp.command('/qori-plan', async ({ ack, body, client, command }: any) => {
