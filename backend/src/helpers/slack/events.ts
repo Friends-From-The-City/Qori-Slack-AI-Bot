@@ -122,7 +122,24 @@ slackApp.error(async ({ error, body, logger }: { error: Error; body: any; logger
     }
     return;
   }
+
+  // Generic error — notify the user so they aren't left waiting
   logger.error('Unhandled error:', error);
+  const userId = body?.user?.id || body?.user_id;
+  if (userId) {
+    try {
+      const client = slackApp.client;
+      const im = await client.conversations.open({ users: userId });
+      if (im.channel?.id) {
+        await client.chat.postMessage({
+          channel: im.channel.id,
+          text: '❌ *Something went wrong on our end*\n\nYour request didn\u2019t complete. The team has been notified. Please try again, and if it keeps happening, let us know.',
+        });
+      }
+    } catch (dmErr: any) {
+      logger.error('Failed to send generic error DM:', dmErr.message);
+    }
+  }
 });
 
 // ── URL verification (Express middleware) ────────────────────────
