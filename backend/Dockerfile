@@ -15,8 +15,8 @@ RUN npm ci --legacy-peer-deps
 # Copy application code
 COPY . .
 
-# Build the project (if using babel - currently not needed)
-# RUN npm run build
+# Build the project (Babel compiles .js and .ts from src/ to dist/)
+RUN npm run build
 
 # Expose port
 EXPOSE 3000
@@ -28,5 +28,5 @@ ENV NODE_ENV=production
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
   CMD node -e "require('http').get('http://localhost:3000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})" || exit 1
 
-# Use the prod script which includes module-alias
-CMD ["npm", "run", "prod"]
+# Run the compiled app
+CMD ["node", "./dist/app.js"]
