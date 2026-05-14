@@ -11,8 +11,6 @@
 
 const express = require('express');
 const { App } = require('@slack/bolt');
-import { TemplateContractError } from '../../types/handlers';
-
 // ── Extracted handlers (TypeScript) ─────────────────────────────
 
 // Main /qori command
@@ -103,17 +101,20 @@ const slackApp = new App({
 // ── Global error middleware ─────────────────────────────────────
 
 slackApp.error(async ({ error, body, logger }: { error: Error; body: any; logger: any }) => {
-  if (error instanceof TemplateContractError) {
-    logger.warn(`⚠️ Cascade contract error: ${error.message}`);
+  // Bolt wraps errors — unwrap to find the original thrown error
+  const original = (error as any).original || error;
+
+  if (original.name === 'TemplateContractError') {
+    logger.warn(`⚠️ Cascade contract error: ${original.message}`);
     const userId = body?.user?.id || body?.user_id;
-    if (userId && error.userMessage) {
+    if (userId && original.userMessage) {
       try {
         const client = slackApp.client;
         const im = await client.conversations.open({ users: userId });
         if (im.channel?.id) {
           await client.chat.postMessage({
             channel: im.channel.id,
-            text: `⚠️ *Could not complete that action*\n\n${error.userMessage}`,
+            text: `⚠️ *Could not complete that action*\n\n${original.userMessage}`,
           });
         }
       } catch (dmErr: any) {
