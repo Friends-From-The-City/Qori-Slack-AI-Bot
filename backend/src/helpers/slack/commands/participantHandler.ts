@@ -1,3 +1,5 @@
+import type { SlashCommandContext, BlockActionContext, ViewSubmissionContext } from '../../../types/handlers';
+
 const { addParticipantModal } = require("../ui/addParticipantModal");
 const { updateParticipantStatusModal } = require("../ui/outreach/updateParticipantStatusModal");
 const { getStudiesByUser } = require("../../../services/research_study.service");
@@ -5,7 +7,7 @@ const studyParticipantService = require("../../../services/study_participant.ser
 const { processParticipantYamlTemplate } = require("../../../helpers/participantYamlProcessor");
 const { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo } = require("../../github");
 
-const participantHandler = async ({ ack, body, client, command }) => {
+async function participantHandler({ ack, body, client, command }: SlashCommandContext): Promise<void> {
   try {
     console.log("🚀 ~ participantHandler ~ body:", body);
     await ack();
@@ -17,35 +19,13 @@ const participantHandler = async ({ ack, body, client, command }) => {
     const studies = await getStudiesByUser(userId);
     console.log("🚀 ~ participantHandler ~ studies:", studies)
 
-    // Build study dropdown options
-    let studyDropdownBlock = null;
-    if (studies && studies.length > 0) {
-      const studyOptions = studies.map(study => ({
-        text: { type: 'plain_text', text: study.name },
-        value: study.id.toString()
-      }));
-
-      studyDropdownBlock = {
-        type: 'input',
-        block_id: 'study_select_block',
-        label: { type: 'plain_text', text: 'Select study:' },
-        element: {
-          type: 'static_select',
-          action_id: 'study_select',
-          placeholder: { type: 'plain_text', text: 'Pick a study...' },
-          options: studyOptions
-        },
-        optional: false
-      };
-    }
-
     // Build the modal blocks
     let blocks = JSON.parse(JSON.stringify(addParticipantModal.blocks));
 
     // Find and update the study_select_block with actual studies
-    const studySelectBlockIndex = blocks.findIndex(block => block.block_id === 'study_select_block');
+    const studySelectBlockIndex = blocks.findIndex((block: any) => block.block_id === 'study_select_block');
     if (studySelectBlockIndex !== -1 && studies && studies.length > 0) {
-      const studyOptions = studies.map(study => ({
+      const studyOptions = studies.map((study: any) => ({
         text: { type: 'plain_text', text: study.name },
         value: study.id.toString()
       }));
@@ -62,7 +42,7 @@ const participantHandler = async ({ ack, body, client, command }) => {
       // Store first study ID in metadata for default
       const studyId = studies[0].id;
       await client.views.open({
-        trigger_id: body.trigger_id,
+        trigger_id: (body as any).trigger_id,
         view: {
           ...addParticipantModal,
           blocks,
@@ -72,7 +52,7 @@ const participantHandler = async ({ ack, body, client, command }) => {
     } else {
       // No studies found - still open modal but without studies
       await client.views.open({
-        trigger_id: body.trigger_id,
+        trigger_id: (body as any).trigger_id,
         view: {
           ...addParticipantModal,
           blocks,
@@ -80,12 +60,12 @@ const participantHandler = async ({ ack, body, client, command }) => {
         },
       });
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error("🚀 ~ participantHandler ~ error:", error.data || error.message);
   }
-};
+}
 
-const updateParticipantHandler = async ({ ack, body, client, command }) => {
+async function updateParticipantHandler({ ack, body, client, command }: SlashCommandContext): Promise<void> {
   try {
     console.log("🚀 ~ updateParticipantHandler ~ body:", body);
     await ack();
@@ -100,7 +80,7 @@ const updateParticipantHandler = async ({ ack, body, client, command }) => {
     // Build study dropdown options
     let studyDropdownBlock = null;
     if (studies && studies.length > 0) {
-      const studyOptions = studies.map(study => ({
+      const studyOptions = studies.map((study: any) => ({
         text: { type: 'plain_text', text: study.name },
         value: study.id.toString()
       }));
@@ -125,92 +105,31 @@ const updateParticipantHandler = async ({ ack, body, client, command }) => {
     // Update the study selection block if studies exist
     if (studyDropdownBlock) {
       // Find and replace the study selection block
-      const studyBlockIndex = blocks.findIndex(block => block.block_id === 'study_selection_block');
+      const studyBlockIndex = blocks.findIndex((block: any) => block.block_id === 'study_selection_block');
       if (studyBlockIndex !== -1) {
         blocks[studyBlockIndex] = studyDropdownBlock;
       }
     }
 
     await client.views.open({
-      trigger_id: body.trigger_id,
+      trigger_id: (body as any).trigger_id,
       view: {
         ...updateParticipantStatusModal,
         blocks,
         private_metadata: JSON.stringify({ channelId, userId }),
       },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("🚀 ~ updateParticipantHandler ~ error:", error.data || error.message);
   }
-};
+}
 
-// const handleParticipantStudySelectionChange = async ({ ack, body, client, view }) => {
-//   console.log("🚀 ~ handleParticipantStudySelectionChange ~ body:", body);
-//   console.log("🚀 ~ handleParticipantStudySelectionChange ~ view:", view);
-
-//   try {
-//     await ack();
-
-//     const studyId = body.actions[0].selected_option.value;
-//     console.log("🚀 ~ selected studyId:", studyId);
-
-//     // Get participants for the selected study
-//     const participants = await studyParticipantService.getParticipantsByStudy(studyId);
-//     console.log("🚀 ~ participants found:", participants.length);
-
-//     // Build participant dropdown options
-//     const participantOptions = participants.map(participant => ({
-//       text: { type: 'plain_text', text: participant.participant_name },
-//       value: participant.id.toString()
-//     }));
-
-//     console.log("🚀 ~ participantOptions:", participantOptions);
-
-//     // Update the participant selection block
-//     const updatedBlocks = view.blocks.map(block => {
-//       if (block.block_id === 'participant_selection_block') {
-//         console.log("🚀 ~ updating participant block:", block.block_id);
-//         return {
-//           ...block,
-//           element: {
-//             ...block.element,
-//             options: participantOptions.length > 0 ? participantOptions : [
-//               {
-//                 text: { type: 'plain_text', text: 'No participants found' },
-//                 value: 'no_participants'
-//               }
-//             ]
-//           }
-//         };
-//       }
-//       return block;
-//     });
-
-//     console.log("🚀 ~ updatedBlocks:", updatedBlocks);
-
-//     // Update the modal view
-//     const result = await client.views.update({
-//       view_id: body.view.id,
-//       view: {
-//         ...view,
-//         blocks: updatedBlocks
-//       }
-//     });
-
-//     console.log("🚀 ~ view update result:", result);
-
-//   } catch (error) {
-//     console.error("🚀 ~ handleParticipantStudySelectionChange ~ error:", error);
-//     await ack();
-//   }
-// };
-
-const handleLoadParticipantsButton = async ({ ack, body, client }) => {
+async function handleLoadParticipantsButton({ ack, body, client }: BlockActionContext): Promise<void> {
   try {
     await ack();
 
     // For button actions, view data is in body.view
-    const view = body.view;
+    const view = (body as any).view;
     if (!view) {
       console.error("No view data available in button action");
       return;
@@ -220,8 +139,8 @@ const handleLoadParticipantsButton = async ({ ack, body, client }) => {
     if (!view.state || !view.state.values || !view.state.values.study_selection_block) {
       console.error("View state structure is not as expected:", view.state);
       await client.chat.postEphemeral({
-        channel: body.user.id,
-        user: body.user.id,
+        channel: (body as any).user.id,
+        user: (body as any).user.id,
         text: `❌ Error: Unable to read study selection. Please try again.`,
       });
       return;
@@ -232,8 +151,8 @@ const handleLoadParticipantsButton = async ({ ack, body, client }) => {
     if (!selectedStudyOption || selectedStudyOption.value === "loading") {
       // No study selected, show error
       await client.chat.postEphemeral({
-        channel: body.user.id,
-        user: body.user.id,
+        channel: (body as any).user.id,
+        user: (body as any).user.id,
         text: `❌ Please select a study first before loading participants.`,
       });
       return;
@@ -245,26 +164,26 @@ const handleLoadParticipantsButton = async ({ ack, body, client }) => {
     console.log("🚀 ~ Loading participants for study:", studyId, studyName);
 
     // Fetch participants for the selected study
-    let participants = [];
+    let participants: any[] = [];
     try {
       participants = await studyParticipantService.getParticipantsByStudy(studyId);
       console.log("🚀 ~ Participants found:", participants.length);
-    } catch (error) {
+    } catch (error: any) {
       console.warn("Warning: Could not fetch study participants:", error.message);
       // Continue with empty participants array
     }
 
     // Transform participants to the format expected by the modal
-    const participantOptions = participants.map(participant => ({
+    const participantOptions = participants.map((participant: any) => ({
       text: { type: 'plain_text', text: participant.participant_name },
       value: participant.id.toString()
     }));
 
     // Get the studies list to pass back to the modal
-    const studies = await getStudiesByUser(body.user.id);
+    const studies = await getStudiesByUser((body as any).user.id);
 
     // Build study dropdown options
-    const studyOptions = studies.map(study => ({
+    const studyOptions = studies.map((study: any) => ({
       text: { type: 'plain_text', text: study.name },
       value: study.id.toString()
     }));
@@ -273,7 +192,7 @@ const handleLoadParticipantsButton = async ({ ack, body, client }) => {
     let blocks = JSON.parse(JSON.stringify(updateParticipantStatusModal.blocks));
 
     // Update the study selection block
-    const studyBlockIndex = blocks.findIndex(block => block.block_id === 'study_selection_block');
+    const studyBlockIndex = blocks.findIndex((block: any) => block.block_id === 'study_selection_block');
     if (studyBlockIndex !== -1) {
       blocks[studyBlockIndex] = {
         type: 'input',
@@ -290,7 +209,7 @@ const handleLoadParticipantsButton = async ({ ack, body, client }) => {
     }
 
     // Update the participant selection block
-    const participantBlockIndex = blocks.findIndex(block => block.block_id === 'participant_selection_block');
+    const participantBlockIndex = blocks.findIndex((block: any) => block.block_id === 'participant_selection_block');
     if (participantBlockIndex !== -1) {
       blocks[participantBlockIndex] = {
         type: 'input',
@@ -313,7 +232,7 @@ const handleLoadParticipantsButton = async ({ ack, body, client }) => {
 
     // Update the modal with the new participants
     await client.views.update({
-      view_id: body.view.id,
+      view_id: (body as any).view.id,
       view: {
         ...updateParticipantStatusModal,
         blocks,
@@ -321,29 +240,29 @@ const handleLoadParticipantsButton = async ({ ack, body, client }) => {
       }
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error handling load participants button:", error);
 
     // Send error message to user
     await client.chat.postEphemeral({
-      channel: body.user.id,
-      user: body.user.id,
+      channel: (body as any).user.id,
+      user: (body as any).user.id,
       text: `❌ Error loading participants for selected study: ${error.message}`,
     });
   }
-};
+}
 
-const handleUpdateParticipantSubmission = async ({ ack, body, view, client }) => {
+async function handleUpdateParticipantSubmission({ ack, body, view, client }: ViewSubmissionContext): Promise<void> {
   try {
     await ack();
 
     console.log("🚀 ~ handleUpdateParticipantSubmission ~ view:", view);
 
     // Extract form data
-    const studyId = view.state.values.study_selection_block.update_participant_study_selection.selected_option?.value;
-    const participantId = view.state.values.participant_selection_block.participant_selection.selected_option?.value;
-    const newStatus = view.state.values.status_update_block.status_update.selected_option?.value;
-    const updateNotes = view.state.values.update_notes_block?.update_notes?.value || '';
+    const studyId = (view as any).state.values.study_selection_block.update_participant_study_selection.selected_option?.value;
+    const participantId = (view as any).state.values.participant_selection_block.participant_selection.selected_option?.value;
+    const newStatus = (view as any).state.values.status_update_block.status_update.selected_option?.value;
+    const updateNotes = (view as any).state.values.update_notes_block?.update_notes?.value || '';
 
     console.log("🚀 ~ Extracted data:", { studyId, participantId, newStatus, updateNotes });
 
@@ -361,13 +280,13 @@ const handleUpdateParticipantSubmission = async ({ ack, body, view, client }) =>
     }
 
     // Get the selected study and participant names for display
-    const studyName = view.state.values.study_selection_block.update_participant_study_selection.selected_option?.text?.text || "Unknown Study";
-    const participantName = view.state.values.participant_selection_block.participant_selection.selected_option?.text?.text || "Unknown Participant";
+    const studyName = (view as any).state.values.study_selection_block.update_participant_study_selection.selected_option?.text?.text || "Unknown Study";
+    const participantName = (view as any).state.values.participant_selection_block.participant_selection.selected_option?.text?.text || "Unknown Participant";
 
     console.log("🚀 ~ Updating participant:", { studyName, participantName, newStatus });
 
     // Update the participant in the database
-    const updateData = {
+    const updateData: Record<string, string> = {
       status_select: newStatus
     };
 
@@ -391,8 +310,8 @@ const handleUpdateParticipantSubmission = async ({ ack, body, view, client }) =>
     // Optionally update the participant tracker file
     try {
       // Get the study details
-      const study = await getStudiesByUser(body.user.id).then(studies =>
-        studies.find(s => s.id.toString() === studyId)
+      const study = await getStudiesByUser((body as any).user.id).then((studies: any[]) =>
+        studies.find((s: any) => s.id.toString() === studyId)
       );
 
       if (study) {
@@ -410,41 +329,40 @@ const handleUpdateParticipantSubmission = async ({ ack, body, view, client }) =>
             status_select: newStatus,
             notes_field: updateNotes,
             current_date: new Date().toISOString().split('T')[0],
-            added_by: body.user.username || body.user.name || body.user.id
+            added_by: (body as any).user.username || (body as any).user.name || (body as any).user.id
           };
 
           await processParticipantYamlTemplate(yamlTemplateFile.content, templateData, study.path || '', 'primary-research', allParticipants);
           console.log("🚀 ~ Participant tracker updated successfully");
         }
       }
-    } catch (yamlError) {
+    } catch (yamlError: any) {
       console.warn("⚠️ Warning: Could not update participant tracker YAML:", yamlError.message);
       // Don't throw error here to avoid breaking the main participant update
     }
 
     // Send success message
     await client.chat.postEphemeral({
-      channel: body.user.id,
-      user: body.user.id,
+      channel: (body as any).user.id,
+      user: (body as any).user.id,
       text: `✅ *Participant Status Updated Successfully!*\n\n*Study:* ${studyName}\n*Participant:* ${participantName}\n*New Status:* ${newStatus}${updateNotes ? `\n*Notes:* ${updateNotes}` : ''}\n\nThe participant's status has been updated in the database and participant tracker.`,
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error handling update participant submission:", error);
 
     // Send error message to user
     await client.chat.postEphemeral({
-      channel: body.user.id,
-      user: body.user.id,
+      channel: (body as any).user.id,
+      user: (body as any).user.id,
       text: `❌ Error updating participant status: ${error.message}`,
     });
   }
-};
+}
 
 module.exports = {
   participantHandler,
   updateParticipantHandler,
-  // handleParticipantStudySelectionChange,
   handleLoadParticipantsButton,
   handleUpdateParticipantSubmission,
-}; 
+};
