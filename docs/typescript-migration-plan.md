@@ -22,6 +22,18 @@ See ADR 0013 for the decision and rationale. This file tracks actual progress ag
 - **`getResearchStudyWithRoles` placeholder fields** — Lines 95-97 assign `total_sessions = 0`, `total_transcripts = 0`, `total_summaries = 0` as ad-hoc properties. These are dead code (never computed from real data). Safe to remove.
 - **`StudyVariable.value` narrowing pattern** — If Phase 4 handlers frequently narrow `value` to specific cascade types, consider a `readCascadeVariable<K>()` typed helper. Watch for the pattern repeating before abstracting.
 
+## Bugs found and fixed during migration
+
+- **Plan handler cascade contracts (Phase 4, Stage 1):** `planHandler.js` passed `required: false` for all cascade variables including `research_objectives`, `research_questions`, and `target_barriers`. This violated ADR 0007 (cascade contracts fail loudly). Fixed: these are now `required: true` and throw `TemplateContractError` when missing.
+- **Synthesis handler nugget validation (Phase 4, Stage 2):** `researchSynthesisHandler.js` used `throw new Error(...)` for missing nuggets instead of `TemplateContractError`. Fixed: nugget-required methods now throw `TemplateContractError` with proper `userMessage`. Emerging pattern: ad-hoc `throw new Error` for cascade contract violations should be `TemplateContractError` throughout. Normalizing during Stage 3 extraction.
+- **`trigger_id` passed to `views.update` (Phase 4, Stage 3):** Multiple handlers passed `trigger_id` to `client.views.update()`, which only accepts `view_id` + `view`. Slack API ignores the extra field silently, but TypeScript correctly flagged it. Fixed during extraction — `trigger_id` removed from all `views.update` calls. Three latent bug classes surfaced and fixed during Phase 4: silent cascade failures, `throw Error` vs `TemplateContractError`, and `trigger_id` misuse.
+
+## Pending Phase 5 observations
+
+- **Three cascade access patterns coexist:** `readUpstreamVariables` (consumes-spec style), `readStudyVariables` (full study dump), and direct `StudyVariable.findOne`. Worth auditing during Phase 5 utilities migration — consolidate if they overlap, document the differences if they serve distinct purposes.
+- **Cascade emission: two-layer safety with a drift gap.** Runtime validation against YAML schemas checks emission at the extraction boundary. TypeScript types on consumers check reads at the handler boundary. The two layers aren't programmatically linked — drift between YAML schemas and `types/cascade.ts` is invisible. Phase 5: when `variableExtractor.js` migrates, consider typing its return shape using `CascadeVariableMap` (the `variable_key` is runtime-dynamic, so this requires generic gymnastics or a cast at the emission boundary — acceptable to do minimal typing if it adds friction). Future (v1.1 / pre-government-handoff): generate `types/cascade.ts` from YAML schemas via YAML → JSON Schema → TypeScript generator. Closes the drift gap mechanically but adds build complexity.
+- **Cascade helper deferred (Phase 4, Stage 2):** Only 7 cascade-specific narrowing points across 8 handlers (0-3 per handler). `as ResearchQuestion[]` assertions are readable at this volume. Revisit if Phase 5 surfaces more.
+
 ## Key decisions made during migration
 
 - **ADR 0014:** Sequelize v6 built-in generics (InferAttributes pattern)

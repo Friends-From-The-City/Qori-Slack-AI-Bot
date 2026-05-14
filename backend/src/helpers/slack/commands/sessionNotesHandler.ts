@@ -1,4 +1,14 @@
-const { sessionNotesModal, buildSessionNotesView } = require("../ui/sessionNotesModal");
+/**
+ * sessionNotesHandler.ts — /qori-notes command and modal handlers
+ *
+ * Handles session notes upload (file upload or manual entry).
+ * Two tabs: "manual" (structured observations) and "upload" (transcript files).
+ * Manual notes go through session_notes.yaml; uploads save raw to GitHub.
+ */
+
+import type { SlashCommandContext, ViewSubmissionContext, BlockActionContext } from '../../../types/handlers';
+
+const { buildSessionNotesView } = require("../ui/sessionNotesModal");
 const sessionObserverService = require("../../../services/session_observer.service");
 const sessionParticipantService = require("../../../services/study_participant.service");
 const { getResearchStudyWithRoles } = require("../../../services/research_study.service");
@@ -6,22 +16,103 @@ const { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo, createOrUpdateFile
 const { processYamlTemplate } = require("../../yamlProcessor");
 const { studyNotesService } = require("../../../services");
 const { processSlackFiles } = require("../../pdfProcessor");
-const path = require('path');
-const uploadNotesModal = require("../ui/uploadNotesModal");
 
-const uploadNotesHandler = async ({ ack, body, client, command }) => {
+// ─── Types ──────────────────────────────────────────────────────
+
+interface SessionInfo {
+  id: number;
+  session_id: string;
+  study?: { id?: number; name?: string; researcher_name?: string };
+  participant?: {
+    participant_name?: string;
+    scheduled_date?: string;
+    scheduled_time?: string;
+  };
+}
+
+interface SessionDisplayInfo {
+  id: number;
+  displayName: string;
+  study: SessionInfo['study'];
+  participant: SessionInfo['participant'];
+  session_id: string;
+}
+
+interface ModalState {
+  tab: 'manual' | 'upload';
+  method?: string;
+  sessions: SessionInfo[];
+  session?: SessionDisplayInfo;
+  origin: {
+    team: string;
+    channel: string;
+    user: string;
+    ts?: string;
+  };
+}
+
+interface ViewMetadata {
+  tab?: string;
+  method?: string;
+  mode?: 'researcher' | 'observer';
+  userId: string;
+  teamId: string;
+  channelId: string;
+  selectedSessionId?: string;
+}
+
+/** Data shape passed to session_notes YAML template. */
+interface SessionNotesTemplateInput {
+  session_id: string;
+  participant_name: string;
+  observer_name: string;
+  session_date: string;
+  session_time: string;
+  researcher: string;
+  slack_user_id: string;
+  study_name: string;
+  participant_id: string;
+  slack_ts?: string;
+  structured_notes?: string;
+  input_text?: string;
+  transcript_files?: string;
+  filename?: string;
+  folder_context?: string;
+  upload_date_utc?: string;
+  transcript_source?: string;
+  manual_notes_text_or_blank?: string;
+}
+
+interface ProcessedFile {
+  name: string;
+  content: string;
+  type: string;
+  size: number;
+}
+
+interface GitHubResult {
+  path: string;
+  url: string;
+}
+
+// ─── Helper: build display name for a session ───────────────────
+
+function buildSessionDisplayName(session: SessionInfo): string {
+  return `${session.study?.name || 'Unknown Study'} - ${session.participant?.participant_name || 'Unknown Participant'} (${session.session_id || 'Unknown Session'})`;
+}
+
+// ─── Command handler ────────────────────────────────────────────
+
+const uploadNotesHandler = async ({ ack, body, client, command }: SlashCommandContext): Promise<void> => {
   console.log("🚀 ~ uploadNotesHandler ~ body:", body);
 
   try {
-    // Acknowledge the command first
-    await ack(); // < 3s
+    await ack();
 
-    // Fetch user's approved sessions
     const userId = command.user_id;
-    const sessions = await sessionObserverService.getObserverByUser(userId);
-    console.log("🚀 ~ uploadNotesHandler ~ sessions:", sessions)
+    const sessions: SessionInfo[] = await sessionObserverService.getObserverByUser(userId);
+    console.log("🚀 ~ uploadNotesHandler ~ sessions:", sessions);
 
-    // Check if user has any approved sessions
     if (!sessions || sessions.length === 0) {
       await client.chat.postEphemeral({
         channel: command.channel_id,
@@ -31,62 +122,59 @@ const uploadNotesHandler = async ({ ack, body, client, command }) => {
       return;
     }
 
-    // Prepare initial session data
-    let initialSession = null;
-    if (sessions && sessions.length > 0) {
+    let initialSession: SessionDisplayInfo | null = null;
+    if (sessions.length > 0) {
       const firstSession = sessions[0];
       initialSession = {
         id: firstSession.id,
-        displayName: `${firstSession.study?.name || 'Unknown Study'} - ${firstSession.participant?.participant_name || 'Unknown Participant'} (${firstSession.session_id || 'Unknown Session'})`,
+        displayName: buildSessionDisplayName(firstSession),
         study: firstSession.study,
         participant: firstSession.participant,
         session_id: firstSession.session_id
       };
     }
 
-    const initialState = {
-      tab: 'manual',               // default tab
-      session: initialSession,     // include the first session if available
-      sessions: sessions,          // include all sessions for reference
+    const initialState: ModalState = {
+      tab: 'manual',
+      session: initialSession || undefined,
+      sessions: sessions,
       origin: {
         team: command.team_id,
         channel: command.channel_id,
         user: command.user_id,
-        ts: command.trigger_id     // not reusable; just for debugging context
+        ts: command.trigger_id
       }
     };
 
     await client.views.open({
       trigger_id: command.trigger_id,
-      view: buildSessionNotesView(initialState) // dynamic/two-tab modal
+      view: buildSessionNotesView(initialState)
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error opening upload notes modal:", error);
 
-    // Try to send error message to user via chat
     try {
       await client.chat.postEphemeral({
         channel: command.channel_id,
         user: command.user_id,
         text: `❌ Failed to open upload notes modal: ${error.message}`,
-        response_type: "ephemeral"
       });
-    } catch (chatError) {
+    } catch (chatError: any) {
       console.error("Could not send error message to user:", chatError);
     }
   }
 };
 
-const handleTabManual = async ({ ack, body, client }) => {
+// ─── Tab handlers ───────────────────────────────────────────────
+
+const handleTabManual = async ({ ack, body, client }: BlockActionContext): Promise<void> => {
   await ack();
-  const metadata = JSON.parse(body.view.private_metadata || '{}');
+  const metadata = JSON.parse(body.view?.private_metadata || '{}') as ViewMetadata;
 
-  // Fetch sessions data when needed
-  const sessions = await sessionObserverService.getObserverByUser(metadata.userId);
+  const sessions: SessionInfo[] = await sessionObserverService.getObserverByUser(metadata.userId);
 
-  // Rebuild state with sessions data
-  const state = {
+  const state: ModalState = {
     tab: 'manual',
     method: metadata.method || 'files',
     sessions: sessions,
@@ -97,13 +185,12 @@ const handleTabManual = async ({ ack, body, client }) => {
     }
   };
 
-  // If there was a selected session, find it and include it
   if (metadata.selectedSessionId) {
-    const selectedSession = sessions.find(s => s.id.toString() === metadata.selectedSessionId.toString());
+    const selectedSession = sessions.find((s: SessionInfo) => s.id.toString() === metadata.selectedSessionId!.toString());
     if (selectedSession) {
       state.session = {
         id: selectedSession.id,
-        displayName: `${selectedSession.study?.name || 'Unknown Study'} - ${selectedSession.participant?.participant_name || 'Unknown Participant'} (${selectedSession.session_id || 'Unknown Session'})`,
+        displayName: buildSessionDisplayName(selectedSession),
         study: selectedSession.study,
         participant: selectedSession.participant,
         session_id: selectedSession.session_id
@@ -112,20 +199,18 @@ const handleTabManual = async ({ ack, body, client }) => {
   }
 
   await client.views.update({
-    view_id: body.view.id,
+    view_id: body.view!.id,
     view: buildSessionNotesView(state)
   });
 };
 
-const handleTabUpload = async ({ ack, body, client }) => {
+const handleTabUpload = async ({ ack, body, client }: BlockActionContext): Promise<void> => {
   await ack();
-  const metadata = JSON.parse(body.view.private_metadata || '{}');
+  const metadata = JSON.parse(body.view?.private_metadata || '{}') as ViewMetadata;
 
-  // Fetch sessions data when needed
-  const sessions = await sessionObserverService.getObserverByUser(metadata.userId);
+  const sessions: SessionInfo[] = await sessionObserverService.getObserverByUser(metadata.userId);
 
-  // Rebuild state with sessions data
-  const state = {
+  const state: ModalState = {
     tab: 'upload',
     method: metadata.method || 'files',
     sessions: sessions,
@@ -136,13 +221,12 @@ const handleTabUpload = async ({ ack, body, client }) => {
     }
   };
 
-  // If there was a selected session, find it and include it
   if (metadata.selectedSessionId) {
-    const selectedSession = sessions.find(s => s.id.toString() === metadata.selectedSessionId.toString());
+    const selectedSession = sessions.find((s: SessionInfo) => s.id.toString() === metadata.selectedSessionId!.toString());
     if (selectedSession) {
       state.session = {
         id: selectedSession.id,
-        displayName: `${selectedSession.study?.name || 'Unknown Study'} - ${selectedSession.participant?.participant_name || 'Unknown Participant'} (${selectedSession.session_id || 'Unknown Session'})`,
+        displayName: buildSessionDisplayName(selectedSession),
         study: selectedSession.study,
         participant: selectedSession.participant,
         session_id: selectedSession.session_id
@@ -151,28 +235,26 @@ const handleTabUpload = async ({ ack, body, client }) => {
   }
 
   await client.views.update({
-    view_id: body.view.id,
+    view_id: body.view!.id,
     view: buildSessionNotesView(state)
   });
 };
 
-const handleSessionSelectionChange = async ({ ack, body, client }) => {
+// ─── Session selection change ───────────────────────────────────
+
+const handleSessionSelectionChange = async ({ ack, body, client }: BlockActionContext): Promise<void> => {
   await ack();
 
   try {
-    const selectedSessionId = body.actions[0].selected_option.value;
-    const metadata = JSON.parse(body.view.private_metadata || '{}');
+    const selectedSessionId: string = (body as unknown as { actions: Array<{ selected_option: { value: string } }> }).actions[0].selected_option.value;
+    const metadata = JSON.parse(body.view?.private_metadata || '{}') as ViewMetadata;
 
-    // Fetch sessions data when needed
-    const sessions = await sessionObserverService.getObserverByUser(metadata.userId);
-
-    // Find the selected session from the sessions array
-    const selectedSession = sessions.find(s => s.id.toString() === selectedSessionId);
+    const sessions: SessionInfo[] = await sessionObserverService.getObserverByUser(metadata.userId);
+    const selectedSession = sessions.find((s: SessionInfo) => s.id.toString() === selectedSessionId);
 
     if (selectedSession) {
-      // Update the modal with the selected session
-      const updatedState = {
-        tab: metadata.tab || 'upload',
+      const updatedState: ModalState = {
+        tab: (metadata.tab as 'manual' | 'upload') || 'upload',
         method: metadata.method || 'files',
         sessions: sessions,
         origin: {
@@ -182,68 +264,68 @@ const handleSessionSelectionChange = async ({ ack, body, client }) => {
         },
         session: {
           id: selectedSession.id,
-          displayName: `${selectedSession.study?.name || 'Unknown Study'} - ${selectedSession.participant?.participant_name || 'Unknown Participant'} (${selectedSession.session_id || 'Unknown Session'})`,
+          displayName: buildSessionDisplayName(selectedSession),
           study: selectedSession.study,
           participant: selectedSession.participant,
           session_id: selectedSession.session_id
         }
       };
 
-      // Rebuild the modal view with updated state
       const updatedView = buildSessionNotesView(updatedState);
 
       await client.views.update({
-        view_id: body.view.id,
+        view_id: body.view!.id,
         view: updatedView
       });
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error handling session selection:', error);
   }
-}
+};
 
-const handleSessionNotesSubmission = async ({ ack, body, view, client }) => {
+// ─── Submission handler ─────────────────────────────────────────
+
+const handleSessionNotesSubmission = async ({ ack, body, view, client }: ViewSubmissionContext): Promise<void> => {
   try {
     await ack();
 
     const values = view.state.values;
-    console.log("🚀 ~ handleSessionNotesSubmission ~ values:", values)
-    const metadata = JSON.parse(view.private_metadata || '{}');
+    console.log("🚀 ~ handleSessionNotesSubmission ~ values:", values);
+    const metadata = JSON.parse(view.private_metadata || '{}') as ViewMetadata;
     const isManual = metadata.tab === 'manual';
 
-    // Extract session selection
-    const selectedSessionId = values.session_select?.session_select_change?.selected_option?.value;
+    const selectedSessionId: string | undefined = values.session_select?.session_select_change?.selected_option?.value;
 
     // Resolve selected session — observer path or researcher path
-    let selectedSession;
+    let selectedSession: SessionInfo | undefined;
     if (metadata.mode === 'researcher' && selectedSessionId?.startsWith('p_')) {
       const participantId = parseInt(selectedSessionId.replace('p_', ''), 10);
       const participant = await sessionParticipantService.getParticipantById(participantId);
       if (participant) {
         selectedSession = {
+          id: participantId,
           session_id: `PT-${String(participantId).padStart(3, '0')}`,
           study: participant.study || { name: 'Unknown Study' },
           participant,
         };
       }
     } else {
-      const sessions = await sessionObserverService.getObserverByUser(metadata.userId);
-      selectedSession = sessions.find(s => s.id.toString() === selectedSessionId);
+      const sessions: SessionInfo[] = await sessionObserverService.getObserverByUser(metadata.userId);
+      selectedSession = sessions.find((s: SessionInfo) => s.id.toString() === selectedSessionId);
     }
 
     if (!selectedSession || selectedSessionId === 'no_sessions') {
       await client.chat.postMessage({
         channel: body.user.id,
         text: `❌ Please select a valid session before submitting notes. No sessions are currently available.`,
-        response_type: "ephemeral"
       });
       return;
     }
 
-    let templateData = {
+    let templateData: SessionNotesTemplateInput = {
       session_id: selectedSession.session_id || 'Unknown Session',
       participant_name: selectedSession.participant?.participant_name || 'Unknown Participant',
-      observer_name: body.user.username || 'Unknown User',
+      observer_name: (body.user as Record<string, string>).username || 'Unknown User',
       session_date: selectedSession.participant?.scheduled_date || 'Unknown Date',
       session_time: selectedSession.participant?.scheduled_time || 'Unknown Time',
       researcher: selectedSession.study?.researcher_name || 'Unknown Researcher',
@@ -252,63 +334,52 @@ const handleSessionNotesSubmission = async ({ ack, body, view, client }) => {
       participant_id: selectedSession.participant?.participant_name || 'Unknown Participant ID',
     };
 
-    let renderedYaml;
-    let yamlTemplateName;
+    let renderedYaml: { result: GitHubResult } | undefined;
+    let yamlTemplateName: string | undefined;
 
     if (isManual) {
-      // Extract single observations field
-      const observations = values.observations?.observations_text?.value || '';
+      const observations: string = values.observations?.observations_text?.value || '';
 
       if (!observations || observations.trim() === '') {
         await client.chat.postMessage({
           channel: body.user.id,
           text: `❌ Please enter your observations before submitting.`,
-          response_type: "ephemeral"
         });
         return;
       }
 
-      // Map to existing template structure for backward compatibility
-      // The YAML template can use the combined observations field
       const now = new Date();
       const hours = String(now.getHours()).padStart(2, '0');
       const minutes = String(now.getMinutes()).padStart(2, '0');
-      
+
       templateData = {
         ...templateData,
         slack_ts: `${hours}:${minutes}`,
         structured_notes: observations,
       };
 
-      // Use session-notes-template.yaml for manual flow
       yamlTemplateName = "session_notes.yaml";
     } else {
-      // Handle file upload or paste
-      const files = values.transcript_files?.files || [];
-      console.log("🚀 ~ handleSessionNotesSubmission ~ files:", files)
-      const pastedText = values.transcript_paste?.text?.value || '';
+      const filesInput = values.transcript_files?.files as { files?: Array<{ name: string }> } | undefined;
+      const filesList = filesInput?.files || [];
+      console.log("🚀 ~ handleSessionNotesSubmission ~ files:", filesList);
+      const pastedText: string = values.transcript_paste?.text?.value || '';
 
-      let rawContent = ''; // Store raw content for GitHub storage
-
-      if (files.files.length > 0) {
-        // Process uploaded files to extract content
-        const processedFiles = await processSlackFiles(files.files, process.env.SLACK_BOT_TOKEN);
-        const fileContent = processedFiles.map(file => file.content).join('\n\n---\n\n');
-        rawContent = fileContent; // Store for raw file storage
+      if (filesList.length > 0) {
+        const processedFiles: ProcessedFile[] = await processSlackFiles(filesList, process.env.SLACK_BOT_TOKEN);
+        const fileContent: string = processedFiles.map((file: ProcessedFile) => file.content).join('\n\n---\n\n');
 
         templateData = {
           ...templateData,
           input_text: fileContent,
-          transcript_files: files.files.map(f => f.name).join(', '),
-          filename: files.files[0]?.name || 'transcript_upload.md',
+          transcript_files: filesList.map((f: { name: string }) => f.name).join(', '),
+          filename: filesList[0]?.name || 'transcript_upload.md',
           folder_context: templateData.study_name || '',
           upload_date_utc: new Date().toISOString(),
           transcript_source: 'file_upload',
           manual_notes_text_or_blank: '',
         };
       } else if (pastedText) {
-        // Process pasted text
-        rawContent = pastedText; // Store for raw file storage
         templateData = {
           ...templateData,
           input_text: pastedText,
@@ -318,28 +389,23 @@ const handleSessionNotesSubmission = async ({ ack, body, view, client }) => {
         await client.chat.postMessage({
           channel: body.user.id,
           text: `❌ Please either upload files or paste transcript content.`,
-          response_type: "ephemeral"
         });
         return;
       }
-
     }
 
-    let result;
-    let fileName;
+    let result: GitHubResult;
+    let fileName: string;
 
     if (isManual) {
-      // Manual notes: process through session_notes.yaml for AI structuring
       const study = await getResearchStudyWithRoles(templateData.study_name);
-      const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, yamlTemplateName);
+      const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, yamlTemplateName!);
       renderedYaml = await processYamlTemplate(file.content, templateData, study.path);
       console.log("🚀 ~ handleSessionNotesSubmission ~ renderedYaml:", renderedYaml);
-      result = renderedYaml.result;
-      const urlParts = result.path.split('/');
+      result = renderedYaml!.result;
+      const urlParts: string[] = result.path.split('/');
       fileName = urlParts[urlParts.length - 1];
     } else {
-      // Transcript upload: save raw content directly to GitHub (no AI coding step)
-      // The /qori-analyze command handles all analysis from the raw transcript
       const study = await getResearchStudyWithRoles(templateData.study_name);
       const baseFolder = decodeURIComponent(study.path);
       const transcriptFileName = `${templateData.participant_name}-transcript-${new Date().toISOString().split('T')[0]}.md`;
@@ -357,7 +423,7 @@ const handleSessionNotesSubmission = async ({ ack, body, view, client }) => {
 
 ${templateData.input_text}`;
 
-      const githubResult = await createOrUpdateFileOnGitHub(transcriptPath, transcriptContent);
+      const githubResult: GitHubResult = await createOrUpdateFileOnGitHub(transcriptPath, transcriptContent);
       result = githubResult;
       fileName = transcriptFileName;
       console.log("✅ Raw transcript saved to GitHub:", transcriptPath);
@@ -375,7 +441,7 @@ ${templateData.input_text}`;
       participant_name: templateData.participant_name,
       researcher: templateData.researcher,
       created_by: body.user.id,
-      transcript: !isManual // true for file/text input, false for manual input
+      transcript: !isManual
     };
 
     console.log("Study note data to be stored:", studyNoteData);
@@ -383,10 +449,8 @@ ${templateData.input_text}`;
     try {
       const createdNote = await studyNotesService.createStudyNote(studyNoteData);
       console.log("Study note stored in database:", createdNote);
-      studyNoteData.id = createdNote.id;
-    } catch (dbError) {
+    } catch (dbError: any) {
       console.error("Error storing study note in database:", dbError);
-      studyNoteData.id = 'Failed to store';
     }
 
     const sessionInfo = `${selectedSession.session_id} - ${selectedSession.study?.name}`;
@@ -412,77 +476,15 @@ ${templateData.input_text}`;
       ],
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error handling session notes submission:", error);
 
     await client.chat.postMessage({
       channel: body.user.id,
       text: `❌ Error submitting session notes: ${error.message}`,
-      response_type: "ephemeral"
     });
   }
 };
-
-
-// // Handler for selecting session notes button
-// const handleSelectSessionNotes = async ({ ack, body, client }) => {
-//   console.log("🚀 ~ handleSelectSessionNotes ~ body:", body)
-//   try {
-//     await ack();
-
-//     const userId = body.user.id;
-//     const sessions = await sessionObserverService.getObserverByUser(userId);
-
-//     console.log("🚀 ~ handleSelectSessionNotes ~ sessions:", sessions);
-
-//     // Check if user has any approved sessions
-//     if (!sessions || sessions.length === 0) {
-//       await client.chat.postEphemeral({
-//         channel: body.channel.id,
-//         user: userId,
-//         text: "❌ You don't have any approved observation sessions. Please request to observe a session first using the `/observe` command.",
-//         response_type: "ephemeral"
-//       });
-//       return;
-//     }
-
-//     // Update the current modal to show session notes content and hide file upload
-//     await client.views.update({
-//       view_id: body.view.id,
-//       view: {
-//         ...sessionNotesModal(sessions),
-//         blocks: sessionNotesModal(sessions).blocks.map(block => {
-//           if (block.block_id === "file_input_block") {
-//             // Hide the file input block when session notes is selected
-//             return {
-//               ...block,
-//               optional: true
-//             };
-//           }
-//           return block;
-//         })
-//       }
-//     });
-
-//     console.log("Session notes modal updated successfully");
-
-//   } catch (error) {
-//     console.error("Error updating session notes modal:", error);
-
-//     // Try to send error message to user via chat
-//     try {
-//       await client.chat.postEphemeral({
-//         channel: body.channel.id,
-//         user: body.user.id,
-//         text: `❌ Failed to update session notes modal: ${error.message}`,
-//         response_type: "ephemeral"
-//       });
-//     } catch (chatError) {
-//       console.error("Could not send error message to user:", chatError);
-//     }
-//   }
-// };
-
 
 module.exports = {
   uploadNotesHandler,

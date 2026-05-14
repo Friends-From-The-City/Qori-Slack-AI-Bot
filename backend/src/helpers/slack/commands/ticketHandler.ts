@@ -1,14 +1,104 @@
 /**
- * ticketHandler.js — /qori-tickets command
+ * ticketHandler.ts — /qori-tickets command
  *
  * Creates GitHub Issues from ticket_candidates stored in Postgres.
  * Review-before-create: researcher selects which tickets to create.
  * Supports designer, engineering, and accessibility audiences.
  */
+
+import type { SlashCommandContext, ViewSubmissionContext } from '../../../types/handlers';
+import type { SlashCommand } from '@slack/bolt';
+
 const { getStudiesByUser, getResearchStudyWithRoles } = require('../../../services/research_study.service');
 const { getActiveStudy, setActiveStudy } = require('../../../services/slack-user-state.service');
 
-const AUDIENCE_CONFIG = {
+// ─── Types ──────────────────────────────────────────────────────
+
+type AudienceKey = 'designer' | 'engineering' | 'accessibility';
+
+interface AudienceConfigItem {
+  label: string;
+  variableKey: string;
+  sourceTemplate: string;
+  labelPrefix: string;
+}
+
+interface TicketCandidate {
+  id: string;
+  title: string;
+  description: string;
+  priority: string;
+  effort: string;
+  addresses_findings?: string[];
+  // Designer fields
+  current_design_state?: string;
+  affected_personas?: string[];
+  affected_journey_stages?: string[];
+  affected_screens?: string[];
+  acceptance_criteria?: string[];
+  design_artifacts_needed?: string[];
+  collaboration_needed?: string[];
+  blocked_by?: string[];
+  related_engineering_tickets?: string[];
+  // Engineering fields
+  user_impact_metrics?: string[];
+  current_behavior?: string;
+  technical_acceptance_criteria?: string[];
+  affected_components?: string[];
+  technical_constraints?: string[];
+  testing_approach?: string[];
+  enables?: string[];
+  related_design_tickets?: string[];
+  related_accessibility_tickets?: string[];
+  effort_rationale?: string;
+  effort_estimate_sprints?: string;
+  // Accessibility fields
+  wcag_criterion?: string;
+  section_508_implication?: string;
+  compliance_priority_rationale?: string;
+  affected_at_users?: string[];
+  evidence_nuggets?: string[];
+  recommended_testing?: string[];
+  regression_risk?: string;
+  compliance_deadline?: string;
+}
+
+interface PrioritizedFinding {
+  id: string;
+  finding: string;
+  severity?: number | null;
+  representative_quote?: string;
+  representative_quote_source?: string;
+  supporting_nuggets?: string[];
+}
+
+interface NuggetDetail {
+  id: string;
+  verbatim_quote?: string;
+  participant?: string;
+}
+
+interface StudyOption {
+  text: { type: 'plain_text'; text: string };
+  value: string;
+}
+
+interface CreatedIssueResult {
+  number: number;
+  url: string;
+  title: string;
+  id: string;
+}
+
+interface FailedIssueResult {
+  id: string;
+  title: string;
+  error: string;
+}
+
+// ─── Config ─────────────────────────────────────────────────────
+
+const AUDIENCE_CONFIG: Record<AudienceKey, AudienceConfigItem> = {
   designer: {
     label: 'Designer',
     variableKey: 'design_ticket_candidates',
@@ -33,7 +123,7 @@ const AUDIENCE_CONFIG = {
 // STEP 1: Open modal with study + audience selection
 // ═══════════════════════════════════════════════════════════
 
-const ticketHandler = async ({ ack, body, client, command }) => {
+const ticketHandler = async ({ ack, body, client, command }: SlashCommandContext): Promise<void> => {
   try {
     await ack();
 
@@ -49,19 +139,25 @@ const ticketHandler = async ({ ack, body, client, command }) => {
       return;
     }
 
-    const activeStudyId = await getActiveStudy(userId);
+    const activeStudyId: number | null = await getActiveStudy(userId);
     await client.views.open({
       trigger_id: command.trigger_id,
-      view: buildStep1Modal(studies, command, activeStudyId),
+      // buildStep1Modal returns a valid Slack modal structure — cast through unknown
+      // because the return type doesn't exactly match Bolt's strict View union
+      view: buildStep1Modal(studies, command, activeStudyId) as unknown as Parameters<typeof client.views.open>[0]['view'],
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ ticketHandler error:', error.message);
   }
 };
 
-function buildStep1Modal(studies, command, activeStudyId) {
-  const studyOptions = studies.slice(0, 10).map(s => ({
-    text: { type: 'plain_text', text: s.name },
+function buildStep1Modal(
+  studies: Array<{ id: number; name: string }>,
+  command: SlashCommand,
+  activeStudyId: number | null,
+): Record<string, unknown> {
+  const studyOptions: StudyOption[] = studies.slice(0, 10).map(s => ({
+    text: { type: 'plain_text' as const, text: s.name },
     value: s.id.toString(),
   }));
   const initialStudyOption = activeStudyId
@@ -122,28 +218,28 @@ function buildStep1Modal(studies, command, activeStudyId) {
 // STEP 1 SUBMIT: Load tickets and show Step 2
 // ═══════════════════════════════════════════════════════════
 
-const handleStep1Submit = async ({ ack, body, view, client }) => {
+const handleStep1Submit = async ({ ack, body, view, client }: ViewSubmissionContext): Promise<void> => {
   const values = view.state.values;
-  const studyId = values.study_select?.study_select_action?.selected_option?.value;
-  const audience = values.audience_select?.audience_select_action?.selected_option?.value;
+  const studyId: string | undefined = values.study_select?.study_select_action?.selected_option?.value;
+  const audience: string | undefined = values.audience_select?.audience_select_action?.selected_option?.value;
   const meta = JSON.parse(view.private_metadata || '{}');
 
   if (!studyId || !audience) {
-    await ack({ response_action: 'errors', errors: { study_select: 'Select a study', audience_select: 'Select an audience' } });
+    await (ack as Function)({ response_action: 'errors', errors: { study_select: 'Select a study', audience_select: 'Select an audience' } });
     return;
   }
 
-  const config = AUDIENCE_CONFIG[audience];
+  const config = AUDIENCE_CONFIG[audience as AudienceKey];
   if (!config) {
-    await ack({ response_action: 'errors', errors: { audience_select: 'Invalid audience' } });
+    await (ack as Function)({ response_action: 'errors', errors: { audience_select: 'Invalid audience' } });
     return;
   }
 
   // Look up study and update active study
   const studies = await getStudiesByUser(body.user.id);
-  const study = studies.find(s => s.id.toString() === studyId);
+  const study = studies.find((s: { id: number }) => s.id.toString() === studyId);
   if (!study) {
-    await ack({ response_action: 'errors', errors: { study_select: 'Study not found' } });
+    await (ack as Function)({ response_action: 'errors', errors: { study_select: 'Study not found' } });
     return;
   }
   await setActiveStudy(body.user.id, study.id);
@@ -153,7 +249,7 @@ const handleStep1Submit = async ({ ack, body, view, client }) => {
   const StudyVariable = sequelize.models?.StudyVariable;
   const CreatedIssue = sequelize.models?.CreatedIssue;
 
-  let tickets = [];
+  let tickets: TicketCandidate[] = [];
   try {
     const row = await StudyVariable.findOne({
       where: {
@@ -165,29 +261,29 @@ const handleStep1Submit = async ({ ack, body, view, client }) => {
     });
 
     if (!row || !row.value || !Array.isArray(row.value)) {
-      await ack({
+      await (ack as Function)({
         response_action: 'errors',
         errors: { audience_select: `No ${config.label} tickets found. Generate the ${config.label} readout first.` },
       });
       return;
     }
 
-    tickets = row.value;
-  } catch (err) {
+    tickets = row.value as TicketCandidate[];
+  } catch (err: any) {
     console.error('❌ Error loading tickets:', err.message);
-    await ack({ response_action: 'errors', errors: { study_select: 'Error loading tickets' } });
+    await (ack as Function)({ response_action: 'errors', errors: { study_select: 'Error loading tickets' } });
     return;
   }
 
   // Check which tickets already have GitHub issues
-  let existingIssues = [];
+  let existingIssues: Array<{ ticket_id: string; github_issue_number: number; github_url: string }> = [];
   if (CreatedIssue) {
     try {
       existingIssues = await CreatedIssue.findAll({
         where: { study_name: study.name, audience },
         attributes: ['ticket_id', 'github_issue_number', 'github_url'],
       });
-    } catch (err) {
+    } catch (err: any) {
       console.warn('⚠️ Could not check existing issues:', err.message);
     }
   }
@@ -201,13 +297,12 @@ const handleStep1Submit = async ({ ack, body, view, client }) => {
     const desc = `${t.priority} · ${t.effort} · ${findingsCount} finding(s)${alreadyCreated ? ' · ✅ Already created' : ''}`;
 
     return {
-      text: { type: 'mrkdwn', text: label },
-      description: { type: 'plain_text', text: desc },
+      text: { type: 'mrkdwn' as const, text: label },
+      description: { type: 'plain_text' as const, text: desc },
       value: t.id,
     };
   });
 
-  // Filter out already-created for initial selection (all uncreated checked by default)
   const initialOptions = ticketOptions.filter(o => !existingTicketIds.has(o.value));
 
   const step2Meta = {
@@ -258,22 +353,22 @@ const handleStep1Submit = async ({ ack, body, view, client }) => {
     ],
   };
 
-  await ack({ response_action: 'update', view: step2View });
+  await (ack as Function)({ response_action: 'update', view: step2View });
 };
 
 // ═══════════════════════════════════════════════════════════
 // STEP 2 SUBMIT: Create GitHub Issues
 // ═══════════════════════════════════════════════════════════
 
-const handleStep2Submit = async ({ ack, body, view, client }) => {
+const handleStep2Submit = async ({ ack, body, view, client }: ViewSubmissionContext): Promise<void> => {
   await ack();
 
   const values = view.state.values;
   const meta = JSON.parse(view.private_metadata || '{}');
-  const { studyName, audience } = meta;
+  const { studyName, audience } = meta as { studyName: string; audience: AudienceKey };
   const userId = body.user.id;
 
-  const selectedTicketIds = values.ticket_selection?.ticket_checkboxes?.selected_options?.map(o => o.value) || [];
+  const selectedTicketIds: string[] = values.ticket_selection?.ticket_checkboxes?.selected_options?.map((o: any) => o.value) || [];
 
   if (selectedTicketIds.length === 0) {
     await client.chat.postMessage({
@@ -291,54 +386,47 @@ const handleStep2Submit = async ({ ack, body, view, client }) => {
   const StudyVariable = sequelize.models?.StudyVariable;
   const CreatedIssue = sequelize.models?.CreatedIssue;
 
-  let tickets = [];
-  let findings = [];
-  let nuggetDetails = {};
+  let tickets: TicketCandidate[] = [];
+  let findings: PrioritizedFinding[] = [];
+  const nuggetDetails: Record<string, NuggetDetail> = {};
   try {
-    // Load ticket candidates
     const ticketRow = await StudyVariable.findOne({
       where: { study_name: studyName, variable_key: config.variableKey, scope: 'study' },
       attributes: ['value'],
     });
-    tickets = (ticketRow?.value || []).filter(t => selectedTicketIds.includes(t.id));
+    tickets = ((ticketRow?.value || []) as TicketCandidate[]).filter(t => selectedTicketIds.includes(t.id));
 
-    // Load prioritized_findings for finding statements
     const findingsRow = await StudyVariable.findOne({
       where: { study_name: studyName, variable_key: 'prioritized_findings', scope: 'study' },
       attributes: ['value'],
     });
-    findings = findingsRow?.value || [];
+    findings = (findingsRow?.value || []) as PrioritizedFinding[];
 
-    // Load atomic_nugget_detail for verbatim quotes
     const detailRows = await StudyVariable.findAll({
       where: { study_name: studyName, variable_key: 'atomic_nugget_detail', scope: 'study' },
       attributes: ['item_key', 'value'],
     });
-    // Build lookup: nugget ID → detail object
-    // Handle both pool items (individual rows) and singleton array (one row)
     for (const row of detailRows) {
       if (row.item_key && row.value) {
-        nuggetDetails[row.item_key] = row.value;
+        nuggetDetails[row.item_key] = row.value as NuggetDetail;
       } else if (!row.item_key && Array.isArray(row.value)) {
-        // Singleton array: extract each item by id
-        for (const item of row.value) {
+        for (const item of row.value as NuggetDetail[]) {
           if (item.id) nuggetDetails[item.id] = item;
         }
       }
     }
-  } catch (err) {
+  } catch (err: any) {
     console.error('❌ Error loading ticket data:', err.message);
     await client.chat.postMessage({ channel: userId, text: `❌ Error loading tickets: ${err.message}` });
     return;
   }
 
-  // Build findings lookup: finding ID → finding object
-  const findingsMap = {};
+  // Build findings lookup
+  const findingsMap: Record<string, PrioritizedFinding> = {};
   for (const f of findings) {
     if (f.id) findingsMap[f.id] = f;
   }
 
-  // Acknowledge
   await client.chat.postMessage({
     channel: userId,
     text: `🔄 Creating ${tickets.length} GitHub Issue(s) for *${config.label}* audience...`,
@@ -347,12 +435,12 @@ const handleStep2Submit = async ({ ack, body, view, client }) => {
   // Create issues sequentially
   const { Octokit } = await import('@octokit/rest');
   const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
-  const owner = process.env.GITHUB_OWNER;
-  const repo = process.env.GITHUB_REPO;
+  const owner = process.env.GITHUB_OWNER!;
+  const repo = process.env.GITHUB_REPO!;
   const repoFull = `${owner}/${repo}`;
 
-  const created = [];
-  const failed = [];
+  const created: CreatedIssueResult[] = [];
+  const failed: FailedIssueResult[] = [];
 
   for (const ticket of tickets) {
     try {
@@ -367,7 +455,6 @@ const handleStep2Submit = async ({ ack, body, view, client }) => {
         labels,
       });
 
-      // Track in Postgres
       if (CreatedIssue) {
         try {
           await CreatedIssue.create({
@@ -379,21 +466,19 @@ const handleStep2Submit = async ({ ack, body, view, client }) => {
             github_repo: repoFull,
             created_by: userId,
           });
-        } catch (dbErr) {
-          // Duplicate or DB error — log but don't fail
+        } catch (dbErr: any) {
           console.warn(`⚠️ Could not track issue in DB: ${dbErr.message}`);
         }
       }
 
       created.push({ number: data.number, url: data.html_url, title: ticket.title, id: ticket.id });
       console.log(`✅ Created issue #${data.number}: ${ticket.title}`);
-    } catch (err) {
+    } catch (err: any) {
       console.error(`❌ Failed to create issue "${ticket.title}":`, err.message);
       failed.push({ id: ticket.id, title: ticket.title, error: err.message });
     }
   }
 
-  // Send summary DM
   const issueLinks = created.map(i => `• <${i.url}|#${i.number}> — ${i.title}`).join('\n');
   const summaryText = `✅ Created ${created.length} GitHub Issue(s) for *${config.label}* audience\n\n${issueLinks}${failed.length > 0 ? `\n\n❌ ${failed.length} failed: ${failed.map(f => f.id).join(', ')}` : ''}`;
 
@@ -422,8 +507,14 @@ const handleStep2Submit = async ({ ack, body, view, client }) => {
 // ISSUE BODY FORMATTING (audience-specific)
 // ═══════════════════════════════════════════════════════════
 
-function formatIssueBody(ticket, audience, studyName, findingsMap = {}, nuggetDetails = {}) {
-  const sections = [];
+function formatIssueBody(
+  ticket: TicketCandidate,
+  audience: AudienceKey,
+  studyName: string,
+  findingsMap: Record<string, PrioritizedFinding> = {},
+  nuggetDetails: Record<string, NuggetDetail> = {},
+): string {
+  const sections: string[] = [];
 
   sections.push(`## Description\n\n${ticket.description}`);
 
@@ -450,7 +541,7 @@ function formatIssueBody(ticket, audience, studyName, findingsMap = {}, nuggetDe
     if (ticket.collaboration_needed?.length) {
       sections.push(`## Collaboration Needed\n\n${ticket.collaboration_needed.map(c => `- ${c}`).join('\n')}`);
     }
-    const designDeps = [];
+    const designDeps: string[] = [];
     designDeps.push(`- Blocked by: ${ticket.blocked_by?.length ? ticket.blocked_by.join(', ') : 'None'}`);
     designDeps.push(`- Related engineering work: ${ticket.related_engineering_tickets?.length ? ticket.related_engineering_tickets.join(', ') : 'None'}`);
     sections.push(`## Dependencies\n\n${designDeps.join('\n')}`);
@@ -478,7 +569,7 @@ function formatIssueBody(ticket, audience, studyName, findingsMap = {}, nuggetDe
     if (ticket.testing_approach?.length) {
       sections.push(`## Testing Approach\n\n${ticket.testing_approach.map(t => `- ${t}`).join('\n')}`);
     }
-    const engDeps = [];
+    const engDeps: string[] = [];
     engDeps.push(`- Blocked by: ${ticket.blocked_by?.length ? ticket.blocked_by.join(', ') : 'None'}`);
     engDeps.push(`- Enables: ${ticket.enables?.length ? ticket.enables.join(', ') : 'None'}`);
     engDeps.push(`- Related design work: ${ticket.related_design_tickets?.length ? ticket.related_design_tickets.join(', ') : 'None'}`);
@@ -517,7 +608,7 @@ function formatIssueBody(ticket, audience, studyName, findingsMap = {}, nuggetDe
     if (ticket.regression_risk) {
       sections.push(`## Regression Risk\n\n${ticket.regression_risk}`);
     }
-    const a11yDeps = [];
+    const a11yDeps: string[] = [];
     a11yDeps.push(`- Related engineering work: ${ticket.related_engineering_tickets?.length ? ticket.related_engineering_tickets.join(', ') : 'None'}`);
     sections.push(`## Dependencies\n\n${a11yDeps.join('\n')}`);
     if (ticket.compliance_deadline) {
@@ -532,7 +623,6 @@ function formatIssueBody(ticket, audience, studyName, findingsMap = {}, nuggetDe
     const readoutPath = `${studyName}/primary-research/05-reports/`;
     const readoutLink = `https://github.com/${owner}/${repo}/tree/main/${readoutPath}`;
 
-    // Finding statements with severity
     const findingLines = ticket.addresses_findings.map(fId => {
       const finding = findingsMap[fId];
       if (finding) {
@@ -544,27 +634,22 @@ function formatIssueBody(ticket, audience, studyName, findingsMap = {}, nuggetDe
     sections.push(`## Linked Findings\n\n${findingLines.join('\n')}`);
 
     // Collect verbatim quotes from supporting nuggets across all linked findings
-    const quotes = [];
+    const quotes: Array<{ quote: string; source: string }> = [];
     for (const fId of ticket.addresses_findings) {
       const finding = findingsMap[fId];
       if (!finding) continue;
 
-      // Use representative_quote from finding itself
       if (finding.representative_quote && finding.representative_quote_source) {
         quotes.push({ quote: finding.representative_quote, source: finding.representative_quote_source });
       }
 
-      // Also pull from supporting_nuggets → atomic_nugget_detail
       const nuggetIds = finding.supporting_nuggets || [];
-      for (const nId of nuggetIds.slice(0, 3)) { // Max 3 per finding
+      for (const nId of nuggetIds.slice(0, 3)) {
         const detail = nuggetDetails[nId];
         if (detail?.verbatim_quote) {
-          // Avoid duplicating the representative_quote
           if (!quotes.some(q => q.quote === detail.verbatim_quote)) {
-            // Extract participant code from nugget ID (nugget-PT-003-001 → PT-003)
-            // or use detail.participant field. Never show raw nugget ID as attribution.
             const participant = detail.participant
-              || (nId.match(/PT-\d+/) ? nId.match(/PT-\d+/)[0] : nId);
+              || (nId.match(/PT-\d+/) ? nId.match(/PT-\d+/)![0] : nId);
             quotes.push({
               quote: detail.verbatim_quote,
               source: participant,
@@ -574,9 +659,7 @@ function formatIssueBody(ticket, audience, studyName, findingsMap = {}, nuggetDe
       }
     }
 
-    // Add collapsed research evidence if we have quotes
     if (quotes.length > 0) {
-      // Limit to 3 most representative quotes total
       const topQuotes = quotes.slice(0, 3);
       const quoteBlock = topQuotes.map(q => `> "${q.quote}"\n> — ${q.source}`).join('\n\n');
       sections.push(`<details>\n<summary>Research evidence</summary>\n\n${quoteBlock}\n\n</details>`);
@@ -592,8 +675,8 @@ function formatIssueBody(ticket, audience, studyName, findingsMap = {}, nuggetDe
 // LABEL GENERATION (audience-specific)
 // ═══════════════════════════════════════════════════════════
 
-function buildLabels(ticket, audience, studyName) {
-  const labels = [
+function buildLabels(ticket: TicketCandidate, audience: AudienceKey, studyName: string): string[] {
+  const labels: string[] = [
     `priority:${ticket.priority}`,
     `effort:${ticket.effort}`,
     `audience:${audience}`,
@@ -608,11 +691,8 @@ function buildLabels(ticket, audience, studyName) {
 
   if (audience === 'accessibility') {
     if (ticket.wcag_criterion) {
-      // WCAG field may contain multiple criteria comma-separated — split into individual labels
-      // Also sanitize: GitHub labels can't contain commas
       const criteria = ticket.wcag_criterion.split(',').map(c => c.trim()).filter(Boolean);
       for (const criterion of criteria) {
-        // Extract just the number (e.g., "1.4.4" from "1.4.4 Resize Text")
         const match = criterion.match(/(\d+\.\d+\.\d+)/);
         if (match) {
           labels.push(`wcag:${match[1]}`);

@@ -1,3 +1,14 @@
+/**
+ * researchSynthesisHandler.ts — /qori-synthesis command and modal handlers
+ *
+ * Opens a progressive-disclosure modal (study → analysis method → files),
+ * validates cascade prerequisites, then runs the selected synthesis YAML
+ * template (affinity mapping, journey mapping, personas, etc.).
+ */
+
+import type { SlashCommandContext, ViewSubmissionContext, BlockActionContext } from '../../../types/handlers';
+import { TemplateContractError } from '../../../types/handlers';
+
 const { researchSynthesisModal } = require("../ui/researchSynthesisModal");
 const { getStudiesByUser, getResearchStudyWithRoles } = require("../../../services/research_study.service");
 const { getActiveStudy, setActiveStudy } = require("../../../services/slack-user-state.service");
@@ -5,30 +16,168 @@ const { studyNotesService } = require("../../../services");
 const sessionSummaryService = require("../../../services/session-summary.service");
 const { getStudyStakeholderGuide } = require("../../../services/study-status.service");
 const { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepoByPath, fetchFileFromRepo, readFolderContents } = require("../../../helpers/github");
-const { processYamlTemplate, extractAiResponsesFromYaml } = require("../../../helpers/yamlProcessor");
+const { processYamlTemplate } = require("../../../helpers/yamlProcessor");
 const { readStudyVariables } = require("../../../helpers/studyVariables");
 const { buildCascadeReadiness } = require("../ui/cascadeReadinessBlocks");
 
-// Command handler to open the research synthesis modal
-const researchSynthesisHandler = async ({ ack, body, client, command }) => {
+// ─── Types ──────────────────────────────────────────────────────
+
+interface Study {
+  id: number;
+  name: string;
+  path?: string;
+  channel_name?: string;
+  researcher_name?: string;
+  researcher_email?: string;
+}
+
+interface SessionSummary {
+  id: number;
+  filename: string;
+  file_path: string | null;
+  file_url: string | null;
+}
+
+interface Transcript {
+  id: number;
+  filename: string;
+  transcript: boolean;
+  file_path: string | null;
+  file_url: string | null;
+}
+
+interface StakeholderGuide {
+  id: number;
+  file_name: string;
+  path: string;
+}
+
+interface AnalysisFile {
+  name: string;
+  path: string;
+  label: string;
+  relative_path: string;
+}
+
+interface AnalysisScan {
+  folder: string;
+  label: string;
+}
+
+interface FileWithContent {
+  filename: string;
+  file_type: string;
+  file_path: string | null;
+  content: string;
+  githubPath: string | null;
+}
+
+interface CascadeData {
+  available: string[];
+  missing: string[];
+}
+
+interface GithubFile {
+  name: string;
+  path: string;
+}
+
+interface FolderRecord {
+  record: SessionSummary | Transcript;
+  type: 'summary' | 'transcript';
+  path: string | null;
+}
+
+/** Data shape passed to synthesis YAML templates. */
+interface SynthesisTemplateInput {
+  selected_study: string;
+  selected_session_summaries: string[];
+  selected_transcripts: string[];
+  selected_stakeholder_guides: string[];
+  include_participant_tracker: boolean;
+  include_research_plan: boolean;
+  blueprint_scope: string;
+  researcher_contact: string;
+  detected_files: string;
+  combined_file_content: string;
+}
+
+// ─── Constants ──────────────────────────────────────────────────
+
+const ANALYSIS_SCANS: AnalysisScan[] = [
+  { folder: 'affinity-mapping', label: 'Affinity map' },
+  { folder: 'journey-mapping', label: 'Journey map' },
+  { folder: 'personas', label: 'Personas' },
+  { folder: 'usability-issues', label: 'Usability issues' },
+  { folder: 'jobs-to-be-done', label: 'Jobs to be done' },
+  { folder: 'design-opportunities', label: 'Design opportunities' },
+  { folder: 'service-blueprint', label: 'Service blueprint' },
+  { folder: 'survey-synthesis', label: 'Survey synthesis' },
+];
+
+const ANALYSIS_YAML_MAPPING: Record<string, string> = {
+  'affinity_mapping': 'affinity_mapping.yaml',
+  'journey_mapping': 'journey_mapping.yaml',
+  'persona_generation': 'persona_generator.yaml',
+  'jobs_to_be_done': 'jobs_to_be_done.yaml',
+  'usability_issues': 'usability_issues_extractor.yaml',
+  'design_opportunities': 'design_opportunity_generator.yaml',
+  'service_blueprint': 'service_blueprint.yaml'
+};
+
+const NUGGET_REQUIRED_METHODS = [
+  'affinity_mapping', 'persona_generation', 'journey_mapping',
+  'jobs_to_be_done', 'usability_issues', 'design_opportunities', 'service_blueprint',
+];
+
+// ─── Helper: scan analysis folders ──────────────────────────────
+
+async function scanAnalysisFolders(studyPath: string): Promise<AnalysisFile[]> {
+  const analysisFiles: AnalysisFile[] = [];
+  const decodedPath = decodeURIComponent(studyPath);
+  const analysisBase = `${decodedPath}/primary-research/04-analysis`;
+
+  for (const scan of ANALYSIS_SCANS) {
+    try {
+      const scanPath = `${analysisBase}/${scan.folder}`;
+      const files: GithubFile[] = await readFolderContents(scanPath, process.env.GITHUB_REPO);
+      const validFiles = files.filter((f: GithubFile) => f.name !== 'readme.md' && f.name !== '.gitkeep');
+
+      if (validFiles.length > 0) {
+        const sorted = validFiles.sort((a: GithubFile, b: GithubFile) => b.name.localeCompare(a.name));
+        const newest = sorted[0];
+        analysisFiles.push({
+          name: newest.name,
+          path: newest.path,
+          label: scan.label,
+          relative_path: `04-analysis/${scan.folder}/${newest.name}`,
+        });
+      }
+    } catch {
+      // Folder doesn't exist — skip silently
+    }
+  }
+  return analysisFiles;
+}
+
+// ─── Command handler ────────────────────────────────────────────
+
+const researchSynthesisHandler = async ({ ack, body, client }: SlashCommandContext): Promise<void> => {
   try {
     await ack();
 
-    // Get research studies for the current user
     const studies = await getStudiesByUser(body.user_id);
-    const activeStudyId = await getActiveStudy(body.user_id);
-    const activeStudy = activeStudyId ? studies.find(s => s.id === activeStudyId) : null;
+    const activeStudyId: number | null = await getActiveStudy(body.user_id);
+    const activeStudy = activeStudyId ? studies.find((s: Study) => s.id === activeStudyId) : null;
 
-    // Open the research synthesis modal, pre-selecting active study
     await client.views.open({
       trigger_id: body.trigger_id,
       view: researchSynthesisModal(studies, activeStudy, [], [], null, [])
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error opening research synthesis modal:", error);
 
-    // Send error message to user
     await client.chat.postEphemeral({
       channel: body.user_id,
       user: body.user_id,
@@ -37,25 +186,22 @@ const researchSynthesisHandler = async ({ ack, body, client, command }) => {
   }
 };
 
-// Handler for when study selection changes
-const handleStudySelectionChange = async ({ ack, body, client }) => {
+// ─── Study selection change handler ─────────────────────────────
+
+const handleStudySelectionChange = async ({ ack, body, client }: BlockActionContext): Promise<void> => {
   try {
     console.log("🚀 ~ handleStudySelectionChange called");
     await ack();
 
     const view = body.view;
-    console.log("🚀 ~ View state blocks:", Object.keys(view.state?.values || {}).length, "blocks");
-    
     if (!view || !view.state || !view.state.values) {
       console.error("🚨 No view state available");
       return;
     }
 
     const selectedStudyOption = view.state.values.study_select_block?.study_select_synthesize?.selected_option;
-    console.log("🚀 ~ Selected study option:", selectedStudyOption);
 
     if (!selectedStudyOption || selectedStudyOption.value === "no_studies") {
-      // No study selected, update modal to show no files
       console.log("🚀 ~ No study selected, clearing files");
       const studies = await getStudiesByUser(body.user.id);
       await client.views.update({
@@ -65,27 +211,20 @@ const handleStudySelectionChange = async ({ ack, body, client }) => {
       return;
     }
 
-    const studyId = selectedStudyOption.value;
-    const studyName = selectedStudyOption.text.text;
+    const studyId: string = selectedStudyOption.value;
+    const studyName: string = selectedStudyOption.text.text;
 
-    console.log(`🚀 ~ Study selected: ${studyName} (ID: ${studyId}, type: ${typeof studyId})`);
+    console.log(`🚀 ~ Study selected: ${studyName} (ID: ${studyId})`);
 
-    // Get the selected analysis method from the current view
-    const currentAnalysisMethod = view.state.values.analysis_method_selection?.analysis_method?.selected_option?.value || null;
-
-    // Get the studies list first
+    const currentAnalysisMethod: string | null = view.state.values.analysis_method_selection?.analysis_method?.selected_option?.value || null;
     const studies = await getStudiesByUser(body.user.id);
 
-    // Initially update modal with button visible but no files (will trigger button to show)
-    console.log("🚀 ~ Updating modal with study selection (button should appear)");
+    // First update: show button immediately
     let updatedModal = researchSynthesisModal(studies, studyId, [], [], currentAnalysisMethod, []);
-    
-    // Preserve existing private_metadata if any
     if (view.private_metadata) {
       updatedModal.private_metadata = view.private_metadata;
     }
 
-    // First, update modal immediately to show the button
     await client.views.update({
       view_id: view.id,
       view: updatedModal
@@ -93,58 +232,51 @@ const handleStudySelectionChange = async ({ ack, body, client }) => {
 
     console.log("✅ Modal updated with Load Files button");
 
-    // Then fetch files in the background and update again
-    let sessionSummaries = [];
+    // Fetch files in background
+    let sessionSummaries: SessionSummary[] = [];
     try {
       sessionSummaries = await sessionSummaryService.getSessionSummariesByStudyId(parseInt(studyId));
       console.log(`✅ Fetched ${sessionSummaries.length} session summaries`);
-    } catch (error) {
+    } catch (error: any) {
       console.error("❌ Error fetching session summaries:", error);
     }
 
-    // Fetch only actual transcripts (transcript=true) from study notes
-    let transcripts = [];
+    let transcripts: Transcript[] = [];
     try {
       const allStudyNotes = await studyNotesService.getStudyNotesByStudyId(parseInt(studyId));
-      console.log(`✅ Fetched ${allStudyNotes.length} study notes`);
-
-      // Only include notes flagged as transcripts — session notes already
-      // appear in the Session Summaries section via sessionSummaryService
       transcripts = allStudyNotes
-        .filter(note => note.transcript === true)
-        .map(note => ({
+        .filter((note: { transcript: boolean }) => note.transcript === true)
+        .map((note: { id: number; filename: string; file_path: string | null; file_url: string | null }) => ({
           id: note.id,
           filename: note.filename,
           transcript: true,
           file_path: note.file_path,
           file_url: note.file_url,
         }));
-      console.log(`✅ Formatted ${transcripts.length} transcripts (filtered from ${allStudyNotes.length} total notes)`);
-    } catch (error) {
+      console.log(`✅ Formatted ${transcripts.length} transcripts`);
+    } catch (error: any) {
       console.error("❌ Error fetching transcripts:", error);
     }
 
-    // Fetch stakeholder interview guides
-    let stakeholderGuides = [];
+    let stakeholderGuides: StakeholderGuide[] = [];
     try {
-      const selectedStudy = studies.find(s => s.id.toString() === studyId.toString());
+      const selectedStudy = studies.find((s: Study) => s.id.toString() === studyId.toString());
       if (selectedStudy) {
         stakeholderGuides = await getStudyStakeholderGuide(selectedStudy.name);
         console.log(`✅ Fetched ${stakeholderGuides.length} stakeholder interview guides`);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("❌ Error fetching stakeholder guides:", error);
     }
 
-    // Validate DB records against GitHub — prune any whose files were deleted
+    // Validate DB records against GitHub
     try {
       const repo = process.env.GITHUB_REPO;
-      // Collect all unique parent folders from file paths
-      const allRecords = [
-        ...sessionSummaries.map(s => ({ record: s, type: 'summary', path: s.file_path })),
-        ...transcripts.map(t => ({ record: t, type: 'transcript', path: t.file_path })),
+      const allRecords: FolderRecord[] = [
+        ...sessionSummaries.map((s: SessionSummary) => ({ record: s, type: 'summary' as const, path: s.file_path })),
+        ...transcripts.map((t: Transcript) => ({ record: t, type: 'transcript' as const, path: t.file_path })),
       ];
-      const folderMap = {};
+      const folderMap: Record<string, FolderRecord[]> = {};
       for (const r of allRecords) {
         if (!r.path) continue;
         const folder = r.path.substring(0, r.path.lastIndexOf('/'));
@@ -152,36 +284,34 @@ const handleStudySelectionChange = async ({ ack, body, client }) => {
         folderMap[folder].push(r);
       }
 
-      // List each folder once and check which files exist
       for (const [folder, records] of Object.entries(folderMap)) {
         try {
-          const githubFiles = await readFolderContents(folder, repo);
-          const githubFileNames = new Set(githubFiles.map(f => f.name));
+          const githubFiles: GithubFile[] = await readFolderContents(folder, repo);
+          const githubFileNames = new Set(githubFiles.map((f: GithubFile) => f.name));
 
           for (const r of records) {
-            const fileName = r.path.split('/').pop();
-            if (!githubFileNames.has(fileName)) {
-              console.log(`🗑️ Pruning stale ${r.type} record: ${fileName} (not found in GitHub)`);
+            const fileName = r.path!.split('/').pop();
+            if (!githubFileNames.has(fileName!)) {
+              console.log(`🗑️ Pruning stale ${r.type} record: ${fileName}`);
               if (r.type === 'summary') {
                 await sessionSummaryService.deleteSessionSummary(r.record.id);
-                sessionSummaries = sessionSummaries.filter(s => s.id !== r.record.id);
+                sessionSummaries = sessionSummaries.filter((s: SessionSummary) => s.id !== r.record.id);
               } else if (r.type === 'transcript') {
                 await studyNotesService.deleteStudyNote(r.record.id);
-                transcripts = transcripts.filter(t => t.id !== r.record.id);
+                transcripts = transcripts.filter((t: Transcript) => t.id !== r.record.id);
               }
             }
           }
-        } catch (folderError) {
-          // Folder itself doesn't exist in GitHub — prune all records from it
+        } catch (folderError: any) {
           if (folderError.status === 404) {
             console.log(`🗑️ Folder not found in GitHub: ${folder}, pruning ${records.length} records`);
             for (const r of records) {
               if (r.type === 'summary') {
                 await sessionSummaryService.deleteSessionSummary(r.record.id);
-                sessionSummaries = sessionSummaries.filter(s => s.id !== r.record.id);
+                sessionSummaries = sessionSummaries.filter((s: SessionSummary) => s.id !== r.record.id);
               } else if (r.type === 'transcript') {
                 await studyNotesService.deleteStudyNote(r.record.id);
-                transcripts = transcripts.filter(t => t.id !== r.record.id);
+                transcripts = transcripts.filter((t: Transcript) => t.id !== r.record.id);
               }
             }
           } else {
@@ -190,104 +320,63 @@ const handleStudySelectionChange = async ({ ack, body, client }) => {
         }
       }
 
-      // Validate stakeholder records (check by file URL)
+      // Validate stakeholder records
       for (const guide of [...stakeholderGuides]) {
         if (!guide.path) continue;
         try {
-          // Extract GitHub path from the URL
           const urlPath = guide.path.replace(/https:\/\/github\.com\/[^/]+\/[^/]+\/(blob|tree)\/main\//, '');
           const folder = decodeURIComponent(urlPath.substring(0, urlPath.lastIndexOf('/')));
-          const fileName = decodeURIComponent(urlPath.split('/').pop());
-          const githubFiles = await readFolderContents(folder, repo);
-          if (!githubFiles.some(f => f.name === fileName)) {
+          const fileName = decodeURIComponent(urlPath.split('/').pop()!);
+          const githubFiles: GithubFile[] = await readFolderContents(folder, repo);
+          if (!githubFiles.some((f: GithubFile) => f.name === fileName)) {
             console.log(`🗑️ Pruning stale stakeholder record: ${fileName}`);
-            stakeholderGuides = stakeholderGuides.filter(g => g.id !== guide.id);
+            stakeholderGuides = stakeholderGuides.filter((g: StakeholderGuide) => g.id !== guide.id);
           }
-        } catch (err) {
+        } catch (err: any) {
           if (err.status === 404) {
             console.log(`🗑️ Stakeholder file folder not found, pruning: ${guide.file_name}`);
-            stakeholderGuides = stakeholderGuides.filter(g => g.id !== guide.id);
+            stakeholderGuides = stakeholderGuides.filter((g: StakeholderGuide) => g.id !== guide.id);
           }
         }
       }
 
       console.log(`✅ GitHub validation complete: ${sessionSummaries.length} summaries, ${transcripts.length} transcripts, ${stakeholderGuides.length} stakeholder files`);
-    } catch (validationError) {
-      console.error("⚠️ GitHub validation failed (continuing with unvalidated data):", validationError.message);
+    } catch (validationError: any) {
+      console.error("⚠️ GitHub validation failed (continuing):", validationError.message);
     }
 
-    // Scan analysis-layer folders for prior synthesis files
-    let analysisFiles = [];
+    // Scan analysis-layer folders
+    let analysisFiles: AnalysisFile[] = [];
     try {
-      const selectedStudy = studies.find(s => s.id.toString() === studyId.toString());
+      const selectedStudy = studies.find((s: Study) => s.id.toString() === studyId.toString());
       if (selectedStudy) {
         const study = await getResearchStudyWithRoles(selectedStudy.name);
         if (study?.path) {
-          const decodedPath = decodeURIComponent(study.path);
-          const analysisBase = `${decodedPath}/primary-research/04-analysis`;
-          const analysisScans = [
-            { folder: 'affinity-mapping', label: 'Affinity map' },
-            { folder: 'journey-mapping', label: 'Journey map' },
-            { folder: 'personas', label: 'Personas' },
-            { folder: 'usability-issues', label: 'Usability issues' },
-            { folder: 'jobs-to-be-done', label: 'Jobs to be done' },
-            { folder: 'design-opportunities', label: 'Design opportunities' },
-            { folder: 'service-blueprint', label: 'Service blueprint' },
-            { folder: 'survey-synthesis', label: 'Survey synthesis' },
-          ];
-
-          for (const scan of analysisScans) {
-            try {
-              const scanPath = `${analysisBase}/${scan.folder}`;
-              const files = await readFolderContents(scanPath, process.env.GITHUB_REPO);
-              const validFiles = files.filter(f => f.name !== 'readme.md' && f.name !== '.gitkeep');
-
-              // Keep only the newest file per folder (last alphabetically)
-              // This works because both date formats sort correctly:
-              // ISO dates (2026-04-30) and spelled dates (April 29, 2026)
-              if (validFiles.length > 0) {
-                const sorted = validFiles.sort((a, b) => b.name.localeCompare(a.name));
-                const newest = sorted[0];
-                analysisFiles.push({
-                  name: newest.name,
-                  path: newest.path,
-                  label: scan.label,
-                  relative_path: `04-analysis/${scan.folder}/${newest.name}`,
-                });
-              }
-            } catch (err) {
-              // Folder doesn't exist — skip silently
-            }
-          }
+          analysisFiles = await scanAnalysisFolders(study.path);
           console.log(`✅ Found ${analysisFiles.length} analysis-layer files`);
         }
       }
-    } catch (analysisError) {
-      console.error("⚠️ Analysis file scan failed (continuing without):", analysisError.message);
+    } catch (analysisError: any) {
+      console.error("⚠️ Analysis file scan failed:", analysisError.message);
     }
 
-    // Update modal again with loaded files (button will still be visible)
+    // Update modal with loaded files
     updatedModal = researchSynthesisModal(studies, studyId, sessionSummaries, transcripts, currentAnalysisMethod, stakeholderGuides, analysisFiles);
-    
-    // Preserve existing private_metadata if any
     if (view.private_metadata) {
       updatedModal.private_metadata = view.private_metadata;
     }
 
-    // Validate the modal structure before updating
     if (!updatedModal.blocks || updatedModal.blocks.length === 0) {
       throw new Error("Generated modal has no blocks");
     }
 
-    // Check for duplicate block_ids
-    const blockIds = updatedModal.blocks.map(block => block.block_id).filter(Boolean);
+    const blockIds: string[] = updatedModal.blocks.map((block: { block_id?: string }) => block.block_id).filter(Boolean);
     const uniqueBlockIds = new Set(blockIds);
     if (blockIds.length !== uniqueBlockIds.size) {
       throw new Error("Modal has duplicate block_ids");
     }
 
     console.log(`🚀 ~ Updating modal with ${sessionSummaries.length} summaries, ${transcripts.length} transcripts, ${analysisFiles.length} analysis files`);
-    console.log(`🚀 ~ Analysis files:`, analysisFiles.map(f => f.name));
 
     await client.views.update({
       view_id: view.id,
@@ -296,24 +385,24 @@ const handleStudySelectionChange = async ({ ack, body, client }) => {
 
     console.log("✅ Modal updated successfully with files and analysis");
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("🚨 Error in handleStudySelectionChange:", error);
-    
-    // Send error message to user
+
     try {
       await client.chat.postEphemeral({
         channel: body.user.id,
         user: body.user.id,
         text: `❌ Error loading files for selected study: ${error.message}`,
       });
-    } catch (ephemeralError) {
+    } catch (ephemeralError: any) {
       console.error("Failed to send error message:", ephemeralError);
     }
   }
 };
 
-// Handler for individual file checkbox changes
-const handleFileCheckboxChange = async ({ ack, body, client }) => {
+// ─── File checkbox change handler ───────────────────────────────
+
+const handleFileCheckboxChange = async ({ ack, body, client }: BlockActionContext): Promise<void> => {
   try {
     await ack();
 
@@ -322,29 +411,26 @@ const handleFileCheckboxChange = async ({ ack, body, client }) => {
       return;
     }
 
-    // Parse the current metadata to get selected files
-    let metadata = {};
+    let metadata: Record<string, unknown> = {};
     try {
       metadata = JSON.parse(view.private_metadata);
-    } catch (error) {
+    } catch (error: any) {
       throw error;
     }
 
-    // Find which file was changed and update its selection status
-    const actionId = body.actions[0].action_id;
+    const actionId = (body as unknown as { actions: Array<{ action_id: string }> }).actions[0].action_id;
     const fileId = actionId.replace('file_checkbox_', '');
 
-    if (metadata.selectedFiles) {
-      const file = metadata.selectedFiles.find(f => (f.id || f.filename) === fileId);
+    const selectedFiles = metadata.selectedFiles as Array<{ id?: string; filename?: string; selected?: boolean }> | undefined;
+    if (selectedFiles) {
+      const file = selectedFiles.find(f => (f.id || f.filename) === fileId);
       if (file) {
-        // Toggle the selection status
         file.selected = !file.selected;
       }
     }
 
-    // Update the modal with the new selection
     const studies = await getStudiesByUser(body.user.id);
-    const updatedModal = researchSynthesisModal(studies, metadata.selectedFiles || []);
+    const updatedModal = researchSynthesisModal(studies, selectedFiles || []);
     updatedModal.private_metadata = JSON.stringify(metadata);
 
     await client.views.update({
@@ -352,13 +438,14 @@ const handleFileCheckboxChange = async ({ ack, body, client }) => {
       view: updatedModal
     });
 
-  } catch (error) {
+  } catch (error: any) {
     throw error;
   }
 };
 
-// Handler for Load Files button in synthesis modal
-const handleLoadSynthesisFiles = async ({ ack, body, client }) => {
+// ─── Load Files button handler ──────────────────────────────────
+
+const handleLoadSynthesisFiles = async ({ ack, body, client }: BlockActionContext): Promise<void> => {
   try {
     await ack();
 
@@ -368,12 +455,9 @@ const handleLoadSynthesisFiles = async ({ ack, body, client }) => {
       return;
     }
 
-    // Get study ID from dropdown selection (priority) or from button value
     const selectedStudyOption = view.state.values.study_select_block?.study_select_synthesize?.selected_option;
-    const studyId = selectedStudyOption?.value || 
-                    body.actions[0].value;
-    
-    console.log(`🚀 ~ Load Files - studyId from dropdown: ${selectedStudyOption?.value}, from button: ${body.actions[0].value}`);
+    const studyId: string = selectedStudyOption?.value ||
+                    (body as unknown as { actions: Array<{ value: string }> }).actions[0].value;
 
     if (!studyId || studyId === "no_studies") {
       await client.chat.postEphemeral({
@@ -386,122 +470,81 @@ const handleLoadSynthesisFiles = async ({ ack, body, client }) => {
 
     console.log(`🚀 ~ Load Files button clicked for study ID: ${studyId}`);
 
-    // Get the selected analysis method from the current view
-    const currentAnalysisMethod = view.state.values.analysis_method_selection?.analysis_method?.selected_option?.value || null;
+    const currentAnalysisMethod: string | null = view.state.values.analysis_method_selection?.analysis_method?.selected_option?.value || null;
 
-    // Fetch session summaries for the selected study
-    let sessionSummaries = [];
+    let sessionSummaries: SessionSummary[] = [];
     try {
       sessionSummaries = await sessionSummaryService.getSessionSummariesByStudyId(parseInt(studyId));
       console.log(`✅ Fetched ${sessionSummaries.length} session summaries`);
-    } catch (error) {
+    } catch (error: any) {
       console.error("❌ Error fetching session summaries:", error);
     }
 
-    // Fetch only actual transcripts (transcript=true) from study notes
-    let transcripts = [];
+    let transcripts: Transcript[] = [];
     try {
       const allStudyNotes = await studyNotesService.getStudyNotesByStudyId(parseInt(studyId));
-      console.log(`✅ Fetched ${allStudyNotes.length} study notes`);
-
       transcripts = allStudyNotes
-        .filter(note => note.transcript === true)
-        .map(note => ({
+        .filter((note: { transcript: boolean }) => note.transcript === true)
+        .map((note: { id: number; filename: string; file_path: string | null; file_url: string | null }) => ({
           id: note.id,
           filename: note.filename,
           transcript: true,
           file_path: note.file_path,
           file_url: note.file_url,
         }));
-      console.log(`✅ Formatted ${transcripts.length} transcripts (filtered from ${allStudyNotes.length} total notes)`);
-    } catch (error) {
+      console.log(`✅ Formatted ${transcripts.length} transcripts`);
+    } catch (error: any) {
       console.error("❌ Error fetching transcripts:", error);
     }
 
-    // Fetch stakeholder interview guides
-    let stakeholderGuides = [];
+    let stakeholderGuides: StakeholderGuide[] = [];
     const studies = await getStudiesByUser(body.user.id);
     try {
-      const selectedStudy = studies.find(s => s.id.toString() === studyId.toString());
+      const selectedStudy = studies.find((s: Study) => s.id.toString() === studyId.toString());
       if (selectedStudy) {
         stakeholderGuides = await getStudyStakeholderGuide(selectedStudy.name);
         console.log(`✅ Fetched ${stakeholderGuides.length} stakeholder interview guides`);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("❌ Error fetching stakeholder guides:", error);
     }
 
     // Scan analysis-layer folders
-    let analysisFiles = [];
+    let analysisFiles: AnalysisFile[] = [];
     try {
-      const selectedStudy = studies.find(s => s.id.toString() === studyId.toString());
+      const selectedStudy = studies.find((s: Study) => s.id.toString() === studyId.toString());
       if (selectedStudy) {
         const study = await getResearchStudyWithRoles(selectedStudy.name);
         if (study?.path) {
-          const decodedPath = decodeURIComponent(study.path);
-          const analysisBase = `${decodedPath}/primary-research/04-analysis`;
-          const analysisScans = [
-            { folder: 'affinity-mapping', label: 'Affinity map' },
-            { folder: 'journey-mapping', label: 'Journey map' },
-            { folder: 'personas', label: 'Personas' },
-            { folder: 'usability-issues', label: 'Usability issues' },
-            { folder: 'jobs-to-be-done', label: 'Jobs to be done' },
-            { folder: 'design-opportunities', label: 'Design opportunities' },
-            { folder: 'service-blueprint', label: 'Service blueprint' },
-            { folder: 'survey-synthesis', label: 'Survey synthesis' },
-          ];
-          for (const scan of analysisScans) {
-            try {
-              const scanPath = `${analysisBase}/${scan.folder}`;
-              const files = await readFolderContents(scanPath, process.env.GITHUB_REPO);
-              const validFiles = files.filter(f => f.name !== 'readme.md' && f.name !== '.gitkeep');
-              // Keep only the newest file per folder (last alphabetically)
-              if (validFiles.length > 0) {
-                const sorted = validFiles.sort((a, b) => b.name.localeCompare(a.name));
-                const newest = sorted[0];
-                analysisFiles.push({
-                  name: newest.name,
-                  path: newest.path,
-                  label: scan.label,
-                  relative_path: `04-analysis/${scan.folder}/${newest.name}`,
-                });
-              }
-            } catch (err) {
-              // Folder doesn't exist — skip silently
-            }
-          }
+          analysisFiles = await scanAnalysisFolders(study.path);
           console.log(`✅ Found ${analysisFiles.length} analysis-layer files (Load Files)`);
         }
       }
-    } catch (analysisError) {
+    } catch (analysisError: any) {
       console.error("⚠️ Analysis file scan failed:", analysisError.message);
     }
 
-    // Read cascade variables for this study
-    let cascadeData = null;
+    // Read cascade variables
+    let cascadeData: CascadeData | null = null;
     try {
-      const selectedStudy = studies.find(s => s.id.toString() === studyId.toString());
+      const selectedStudy = studies.find((s: Study) => s.id.toString() === studyId.toString());
       if (selectedStudy) {
         const study = await getResearchStudyWithRoles(selectedStudy.name);
         if (study?.path) {
           const decodedPath = decodeURIComponent(study.path);
           const studyVars = await readStudyVariables(decodedPath);
           if (studyVars && Object.keys(studyVars.variables).length > 0) {
-            // Build cascade readiness based on what variables exist
-            cascadeData = buildCascadeReadiness(studyVars, currentAnalysisMethod);
-            console.log(`✅ Cascade: ${cascadeData.available.length} variables available, ${cascadeData.missing.length} missing`);
+            cascadeData = buildCascadeReadiness(studyVars, currentAnalysisMethod) as CascadeData;
+            console.log(`✅ Cascade: ${cascadeData!.available.length} variables available, ${cascadeData!.missing.length} missing`);
           }
         }
       }
-    } catch (cascadeError) {
-      // Non-blocking — cascade readiness is informational
+    } catch (cascadeError: any) {
       console.warn('⚠️ Could not read cascade variables:', cascadeError.message);
     }
 
-    // Update the modal with all file types + cascade data
     const updatedModal = researchSynthesisModal(studies, studyId, sessionSummaries, transcripts, currentAnalysisMethod, stakeholderGuides, analysisFiles, cascadeData);
 
-    // Preserve existing private_metadata if any
     if (view.private_metadata) {
       updatedModal.private_metadata = view.private_metadata;
     }
@@ -515,24 +558,24 @@ const handleLoadSynthesisFiles = async ({ ack, body, client }) => {
 
     console.log("✅ Files loaded and modal updated successfully");
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("🚨 Error in handleLoadSynthesisFiles:", error);
-    
-    // Send error message to user
+
     try {
       await client.chat.postEphemeral({
         channel: body.user.id,
         user: body.user.id,
         text: `❌ Error loading files: ${error.message}`,
       });
-    } catch (ephemeralError) {
+    } catch (ephemeralError: any) {
       console.error("Failed to send error message:", ephemeralError);
     }
   }
 };
 
-// Handler for Load Study Notes button
-const handleLoadStudyNotes = async ({ ack, body, client }) => {
+// ─── Load Study Notes button handler ────────────────────────────
+
+const handleLoadStudyNotes = async ({ ack, body, client }: BlockActionContext): Promise<void> => {
   try {
     await ack();
 
@@ -544,7 +587,6 @@ const handleLoadStudyNotes = async ({ ack, body, client }) => {
     const selectedStudyOption = view.state.values.study_select_block?.study_select_synthesize?.selected_option;
 
     if (!selectedStudyOption || selectedStudyOption.value === "no_studies") {
-      // No study selected, show error
       await client.chat.postEphemeral({
         channel: body.user.id,
         user: body.user.id,
@@ -553,50 +595,42 @@ const handleLoadStudyNotes = async ({ ack, body, client }) => {
       return;
     }
 
-    const studyId = selectedStudyOption.value;
-    const studyName = selectedStudyOption.text.text;
+    const studyId: string = selectedStudyOption.value;
+    const currentAnalysisMethod: string | null = view.state.values.analysis_method_selection?.analysis_method?.selected_option?.value || null;
 
-    // Get the selected analysis method from the current view
-    const currentAnalysisMethod = view.state.values.analysis_method_selection?.analysis_method?.selected_option?.value || null;
-
-    // Fetch session summaries for the selected study
-    let sessionSummaries = [];
+    let sessionSummaries: SessionSummary[] = [];
     try {
       sessionSummaries = await sessionSummaryService.getSessionSummariesByStudyId(parseInt(studyId));
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error fetching session summaries:", error);
     }
 
-    // Fetch transcripts (both transcript=true and transcript=false) from study notes
-    let transcripts = [];
+    let transcripts: Transcript[] = [];
     try {
       const allStudyNotes = await studyNotesService.getStudyNotesByStudyId(parseInt(studyId));
-      transcripts = allStudyNotes.map(note => ({
+      transcripts = allStudyNotes.map((note: { id: number; filename: string; transcript: boolean; file_path: string | null; file_url: string | null }) => ({
         id: note.id,
         filename: note.filename,
         transcript: note.transcript || false,
         file_path: note.file_path,
         file_url: note.file_url,
       }));
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error fetching transcripts:", error);
     }
 
-    // Get the studies list first
     const studies = await getStudiesByUser(body.user.id);
 
-    // Fetch stakeholder interview guides
-    let stakeholderGuides = [];
+    let stakeholderGuides: StakeholderGuide[] = [];
     try {
-      const selectedStudy = studies.find(s => s.id.toString() === studyId.toString());
+      const selectedStudy = studies.find((s: Study) => s.id.toString() === studyId.toString());
       if (selectedStudy) {
         stakeholderGuides = await getStudyStakeholderGuide(selectedStudy.name);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error fetching stakeholder guides:", error);
     }
 
-    // Update the modal (analysis files loaded by handleStudySelectionChange, not here)
     const updatedModal = researchSynthesisModal(studies, studyId, sessionSummaries, transcripts, currentAnalysisMethod, stakeholderGuides, []);
 
     await client.views.update({
@@ -604,70 +638,66 @@ const handleLoadStudyNotes = async ({ ack, body, client }) => {
       view: updatedModal
     });
 
-  } catch (error) {
+  } catch (error: any) {
     throw error;
   }
 };
 
-// View submission handler for research synthesis modal
-const handleResearchSynthesisSubmission = async ({ ack, body, view, client }) => {
+// ─── Submission handler ─────────────────────────────────────────
+
+const handleResearchSynthesisSubmission = async ({ ack, body, view, client }: ViewSubmissionContext): Promise<void> => {
   try {
     await ack();
 
-    // Extract form data
-    const selectedStudyName = view.state.values.study_select_block?.study_select_synthesize?.selected_option?.text?.text;
-    const selectedStudyId = view.state.values.study_select_block?.study_select_synthesize?.selected_option?.value;
-    const analysisMethod = view.state.values.analysis_method_selection?.analysis_method?.selected_option?.value;
+    const selectedStudyName: string | undefined = view.state.values.study_select_block?.study_select_synthesize?.selected_option?.text?.text;
+    const selectedStudyId: string | undefined = view.state.values.study_select_block?.study_select_synthesize?.selected_option?.value;
+    const analysisMethod: string | undefined = view.state.values.analysis_method_selection?.analysis_method?.selected_option?.value;
 
-    // Update active study for cross-command pre-fill
     if (selectedStudyId) await setActiveStudy(body.user.id, parseInt(selectedStudyId, 10));
 
-    // Extract selected session summaries from all checkbox blocks (may be split across multiple blocks)
-    let selectedSessionSummaries = [];
+    // Extract selected session summaries from all checkbox blocks
+    let selectedSessionSummaries: Array<{ value: string }> = [];
     Object.keys(view.state.values).forEach(key => {
       if (key.startsWith('session_summaries_list_')) {
         const blockValues = view.state.values[key]?.session_summaries_checkboxes?.selected_options || [];
         selectedSessionSummaries = selectedSessionSummaries.concat(blockValues);
       }
     });
-    // Fallback to single block format
     if (selectedSessionSummaries.length === 0) {
       selectedSessionSummaries = view.state.values.session_summaries_list?.session_summaries_checkboxes?.selected_options || [];
     }
-    const selectedSummaryIds = selectedSessionSummaries.map(opt => opt.value.replace('summary_', ''));
+    const selectedSummaryIds: string[] = selectedSessionSummaries.map((opt: { value: string }) => opt.value.replace('summary_', ''));
 
-    // Extract selected transcripts from all checkbox blocks (may be split across multiple blocks)
-    let selectedTranscripts = [];
+    // Extract selected transcripts
+    let selectedTranscripts: Array<{ value: string }> = [];
     Object.keys(view.state.values).forEach(key => {
       if (key.startsWith('transcripts_list_')) {
         const blockValues = view.state.values[key]?.transcripts_checkboxes?.selected_options || [];
         selectedTranscripts = selectedTranscripts.concat(blockValues);
       }
     });
-    // Fallback to single block format
     if (selectedTranscripts.length === 0) {
       selectedTranscripts = view.state.values.transcripts_list?.transcripts_checkboxes?.selected_options || [];
     }
-    const selectedTranscriptIds = selectedTranscripts.map(opt => opt.value.replace('transcript_', ''));
+    const selectedTranscriptIds: string[] = selectedTranscripts.map((opt: { value: string }) => opt.value.replace('transcript_', ''));
 
-    // Extract selected stakeholder guides from all checkbox blocks
-    let selectedStakeholderGuides = [];
+    // Extract selected stakeholder guides
+    let selectedStakeholderGuides: Array<{ value: string }> = [];
     Object.keys(view.state.values).forEach(key => {
       if (key.startsWith('stakeholder_guides_list_')) {
         const blockValues = view.state.values[key]?.stakeholder_guides_checkboxes?.selected_options || [];
         selectedStakeholderGuides = selectedStakeholderGuides.concat(blockValues);
       }
     });
-    // Fallback to single block format
     if (selectedStakeholderGuides.length === 0) {
       selectedStakeholderGuides = view.state.values.stakeholder_guides_list?.stakeholder_guides_checkboxes?.selected_options || [];
     }
-    const selectedStakeholderGuideIds = selectedStakeholderGuides.map(opt => opt.value.replace('guide_', ''));
+    const selectedStakeholderGuideIds: string[] = selectedStakeholderGuides.map((opt: { value: string }) => opt.value.replace('guide_', ''));
 
     // Extract context data checkboxes
     const contextDataCheckboxes = view.state.values.context_data_list?.context_data_checkboxes?.selected_options || [];
-    const includeParticipantTracker = contextDataCheckboxes.some(option => option.value === 'participant_tracker');
-    const includeResearchPlan = contextDataCheckboxes.some(option => option.value === 'research_plan');
+    const includeParticipantTracker: boolean = contextDataCheckboxes.some((option: { value: string }) => option.value === 'participant_tracker');
+    const includeResearchPlan: boolean = contextDataCheckboxes.some((option: { value: string }) => option.value === 'research_plan');
 
     // Validate required fields
     if (!selectedStudyId || selectedStudyId === "no_studies") {
@@ -678,10 +708,8 @@ const handleResearchSynthesisSubmission = async ({ ack, body, view, client }) =>
       throw new Error("Please select an analysis method");
     }
 
-    // Extract selected analysis files count for validation
-    const selectedAnalysisCount = (view.state.values.analysis_files_list_0?.analysis_files_checkboxes?.selected_options || []).length;
+    const selectedAnalysisCount: number = (view.state.values.analysis_files_list_0?.analysis_files_checkboxes?.selected_options || []).length;
 
-    // At least one file must be selected
     if (selectedSummaryIds.length === 0 && selectedTranscriptIds.length === 0 && selectedStakeholderGuideIds.length === 0 && selectedAnalysisCount === 0 && !includeParticipantTracker && !includeResearchPlan) {
       throw new Error("Please select at least one file or data source for analysis.");
     }
@@ -689,8 +717,7 @@ const handleResearchSynthesisSubmission = async ({ ack, body, view, client }) =>
     const study = await getResearchStudyWithRoles(selectedStudyName);
 
     // Cascade validation: synthesis methods that require upstream nuggets
-    const nuggetRequiredMethods = ['affinity_mapping', 'persona_generation', 'journey_mapping', 'jobs_to_be_done', 'usability_issues', 'design_opportunities', 'service_blueprint'];
-    if (nuggetRequiredMethods.includes(analysisMethod) && study?.path) {
+    if (NUGGET_REQUIRED_METHODS.includes(analysisMethod) && study?.path) {
       try {
         const decodedPath = decodeURIComponent(study.path);
         const studyVars = await readStudyVariables(decodedPath);
@@ -699,72 +726,66 @@ const handleResearchSynthesisSubmission = async ({ ack, body, view, client }) =>
           studyVars.variables.atomic_nugget_core.value.length > 0;
         if (!hasNuggetCore) {
           const methodName = analysisMethod.replace(/_/g, ' ');
-          throw new Error(
+          throw new TemplateContractError(
+            `${methodName} requires atomic_nugget_core from session summaries`,
+            analysisMethod,
+            'atomic_nugget_core',
             `${methodName} requires session summaries with extracted nuggets. ` +
-            "Run /qori-analyze on session transcripts first to build the nugget pool."
+            'Run `/qori-analyze` on session transcripts first to build the nugget pool.',
           );
         }
-      } catch (validationError) {
-        if (validationError.message.includes('requires session summaries')) {
+      } catch (validationError: any) {
+        if (validationError instanceof TemplateContractError) {
           throw validationError;
         }
-        // Non-blocking if variable read fails — let it proceed with file content
         console.warn('⚠️ Cascade validation check failed (continuing):', validationError.message);
       }
     }
 
     // Fetch files based on selected checkboxes
-    let allFiles = [];
+    let allFiles: Array<Record<string, unknown>> = [];
 
-    // Fetch selected session summaries
     if (selectedSummaryIds.length > 0) {
       try {
-        const allSessionSummaries = await sessionSummaryService.getSessionSummariesByStudyId(parseInt(selectedStudyId));
-        const selectedSummaries = allSessionSummaries.filter(summary => 
+        const allSessionSummaries: SessionSummary[] = await sessionSummaryService.getSessionSummariesByStudyId(parseInt(selectedStudyId));
+        const selectedSummaries = allSessionSummaries.filter((summary: SessionSummary) =>
           selectedSummaryIds.includes(summary.id.toString())
         );
-        allFiles = allFiles.concat(selectedSummaries.map(summary => ({
+        allFiles = allFiles.concat(selectedSummaries.map((summary: SessionSummary) => ({
           ...summary,
           file_type: 'session_summary',
           file_path: summary.file_path
         })));
-      } catch (error) {
+      } catch (error: any) {
         console.error("Error fetching session summaries:", error);
       }
     }
 
-    // Fetch selected transcripts
     if (selectedTranscriptIds.length > 0) {
       try {
         const allStudyNotes = await studyNotesService.getStudyNotesByStudyId(parseInt(selectedStudyId));
-        const selectedNotes = allStudyNotes.filter(note => 
+        const selectedNotes = allStudyNotes.filter((note: { id: number }) =>
           selectedTranscriptIds.includes(note.id.toString())
         );
-        allFiles = allFiles.concat(selectedNotes.map(note => ({
+        allFiles = allFiles.concat(selectedNotes.map((note: { id: number; transcript: boolean; file_path: string | null; path?: string }) => ({
           ...note,
           file_type: note.transcript ? 'transcript' : 'study_note',
           file_path: note.file_path || note.path
         })));
-      } catch (error) {
+      } catch (error: any) {
         console.error("Error fetching transcripts:", error);
       }
     }
 
-    // Fetch selected stakeholder guides
     if (selectedStakeholderGuideIds.length > 0) {
       try {
-        const allStakeholderGuides = await getStudyStakeholderGuide(selectedStudyName);
-        const selectedGuides = allStakeholderGuides.filter(guide => 
+        const allStakeholderGuides: StakeholderGuide[] = await getStudyStakeholderGuide(selectedStudyName);
+        const selectedGuides = allStakeholderGuides.filter((guide: StakeholderGuide) =>
           selectedStakeholderGuideIds.includes(guide.id.toString())
         );
-        allFiles = allFiles.concat(selectedGuides.map(guide => {
-          // Extract file path from GitHub URL if needed
-          let filePath = guide.path;
+        allFiles = allFiles.concat(selectedGuides.map((guide: StakeholderGuide) => {
+          let filePath: string | null = guide.path;
           if (filePath && filePath.includes('github.com')) {
-            // Extract path from GitHub URL: 
-            // https://github.com/org/repo/blob/branch/path/to/file.md
-            // https://github.com/org/repo/tree/branch/path/to/file.md
-            // Convert to: path/to/file.md
             const urlMatch = filePath.match(/github\.com\/[^/]+\/[^/]+\/(?:blob|tree)\/[^/]+\/(.+)$/);
             if (urlMatch) {
               filePath = decodeURIComponent(urlMatch[1]);
@@ -780,30 +801,25 @@ const handleResearchSynthesisSubmission = async ({ ack, body, view, client }) =>
             filename: guide.file_name || filePath?.split('/').pop() || 'Unknown'
           };
         }));
-      } catch (error) {
+      } catch (error: any) {
         console.error("Error fetching stakeholder guides:", error);
       }
     }
 
-    // TODO: Fetch participant tracker if selected
     if (includeParticipantTracker) {
-      // Implementation needed
       console.log("Participant tracker selected - implementation needed");
     }
 
-    // TODO: Fetch research plan if selected
     if (includeResearchPlan) {
-      // Implementation needed
       console.log("Research plan selected - implementation needed");
     }
 
-    // Fetch selected analysis files (from 04-analysis/ GitHub folders)
+    // Fetch selected analysis files
     const selectedAnalysisFiles = view.state.values.analysis_files_list_0?.analysis_files_checkboxes?.selected_options || [];
     if (selectedAnalysisFiles.length > 0) {
       const decodedStudyPath = decodeURIComponent(study.path);
       for (const opt of selectedAnalysisFiles) {
-        // Value format: analysis_{index}_{relative_path}
-        const relativePath = opt.value.replace(/^analysis_\d+_/, '');
+        const relativePath: string = opt.value.replace(/^analysis_\d+_/, '');
         const fullPath = `${decodedStudyPath}/primary-research/${relativePath}`;
         allFiles.push({
           filename: relativePath.split('/').pop(),
@@ -818,97 +834,76 @@ const handleResearchSynthesisSubmission = async ({ ack, body, view, client }) =>
       throw new Error("No files found for the selected study. Please check if files exist for the selected study.");
     }
 
-    // Fetch file contents from GitHub in parallel for better performance
+    // Fetch file contents from GitHub in parallel
     console.log(`🚀 ~ Fetching content for ${allFiles.length} files in parallel...`);
 
-    const fileContentPromises = allFiles.map(async (file) => {
+    const fileContentPromises = allFiles.map(async (file): Promise<FileWithContent> => {
       try {
         if (!file.file_path) {
           console.warn(`🚀 ~ No file path available for file: ${file.filename}`);
           return {
             ...file,
+            filename: (file.filename as string) || 'Unknown',
+            file_type: (file.file_type as string) || 'unknown',
             content: '[No file path available]',
             githubPath: null
-          };
+          } as FileWithContent;
         }
 
         const githubFile = await fetchFileFromRepoByPath(process.env.GITHUB_REPO, file.file_path);
         return {
           ...file,
+          filename: (file.filename as string) || 'Unknown',
+          file_type: (file.file_type as string) || 'unknown',
           content: githubFile.content || '[Content not available]',
-          githubPath: file.file_path
-        };
-      } catch (error) {
+          githubPath: file.file_path as string
+        } as FileWithContent;
+      } catch (error: any) {
         console.error(`🚀 ~ Error fetching file ${file.filename}:`, error.message);
         return {
           ...file,
+          filename: (file.filename as string) || 'Unknown',
+          file_type: (file.file_type as string) || 'unknown',
           content: `[Error fetching content: ${error.message}]`,
-          githubPath: file.file_path || 'unknown'
-        };
+          githubPath: (file.file_path as string) || 'unknown'
+        } as FileWithContent;
       }
     });
 
-    // Wait for all file content to be fetched in parallel
-    const filesWithContent = await Promise.all(fileContentPromises);
+    const filesWithContent: FileWithContent[] = await Promise.all(fileContentPromises);
     console.log(`🚀 ~ Successfully fetched content for ${filesWithContent.length} files`);
 
-    // Build detected_files list with relative paths for source citations
-    const detectedFilesList = filesWithContent
+    // Build detected_files list
+    const detectedFilesList: string = filesWithContent
       .filter(f => f.file_path)
       .map(f => {
-        // Strip the study base path to get primary-research-relative paths
-        if (f.file_path.includes('primary-research/')) {
+        if (f.file_path && f.file_path.includes('primary-research/')) {
           return f.file_path.split('primary-research/')[1];
         }
-        // For paths outside primary-research/, use the last 3 segments
-        const parts = f.file_path.split('/');
+        const parts = (f.file_path || '').split('/');
         return parts.slice(-3).join('/');
       })
       .map(f => `- ${f}`)
       .join('\n');
 
-    // Create simplified data object structure
-    const analysisData = {
-      // Core required fields
-      selected_study: selectedStudyName,
+    const analysisData: SynthesisTemplateInput = {
+      selected_study: selectedStudyName!,
       selected_session_summaries: selectedSummaryIds,
       selected_transcripts: selectedTranscriptIds,
       selected_stakeholder_guides: selectedStakeholderGuideIds,
       include_participant_tracker: includeParticipantTracker,
       include_research_plan: includeResearchPlan,
-
-      // Default for service_blueprint.yaml (no modal UI element for this yet)
       blueprint_scope: 'end_to_end',
-
-      // Researcher info for masthead
       researcher_contact: study?.researcher_name || study?.researcher_email || '',
-
-      // Source files for traceability citations
       detected_files: detectedFilesList || 'No files detected',
-
-      // Combined content of all files
-      combined_file_content: filesWithContent.map(f => f.content).join('\n\n---\n\n')
+      combined_file_content: filesWithContent.map((f: FileWithContent) => f.content).join('\n\n---\n\n')
     };
 
-
-    // Map analysis methods to their corresponding YAML files
-    const analysisYamlMapping = {
-      'affinity_mapping': 'affinity_mapping.yaml',
-      'journey_mapping': 'journey_mapping.yaml',
-      'persona_generation': 'persona_generator.yaml',
-      'jobs_to_be_done': 'jobs_to_be_done.yaml',
-      'usability_issues': 'usability_issues_extractor.yaml',
-      'design_opportunities': 'design_opportunity_generator.yaml',
-      'service_blueprint': 'service_blueprint.yaml'
-    };
-
-    // Fetch the appropriate YAML file based on the selected analysis method
-    const yamlFileName = analysisYamlMapping[analysisMethod];
+    const yamlFileName = ANALYSIS_YAML_MAPPING[analysisMethod];
     if (!yamlFileName) {
       throw new Error(`Unknown analysis method: ${analysisMethod}`);
     }
 
-    // Send immediate progress message so user knows it's working
     await client.chat.postEphemeral({
       channel: body.user.id,
       user: body.user.id,
@@ -917,16 +912,12 @@ const handleResearchSynthesisSubmission = async ({ ack, body, view, client }) =>
 
     try {
       const yamlTemplateFile = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, yamlFileName);
-
-      // Process the specific analysis YAML with the simplified data
       const renderedAnalysis = await processYamlTemplate(yamlTemplateFile.content, analysisData, study?.path);
-      console.log(`✅ Synthesis complete: ${renderedAnalysis.outputTemplate?.length || 0} chars, path: ${renderedAnalysis.result?.path || 'unknown'}`);
+      console.log(`✅ Synthesis complete: ${renderedAnalysis.outputTemplate?.length || 0} chars`);
 
-      // Extract first two lines from outputTemplate for channel message
-      const outputLines = renderedAnalysis.outputTemplate.split('\n').filter(line => line.trim());
-      const firstTwoLines = outputLines.slice(0, 2).join('\n');
+      const outputLines: string[] = renderedAnalysis.outputTemplate.split('\n').filter((line: string) => line.trim());
+      const firstTwoLines: string = outputLines.slice(0, 2).join('\n');
 
-      // Send confirmation message with GitHub link using blocks (DM)
       await client.chat.postEphemeral({
         channel: body.user.id,
         user: body.user.id,
@@ -957,7 +948,6 @@ const handleResearchSynthesisSubmission = async ({ ack, body, view, client }) =>
         ],
       });
 
-      // Send channel message with synthesis preview and GitHub link
       if (study?.channel_name) {
         await client.chat.postMessage({
           channel: study.channel_name,
@@ -988,34 +978,33 @@ const handleResearchSynthesisSubmission = async ({ ack, body, view, client }) =>
         });
       }
 
-      // Track extraction in background — send follow-up when done
+      // Track extraction in background
       if (renderedAnalysis.extractionPromise) {
-        renderedAnalysis.extractionPromise.then(async (extractResult) => {
+        renderedAnalysis.extractionPromise.then(async (extractResult: { success: boolean; variableCount?: number; keys?: string[]; error?: string }) => {
           try {
             if (extractResult.success) {
               await client.chat.postEphemeral({
                 channel: body.user.id,
                 user: body.user.id,
-                text: `Cascade variables extracted: ${extractResult.variableCount} items (${extractResult.keys.join(', ')}). Downstream templates can now consume this data.`,
+                text: `Cascade variables extracted: ${extractResult.variableCount} items (${extractResult.keys!.join(', ')}). Downstream templates can now consume this data.`,
               });
             } else {
               await client.chat.postEphemeral({
                 channel: body.user.id,
                 user: body.user.id,
-                text: `Warning: Variable extraction failed — ${extractResult.error}. The document was saved but cascade variables were not updated. Downstream templates will use file content as fallback.`,
+                text: `Warning: Variable extraction failed — ${extractResult.error}. The document was saved but cascade variables were not updated.`,
               });
             }
-          } catch (msgErr) {
+          } catch (msgErr: any) {
             console.error('Failed to send extraction status message:', msgErr.message);
           }
         });
       }
 
-    } catch (error) {
+    } catch (error: any) {
       console.error(`❌ Synthesis failed [${yamlFileName}]: ${error.message}`);
       if (error.stack) console.error(error.stack.split('\n').slice(0, 5).join('\n'));
 
-      // Send error message to user so they know it failed
       await client.chat.postEphemeral({
         channel: body.user.id,
         user: body.user.id,
@@ -1023,10 +1012,9 @@ const handleResearchSynthesisSubmission = async ({ ack, body, view, client }) =>
       });
     }
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error handling research synthesis submission:", error);
 
-    // Send error message to user
     await client.chat.postEphemeral({
       channel: body.user.id,
       user: body.user.id,

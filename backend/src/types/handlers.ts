@@ -15,6 +15,7 @@ import type {
   ViewSubmitAction,
   SlashCommand,
   BlockAction,
+  BlockElementAction,
 } from '@slack/bolt';
 import type { WebClient } from '@slack/web-api';
 
@@ -35,10 +36,11 @@ export interface ViewSubmissionContext {
 
 /**
  * Common shape every slash command handler receives.
- * Handlers for /qori-* commands get this before opening a modal.
+ * Bolt passes both `body` and `command` — they're the same object.
  */
 export interface SlashCommandContext {
   ack: AckFn<void>;
+  command: SlashCommand;
   body: SlashCommand;
   client: WebClient;
 }
@@ -50,7 +52,17 @@ export interface SlashCommandContext {
 export interface BlockActionContext {
   ack: AckFn<void>;
   body: BlockAction;
+  action: BlockElementAction;
   client: WebClient;
+}
+
+/**
+ * Common shape for Slack event handlers (message, reaction, etc.).
+ */
+export interface EventContext<E = Record<string, unknown>> {
+  event: E;
+  client: WebClient;
+  say: (message: string | Record<string, unknown>) => Promise<unknown>;
 }
 
 // ---------------------------------------------------------------------------
