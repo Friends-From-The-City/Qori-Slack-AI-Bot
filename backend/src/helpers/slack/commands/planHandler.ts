@@ -141,11 +141,6 @@ interface PlanTemplateInput {
 async function handlePlanSubmission({ ack, body, view, client }: ViewSubmissionContext) {
   await ack();
 
-  // TEMPORARY: Test 2 — verify generic error DM reaches user
-  if (Date.now() > 0) {
-    throw new Error('test generic error');
-  }
-
   const values = view.state.values;
   const { channelId, studyName: metaStudyName, userId } = JSON.parse(view.private_metadata || '{}');
 
