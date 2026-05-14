@@ -1,0 +1,213 @@
+/**
+ * deskResearchHandler.ts — Desk research upload modal opener + submission
+ *
+ * Extracted from events.js. Handles the upload_desk_research action (opens
+ * modal with study picker) and the upload_desk_research_modal submission
+ * (processes uploaded files, runs YAML template, emits cascade variables).
+ *
+ * This is a CASCADE-EMITTING handler: it doesn't consume upstream variables,
+ * it produces them. The desk_research.yaml template emits discovered_barriers,
+ * discovered_metrics, discovered_journeys, methodology_recommendations,
+ * knowledge_gaps, and source_artifacts.
+ */
+
+import type { BlockActionContext, ViewSubmissionContext } from '../../../../types/handlers';
+
+const { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo } = require('../../../github');
+const { getResearchStudyWithRoles, getStudiesByUser } = require('../../../../services/research_study.service');
+const { processYamlTemplate } = require('../../../yamlProcessor');
+const { sendStudyResultMessage, generateStudyResultBlocks } = require('../../ui/studyResultBlocks');
+const { processSlackFiles } = require('../../../pdfProcessor');
+const { parseDocuments, validateDocuments } = require('../../../documentParser');
+const { uploadDeskResearchModal } = require('../../ui/uploadDeskResearchModal');
+
+// ─── Block Kit manipulation type ──────────────────────────────────
+
+interface MutableBlock {
+  type: string;
+  block_id?: string;
+  element?: { options?: unknown[]; initial_option?: unknown; [key: string]: unknown };
+  [key: string]: unknown;
+}
+
+// ─── Template input contract ──────────────────────────────────────
+
+interface DeskResearchTemplateInput {
+  research_topic: string;
+  selected_study: string;
+  description: string;
+  document_content: string;
+}
+
+// ─── Modal opener ─────────────────────────────────────────────────
+
+async function openDeskResearchModal({ ack, body, client }: BlockActionContext) {
+  await ack();
+
+  if (!('view' in body) || !body.view) {
+    console.warn('Desk research opener received non-modal action context');
+    return;
+  }
+
+  try {
+    const meta = JSON.parse(body.view.private_metadata || '{}');
+    const selectedFromView = body.view.state?.values?.study_selection?.study_select?.selected_option || null;
+    let studyName: string = selectedFromView?.text?.text || meta.studyName || meta.selectedStudy || meta.study_name || '';
+    let studyId: string | null = selectedFromView?.value || meta.studyId || null;
+
+    if (!studyName || studyId === 'loading' || studyId === 'no_studies') {
+      await client.chat.postEphemeral({
+        channel: meta.channelId || body.user.id,
+        user: body.user.id,
+        text: '❌ Please select a study before uploading desk research.',
+      });
+      return;
+    }
+
+    if (!studyName) {
+      try {
+        const studies = await getStudiesByUser(body.user.id);
+        if (Array.isArray(studies) && studies.length > 0) {
+          studyName = studies[0].name;
+          studyId = String(studies[0].id);
+        }
+      } catch (e: any) {
+        console.warn('⚠️ Could not infer studyName for upload desk research:', e.message);
+      }
+    }
+
+    const studies = await getStudiesByUser(body.user.id);
+    const studyOptions = studies.map((study: any) => ({
+      text: { type: 'plain_text', text: study.name },
+      value: String(study.id),
+    }));
+
+    const modalBlocks: MutableBlock[] = [...uploadDeskResearchModal.blocks];
+    const studyBlockIndex = modalBlocks.findIndex(b => b.block_id === 'study_select_block');
+
+    if (studyBlockIndex !== -1 && studyOptions.length > 0 && modalBlocks[studyBlockIndex].element) {
+      modalBlocks[studyBlockIndex] = {
+        ...modalBlocks[studyBlockIndex],
+        element: {
+          ...modalBlocks[studyBlockIndex].element!,
+          options: studyOptions,
+          initial_option: studyName
+            ? studyOptions.find((o: any) => o.text.text === studyName) || studyOptions[0]
+            : studyOptions[0],
+        },
+      };
+    }
+
+    await client.views.push({
+      trigger_id: body.trigger_id,
+      view: {
+        ...uploadDeskResearchModal,
+        blocks: modalBlocks,
+        private_metadata: JSON.stringify({ ...(meta || {}), studyName, studyId, channelId: meta.channelId }),
+      },
+    });
+  } catch (err: any) {
+    console.error('Error opening upload desk research modal:', err.data || err);
+  }
+}
+
+// ─── Submission handler ───────────────────────────────────────────
+
+async function handleDeskResearchSubmission({ ack, body, view, client }: ViewSubmissionContext) {
+  await ack();
+
+  const values = view.state.values;
+  const meta = JSON.parse(view.private_metadata || '{}');
+  let { channelId, studyName } = meta;
+
+  const selectedStudy = values.study_select_block?.selected_study?.selected_option;
+  if (selectedStudy) {
+    studyName = selectedStudy.text.text;
+  }
+
+  if (!studyName) {
+    await client.chat.postMessage({
+      channel: channelId || body.user?.id,
+      text: '❌ Study name is required but could not be determined. Please ensure you have a study selected or create one with `/qori-start`.',
+    });
+    return;
+  }
+
+  if (!channelId) {
+    await client.chat.postMessage({
+      channel: body.user?.id || '',
+      text: '❌ Channel ID is required but could not be determined. Please try again.',
+    });
+    return;
+  }
+
+  const uploadedFiles = values.file_upload_block?.file_upload?.files?.map((file: any) => ({
+    id: file.id,
+    name: file.name,
+    mimetype: file.mimetype,
+    url: file.url_private,
+  })) || [];
+
+  try {
+    if (uploadedFiles.length === 0) {
+      await client.chat.postMessage({
+        channel: channelId,
+        text: '❌ Please upload at least one file to analyze.',
+      });
+      return;
+    }
+
+    const processedFiles = await processSlackFiles(uploadedFiles, process.env.SLACK_BOT_TOKEN);
+
+    const documents = processedFiles.map((file: any) => ({
+      name: file.name,
+      content: file.content,
+      type: file.type,
+      size: file.size,
+    }));
+
+    const validation = validateDocuments(documents);
+    if (!validation.isValid) {
+      await client.chat.postMessage({
+        channel: channelId,
+        text: `❌ ${validation.message}`,
+      });
+      return;
+    }
+
+    const parsedDocuments = parseDocuments(documents);
+    const formattedDocumentContent: string = parsedDocuments.structured_format;
+
+    const deskResearchData: DeskResearchTemplateInput = {
+      research_topic: studyName,
+      selected_study: studyName,
+      description: studyName,
+      document_content: formattedDocumentContent,
+    };
+
+    const study = await getResearchStudyWithRoles(studyName);
+
+    if (!study) {
+      await client.chat.postMessage({
+        channel: channelId,
+        text: `❌ Study "${studyName}" not found. Please verify the study name and try again.`,
+      });
+      return;
+    }
+
+    const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, 'desk_research.yaml');
+    const renderedYaml = await processYamlTemplate(file.content, deskResearchData, study.path, 'desk-research');
+
+    const url: string = renderedYaml.result.url;
+    const blocks = generateStudyResultBlocks(studyName, study, url, channelId, 'desk');
+    await sendStudyResultMessage(client, channelId, studyName, blocks, 'desk');
+  } catch (error: any) {
+    console.error('Error processing desk research:', error);
+    await client.chat.postMessage({
+      channel: channelId,
+      text: `❌ There was an error processing your desk research: ${error.message}\n\nPlease try again or contact support.`,
+    });
+  }
+}
+
+module.exports = { openDeskResearchModal, handleDeskResearchSubmission };

@@ -1,3 +1,14 @@
+/**
+ * analyzeNotesHandler.ts — /qori-analyze command and modal handlers
+ *
+ * Opens a progressive-disclosure modal (study → session → notes),
+ * then processes selected session transcripts + observer notes through
+ * the session_summary YAML template.
+ */
+
+import type { SlashCommandContext, ViewSubmissionContext, BlockActionContext } from '../../../types/handlers';
+import type { ResearchQuestion, TargetBarrier } from '../../../types/cascade';
+
 const { analyzeNotesModal } = require("../ui/analyzeNotesModal");
 const { getStudiesByUser, getResearchStudyWithRoles } = require("../../../services/research_study.service");
 const { getActiveStudy, setActiveStudy } = require("../../../services/slack-user-state.service");
@@ -8,17 +19,28 @@ const { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepoByPath, fetchFileFro
 const { processYamlTemplate } = require("../../../helpers/yamlProcessor");
 const { readStudyVariables } = require("../../../helpers/studyVariables");
 
-// Read cascade context from study variables (brief-emitted vars)
-const getCascadeContext = async (studyPath) => {
+// ─── Cascade context ─────────────────────────────────────────────
+
+interface CascadeContext {
+  barrierCount: number;
+  questionCount: number;
+  methodology: string | null;
+}
+
+/**
+ * Read cascade context from study variables (brief-emitted vars).
+ * Non-blocking: returns null if variables are unavailable.
+ */
+const getCascadeContext = async (studyPath: string): Promise<CascadeContext | null> => {
   if (!studyPath) return null;
   try {
     const studyVars = await readStudyVariables(decodeURIComponent(studyPath));
     if (!studyVars || !studyVars.variables) return null;
 
     const vars = studyVars.variables;
-    const barriers = vars.target_barriers?.value;
-    const questions = vars.research_questions?.value;
-    const methodology = vars.methodology_selection?.value;
+    const barriers = vars.target_barriers?.value as TargetBarrier[] | string | undefined;
+    const questions = vars.research_questions?.value as ResearchQuestion[] | string | undefined;
+    const methodology = vars.methodology_selection?.value as string | undefined;
 
     const barrierCount = Array.isArray(barriers) ? barriers.length
       : (typeof barriers === 'string' && barriers.trim()) ? barriers.split(/\n|;/).filter(Boolean).length : 0;
@@ -28,22 +50,66 @@ const getCascadeContext = async (studyPath) => {
     if (barrierCount === 0 && questionCount === 0 && !methodology) return null;
 
     return { barrierCount, questionCount, methodology: methodology || null };
-  } catch (error) {
+  } catch (error: any) {
     console.warn("Could not read cascade context for study:", error.message);
     return null;
   }
 };
 
-// Command handler to open the analyze notes modal
-const analyzeNotesHandler = async ({ ack, body, client, command }) => {
+// ─── Template input contract ────────────────────────────────────
+
+/** Data shape passed to the session_summary YAML template. */
+interface SessionSummaryTemplateInput {
+  study_folder: string;
+  study_name: string;
+  session_name: string;
+  session_date: string;
+  selected_note_files: string[];
+  coded_transcript_content: string;
+  notes_content: string;
+  note_takers: string;
+  participant_id: string;
+  researcher_contact: string;
+  analyzer: string;
+}
+
+// ─── Note detail types ──────────────────────────────────────────
+
+interface NoteDetail {
+  id: number;
+  filename: string;
+  transcript: boolean;
+  participant_name: string | null;
+  session_date: string | null;
+  created_by: string;
+  file_path: string | null;
+  file_url: string | null;
+  githubContent?: string;
+  dataValues?: Record<string, unknown>;
+  get?: (key: string) => unknown;
+}
+
+interface NoteFile {
+  id: string;
+  filename: string;
+  transcript: boolean;
+  author: string;
+  participant_name: string | null;
+  session_date: string | null;
+  session_time: string | null;
+  study_name: string;
+  file_url: string | null;
+}
+
+// ─── Command handler ────────────────────────────────────────────
+
+const analyzeNotesHandler = async ({ ack, body, client }: SlashCommandContext): Promise<void> => {
   try {
     await ack();
 
-    // Get research studies for the current user
     const studies = await getStudiesByUser(body.user_id);
-    const activeStudyId = await getActiveStudy(body.user_id);
+    const activeStudyId: number | null = await getActiveStudy(body.user_id);
 
-    // Initial state: Show only study dropdown, pre-select active study
     await client.views.open({
       trigger_id: body.trigger_id,
       view: analyzeNotesModal(studies, [], [], {
@@ -54,10 +120,9 @@ const analyzeNotesHandler = async ({ ack, body, client, command }) => {
       })
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error opening analyze notes modal:", error);
 
-    // Send error message to user
     await client.chat.postEphemeral({
       channel: body.user_id,
       user: body.user_id,
@@ -66,18 +131,20 @@ const analyzeNotesHandler = async ({ ack, body, client, command }) => {
   }
 };
 
-// View submission handler for analyze notes modal
-const handleAnalyzeNotesSubmission = async ({ ack, body, view, client }) => {
-  // Extract form data
-  const studyId = view.state.values.study_select_block?.study_select_test?.selected_option?.value;
-  const sessionId = view.state.values.session_select_block?.analyze_notes_session_select?.selected_option?.value;
-  const selectedTranscriptId = view.state.values.transcript_select_block?.transcript_select?.selected_option?.value;
-  const selectedNotes = view.state.values.notes_select_block?.notes_select?.selected_options || [];
+// ─── View submission handler ────────────────────────────────────
+
+const handleAnalyzeNotesSubmission = async ({ ack, body, view, client }: ViewSubmissionContext): Promise<void> => {
+  const values = view.state.values;
+
+  const studyId = values.study_select_block?.study_select_test?.selected_option?.value as string | undefined;
+  const sessionId = values.session_select_block?.analyze_notes_session_select?.selected_option?.value as string | undefined;
+  const selectedTranscriptId = values.transcript_select_block?.transcript_select?.selected_option?.value as string | undefined;
+  const selectedNotes = values.notes_select_block?.notes_select?.selected_options || [];
 
   // Transcript is required
-  const transcriptBlock = view.state.values.transcript_select_block;
+  const transcriptBlock = values.transcript_select_block;
   if (!transcriptBlock || !selectedTranscriptId) {
-    await ack({
+    await (ack as Function)({
       response_action: "errors",
       errors: {
         transcript_select_block: "Please select a session transcript to analyze."
@@ -100,23 +167,22 @@ const handleAnalyzeNotesSubmission = async ({ ack, body, view, client }) => {
       console.log("Selected session ID:", sessionId);
     }
 
-    // Get the selected study name and session info
-    const studyName = view.state.values.study_select_block?.study_select_test?.selected_option?.text?.text || "Unknown Study";
-    const sessionName = view.state.values.session_select_block?.analyze_notes_session_select?.selected_option?.text?.text || null;
+    const studyName: string = values.study_select_block?.study_select_test?.selected_option?.text?.text || "Unknown Study";
+    const sessionName: string | null = values.session_select_block?.analyze_notes_session_select?.selected_option?.text?.text || null;
 
     // Fetch the transcript (required)
-    let noteDetails = [];
+    const noteDetails: NoteDetail[] = [];
     try {
       const transcript = await studyNotesService.getStudyNoteById(parseInt(selectedTranscriptId));
       if (transcript) {
         noteDetails.push(transcript);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.warn("Warning: Could not fetch transcript:", error.message);
     }
 
     // Fetch optional observer notes
-    const noteIds = selectedNotes.map(note => note.value);
+    const noteIds: string[] = selectedNotes.map((note: any) => note.value);
     try {
       for (const noteId of noteIds) {
         const note = await studyNotesService.getStudyNoteById(parseInt(noteId));
@@ -124,18 +190,16 @@ const handleAnalyzeNotesSubmission = async ({ ack, body, view, client }) => {
           noteDetails.push(note);
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.warn("Warning: Could not fetch some observer notes:", error.message);
     }
 
-    // Get the study details
     const study = await getResearchStudyWithRoles(studyName);
 
     // Fetch GitHub content for each note file in parallel
-    const noteContentPromises = noteDetails.map(async (note) => {
+    const noteContentPromises = noteDetails.map(async (note: NoteDetail) => {
       try {
-        // Extract the file path from the GitHub URL
-        let filePath = note.file_path;
+        const filePath = note.file_path;
 
         if (filePath) {
           const githubFile = await fetchFileFromRepoByPath(process.env.GITHUB_REPO, filePath);
@@ -149,7 +213,7 @@ const handleAnalyzeNotesSubmission = async ({ ack, body, view, client }) => {
             githubContent: '[File path not available]'
           };
         }
-      } catch (error) {
+      } catch (error: any) {
         console.warn(`Warning: Could not fetch GitHub content for note ${note.filename}:`, error.message);
         return {
           ...note,
@@ -158,71 +222,59 @@ const handleAnalyzeNotesSubmission = async ({ ack, body, view, client }) => {
       }
     });
 
-    // Wait for all GitHub content to be fetched
     const notesWithContent = await Promise.all(noteContentPromises);
 
-    // Extract note takers and participant IDs from filenames
-    const noteTakers = notesWithContent.map(note => note.created_by).filter(Boolean);
+    const noteTakers: string[] = notesWithContent.map((note: NoteDetail) => note.created_by).filter(Boolean);
 
-    // Since we now filter notes by session_id (which becomes participant_name), 
-    // all notes will have the same participant_name for a given session
-    // So we just need one unique participant ID
-    const participantIds = notesWithContent.map(note => {
-      const participantName = note.participant_name || note.dataValues?.participant_name || note.get?.('participant_name');
-      return participantName || 'unknown';
+    const participantIds: string[] = notesWithContent.map((note: NoteDetail) => {
+      const participantName = note.participant_name || note.dataValues?.participant_name || (note.get ? note.get('participant_name') : undefined);
+      return (participantName as string) || 'unknown';
     });
 
-    // Get unique participant IDs (remove duplicates since they're all the same)
     const uniqueParticipantIds = [...new Set(participantIds)];
 
-    // Helper function to format note content
-    const formatNoteContent = (note) => {
+    const formatNoteContent = (note: NoteDetail): string => {
       const filename = note.filename || 'Unknown File';
       return `# ${filename}\n\n` +
         `**Participant:** ${note.participant_name || 'Unknown Participant'}\n` +
         `**Date:** ${note.session_date || 'Unknown Date'}\n` +
         `**Note Taker:** ${note.created_by || 'Unknown User'}\n\n` +
-        `${note.githubContent || '[No content available]'}`
+        `${note.githubContent || '[No content available]'}`;
     };
 
-    // Separate notes by transcript property
-    const transcriptNotes = notesWithContent.filter(note => note.transcript === true);
-    const regularNotes = notesWithContent.filter(note => note.transcript !== true);
+    const transcriptNotes = notesWithContent.filter((note: NoteDetail) => note.transcript === true);
+    const regularNotes = notesWithContent.filter((note: NoteDetail) => note.transcript !== true);
 
-    // Create coded_transcript_content for transcript notes
-    const coded_transcript_content = transcriptNotes.length > 0
+    const coded_transcript_content: string = transcriptNotes.length > 0
       ? transcriptNotes.map(formatNoteContent).join('\n\n---\n\n')
       : '';
 
-    // Create notes_content for regular notes
-    const notes_content = regularNotes.length > 0
+    const notes_content: string = regularNotes.length > 0
       ? regularNotes.map(formatNoteContent).join('\n\n---\n\n')
       : '';
 
-    // Create template data object with all required keys
-    const templateData = {
+    const templateData: SessionSummaryTemplateInput = {
       study_folder: studyName,
       study_name: studyName,
       session_name: sessionName || 'No specific session selected',
       session_date: new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
-      selected_note_files: notesWithContent.map(note => note.filename || 'Unknown File'),
+      selected_note_files: notesWithContent.map((note: NoteDetail) => note.filename || 'Unknown File'),
       coded_transcript_content: coded_transcript_content,
       notes_content: notes_content,
       note_takers: noteTakers.join(', '),
       participant_id: uniqueParticipantIds[0] || 'Unknown Participant ID',
       researcher_contact: study?.researcher_name || study?.researcher_email || '',
-      analyzer: body.user.username || body.user.name || body.user.id
+      analyzer: (body.user as Record<string, string>).username || body.user.name || body.user.id
     };
-    console.log("🚀 ~ handleAnalyzeNotesSubmission ~ templateData:", templateData)
+    console.log("🚀 ~ handleAnalyzeNotesSubmission ~ templateData:", templateData);
 
-    // Process the YAML template
     const yamlTemplateFile = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, "session_summary.yaml");
 
     const renderedYaml = await processYamlTemplate(yamlTemplateFile.content, templateData, study?.path);
 
     const { result } = renderedYaml;
-    const urlParts = result.path.split('/');
-    const fileName = urlParts[urlParts.length - 1];
+    const urlParts: string[] = result.path.split('/');
+    const fileName: string = urlParts[urlParts.length - 1];
 
     // Save the session summary to the database
     if (renderedYaml && renderedYaml.result) {
@@ -238,18 +290,15 @@ const handleAnalyzeNotesSubmission = async ({ ack, body, view, client }) => {
 
         const savedSummary = await sessionSummaryService.createOrUpdateSessionSummary(summaryData);
         console.log('✅ Session summary saved to database:', savedSummary.id);
-      } catch (error) {
+      } catch (error: any) {
         console.error('⚠️ Warning: Could not save session summary to database:', error);
-        // Continue even if saving fails - don't block the user
       }
     }
 
-    // Create note summary from noteDetails array
-    const noteSummary = noteDetails.map(note =>
+    const noteSummary: string = noteDetails.map((note: NoteDetail) =>
       `• ${note.filename || 'Unknown File'} - Note taker: <@${note.created_by}>`
     ).join('\n');
 
-    // Send the main confirmation message
     await client.chat.postEphemeral({
       channel: body.user.id,
       user: body.user.id,
@@ -280,41 +329,9 @@ const handleAnalyzeNotesSubmission = async ({ ack, body, view, client }) => {
       ],
     });
 
-    // Send the formatted template content in a separate message
-    // if (formattedTemplate) {
-    //   await client.chat.postEphemeral({
-    //     channel: body.user.id,
-    //     user: body.user.id,
-    //     text: `📋 *Session Summary Report*`,
-    //     blocks: [
-    //       {
-    //         type: 'section',
-    //         text: {
-    //           type: 'mrkdwn',
-    //           text: `📋 *Session Summary Report*\n\n${formattedTemplate}`,
-    //         },
-    //       },
-    //       {
-    //         type: 'section',
-    //         text: {
-    //           type: 'mrkdwn',
-    //           text: `<${result.url}|:github: View on GitHub>`,
-    //         },
-    //       },
-    //     ],
-    //   });
-    // } else {
-    //   await client.chat.postEphemeral({
-    //     channel: body.user.id,
-    //     user: body.user.id,
-    //     text: `⚠️ *Template Processing Issue*\n\nThe YAML template was processed but the output format is unexpected. Please check the logs for details.`,
-    //   });
-    // }
-
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error handling analyze notes submission:", error);
 
-    // Send error message to user
     await client.chat.postEphemeral({
       channel: body.user.id,
       user: body.user.id,
@@ -323,9 +340,9 @@ const handleAnalyzeNotesSubmission = async ({ ack, body, view, client }) => {
   }
 };
 
+// ─── Study selection change handler ─────────────────────────────
 
-// Handler for when study selection changes - loads sessions for that study
-const handleStudySelectionChange = async ({ ack, body, client }) => {
+const handleStudySelectionChange = async ({ ack, body, client }: BlockActionContext): Promise<void> => {
   try {
     await ack();
     console.log("🎯 Study selection change handler triggered!");
@@ -339,7 +356,6 @@ const handleStudySelectionChange = async ({ ack, body, client }) => {
     const selectedStudyOption = view.state.values.study_select_block?.study_select_test?.selected_option;
 
     if (!selectedStudyOption || selectedStudyOption.value === "no_studies") {
-      // No study selected, reset to initial state
       console.log("🚀 ~ No study selected, resetting to initial state");
       const studies = await getStudiesByUser(body.user.id);
       await client.views.update({
@@ -354,15 +370,14 @@ const handleStudySelectionChange = async ({ ack, body, client }) => {
     }
 
     const studyId = parseInt(selectedStudyOption.value);
-    const studyName = selectedStudyOption.text.text;
+    const studyName: string = selectedStudyOption.text.text;
 
-    // Fetch sessions and cascade context in parallel
-    let sessions = [];
-    let cascadeContext = null;
+    let sessions: unknown[] = [];
+    let cascadeContext: CascadeContext | null = null;
     try {
       const study = await getResearchStudyWithRoles(studyName);
       const [sessionsResult, cascadeResult] = await Promise.all([
-        sessionObserverService.getObserverRequestsByStudy(studyId).catch(err => {
+        sessionObserverService.getObserverRequestsByStudy(studyId).catch((err: any) => {
           console.warn("Warning: Could not fetch sessions:", err.message);
           return [];
         }),
@@ -371,14 +386,12 @@ const handleStudySelectionChange = async ({ ack, body, client }) => {
       sessions = sessionsResult;
       cascadeContext = cascadeResult;
       console.log(`✅ Loaded ${sessions.length} sessions for study "${studyName}"${cascadeContext ? ` (cascade: ${cascadeContext.barrierCount} barriers, ${cascadeContext.questionCount} questions)` : ''}`);
-    } catch (error) {
+    } catch (error: any) {
       console.warn("Warning: Could not fetch sessions:", error.message);
     }
 
-    // Get the studies list to pass back to the modal
     const studies = await getStudiesByUser(body.user.id);
 
-    // Update modal: Show Study (pre-selected) + Session dropdown with dispatch_action
     await client.views.update({
       view_id: view.id,
       hash: view.hash,
@@ -391,13 +404,14 @@ const handleStudySelectionChange = async ({ ack, body, client }) => {
       })
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error handling study selection change:", error);
   }
 };
 
-// Handler for when session selection changes - loads notes for that session
-const handleSessionSelectionChange = async ({ ack, body, client }) => {
+// ─── Session selection change handler ───────────────────────────
+
+const handleSessionSelectionChange = async ({ ack, body, client }: BlockActionContext): Promise<void> => {
   try {
     await ack();
     console.log("🎯 Session selection change handler triggered!");
@@ -417,13 +431,12 @@ const handleSessionSelectionChange = async ({ ack, body, client }) => {
     }
 
     const studyId = parseInt(selectedStudyOption.value);
-    const studyName = selectedStudyOption.text.text;
+    const studyName: string = selectedStudyOption.text.text;
 
-    // Get the studies list, sessions, and cascade context in parallel
     const study = await getResearchStudyWithRoles(studyName);
     const [studies, sessions, cascadeContext] = await Promise.all([
       getStudiesByUser(body.user.id),
-      sessionObserverService.getObserverRequestsByStudy(studyId).catch(err => {
+      sessionObserverService.getObserverRequestsByStudy(studyId).catch((err: any) => {
         console.warn("Warning: Could not fetch sessions:", err.message);
         return [];
       }),
@@ -431,7 +444,6 @@ const handleSessionSelectionChange = async ({ ack, body, client }) => {
     ]);
 
     if (!selectedSessionOption || selectedSessionOption.value === "no_sessions") {
-      // No session selected, show study + session but no notes
       console.log("🚀 ~ No session selected, showing sessions only");
       await client.views.update({
         view_id: view.id,
@@ -448,54 +460,51 @@ const handleSessionSelectionChange = async ({ ack, body, client }) => {
     }
 
     const sessionId = parseInt(selectedSessionOption.value);
-    const sessionName = selectedSessionOption.text.text;
+    const sessionName: string = selectedSessionOption.text.text;
 
     // Get the session object to extract session_id
-    let sessionObject = null;
+    let sessionObject: Record<string, unknown> | null = null;
     try {
       const allSessions = await sessionObserverService.getObserverRequestsByStudy(studyId);
-      sessionObject = allSessions.find(s => s.id.toString() === selectedSessionOption.value);
-    } catch (error) {
+      sessionObject = allSessions.find((s: { id: number | string }) => s.id.toString() === selectedSessionOption.value) || null;
+    } catch (error: any) {
       console.warn("Warning: Could not fetch session details:", error.message);
     }
 
     // Fetch notes for the specific session using session_id as participant_name
-    let studyNotes = [];
+    let studyNotes: NoteDetail[] = [];
     try {
       if (sessionObject && sessionObject.session_id) {
-        // Use session_id to filter notes by participant_name
         studyNotes = await studyNotesService.getStudyNotesByParticipantName(sessionObject.session_id);
         console.log(`✅ Loaded ${studyNotes.length} notes for session_id "${sessionObject.session_id}" (session: "${sessionName}")`);
       } else {
-        // Fallback: if no session_id found, get all notes for the study
         console.warn("No session_id found in session object, falling back to all study notes");
         const transcriptNotes = await studyNotesService.getStudyNotesByStudyName(studyName, true);
         const nonTranscriptNotes = await studyNotesService.getStudyNotesByStudyName(studyName, false);
 
         const allNotes = [...transcriptNotes, ...nonTranscriptNotes];
-        studyNotes = allNotes.filter((note, index, self) =>
-          index === self.findIndex(n => n.id === note.id)
+        studyNotes = allNotes.filter((note: NoteDetail, index: number, self: NoteDetail[]) =>
+          index === self.findIndex((n: NoteDetail) => n.id === note.id)
         );
         console.log(`✅ Loaded ${studyNotes.length} notes for study "${studyName}" (fallback)`);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.warn("Warning: Could not fetch study notes:", error.message);
     }
 
     // Transform notes to the format expected by the modal
-    const noteFiles = studyNotes.map(note => ({
+    const noteFiles: NoteFile[] = studyNotes.map((note: NoteDetail) => ({
       id: note.id.toString(),
       filename: note.filename,
       transcript: note.transcript || false,
       author: note.created_by,
       participant_name: note.participant_name,
       session_date: note.session_date,
-      session_time: note.session_time,
-      study_name: note.study_name,
+      session_time: null,
+      study_name: studyName,
       file_url: note.file_url
     }));
 
-    // Update modal: Show Study (pre-selected) + Session (pre-selected) + Notes checkboxes
     await client.views.update({
       view_id: view.id,
       hash: view.hash,
@@ -509,7 +518,7 @@ const handleSessionSelectionChange = async ({ ack, body, client }) => {
       })
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error handling session selection change:", error);
   }
 };
