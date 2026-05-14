@@ -82,6 +82,11 @@ const { generateOtherMessageType, copyEmailFormatted } = require('./commands/mes
 // Events
 const { handleMessageEvent } = require('./commands/messageEventHandler');
 
+// UI modals and services (used by inline /qori-plan and /qori-brief command handlers)
+const { studySetupModalPlanStudy } = require('./ui/studySetupModal');
+const { buildBriefEntryModal } = require('./ui/researchBriefEntryModal');
+const { getStudiesByUser } = require('../../services/research_study.service');
+
 // ── Express router for Slack routes ─────────────────────────────
 
 const slackExpressRouter = express.Router();
@@ -147,16 +152,12 @@ slackApp.command('/qori', qoriMainCommand);
 slackApp.command('/qori-start', startResearchHandler);
 slackApp.command('/qori-brief', async ({ ack, body, client, command }: any) => {
   await ack();
-  const { buildBriefEntryModal } = require('./ui/researchBriefEntryModal');
-  const { getStudiesByUser } = require('../../services/research_study.service');
   const studies = await getStudiesByUser(command.user_id);
   const modal = buildBriefEntryModal(studies, command.channel_id);
   await client.views.open({ trigger_id: command.trigger_id, view: modal });
 });
 slackApp.command('/qori-plan', async ({ ack, body, client, command }: any) => {
   await ack();
-  const { studySetupModalPlanStudy } = require('./ui/studySetupModal');
-  const { getStudiesByUser } = require('../../services/research_study.service');
   const studies = await getStudiesByUser(command.user_id);
   const modal = studySetupModalPlanStudy(studies, command.channel_id);
   await client.views.open({ trigger_id: command.trigger_id, view: modal });
