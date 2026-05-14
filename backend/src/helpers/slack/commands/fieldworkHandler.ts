@@ -5,6 +5,8 @@
  *               /qori-observe, /qori-outreach, /qori-notes
  */
 
+import type { SlashCommandContext, BlockActionContext, ViewSubmissionContext } from '../../../types/handlers';
+
 const { getStudiesByUser, getResearchStudyWithRoles } = require('../../../services/research_study.service');
 const studyParticipantService = require('../../../services/study_participant.service');
 const sessionObserverService = require('../../../services/session_observer.service');
@@ -22,7 +24,7 @@ const { buildSessionNotesView } = require('../ui/sessionNotesModal');
 /**
  * Derive outreach stats and dashboard context from raw participant list.
  */
-const buildDashboardContext = (allParticipants, study) => {
+function buildDashboardContext(allParticipants: any[], study: any) {
   const outreachSent = allParticipants.filter((p) => p.outreach_sent_at).length;
   const awaitingResponse = allParticipants.filter((p) =>
     p.outreach_sent_at && p.status_select === PARTICIPANT_STATUS.CONTACTED
@@ -61,13 +63,13 @@ const buildDashboardContext = (allParticipants, study) => {
     outreachStats,
     context: { sessionDateRange, lastUpdated },
   };
-};
+}
 
 /**
  * Fetch all stats needed for the dashboard and render it.
  * Used both on initial open and after sub-modal actions refresh the parent.
  */
-const fetchAndRenderDashboard = async (client, viewId, study, meta) => {
+async function fetchAndRenderDashboard(client: any, viewId: string, study: any, meta: any) {
   const participantStats = await studyParticipantService.getParticipantStats(study.id);
   const observerStats = await sessionObserverService.getObserverStats(study.id);
   const allParticipants = await studyParticipantService.getParticipantsByStudy(study.id);
@@ -77,11 +79,11 @@ const fetchAndRenderDashboard = async (client, viewId, study, meta) => {
   dashboard.private_metadata = JSON.stringify(meta);
 
   await client.views.update({ view_id: viewId, view: dashboard });
-};
+}
 
 // ── Command handler ────────────────────────────────────────
 
-const fieldworkHandler = async ({ ack, body, client, command }) => {
+async function fieldworkHandler({ ack, body, client, command }: SlashCommandContext) {
   try {
     await ack();
 
@@ -118,7 +120,7 @@ const fieldworkHandler = async ({ ack, body, client, command }) => {
     }
 
     // Multiple studies — show picker, pre-select active study
-    const studyOptions = studies.map(s => ({
+    const studyOptions = studies.map((s: any) => ({
       text: { type: 'plain_text', text: s.name },
       value: s.id.toString(),
     }));
@@ -127,24 +129,24 @@ const fieldworkHandler = async ({ ack, body, client, command }) => {
     picker.private_metadata = JSON.stringify({ channelId, userId });
 
     await client.views.open({ trigger_id: body.trigger_id, view: picker });
-  } catch (error) {
+  } catch (error: any) {
     console.error('fieldworkHandler error:', error.data || error.message);
   }
-};
+}
 
 // ── Study picker submission ────────────────────────────────
 
-const handleFieldworkStudyPickerSubmit = async ({ ack, body, view, client }) => {
+async function handleFieldworkStudyPickerSubmit({ ack, body, view, client }: ViewSubmissionContext) {
   try {
-    const selectedStudyId = view.state.values.fieldwork_study_select.fieldwork_study_choice.selected_option.value;
+    const selectedStudyId = (view.state as any).values.fieldwork_study_select.fieldwork_study_choice.selected_option.value;
     const meta = JSON.parse(view.private_metadata || '{}');
     const userId = meta.userId || body.user.id;
 
     await setActiveStudy(userId, parseInt(selectedStudyId, 10));
 
-    const study = (await getStudiesByUser(userId)).find(s => s.id.toString() === selectedStudyId);
+    const study = (await getStudiesByUser(userId)).find((s: any) => s.id.toString() === selectedStudyId);
     if (!study) {
-      await ack({ response_action: 'errors', errors: { fieldwork_study_select: 'Study not found.' } });
+      await ack({ response_action: 'errors', errors: { fieldwork_study_select: 'Study not found.' } } as any);
       return;
     }
 
@@ -157,12 +159,12 @@ const handleFieldworkStudyPickerSubmit = async ({ ack, body, view, client }) => 
     const dashboard = buildFieldworkDashboard(study, participantStats, observerStats, outreachStats, context);
     dashboard.private_metadata = JSON.stringify(dashboardMeta);
 
-    await ack({ response_action: 'update', view: dashboard });
-  } catch (error) {
+    await ack({ response_action: 'update', view: dashboard } as any);
+  } catch (error: any) {
     console.error('handleFieldworkStudyPickerSubmit error:', error);
     await ack();
   }
-};
+}
 
 // ── Sub-modal action dispatchers ───────────────────────────
 // Each button in the dashboard pushes the corresponding sub-modal.
@@ -174,40 +176,40 @@ const handleFieldworkStudyPickerSubmit = async ({ ack, body, view, client }) => 
  * refresh the parent fieldwork dashboard. Call this at the end of each
  * sub-modal submission handler that was folded from a standalone command.
  */
-const refreshDashboardAfterAction = async (client, rootViewId, studyId, userId, channelId, studyName) => {
+async function refreshDashboardAfterAction(client: any, rootViewId: string, studyId: string | number, userId: string, channelId: string, studyName: string) {
   try {
     const studies = await getStudiesByUser(userId);
-    const study = studies.find(s => s.id.toString() === studyId.toString());
+    const study = studies.find((s: any) => s.id.toString() === studyId.toString());
     if (!study) return;
 
     await fetchAndRenderDashboard(client, rootViewId, study, {
       channelId, userId, studyId: study.id, studyName: study.name,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('refreshDashboardAfterAction error:', error.message);
     // Non-fatal — the sub-modal action already succeeded
   }
-};
+}
 
 // ── Sub-modal action handlers ──────────────────────────────
 
-const handleFieldworkAddParticipant = async ({ ack, body, client }) => {
+async function handleFieldworkAddParticipant({ ack, body, client }: BlockActionContext) {
   await ack();
   try {
-    const { studyId, studyName } = JSON.parse(body.actions[0].value);
-    const dashboardMeta = JSON.parse(body.view.private_metadata || '{}');
+    const { studyId, studyName } = JSON.parse((body as any).actions[0].value);
+    const dashboardMeta = JSON.parse((body as any).view.private_metadata || '{}');
     const studies = await getStudiesByUser(body.user.id);
 
     // Build study options and pre-select the current study
-    const studyOptions = studies.map(s => ({
+    const studyOptions = studies.map((s: any) => ({
       text: { type: 'plain_text', text: s.name },
       value: s.id.toString(),
     }));
 
     let blocks = JSON.parse(JSON.stringify(addParticipantModal.blocks));
-    const studyBlockIdx = blocks.findIndex(b => b.block_id === 'study_select_block');
+    const studyBlockIdx = blocks.findIndex((b: any) => b.block_id === 'study_select_block');
     if (studyBlockIdx !== -1 && studyOptions.length > 0) {
-      const initialOption = studyOptions.find(o => o.value === studyId.toString()) || studyOptions[0];
+      const initialOption = studyOptions.find((o: any) => o.value === studyId.toString()) || studyOptions[0];
       blocks[studyBlockIdx] = {
         ...blocks[studyBlockIdx],
         element: { ...blocks[studyBlockIdx].element, options: studyOptions, initial_option: initialOption },
@@ -215,34 +217,34 @@ const handleFieldworkAddParticipant = async ({ ack, body, client }) => {
     }
 
     await client.views.push({
-      trigger_id: body.trigger_id,
+      trigger_id: (body as any).trigger_id,
       view: {
         ...addParticipantModal,
         blocks,
-        private_metadata: JSON.stringify({ ...dashboardMeta, studyId, studyName, rootViewId: body.view.id }),
+        private_metadata: JSON.stringify({ ...dashboardMeta, studyId, studyName, rootViewId: (body as any).view.id }),
       },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('handleFieldworkAddParticipant error:', error.message);
   }
-};
+}
 
-const handleFieldworkUpdateStatus = async ({ ack, body, client }) => {
+async function handleFieldworkUpdateStatus({ ack, body, client }: BlockActionContext) {
   await ack();
   try {
-    const { studyId, studyName } = JSON.parse(body.actions[0].value);
-    const dashboardMeta = JSON.parse(body.view.private_metadata || '{}');
+    const { studyId, studyName } = JSON.parse((body as any).actions[0].value);
+    const dashboardMeta = JSON.parse((body as any).view.private_metadata || '{}');
     const studies = await getStudiesByUser(body.user.id);
 
-    const studyOptions = studies.map(s => ({
+    const studyOptions = studies.map((s: any) => ({
       text: { type: 'plain_text', text: s.name },
       value: s.id.toString(),
     }));
 
     let blocks = JSON.parse(JSON.stringify(updateParticipantStatusModal.blocks));
-    const studyBlockIdx = blocks.findIndex(b => b.block_id === 'study_selection_block');
+    const studyBlockIdx = blocks.findIndex((b: any) => b.block_id === 'study_selection_block');
     if (studyBlockIdx !== -1 && studyOptions.length > 0) {
-      const initialOption = studyOptions.find(o => o.value === studyId.toString()) || studyOptions[0];
+      const initialOption = studyOptions.find((o: any) => o.value === studyId.toString()) || studyOptions[0];
       blocks[studyBlockIdx] = {
         type: 'input',
         block_id: 'study_selection_block',
@@ -259,23 +261,23 @@ const handleFieldworkUpdateStatus = async ({ ack, body, client }) => {
     }
 
     await client.views.push({
-      trigger_id: body.trigger_id,
+      trigger_id: (body as any).trigger_id,
       view: {
         ...updateParticipantStatusModal,
         blocks,
-        private_metadata: JSON.stringify({ ...dashboardMeta, studyId, studyName, rootViewId: body.view.id }),
+        private_metadata: JSON.stringify({ ...dashboardMeta, studyId, studyName, rootViewId: (body as any).view.id }),
       },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('handleFieldworkUpdateStatus error:', error.message);
   }
-};
+}
 
-const handleFieldworkObserve = async ({ ack, body, client }) => {
+async function handleFieldworkObserve({ ack, body, client }: BlockActionContext) {
   await ack();
   try {
-    const { studyId, studyName } = JSON.parse(body.actions[0].value);
-    const dashboardMeta = JSON.parse(body.view.private_metadata || '{}');
+    const { studyId, studyName } = JSON.parse((body as any).actions[0].value);
+    const dashboardMeta = JSON.parse((body as any).view.private_metadata || '{}');
     const channelId = dashboardMeta.channelId || body.user.id;
 
     // Build sessions with current observer counts
@@ -294,14 +296,14 @@ const handleFieldworkObserve = async ({ ack, body, client }) => {
     let channelName = 'channel';
     try {
       const channelInfo = await client.conversations.info({ channel: channelId });
-      channelName = channelInfo.channel?.name || 'channel';
+      channelName = (channelInfo as any).channel?.name || 'channel';
     } catch (e) {
       // Fallback — may be a DM channel or inaccessible
     }
 
     const observeView = buildAddObserverModal(sessions, channelName);
     await client.views.push({
-      trigger_id: body.trigger_id,
+      trigger_id: (body as any).trigger_id,
       view: {
         ...observeView,
         private_metadata: JSON.stringify({
@@ -310,30 +312,30 @@ const handleFieldworkObserve = async ({ ack, body, client }) => {
           studyName,
           channelId,
           userId: body.user.id,
-          rootViewId: body.view.id,
+          rootViewId: (body as any).view.id,
         }),
       },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('handleFieldworkObserve error:', error.message);
   }
-};
+}
 
-const handleFieldworkOutreach = async ({ ack, body, client }) => {
+async function handleFieldworkOutreach({ ack, body, client }: BlockActionContext) {
   await ack();
   try {
-    const { studyId, studyName } = JSON.parse(body.actions[0].value);
-    const dashboardMeta = JSON.parse(body.view.private_metadata || '{}');
+    const { studyId, studyName } = JSON.parse((body as any).actions[0].value);
+    const dashboardMeta = JSON.parse((body as any).view.private_metadata || '{}');
     const studies = await getStudiesByUser(body.user.id);
 
-    const studyOptions = studies.map(s => ({
+    const studyOptions = studies.map((s: any) => ({
       text: { type: 'plain_text', text: s.name },
       value: s.name,
     }));
 
     let blocks = JSON.parse(JSON.stringify(participantOutreachModal.blocks));
     // Prepend study dropdown with pre-selection
-    const initialOption = studyOptions.find(o => o.value === studyName) || studyOptions[0];
+    const initialOption = studyOptions.find((o: any) => o.value === studyName) || studyOptions[0];
     blocks.unshift({
       type: 'input',
       block_id: 'study_select_block',
@@ -349,23 +351,23 @@ const handleFieldworkOutreach = async ({ ack, body, client }) => {
     });
 
     await client.views.push({
-      trigger_id: body.trigger_id,
+      trigger_id: (body as any).trigger_id,
       view: {
         ...participantOutreachModal,
         blocks,
-        private_metadata: JSON.stringify({ ...dashboardMeta, studyId, studyName, rootViewId: body.view.id }),
+        private_metadata: JSON.stringify({ ...dashboardMeta, studyId, studyName, rootViewId: (body as any).view.id }),
       },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('handleFieldworkOutreach error:', error.message);
   }
-};
+}
 
-const handleFieldworkUploadNotes = async ({ ack, body, client }) => {
+async function handleFieldworkUploadNotes({ ack, body, client }: BlockActionContext) {
   await ack();
   try {
-    const { studyId, studyName } = JSON.parse(body.actions[0].value);
-    const dashboardMeta = JSON.parse(body.view.private_metadata || '{}');
+    const { studyId, studyName } = JSON.parse((body as any).actions[0].value);
+    const dashboardMeta = JSON.parse((body as any).view.private_metadata || '{}');
     const userId = body.user.id;
 
     // Try observer sessions first
@@ -386,7 +388,7 @@ const handleFieldworkUploadNotes = async ({ ack, body, client }) => {
       }
 
       mode = 'researcher';
-      sessions = participants.map((p, idx) => ({
+      sessions = participants.map((p: any, idx: number) => ({
         id: `p_${p.id}`,
         study: p.study || { id: studyId, name: studyName },
         participant: p,
@@ -395,7 +397,7 @@ const handleFieldworkUploadNotes = async ({ ack, body, client }) => {
     }
 
     // Convert Sequelize models to plain objects so template literals work consistently
-    const plainSessions = sessions.map(s => ({
+    const plainSessions = sessions.map((s: any) => ({
       id: s.id,
       study: s.study?.dataValues ? s.study.toJSON() : s.study,
       participant: s.participant?.dataValues ? s.participant.toJSON() : s.participant,
@@ -422,10 +424,10 @@ const handleFieldworkUploadNotes = async ({ ack, body, client }) => {
     };
 
     await client.views.push({
-      trigger_id: body.trigger_id,
+      trigger_id: (body as any).trigger_id,
       view: buildSessionNotesView(initialState),
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('handleFieldworkUploadNotes error:', error.message, error.data || '');
     await client.chat.postEphemeral({
       channel: body.user.id,
@@ -433,7 +435,7 @@ const handleFieldworkUploadNotes = async ({ ack, body, client }) => {
       text: `Failed to open notes modal: ${error.message}`,
     }).catch(() => {});
   }
-};
+}
 
 module.exports = {
   fieldworkHandler,

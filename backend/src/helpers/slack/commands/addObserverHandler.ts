@@ -4,6 +4,8 @@
  * 2. Opportunistic — channel CTA button, self-join via session picker
  */
 
+import type { ViewSubmissionContext, BlockActionContext } from '../../../types/handlers';
+
 const sessionObserverService = require('../../../services/session_observer.service');
 const studyParticipantService = require('../../../services/study_participant.service');
 const { getStudiesByUser, getResearchStudyWithRoles } = require('../../../services/research_study.service');
@@ -15,11 +17,18 @@ const { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo } = require('../../
 
 // ── Helpers ────────────────────────────────────────────────
 
+const ROLE_DISPLAY: Record<string, string> = {
+  note_taker: '📝 Note-taker',
+  silent_observer: '👁️ Silent Observer',
+  pm_observer: '📊 PM Observer',
+  stakeholder: '🏛️ Stakeholder',
+};
+
 /**
  * Update the GitHub participant tracker with current observer data.
  * Non-fatal — logs a warning on failure so the main flow isn't blocked.
  */
-const updateObserverTracker = async (studyId, studyName, studyPath) => {
+async function updateObserverTracker(studyId: number, studyName: string, studyPath: string | undefined): Promise<void> {
   try {
     const yamlFile = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, 'participant_tracker.yaml');
     if (!yamlFile || !yamlFile.content) return;
@@ -36,59 +45,52 @@ const updateObserverTracker = async (studyId, studyName, studyPath) => {
       allParticipants,
     );
     console.log('✅ Observer tracker updated for study:', studyName);
-  } catch (err) {
+  } catch (err: any) {
     console.warn('⚠️ Could not update observer tracker:', err.message);
   }
-};
-
-const ROLE_DISPLAY = {
-  note_taker: '📝 Note-taker',
-  silent_observer: '👁️ Silent Observer',
-  pm_observer: '📊 PM Observer',
-  stakeholder: '🏛️ Stakeholder',
-};
+}
 
 /**
  * Parse the session value from the modal (format: "PT-001|1").
  */
-const parseSessionValue = (value) => {
+function parseSessionValue(value: string): { sessionId: string; participantId: number } {
   const [sessionId, participantIdStr] = value.split('|');
   return { sessionId, participantId: parseInt(participantIdStr, 10) };
-};
+}
 
 /**
  * Format a date range string from participant scheduled_dates.
  */
-const formatDateRange = (participants) => {
+function formatDateRange(participants: Array<{ scheduled_date?: string }>): string {
   const dates = participants
     .map(p => p.scheduled_date)
     .filter(Boolean)
     .sort();
   if (dates.length === 0) return 'TBD';
-  if (dates.length === 1) return dates[0];
+  if (dates.length === 1) return dates[0] as string;
   return `${dates[0]} – ${dates[dates.length - 1]}`;
-};
+}
 
 // ── Handler: Add observer modal submission ─────────────────
 
-const handleAddObserverSubmission = async ({ ack, body, client, view }) => {
-  const values = view.state.values;
+async function handleAddObserverSubmission({ ack, body, client, view }: ViewSubmissionContext): Promise<void> {
+  const values = (view.state as any).values;
   const meta = JSON.parse(view.private_metadata || '{}');
   const { studyId, studyName, channelId, userId, rootViewId } = meta;
 
   // Extract form values
-  const selectedSessionValues = values.observer_sessions_block?.observer_sessions?.selected_options?.map(o => o.value) || [];
-  const selectedUsers = values.observer_people_block?.observer_people?.selected_users || [];
-  const selectedRole = values.observer_role_block?.observer_role?.selected_option?.value || 'silent_observer';
+  const selectedSessionValues: string[] = values.observer_sessions_block?.observer_sessions?.selected_options?.map((o: any) => o.value) || [];
+  const selectedUsers: string[] = values.observer_people_block?.observer_people?.selected_users || [];
+  const selectedRole: string = values.observer_role_block?.observer_role?.selected_option?.value || 'silent_observer';
   const ctaChecked = (values.observer_channel_cta_block?.observer_channel_cta?.selected_options || [])
-    .some(o => o.value === 'post_channel_cta');
+    .some((o: any) => o.value === 'post_channel_cta');
 
   // Validate: at least one session
   if (selectedSessionValues.length === 0) {
     return ack({
       response_action: 'errors',
       errors: { observer_sessions_block: 'Select at least one session.' },
-    });
+    } as any);
   }
 
   // Validate: at least one path chosen
@@ -96,7 +98,7 @@ const handleAddObserverSubmission = async ({ ack, body, client, view }) => {
     return ack({
       response_action: 'errors',
       errors: { observer_people_block: 'Select people or check the channel invite option.' },
-    });
+    } as any);
   }
 
   // Atomic cap check for curated path (overall + per-role)
@@ -112,28 +114,28 @@ const handleAddObserverSubmission = async ({ ack, body, client, view }) => {
         return ack({
           response_action: 'errors',
           errors: { observer_sessions_block: msg },
-        });
+        } as any);
       }
     }
   }
 
   // Ack — close the modal
-  await ack({ response_action: 'clear' });
+  await ack({ response_action: 'clear' } as any);
 
   try {
-    const addedUsers = [];
+    const addedUsers: string[] = [];
 
     // ── Curated path ────────────────────────────────────
     if (selectedUsers.length > 0) {
       for (const slackUserId of selectedUsers) {
-        let userInfo;
+        let userInfo: any;
         try {
           userInfo = await client.users.info({ user: slackUserId });
-        } catch (e) {
+        } catch (e: any) {
           console.error('Failed to fetch user info for', slackUserId, e.message);
           continue;
         }
-        const displayName = userInfo.user?.real_name || userInfo.user?.name || slackUserId;
+        const displayName: string = userInfo.user?.real_name || userInfo.user?.name || slackUserId;
 
         for (const sv of selectedSessionValues) {
           const { sessionId, participantId } = parseSessionValue(sv);
@@ -165,8 +167,8 @@ const handleAddObserverSubmission = async ({ ack, body, client, view }) => {
       const targetChannel = channelId;
       try {
         const channelInfo = await client.conversations.info({ channel: targetChannel });
-        ctaChannelName = channelInfo.channel?.name || targetChannel;
-      } catch (e) {
+        ctaChannelName = (channelInfo.channel as any)?.name || targetChannel;
+      } catch (e: any) {
         ctaChannelName = targetChannel;
       }
 
@@ -174,15 +176,15 @@ const handleAddObserverSubmission = async ({ ack, body, client, view }) => {
       let researcherName = 'A researcher';
       try {
         const userInfo = await client.users.info({ user: userId });
-        researcherName = userInfo.user?.real_name || userInfo.user?.name || 'A researcher';
-      } catch (e) { /* use fallback */ }
+        researcherName = (userInfo.user as any)?.real_name || (userInfo.user as any)?.name || 'A researcher';
+      } catch (e: any) { /* use fallback */ }
 
       // Get date range
       const participants = await studyParticipantService.getParticipantsByStudy(studyId);
       const dateRange = formatDateRange(participants);
 
       // Build session labels for the CTA
-      const sessionLabels = selectedSessionValues.map(sv => {
+      const sessionLabels = selectedSessionValues.map((sv: string) => {
         const { sessionId } = parseSessionValue(sv);
         return sessionId;
       });
@@ -220,9 +222,9 @@ const handleAddObserverSubmission = async ({ ack, body, client, view }) => {
     }
 
     // ── Researcher confirmation DM ──────────────────────
-    const parts = [];
+    const parts: string[] = [];
     if (addedUsers.length > 0) {
-      const sessionLabels = selectedSessionValues.map(sv => parseSessionValue(sv).sessionId);
+      const sessionLabels = selectedSessionValues.map((sv: string) => parseSessionValue(sv).sessionId);
       const roleLabel = ROLE_DISPLAY[selectedRole] || selectedRole;
       parts.push(`Added ${addedUsers.length} observer${addedUsers.length === 1 ? '' : 's'} (${roleLabel}) across ${sessionLabels.join(', ')}.`);
     }
@@ -245,28 +247,28 @@ const handleAddObserverSubmission = async ({ ack, body, client, view }) => {
     if (rootViewId) {
       await refreshDashboardAfterAction(client, rootViewId, studyId, userId, channelId, studyName);
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('handleAddObserverSubmission error:', error.message);
   }
-};
+}
 
 // ── Handler: Self-join CTA button click ────────────────────
 
-const handleSelfJoinObserver = async ({ ack, body, client }) => {
+async function handleSelfJoinObserver({ ack, body, client }: BlockActionContext): Promise<void> {
   await ack();
 
   try {
-    const { studyId, studyName, sessionIds } = JSON.parse(body.actions[0].value);
+    const { studyId, studyName, sessionIds } = JSON.parse((body as any).actions[0].value);
 
     // Build session list with current counts for the picker
     const allSessions = await sessionObserverService.buildSessionsWithCounts(studyId);
     const ctaSessions = sessionIds
-      ? allSessions.filter(s => sessionIds.includes(s.id))
+      ? allSessions.filter((s: any) => sessionIds.includes(s.id))
       : allSessions;
 
     if (ctaSessions.length === 0) {
       await client.chat.postEphemeral({
-        channel: body.channel.id,
+        channel: (body as any).channel.id,
         user: body.user.id,
         text: 'No sessions available for this study.',
       });
@@ -278,33 +280,33 @@ const handleSelfJoinObserver = async ({ ack, body, client }) => {
       studyId,
       studyName,
       userId: body.user.id,
-      channelId: body.channel.id,
+      channelId: (body as any).channel.id,
     });
 
     await client.views.open({
-      trigger_id: body.trigger_id,
+      trigger_id: (body as any).trigger_id,
       view: modal,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('handleSelfJoinObserver error:', error.message);
   }
-};
+}
 
 // ── Handler: Self-join session picker submission ───────────
 
-const handleSelfJoinSubmission = async ({ ack, body, client, view }) => {
-  const values = view.state.values;
+async function handleSelfJoinSubmission({ ack, body, client, view }: ViewSubmissionContext): Promise<void> {
+  const values = (view.state as any).values;
   const meta = JSON.parse(view.private_metadata || '{}');
   const { studyId, studyName, userId: joinerUserId, channelId } = meta;
 
-  const selectedSessionValues = values.self_join_sessions_block?.self_join_sessions?.selected_options?.map(o => o.value) || [];
-  const selectedRole = values.self_join_role_block?.self_join_role?.selected_option?.value || 'silent_observer';
+  const selectedSessionValues: string[] = values.self_join_sessions_block?.self_join_sessions?.selected_options?.map((o: any) => o.value) || [];
+  const selectedRole: string = values.self_join_role_block?.self_join_role?.selected_option?.value || 'silent_observer';
 
   if (selectedSessionValues.length === 0) {
     return ack({
       response_action: 'errors',
       errors: { self_join_sessions_block: 'Select at least one session.' },
-    });
+    } as any);
   }
 
   // Cap check (overall + per-role)
@@ -324,22 +326,22 @@ const handleSelfJoinSubmission = async ({ ack, body, client, view }) => {
       return ack({
         response_action: 'errors',
         errors: { self_join_sessions_block: msg },
-      });
+      } as any);
     }
   }
 
-  await ack({ response_action: 'clear' });
+  await ack({ response_action: 'clear' } as any);
 
   try {
     // Get joiner display name
     let joinerName = 'Someone';
     try {
       const userInfo = await client.users.info({ user: joinerUserId });
-      joinerName = userInfo.user?.real_name || userInfo.user?.name || 'Someone';
-    } catch (e) { /* use fallback */ }
+      joinerName = (userInfo.user as any)?.real_name || (userInfo.user as any)?.name || 'Someone';
+    } catch (e: any) { /* use fallback */ }
 
-    const joinedSessions = [];
-    const skippedSessions = [];
+    const joinedSessions: string[] = [];
+    const skippedSessions: string[] = [];
 
     for (const sv of selectedSessionValues) {
       const { sessionId, participantId } = parseSessionValue(sv);
@@ -379,7 +381,7 @@ const handleSelfJoinSubmission = async ({ ack, body, client, view }) => {
         const participants = await studyParticipantService.getParticipantsByStudy(studyId);
 
         for (const sessionId of joinedSessions) {
-          const participant = participants.find(p => `PT-${String(p.id).padStart(3, '0')}` === sessionId);
+          const participant = participants.find((p: any) => `PT-${String(p.id).padStart(3, '0')}` === sessionId);
           const dateStr = participant?.scheduled_date || 'TBD';
 
           const roleLabel = ROLE_DISPLAY[selectedRole] || selectedRole;
@@ -392,7 +394,7 @@ const handleSelfJoinSubmission = async ({ ack, body, client, view }) => {
     }
 
     // Ephemeral confirmation to self-joiner
-    const parts = [];
+    const parts: string[] = [];
     if (joinedSessions.length > 0) {
       const roleLabel = ROLE_DISPLAY[selectedRole] || selectedRole;
       parts.push(`You've been added as ${roleLabel} for ${joinedSessions.join(', ')}. Check your DMs for the observer guide.`);
@@ -414,10 +416,10 @@ const handleSelfJoinSubmission = async ({ ack, body, client, view }) => {
       const studyForTracker = await getResearchStudyWithRoles(studyName);
       await updateObserverTracker(studyId, studyName, studyForTracker?.path);
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('handleSelfJoinSubmission error:', error.message);
   }
-};
+}
 
 module.exports = {
   handleAddObserverSubmission,
