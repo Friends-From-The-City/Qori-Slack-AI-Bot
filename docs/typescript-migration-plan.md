@@ -33,6 +33,7 @@ See ADR 0013 for the decision and rationale. This file tracks actual progress ag
 ## Pending Phase 5 / v1.1
 
 - **Modal metadata contracts (Phase 5 or v1.1):** `private_metadata` travels as an untyped JSON string between modal builders and handlers. The `channel_id` vs `channelId` divergence in the plan modal (fixed 2026-05-14) is the visible symptom; there are likely more latent across the ~30 modals. Fix pattern: each modal builder defines a TypeScript interface for its `private_metadata` shape; the corresponding handler imports the interface and uses typed destructuring. Same pattern as `PlanTemplateInput` from Stage 1.
+- **`require()` → `import` migration to recover service typing in handlers (Phase 5):** Stage 4 handlers use `const x = require(...)` which loses TypeScript return types at module boundaries. The `any[]` on `participants`/`studies` in handlers is not a service typing gap — services return typed values (`StudyParticipant[]`, `ResearchStudy[]`). The `any` resolves naturally when handlers convert from `require()` to `import` during Phase 5 (events.ts migration).
 
 ## Phase 5 observations
 
