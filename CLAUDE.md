@@ -94,7 +94,7 @@ docker-compose up    # Starts app (3000), postgres (5432), redis (6379)
 
 3. **Postgres public URL for migrations.** Railway's internal Postgres hostname (`postgres.railway.internal`) only resolves inside the private network. To run `npx sequelize-cli db:migrate` from your local machine or via `railway run`, use the **public** connection URL (with `DATABASE_PUBLIC_URL` fields) from the Postgres service's Connect tab (it has a `railway.app` hostname and a mapped port). The internal URL works for the backend service at runtime since it's on the same private network.
 
-**Start command:** Railway's Custom Start Command is `npm run build && node ./dist/app.js`. This compiles `src/` → `dist/` via Babel (handling both `.js` and `.ts` files), then runs the compiled app directly. Do **not** use `npm start` (runs `dist/bin/www.js` which has broken relative paths for `./app` and `./database`). Do **not** use `npm run prod` (runs raw source, can't load `.ts` files). Do **not** put the build in Pre-deploy Command — Railway runs pre-deploy in a separate ephemeral container whose filesystem doesn't persist to the start container.
+**Start command:** Railway uses a Dockerfile (`backend/Dockerfile`) which runs `npm run build` during image creation and `node ./dist/app.js` at runtime. Clear the Custom Start Command in Railway's UI — the Dockerfile CMD handles it. Do **not** use `npm run prod` (runs raw source, can't load `.ts` files). Do **not** use `npm start` (`dist/bin/www.js` has broken relative paths).
 
 **Deploy flow:** Push to `main` → Railway auto-deploys. GitHub Actions CI runs typecheck + tests on every PR.
 
