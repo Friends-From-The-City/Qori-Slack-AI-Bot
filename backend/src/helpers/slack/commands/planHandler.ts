@@ -141,9 +141,9 @@ interface PlanTemplateInput {
 async function handlePlanSubmission({ ack, body, view, client }: ViewSubmissionContext) {
   await ack();
 
-  // TEMPORARY: Test 1 — verify TemplateContractError middleware delivers DM
+  // TEMPORARY: Test 2 — verify generic error DM reaches user
   if (Date.now() > 0) {
-    throw new TemplateContractError('test contract violation', 'research_plan', 'research_objectives', 'This is a test of the cascade contract DM — if you see this, the middleware works.');
+    throw new Error('test generic error');
   }
 
   const values = view.state.values;
