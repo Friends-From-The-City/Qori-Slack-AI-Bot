@@ -13,7 +13,7 @@ function studySetupModalPlanStudy(studies, channelId) {
   return {
     type: "modal",
     callback_id: "plan_study_modal",
-    private_metadata: JSON.stringify({ channel_id: channelId }),
+    private_metadata: JSON.stringify({ channelId }),
     title: {
       type: "plain_text",
       text: "Plan your study",

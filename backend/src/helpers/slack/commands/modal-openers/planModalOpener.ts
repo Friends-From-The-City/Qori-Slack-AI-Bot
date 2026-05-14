@@ -139,7 +139,7 @@ async function openResearchPlanModal({ ack, body, client }: BlockActionContext) 
       view: {
         ...researchPlanGeneratorModal,
         blocks,
-        private_metadata: JSON.stringify({ ...(meta || {}), studyName: preselectStudyName, studyId: preselectStudyId }),
+        private_metadata: JSON.stringify({ ...(meta || {}), studyName: preselectStudyName, studyId: preselectStudyId, userId }),
       },
     });
   } catch (error: any) {
