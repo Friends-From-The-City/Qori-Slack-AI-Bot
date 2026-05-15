@@ -33,7 +33,7 @@ const { handlePlanSubmission } = require('./commands/planHandler');
 const { openPlanFromBrief, openStudyFromBrief } = require('./commands/modal-openers/briefToStudyHandler');
 
 // Approval flows
-const { approvePlan, confirmApprovePlan, requestChangesPlan, requestChangesPlanSubmission, approveBrief, confirmApproveBrief, requestChangesBrief, requestChangesBriefSubmission } = require('./commands/approval/approvalFlowHandler');
+const { handleApprovePlan: approvePlan, handleConfirmApprovePlan: confirmApprovePlan, handleRequestChangesPlan: requestChangesPlan, handleRequestChangesPlanModal: requestChangesPlanSubmission, handleApproveBrief: approveBrief, handleConfirmApproveBrief: confirmApproveBrief, handleRequestChangesBrief: requestChangesBrief, handleRequestChangesBriefModal: requestChangesBriefSubmission } = require('./commands/approval/approvalFlowHandler');
 const { handleMarkChangesCompleteAction, handleMarkChangesCompleteModal, handleApproveChanges } = require('./markChangesCompleteHandler');
 
 // Discussion guide
