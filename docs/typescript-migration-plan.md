@@ -9,7 +9,7 @@ See ADR 0013 for the decision and rationale. This file tracks actual progress ag
 | 1 | TypeScript foundation, tsconfig, Jest TS, CI/CD | 3-5 days | ~0.5 day | 2026-05-13 | Faster than expected. Railway deployment fix added ~1hr of debugging (pre-deploy runs in ephemeral container). |
 | 2 | Type definitions: cascade variables, models, handlers | 3-4 days | ~0.5 day | 2026-05-13 | YAML schema audit was the bulk of the work. Sequelize pattern decision (ADR 0014) was straightforward once models were audited. |
 | 3 | Service + model layer migration | 4-6 days | ~1 day | 2026-05-13 | Stage 1 review gate caught the model-return-type issue (Option A — class at module scope). Once that pattern was established, bulk migration was mechanical. 13 models, 12 services. |
-| 4 | Handler layer migration | 4-6 days | — | — | Not started |
+| 4 | Handler layer migration | 4-6 days | ~2 days CC time | 2026-05-15 | 4 stages over ~3 weeks calendar. Stage 1: planHandler pattern + review gate. Stage 2: synthesis + readout handlers. Stage 3: extraction of 20 handlers from events.js. Stage 4: 7 remaining .js handlers. Smoke tested all 10 command areas on staging. Surfaced 5 latent bugs: studySetupModal static object, private_metadata key mismatch, TemplateContractError instanceof failure, brief modal wrong params, approval import name mismatch. |
 | 5 | Utilities, parsers, events.js | 3-5 days | — | — | Not started |
 | 6 | End-to-end tests | 3-5 days | — | — | Not started |
 | 7 | Sign-off, documentation, resume template work | 1 day | — | — | Not started |
