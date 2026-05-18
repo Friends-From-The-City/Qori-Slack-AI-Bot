@@ -18,6 +18,8 @@ module.exports = {
   },
   testEnvironment: 'node',
   testTimeout: 30000,
+  // Run serially — all tests share one database, parallel workers cause race conditions
+  maxWorkers: 1,
   globalSetup: '<rootDir>/src/__tests__/integration/setup/globalSetup.ts',
   globalTeardown: '<rootDir>/src/__tests__/integration/setup/globalTeardown.ts',
 };
