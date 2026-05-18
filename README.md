@@ -1,241 +1,109 @@
-## Qori by Friends Suite
-
-**Qori by Friends** is a role-based suite of AI-powered tools designed to support government product teams throughout the entire digital delivery lifecycle. Each tool is built to reflect how real teams work — with minimal UI, native Slack integration, and GitHub as the system of record. The tools are modular, non-overlapping, but fully interoperable.
-
-🧠 **Qori for Research**
-
-- Supports user researchers in collecting, synthesizing, and sharing insights faster.
-- Uploads and tags research notes, transcripts, quotes, and recordings
-- Extracts themes, Jobs-to-be-Done, and insights using structured AI prompts
-- Pushes synthesis outputs into GitHub for use by other Qori tools
-- Slack-native: run and retrieve insights directly in channel
-
-🎨 **Qori for Design**
-
-- Helps designers log design decisions, capture rationale, and align with product strategy.
-- Records UX decisions, links to Figma files, and documents iterations
-- Connects design rationale to research evidence and product requirements
-- Maintains a clear record of how and why the product evolved visually
-- Works in Slack with GitHub-based structured storage
-
-📌 **Qori for Product**
-
-- Acts as a product manager's AI co-pilot for planning, alignment, and execution.
-- Drafts roadmaps, Jira tickets, user stories, and success criteria
-- Surfaces relevant research and design inputs when writing features
-- Structures strategy docs, PM briefs, and stakeholder updates
-- Manages backlog context and decision history without additional tools
-
-📌 **Qori for Dev**
-
-- Log technical decisions (stack choices, data modeling, migrations, tool adoption)
-- Summarize architecture using Slack prompts linked to diagrams or PRs
-- Capture API handoffs and document system boundaries
-- Auto-generate developer onboarding packs from environment setup info, common workflows, and project structure
-- Log postmortems with linked root causes, fixes, and preventive actions
-- Slack-based technical Q&A retrieval (“How do I restart staging?” “Who owns the analytics pipeline?”)
-
-📚 **QoriDocs**
-
-- Captures and organizes structured documentation throughout the life of a project — designed for transition, onboarding, and audit-readiness.
-- Logs milestones, sprint summaries, decisions, and architecture notes
-- Creates onboarding packets and training docs on demand
-- AI-powered search across all Qori artifacts, grounded in project files
-- GitHub serves as the documentation vault; Slack is the access point
-
-🔗 **Interoperability**
-- All tools speak the same language (YAML, Markdown, tagging) and connect through:
-- Shared GitHub folder structure
-- Common metadata schema
-- Slack as the unified interface
-- Centralized retrieval and export layer
-
-## Research Ops as Code
-
-**What if research workflows could be as version-controlled, collaborative, and scalable as your codebase?**
-
-### YAML → AI → Slack: The Missing Link Between Research and Delivery
-
-Most research dies in decks. **Qori changes that.**
-
-**Here's how:**
-- **YAML templates in GitHub** mean your research methods are version-controlled, peer-reviewed, and reusable across projects
-- **AI workers** handle the grunt work—transcription, tagging, synthesis—so researchers focus on insights, not operations
-- **Structured output in Slack** means findings land where decisions get made, not buried in folders
-
-### Why This Architecture Wins:
-
-**🔄 Version-Controlled Research Methods**  
-Templates evolve with your team. New hire? They inherit battle-tested workflows, not blank documents.
-
-**⚡ Zero Context-Switching**  
-Teams live in Slack. Research lives in Slack. No more "Did you see that report I shared last week?"
-
-**🛡️ Government-Ready by Design**  
-FedRAMP compliance isn't bolted on—it's baked in. Audit trails, data governance, and human oversight from day one.
-
-**🚀 Compound Learning**  
-Every study makes the next one smarter. Templates improve, AI gets better at your domain, and institutional knowledge accumulates instead of walking out the door.
-
-**The result?** Research becomes **infrastructure**, not a bottleneck. Teams ship faster because insights flow directly into delivery, not into presentations that get forgotten.
-
-*This is research ops that scales with your mission, not against it.*
-
-## 🏗️ Built as Microservices
-
-**Qori is architected as a distributed system of specialized microservices**, making it:
-
-- **🔧 Modular**: Each service handles one responsibility (transcription, analysis, outreach, etc.)
-- **📈 Scalable**: Scale individual services based on demand
-- **🛡️ Resilient**: If one service fails, others continue operating
-- **🔄 Maintainable**: Update, deploy, and debug services independently
-- **🏛️ Government-Ready**: Meets compliance requirements for distributed systems
-
-**Core Architecture Pattern:**
-**YAML (GitHub) → Microservice Orchestration → Structured Output (Slack)**
-
-The microservices architecture enables:
-- **Independent scaling** of AI workers vs. data processing vs. Slack integration
-- **Technology flexibility** (Python for AI, Node.js for Slack, etc.)
-- **Deployment options** (on-premises, cloud, hybrid) to meet agency requirements
-- **Service isolation** for security and compliance auditing
-
-Unlike generic productivity bots, **Qori is purpose-built for public service teams**:
-- It reduces ResearchOps friction. No more cobbling together templates or folder structures.
-- It helps design studies, from research plans to interview guides.
-- It supports study creation, automates transcription, and tags insights thematically.
-- It helps synthesize and summarize findings quickly, without relying on memory or manual labor.
-- It makes research visible by posting digests in Slack and converting insights into GitHub issues.
-- It ensures that **insights don't just sit in decks. They actively shape delivery.**
-
-Qori weaves research directly into the way public interest teams build. It connects the people doing the work with the systems being designed for them, ensuring that insights flow into delivery instead of getting lost. With Qori, research becomes part of the team's operating system, always present and always actionable.
-
----
-
-## 📌 Follow the MVP Progress  
-Stay up-to-date with feature development by following our [CivicMind MVP GitHub Project Board](https://github.com/orgs/Friends-Innovation-Lab/projects/2)
-
----
-
-## ✨ What It Does (MVP Features)
-
-### 🧪 ResearchOps
-
-- **Slack-Initiated Research Kickoff**  
-  Launch new studies with a single command like `/new study`, pre-populating folders, templates, and study metadata.
-
-- **Document Summarization**  
-  Drop in existing Docs, PDFs, or Markdown files to extract key themes, quotes, and pain points from previous research.
-
-### 🎙️ Fieldwork
-- **Transcription + Auto-Tagging**  
-  Upload interview audio to receive a full transcript with quotes tagged by theme, sentiment, and user pain points.
-
-- **AI-Powered Slack Q&A**  
-  Ask questions like “What did users say about benefits navigation?” and get instant summaries, quotes, and links to source materials.
-
-### 🧠 Synthesis
-- **Auto-Report Generation**  
-  Generate insight reports in Markdown or PDF from your notes and transcripts with just a few clicks.
-
-- **Insight-to-Issue Workflow**  
-  Convert research findings into GitHub Issues that reference specific quotes, themes, and transcripts.
-
-### 📢 Share Out
-- **Weekly Slack Digests**  
-  Auto-publish research summaries, tagged by theme or project, into Slack channels to keep teams informed and engaged.
-
----
-
-## 🎯 Market Position
-
-**The Problem**: Government research teams spend 60-80% of their time on research operations (scheduling, transcribing, organizing, reporting) instead of actual analysis and insight generation. Existing tools are built for enterprise teams, not public service workflows.
-
-**Our Solution**: Purpose-built research operations platform that understands government constraints, compliance requirements, and civic tech workflows.
-
-**Why CivicMind vs. Generic AI Tools**:
-- Government-specific templates and workflows out of the box
-- FedRAMP compliance pathway (not an afterthought)
-- Built for teams who serve the public, not venture-backed startups
-- Integrates with government-approved tools (Slack, GitHub) rather than requiring new platforms
-
-**Target Users**: Digital service teams in federal agencies, state governments, and civic tech organizations doing user research.
-
----
-
-## 🧰 Tech Stack
-
-| Component        | Stack / Service                                                                 |
-|------------------|----------------------------------------------------------------------------------|
-| **Frontend**      | Slackbot (Node.js + Bolt)                                                       |
-| **Router Layer**  | LangChain-JS (function calling + RAG)                                           |
-| **Backend Services** | Python Microservices (FastAPI/Flask)                                         |
-| **AI Workers**     | LLM Worker (GPT-4o / Claude), Transcription Worker (Whisper v3), CrewAI + LangGraph |
-| **Data Stores**    | Postgres (config + transcripts), Vector Store (pgvector / Pinecone)            |
-| **Infra / Queue**  | Redis / BullMQ (Job Queue), Agenda.js (for weekly digests)                     |
-| **Integrations**   | Slack, GitHub (via Octokit), Google Docs, Jira                                 |
-
----
-
-## 🗂️ System Architecture
-
-*Architecture diagram to be embedded or linked here once saved successfully.*
-
-![ChatGPT Image Jun 27, 2025, 03_08_58 PM](https://github.com/user-attachments/assets/bfca4214-0603-42d8-a571-8788d1d9efae)
-
-
----
-
-## 🔐 Privacy, Ethics & Human Oversight
-
-CivicMind is built to uphold civic trust:
-- FedRAMP-aware architecture (planning)  
-- Human-in-the-loop review for all AI output  
-- Version logging and edit traceability  
-- PII/PHI redaction (coming soon)  
-
----
-
-## 🛠️ Installation (Coming Soon)
-
-Instructions to deploy CivicMind locally or to a cloud workspace will be added in the next release.
-
----
-
-## 🚀 Usage
-
-Once installed, simply message the Slackbot:
-```
-/ask What did users say about onboarding pain points?
+# Qori Slack
+
+Qori is an AI-powered research operations platform for government UX research teams. Researchers interact through Slack slash commands (`/qori-plan`, `/qori-analyze`, `/qori-synthesis`) which open Block Kit modals, collect input, run chained LLM tasks defined in YAML configs, and store generated documents in GitHub repositories. The variable cascade architecture lets each research artifact (brief, plan, session summary, synthesis) emit typed variables that downstream artifacts consume — creating a traceable chain from raw research through final readouts.
+
+This repo is the Slack surface of Qori. The web surface lives at `Friends-Innovation-Lab/qori` (separate repo).
+
+## Tech stack
+
+| Layer | Technology |
+|-------|-----------|
+| Language | TypeScript (strict mode, migrated from JS in 2026 Q2) |
+| Runtime | Node.js 20 |
+| Slack | Bolt 4.x (socket mode) |
+| Database | PostgreSQL via Sequelize v6 (13 typed models) |
+| Queue | Redis / BullMQ |
+| AI | Claude via LangChain (`@langchain/anthropic`) |
+| Artifact storage | GitHub via Octokit |
+| CI | GitHub Actions (typecheck + unit tests + integration tests) |
+
+## Prerequisites
+
+- Node.js 20+
+- PostgreSQL (local Homebrew or Docker)
+- Redis (for job queue; optional for development)
+- Slack app configured with socket mode (see `.env.example`)
+- GitHub personal access token with repo scope
+
+## Getting started
+
+```bash
+cd backend
+cp .env.example .env        # Fill in Slack tokens, GitHub token, DB credentials, Anthropic API key
+npm install
+npm run db:migrate           # Run all 33 Sequelize migrations
+npm run dev                  # Dev server with nodemon (port 3000)
 ```
 
-Or upload a file:
+For Docker (all services):
+```bash
+cd backend
+docker-compose up            # Starts app (3000), postgres (5432), redis (6379)
 ```
-/upload interview_audio.mp3
+
+## Running tests
+
+```bash
+cd backend
+npm test                     # 76 unit tests (parsers, type verification, template tests)
+npm run test:integration     # 34 integration tests against real Postgres
+npm run typecheck            # TypeScript strict mode check
 ```
 
-Or start a new research study:
+Integration tests require a PostgreSQL database named `qori_test`:
+
+**Local Homebrew Postgres (no Docker needed):**
+```bash
+brew services start postgresql@18
+createdb qori_test
+npm run test:integration
 ```
-/new study "Benefits Navigation Interviews"
+
+**Docker:**
+```bash
+docker compose -f docker-compose.test.yml up -d
+TEST_DB_PORT=5433 TEST_DB_USER=qori_test TEST_DB_PASSWORD=test npm run test:integration
 ```
----
 
-## 👐 Contributing
+## Architecture documentation
 
-We welcome contributions from civic designers, developers, and researchers.
+- **[Architecture Decision Records](docs/architecture-decisions/README.md)** — 15 ADRs documenting significant design choices (cascade contracts, template architecture, Sequelize TypeScript pattern, Bolt native types)
+- **[TypeScript migration plan](docs/typescript-migration-plan.md)** — 7-phase migration from JavaScript, completed 2026-05-18
+- **[Migration retrospective](docs/migration-retrospective.md)** — What worked, what was hard, cumulative findings
+- **[Architecture audit](docs/audits/2026-Q2-audit-post-migration.md)** — Post-migration audit with section ratings and findings
+- **[Quarterly audit checklist](docs/audits/quarterly-architecture-audit.md)** — Recurring discipline document for drift detection
+- **[Template standards](docs/qori-template-standards.md)** — Design language and YAML conventions
+- **[v1.1 followups](docs/v1.1-followups.md)** — Deferred improvements with effort estimates
 
-- 📄 See `CONTRIBUTING.md`  
-- 🛠️ Open an Issue for bugs or ideas  
-- 🌐 Join our Slack to collaborate  
+## Deployment
 
----
+The team's instance runs on **Railway** with Postgres and Redis as managed services. Push to `main` triggers auto-deploy via Dockerfile.
 
-## 📜 License
+For government customer deployments (GOTS), the architecture supports on-premises deployment with standard Node.js + PostgreSQL infrastructure. See `docs/internal/deployment.md` for Railway-specific configuration and the federal go-to-market playbook for customer deployment guidance.
 
-MIT License
+## Key directories
 
----
+```
+backend/src/
+  helpers/slack/commands/    # ~30 handler files (Bolt native types)
+  helpers/slack/ui/          # Modal builders (Block Kit)
+  helpers/slack/events.ts    # Registration manifest (zero as-any casts)
+  services/                  # Sequelize service layer (typed model returns)
+  database/models/           # 13 Sequelize models (InferAttributes pattern)
+  types/                     # Shared types (cascade, models, handlers)
+  utils/                     # Parsers, calculators
+  __tests__/                 # Unit tests
+  __tests__/integration/     # E2E tests against real Postgres
+config/prompts/              # 27 YAML workflow configs (runtime source of truth)
+config/templates/            # Study folder scaffold
+docs/architecture-decisions/ # ADRs
+docs/audits/                 # Architecture audit reports
+```
 
-## ✨ Maintained By
+## License
 
-Built with care by [Friends From The City](https://www.friendsfromthecity.com)
+MIT
+
+## Maintained by
+
+Built by [Friends Innovation Lab](https://www.friendsfromthecity.com)

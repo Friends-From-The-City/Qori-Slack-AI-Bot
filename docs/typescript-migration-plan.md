@@ -12,7 +12,7 @@ See ADR 0013 for the decision and rationale. This file tracks actual progress ag
 | 4 | Handler layer migration | 4-6 days | ~2 days CC time | 2026-05-15 | 4 stages over ~3 weeks calendar. Stage 1: planHandler pattern + review gate. Stage 2: synthesis + readout handlers. Stage 3: extraction of 20 handlers from events.js. Stage 4: 7 remaining .js handlers. Smoke tested all 10 command areas on staging. Surfaced 5 latent bugs: studySetupModal static object, private_metadata key mismatch, TemplateContractError instanceof failure, brief modal wrong params, approval import name mismatch. |
 | 5 | Utilities, parsers, UI builders, helpers, require→import, modal metadata, cascade audit, variableExtractor, timing logs, close-out cleanup | 6-9 days | ~3 days CC time | 2026-05-18 | 8 streams + close-out. 2 utility + 41 UI builder + 16 helper files migrated to .ts. ~480 require()→import conversions. 28 modal metadata interfaces. Cascade access audit in docs/cascade-access-patterns.md. Typed cascade emission via CascadeVariableMap[K]. 32 timing points in 7 handlers. 51 parser fuzz tests. 4 require() remain (circular deps + bcrypt). 47 @ts-expect-error for deep structural mismatches. **Close-out (2026-05-18):** Eliminated all 133 `catch (error: any)` with proper narrowing. Removed 58 `as any` casts (Sequelize CreationAttributes, StudyVariable row typing, modal builder returns, generateStudyResultBlocks param widening). Total `any` count: 672→413. 258 `as any` remain, all Bolt handler typing — moved to Phase 6. |
 | 6 | End-to-end tests, pattern enforcement, Bolt handler typing, architecture audit | 8-12 days | ~1 day CC time | 2026-05-18 | 4 streams. **Stream 1:** Migrated ~75 handlers from custom wrapper types to Bolt native middleware types (ADR 0015). 37 files, 112 registration casts + ~45 handler-body casts eliminated. `any` count 413→193. **Stream 2:** Test infrastructure — Postgres test DB (docker-compose.test.yml + local Homebrew), Jest globalSetup with migrations, per-test truncation. **Stream 3:** 5 critical flow e2e tests (compensation, status transitions, outreach, cascade, full workflow) + 5 pattern enforcement assertions. All 10 tests deliberately broken and verified to fail. Total 76→110 tests. **Stream 4:** Full architecture audit per quarterly checklist. Report at docs/audits/2026-Q2-audit-post-migration.md. All 7 ADRs conform, no drift. |
-| 7 | Sign-off, documentation, resume template work | 1 day | — | — | Not started |
+| 7 | Sign-off, documentation, retrospective, v1.1 followups | 1 day | ~0.5 day | 2026-05-18 | README rewritten for current state. CLAUDE.md updated with post-migration conventions. Migration retrospective at docs/migration-retrospective.md. v1.1 followups consolidated at docs/v1.1-followups.md (14 items, prioritized). Migration plan final-state summary added. |
 
 **Trajectory:** Phases 1-3 estimated at 10-15 days total, completed in ~2 days. The pattern-discovery phase (Stage 1 of Phase 3) was the bottleneck — once approved, bulk migration was fast. Phase 4 (handlers) should follow a similar pattern: slower on the first file, then mechanical.
 
@@ -65,3 +65,24 @@ Four streams executed in order: Bolt typing → test infrastructure → e2e test
 - **`as any` quick fixes (Phase 5 close-out):** 58 casts removed — Sequelize `CreationAttributes`, variable store row typing, modal builder returns, `generateStudyResultBlocks` param widening. 258 remain, all Bolt handler typing (Phase 6 scope).
 - **ADR 0015 (Phase 6):** Bolt native middleware types replace custom wrapper interfaces. Framework-aligned; eliminates registration boundary casts.
 - **Pattern enforcement assertions (Phase 6):** 5 structural tests scan codebase for Phase 4 bug class regressions. Run in CI alongside unit tests.
+
+## Migration complete — final state (2026-05-18)
+
+The TypeScript migration is structurally complete. The codebase is in production-ready state.
+
+**Final metrics:**
+- 13 typed Sequelize models (InferAttributes pattern)
+- ~75 handlers using Bolt native middleware types
+- 12 typed services with model-class return values
+- 110 tests (76 unit + 34 integration)
+- 202 remaining `any` usages (all in bounded categories; budget-enforced by pattern test)
+- 47 `@ts-expect-error` suppressions (genuine type system gaps, each documented)
+- 33 database migrations, all passing
+- 15 ADRs + 3 lessons-from-failure
+- 1 post-migration architecture audit with section ratings
+
+**Bug classes closed:** Attribute whitelist hiding, DECIMAL string coercion, participant status chaos, comma-formatted budget parsing, silent cascade failures.
+
+**What remains (v1.1):** Template unit tests (26/27 untested), `study_name` denormalization (3 tables), database CHECK constraints, STRING→DATE conversions, lint rules. See `docs/v1.1-followups.md`.
+
+**Retrospective:** See `docs/migration-retrospective.md` for lessons learned, time analysis, and recommendations for future architecture work.

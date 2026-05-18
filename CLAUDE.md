@@ -6,24 +6,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Language and type safety
 
-This codebase is migrating from JavaScript to TypeScript. Phase 1 is complete: the toolchain works, CI/CD gates PRs on type-check and tests.
+This codebase is **TypeScript** (strict mode). The migration from JavaScript completed 2026-05-18 (Phases 1-7). See `docs/typescript-migration-plan.md` for history and `docs/migration-retrospective.md` for lessons learned.
 
-Behavior during the migration:
+**Current conventions:**
 
-- **New code is TypeScript.** Any new files should be `.ts`, with proper type annotations.
-- **Modified code is TypeScript when feasible.** If you're substantially modifying a `.js` file (more than a few lines), migrate it to `.ts` as part of the change. If the change is trivial (typo fix, comment update), leaving as `.js` is fine.
-- **Strict mode is on.** Avoid `any` types. If genuinely needed, annotate with `// @ts-expect-error` and a comment explaining why.
-- **The full migration is sequenced.** See `docs/typescript-migration-plan.md` for the phases. You may be working in a specific phase; check the migration plan to see what's in scope.
-- **Pre-commit checks.** Before claiming work is done, run `npm run typecheck` and `npm test`. CI runs the same checks on PR submission.
-
-When migrating a JavaScript file to TypeScript:
-1. Rename `.js` → `.ts`
-2. Add type annotations to function signatures, exported values, and any internal data structures with non-obvious shapes
-3. Use existing types from `backend/src/types/` (defined in Phase 2) when available
-4. Run `npm run typecheck` to surface any issues
-5. Resolve type errors before submitting
-
-The pattern for choosing types: function arguments and return values should always be typed. Internal variables can rely on inference. Public exports should have explicit types so consumers don't have to navigate to the implementation to understand the contract.
+- **All new code is `.ts`** with proper type annotations. The remaining `.js` files are infrastructure (entry points, config, disabled features) — don't migrate them unless there's a reason.
+- **Strict mode is on.** Avoid `any`. The `any` budget is ~200, all in bounded categories (Slack API responses, Block Kit manipulation, Sequelize aggregates). New `any` triggers a pattern enforcement test failure if it pushes the count above 215.
+- **Cascade contract violations throw `TemplateContractError`**, not generic `Error`. Import from `types/handlers.ts`. A pattern enforcement test catches bare `Error` throws in cascade contexts.
+- **Models follow ADR 0014:** class at module scope, `InferAttributes`/`InferCreationAttributes` generics, `declare` attributes, DECIMAL fields have getter coercion (`string → number`).
+- **Services return typed model classes** (`ResearchStudy`, `StudyParticipant`), not generic `Model`.
+- **Handlers use Bolt's native middleware types** (ADR 0015): `SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs`, etc. The deprecated custom wrappers (`ViewSubmissionContext`, `SlashCommandContext`, etc.) were removed. A pattern enforcement test catches any re-introduction.
+- **Modal builders** in `helpers/slack/ui/` export typed metadata interfaces.
+- **Pre-commit checks:** `npm run typecheck` and `npm test`. CI also runs `npm run test:integration` (requires Postgres).
 
 ## What is Qori?
 
@@ -57,14 +51,15 @@ All commands run from `backend/`:
 ```bash
 cd backend
 npm install
-npm run dev          # Dev server with nodemon (port 3000)
-npm run build        # Babel compile src/ → dist/ (handles .js and .ts)
-npm start            # Run compiled dist/bin/www.js
-npm run typecheck    # TypeScript type check (no emit)
-npm run lint         # ESLint (airbnb-base)
-npm run lint:fix     # ESLint autofix
-npm test             # Jest tests
-npm run db:migrate   # Sequelize migrations
+npm run dev              # Dev server with nodemon (port 3000)
+npm run build            # Babel compile src/ → dist/ (handles .js and .ts)
+npm start                # Run compiled dist/bin/www.js
+npm run typecheck        # TypeScript type check (no emit)
+npm run lint             # ESLint (airbnb-base)
+npm run lint:fix         # ESLint autofix
+npm test                 # Unit tests (76 tests, no DB required)
+npm run test:integration # Integration tests (34 tests, requires Postgres qori_test DB)
+npm run db:migrate       # Sequelize migrations
 ```
 
 **Docker (all services):**
@@ -83,7 +78,7 @@ docker-compose up    # Starts app (3000), postgres (5432), redis (6379)
 
 **Services:**
 - **Backend** — Node.js service, deployed from `backend/` on push to `main`
-- **Postgres** — Railway-managed, connection string provided as `DATABASE_URL`. All 22 migrations run successfully. You can browse tables directly in Railway's Data tab.
+- **Postgres** — Railway-managed, connection string provided as `DATABASE_URL`. All 33 migrations run successfully. You can browse tables directly in Railway's Data tab.
 - **Redis** — Railway-managed, connection string provided as `REDIS_URL`
 
 **Environment variables** are set in Railway's Variables tab per service. All the same vars from `.env.example` apply. Three gotchas to know:
@@ -100,15 +95,18 @@ docker-compose up    # Starts app (3000), postgres (5432), redis (6379)
 
 ## Key Directories
 
-- `config/modals/` — Slack Block Kit modal JSON definitions, organized by command (plan/, analyze/, outreach/, etc.)
-- `config/prompts/` — Local copies of YAML workflow configs (~25 files). Note: backend fetches these from GitHub at runtime, not locally
-- `config/command-mapping.json` — Maps commands to modal/prompt files, but is **not used by the backend at runtime** (see Architecture section)
-- `sam/` — Unfinished Python support agent with its own config, prompts, and escalation rules
-- `study-template/` — Canonical folder structure copied into GitHub for each new study (00-brief through 07-implementation)
-- `docs/learn/` — Static HTML/Tailwind GitHub Pages documentation site
-- `config/prompts/` — YAML workflow configs (23 files). Runtime source of truth, fetched from GitHub by the backend.
+- `backend/src/helpers/slack/commands/` — ~30 handler files (TypeScript, Bolt native types per ADR 0015)
+- `backend/src/helpers/slack/ui/` — Modal builders (Block Kit)
+- `backend/src/helpers/slack/events.ts` — Registration manifest (zero `as any` at handler boundaries)
+- `backend/src/services/` — Sequelize service layer (typed model returns)
+- `backend/src/database/models/` — 13 Sequelize models (InferAttributes pattern per ADR 0014)
+- `backend/src/types/` — Shared types: cascade variables, model attributes, handler results, TemplateContractError
+- `backend/src/__tests__/integration/` — E2E tests against real Postgres (5 critical flow suites + pattern enforcement)
+- `config/prompts/` — YAML workflow configs (27 files). Runtime source of truth, fetched from GitHub by the backend.
 - `config/templates/` — Study folder scaffold (markdown READMEs) copied into GitHub for each new study.
-- `config/` — Also contains `command-mapping.json` (not used at runtime) and `sam-config.yaml` (Sam agent, unfinished).
+- `docs/architecture-decisions/` — 15 ADRs + 3 lessons-from-failure
+- `docs/audits/` — Architecture audit reports
+- `sam/` — Unfinished Python support agent (not functional)
 
 ## Important Conventions
 
@@ -146,7 +144,7 @@ These are from a codebase audit. Tanzeel (original backend developer) is no long
 1. **RAG / Supabase (resolved for now):** RAG is disabled for alpha. `rag.js` is dead code (fully commented out). `ragV2.js` is preserved but gated on env vars. Hardcoded Supabase credentials were removed from source but remain in git history (repo is private; accepted risk).
 2. **ChromaDB: dead dependency.** Listed in `package.json` but never imported in any source file. Safe to remove.
 3. **Sam Python dependencies:** `sam/requirements.txt` was generated from imports in `sam-agent.py` (anthropic, slack_sdk, pyyaml). There may be missing transitive dependencies or version constraints that aren't captured.
-4. **No CI/CD pipeline exists.** Deployment docs in `docs/internal/deployment.md` describe scripts and processes that don't appear to be implemented yet.
+4. **CI/CD pipeline exists (resolved 2026-05-18).** `.github/workflows/ci.yml` runs typecheck, unit tests, and integration tests (with Postgres service container) on every PR. Railway auto-deploys on push to `main`.
 5. **YAML templates fetched from GitHub at `config/prompts/`.** ~~Reconciled (2026-04-29).~~ The backend now fetches from `config/prompts/` via the `YAML_TEMPLATE_PATH` constant. The old `beta-test/YAML Templates/` path has been deleted. `config/prompts/` is both the local and GitHub source of truth.
 6. **`command-mapping.json` is not used at runtime.** The backend never loads this file. Slash command routing is handled directly in `events.js`.
 
