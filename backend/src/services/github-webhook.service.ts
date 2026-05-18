@@ -137,3 +137,6 @@ class GithubWebhookService {
 }
 
 export default GithubWebhookService;
+
+// CJS compat — controller/route files still use require()
+module.exports = GithubWebhookService;
