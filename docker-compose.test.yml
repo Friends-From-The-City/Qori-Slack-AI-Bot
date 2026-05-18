@@ -1,0 +1,21 @@
+# Test database for integration/e2e tests.
+# Usage: docker compose -f docker-compose.test.yml up -d
+# Runs on port 5433 to avoid conflicts with dev/prod on 5432.
+# tmpfs mount = in-memory, fast, ephemeral — no data persists between runs.
+
+services:
+  postgres-test:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: qori_test
+      POSTGRES_PASSWORD: test
+      POSTGRES_DB: qori_test
+    ports:
+      - "5433:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U qori_test"]
+      interval: 2s
+      timeout: 2s
+      retries: 10
