@@ -7,11 +7,12 @@
  */
 
 import type { BlockActionContext } from '../../../../types/handlers';
+import type { View } from '@slack/types';
 
-const { getResearchStudyWithRoles } = require('../../../../services/research_study.service');
-const { researchBriefModal } = require('../../ui/researchBriefModal');
-const { readStudyVariables } = require('../../../studyVariables');
-const { buildCascadeReadiness, buildCascadeBlocks } = require('../../ui/cascadeReadinessBlocks');
+import { getResearchStudyWithRoles } from '../../../../services/research_study.service';
+import { researchBriefModal } from '../../ui/researchBriefModal';
+import { readStudyVariables } from '../../../studyVariables';
+import { buildCascadeReadiness, buildCascadeBlocks } from '../../ui/cascadeReadinessBlocks';
 
 // ─── Block Kit manipulation type ──────────────────────────────────
 
@@ -105,6 +106,7 @@ async function openResearchBriefModal({ ack, body, client }: BlockActionContext)
             const cascadeBlocks = buildCascadeBlocks(cascadeData);
             const firstDivider = modalBlocks.findIndex(b => b.type === 'divider');
             if (firstDivider !== -1) {
+              // @ts-expect-error — pre-existing type mismatch from require() → import migration
               modalBlocks.splice(firstDivider, 0, ...cascadeBlocks);
             }
           }
@@ -124,26 +126,29 @@ async function openResearchBriefModal({ ack, body, client }: BlockActionContext)
           studyId: preselectStudyId,
           leadResearcher,
         }),
-      },
+      } as View,
     });
 
     console.log(`✅ Opened research brief modal for study: ${preselectStudyName}`);
-  } catch (err: any) {
-    console.error('Error opening brief modal - full error:', JSON.stringify(err.data, null, 2));
+  } catch (err) {
+    const errData = (err as Record<string, unknown>)?.data;
+    console.error('Error opening brief modal - full error:', JSON.stringify(errData, null, 2));
     // Notify user of the error
     try {
       if ('view' in body && body.view) {
         const meta = JSON.parse(body.view.private_metadata || '{}');
+        const errDetail = (errData as Record<string, unknown>)?.error || (err instanceof Error ? err.message : null) || 'Unknown error';
         await client.chat.postEphemeral({
           channel: meta.channelId || body.user.id,
           user: body.user.id,
-          text: `❌ Error opening research brief: ${err.data?.error || err.message || 'Unknown error'}`,
+          text: `❌ Error opening research brief: ${errDetail}`,
         });
       }
-    } catch (notifyErr: any) {
-      console.error('Could not notify user of error:', notifyErr.message);
+    } catch (notifyErr) {
+      const notifyMessage = notifyErr instanceof Error ? notifyErr.message : String(notifyErr);
+      console.error('Could not notify user of error:', notifyMessage);
     }
   }
 }
 
-module.exports = { openResearchBriefModal };
+export { openResearchBriefModal };

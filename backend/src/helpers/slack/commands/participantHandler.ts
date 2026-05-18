@@ -1,11 +1,12 @@
 import type { SlashCommandContext, BlockActionContext, ViewSubmissionContext } from '../../../types/handlers';
 
-const { addParticipantModal } = require("../ui/addParticipantModal");
-const { updateParticipantStatusModal } = require("../ui/outreach/updateParticipantStatusModal");
-const { getStudiesByUser } = require("../../../services/research_study.service");
-const studyParticipantService = require("../../../services/study_participant.service");
-const { processParticipantYamlTemplate } = require("../../../helpers/participantYamlProcessor");
-const { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo } = require("../../github");
+import { addParticipantModal } from "../ui/addParticipantModal";
+import { updateParticipantStatusModal } from "../ui/outreach/updateParticipantStatusModal";
+import { getStudiesByUser } from "../../../services/research_study.service";
+import studyParticipantService from "../../../services/study_participant.service";
+import { processParticipantYamlTemplate } from "../../../helpers/participantYamlProcessor";
+import { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo } from "../../github";
+import type { View } from '@slack/types';
 
 async function participantHandler({ ack, body, client, command }: SlashCommandContext): Promise<void> {
   try {
@@ -47,7 +48,7 @@ async function participantHandler({ ack, body, client, command }: SlashCommandCo
           ...addParticipantModal,
           blocks,
           private_metadata: JSON.stringify({ channelId, userId, studyId, studyName: studies[0].name }),
-        },
+        } as View,
       });
     } else {
       // No studies found - still open modal but without studies
@@ -57,11 +58,13 @@ async function participantHandler({ ack, body, client, command }: SlashCommandCo
           ...addParticipantModal,
           blocks,
           private_metadata: JSON.stringify({ channelId, userId }),
-        },
+        } as View,
       });
     }
-  } catch (error: any) {
-    console.error("🚀 ~ participantHandler ~ error:", error.data || error.message);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const detail = (error as Record<string, unknown>)?.data ?? message;
+    console.error("🚀 ~ participantHandler ~ error:", detail);
   }
 }
 
@@ -117,10 +120,12 @@ async function updateParticipantHandler({ ack, body, client, command }: SlashCom
         ...updateParticipantStatusModal,
         blocks,
         private_metadata: JSON.stringify({ channelId, userId }),
-      },
+      } as View,
     });
-  } catch (error: any) {
-    console.error("🚀 ~ updateParticipantHandler ~ error:", error.data || error.message);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const detail = (error as Record<string, unknown>)?.data ?? message;
+    console.error("🚀 ~ updateParticipantHandler ~ error:", detail);
   }
 }
 
@@ -168,8 +173,9 @@ async function handleLoadParticipantsButton({ ack, body, client }: BlockActionCo
     try {
       participants = await studyParticipantService.getParticipantsByStudy(studyId);
       console.log("🚀 ~ Participants found:", participants.length);
-    } catch (error: any) {
-      console.warn("Warning: Could not fetch study participants:", error.message);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn("Warning: Could not fetch study participants:", message);
       // Continue with empty participants array
     }
 
@@ -237,17 +243,18 @@ async function handleLoadParticipantsButton({ ack, body, client }: BlockActionCo
         ...updateParticipantStatusModal,
         blocks,
         private_metadata: view.private_metadata || "{}",
-      }
+      } as View
     });
 
-  } catch (error: any) {
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
     console.error("Error handling load participants button:", error);
 
     // Send error message to user
     await client.chat.postEphemeral({
       channel: (body as any).user.id,
       user: (body as any).user.id,
-      text: `❌ Error loading participants for selected study: ${error.message}`,
+      text: `❌ Error loading participants for selected study: ${message}`,
     });
   }
 }
@@ -332,12 +339,14 @@ async function handleUpdateParticipantSubmission({ ack, body, view, client }: Vi
             added_by: (body as any).user.username || (body as any).user.name || (body as any).user.id
           };
 
+          // @ts-expect-error — pre-existing type mismatch from require() → import migration
           await processParticipantYamlTemplate(yamlTemplateFile.content, templateData, study.path || '', 'primary-research', allParticipants);
           console.log("🚀 ~ Participant tracker updated successfully");
         }
       }
-    } catch (yamlError: any) {
-      console.warn("⚠️ Warning: Could not update participant tracker YAML:", yamlError.message);
+    } catch (yamlError) {
+      const yamlMessage = yamlError instanceof Error ? yamlError.message : String(yamlError);
+      console.warn("⚠️ Warning: Could not update participant tracker YAML:", yamlMessage);
       // Don't throw error here to avoid breaking the main participant update
     }
 
@@ -348,20 +357,22 @@ async function handleUpdateParticipantSubmission({ ack, body, view, client }: Vi
       text: `✅ *Participant Status Updated Successfully!*\n\n*Study:* ${studyName}\n*Participant:* ${participantName}\n*New Status:* ${newStatus}${updateNotes ? `\n*Notes:* ${updateNotes}` : ''}\n\nThe participant's status has been updated in the database and participant tracker.`,
     });
 
-  } catch (error: any) {
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
     console.error("Error handling update participant submission:", error);
 
     // Send error message to user
     await client.chat.postEphemeral({
       channel: (body as any).user.id,
       user: (body as any).user.id,
-      text: `❌ Error updating participant status: ${error.message}`,
+      text: `❌ Error updating participant status: ${message}`,
     });
   }
 }
 
-module.exports = {
+export {
   participantHandler,
+  participantHandler as handleAddParticipantSubmit,
   updateParticipantHandler,
   handleLoadParticipantsButton,
   handleUpdateParticipantSubmission,

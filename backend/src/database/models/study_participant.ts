@@ -71,7 +71,7 @@ class StudyParticipant extends Model<
   }
 }
 
-module.exports = (sequelize: Sequelize) => {
+export default (sequelize: Sequelize) => {
   StudyParticipant.init(
     {
       id: {

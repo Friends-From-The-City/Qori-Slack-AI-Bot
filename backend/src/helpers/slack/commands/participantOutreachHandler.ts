@@ -1,21 +1,22 @@
 import type { SlashCommandContext, ViewSubmissionContext, BlockActionContext } from '../../../types/handlers';
+import type { View } from '@slack/types';
 
-const { emailModal } = require("../ui/outreach/emailModal");
-const { followupModal } = require("../ui/outreach/followupModal");
-const { initialRecruitmentModal } = require("../ui/outreach/initialRecruitmentModal");
-const { participantOutreachModal } = require("../ui/outreach/participantOutreachModal");
-const { reschedulingRequestModal } = require("../ui/outreach/reschedulingRequestModal");
-const { sessionConfirmationModal } = require("../ui/outreach/sessionConfirmationModal");
-const { sessionReminderModal } = require("../ui/outreach/sessionReminderModal");
-const { thankyouModal } = require("../ui/outreach/thankyouModal");
-const { basinInfoBlocks } = require("../ui/outreach/basicInfoBlock");
-const { getResearchStudyWithRoles, getStudiesByUser } = require("../../../services/research_study.service");
-const { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo } = require("../../github");
-const { processYamlTemplate } = require("../../yamlProcessor");
-const studyParticipantService = require("../../../services/study_participant.service");
-const { buildAddObserverModal } = require("../ui/addObserverModal");
-const sessionObserverService = require("../../../services/session_observer.service");
-const { calculatePerPersonCompensation } = require('../../../utils/compensationCalculator');
+import { emailModal } from "../ui/outreach/emailModal";
+import { followupModal } from "../ui/outreach/followupModal";
+import { initialRecruitmentModal } from "../ui/outreach/initialRecruitmentModal";
+import { participantOutreachModal } from "../ui/outreach/participantOutreachModal";
+import { reschedulingRequestModal } from "../ui/outreach/reschedulingRequestModal";
+import { sessionConfirmationModal } from "../ui/outreach/sessionConfirmationModal";
+import { sessionReminderModal } from "../ui/outreach/sessionReminderModal";
+import { thankyouModal } from "../ui/outreach/thankyouModal";
+import { basinInfoBlocks } from "../ui/outreach/basicInfoBlock";
+import { getResearchStudyWithRoles, getStudiesByUser } from "../../../services/research_study.service";
+import { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo } from "../../github";
+import { processYamlTemplate } from "../../yamlProcessor";
+import studyParticipantService from "../../../services/study_participant.service";
+import { buildAddObserverModal } from "../ui/addObserverModal";
+import sessionObserverService from "../../../services/session_observer.service";
+import { calculatePerPersonCompensation } from '../../../utils/compensationCalculator';
 
 
 async function participantOutreachHandler({ ack, body, client, command }: SlashCommandContext): Promise<void> {
@@ -57,10 +58,12 @@ async function participantOutreachHandler({ ack, body, client, command }: SlashC
         ...participantOutreachModal,
         blocks,
         private_metadata: JSON.stringify({ channelId, userId }),
-      },
+      } as View,
     });
-  } catch (error: any) {
-    console.error("🚀 ~ participantOutreachHandler ~ error:", error.data || error.message);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const detail = (error as Record<string, unknown>)?.data ?? message;
+    console.error("🚀 ~ participantOutreachHandler ~ error:", detail);
   }
 }
 
@@ -118,7 +121,7 @@ async function handleParticipantOutreachSubmit({ ack, body, view, client }: View
     return;
   }
 
-  const study = await getResearchStudyWithRoles(finalSelectedStudy);
+  const study = (await getResearchStudyWithRoles(finalSelectedStudy))!;
 
   let nextModal;
 
@@ -184,8 +187,10 @@ async function handleParticipantOutreachSubmit({ ack, body, view, client }: View
     });
 
     console.log("🚀 ~ Successfully pushed next modal");
-  } catch (err: any) {
-    console.error("Error opening next modal:", err.data || err.message || err);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const detail = (err as Record<string, unknown>)?.data ?? message;
+    console.error("Error opening next modal:", detail);
     // Acknowledge with an error response
     await (ack as any)({
       response_action: "errors",
@@ -233,7 +238,7 @@ async function handleInitialRecruitmentSubmit({ ack, body, view, client }: ViewS
     const study_id = meta.studyId || "";
 
     // Get researcher info from study object (since it's no longer in the modal)
-    const study = await getResearchStudyWithRoles(study_name);
+    const study = (await getResearchStudyWithRoles(study_name))!;
     const researcher_name = study?.researcher_name || meta.researcher_name || "";
     const researcher_email = study?.researcher_email || meta.researcher_email || "";
 
@@ -260,7 +265,7 @@ async function handleInitialRecruitmentSubmit({ ack, body, view, client }: ViewS
       incentive_amount: compAmt ? `$${compAmt}` : '',
     }
     const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, "participant_outreach.yaml");
-    const renderedYaml = await processYamlTemplate(file.content, data, study.path);
+    const renderedYaml = await processYamlTemplate(file.content, data, study.path ?? '');
     console.log("🚀 ~ handleInitialRecruitmentSubmit ~ renderedYaml:", renderedYaml)
 
     // Record outreach event on the participant row
@@ -288,9 +293,10 @@ async function handleInitialRecruitmentSubmit({ ack, body, view, client }: ViewS
         }),
       });
       console.log("🚀 ~ Successfully updated view with email modal");
-    } catch (updateErr: any) {
+    } catch (updateErr) {
       // If update fails (e.g., hash mismatch), try to get the current view and update again
-      console.warn("First update attempt failed, trying without hash:", updateErr.message);
+      const updateErrMessage = updateErr instanceof Error ? updateErr.message : String(updateErr);
+      console.warn("First update attempt failed, trying without hash:", updateErrMessage);
       // The view was already updated with loading, so we can try updating again
       // Slack will provide a new hash if needed
       const currentView = await (client.views as any).info({ view_id: viewId });
@@ -311,8 +317,9 @@ async function handleInitialRecruitmentSubmit({ ack, body, view, client }: ViewS
       });
     }
 
-  } catch (err: any) {
+  } catch (err) {
     console.error("🚨 Error handling initial recruitment modal submission:", err);
+    const message = err instanceof Error ? err.message : String(err);
 
     // Acknowledge with error response
     try {
@@ -328,9 +335,9 @@ async function handleInitialRecruitmentSubmit({ ack, body, view, client }: ViewS
       await client.chat.postEphemeral({
         channel: meta.channelId || body.user.id,
         user: body.user.id,
-        text: `❌ Error generating message: ${err.message || 'Unknown error'}. Please try again.`
+        text: `❌ Error generating message: ${message || 'Unknown error'}. Please try again.`
       });
-    } catch (ackErr: any) {
+    } catch (ackErr) {
       console.error("Error acknowledging with error:", ackErr);
     }
   }
@@ -373,7 +380,7 @@ async function handleReschedulingRequestSubmit({ ack, body, view, client }: View
     const study_id = meta.studyId || "";
 
     // Get researcher info from study object (since it's no longer in the modal)
-    const study = await getResearchStudyWithRoles(study_name);
+    const study = (await getResearchStudyWithRoles(study_name))!;
     const researcher_name = study?.researcher_name || meta.researcher_name || "";
     const researcher_email = study?.researcher_email || meta.researcher_email || "";
 
@@ -393,7 +400,7 @@ async function handleReschedulingRequestSubmit({ ack, body, view, client }: View
     }
 
     const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, "participant_outreach.yaml");
-    const renderedYaml = await processYamlTemplate(file.content, data, study.path);
+    const renderedYaml = await processYamlTemplate(file.content, data, study.path ?? '');
     console.log("🚀 ~ handleReschedulingRequestSubmit ~ renderedYaml:", renderedYaml);
 
     if (participantDbId && participantDbId !== 'no_participants') {
@@ -418,9 +425,10 @@ async function handleReschedulingRequestSubmit({ ack, body, view, client }: View
         }),
       });
       console.log("🚀 ~ Successfully updated view with email modal");
-    } catch (updateErr: any) {
+    } catch (updateErr) {
       // If update fails (e.g., hash mismatch), try to get the current view and update again
-      console.warn("First update attempt failed, trying without hash:", updateErr.message);
+      const updateErrMessage = updateErr instanceof Error ? updateErr.message : String(updateErr);
+      console.warn("First update attempt failed, trying without hash:", updateErrMessage);
       const currentView = await (client.views as any).info({ view_id: viewId });
       await client.views.update({
         view_id: viewId,
@@ -439,8 +447,9 @@ async function handleReschedulingRequestSubmit({ ack, body, view, client }: View
       });
     }
 
-  } catch (err: any) {
+  } catch (err) {
     console.error("🚨 Error handling rescheduling request modal submission:", err);
+    const message = err instanceof Error ? err.message : String(err);
 
     // Acknowledge with error response
     try {
@@ -456,9 +465,9 @@ async function handleReschedulingRequestSubmit({ ack, body, view, client }: View
       await client.chat.postEphemeral({
         channel: meta.channelId || body.user.id,
         user: body.user.id,
-        text: `❌ Error generating message: ${err.message || 'Unknown error'}. Please try again.`
+        text: `❌ Error generating message: ${message || 'Unknown error'}. Please try again.`
       });
-    } catch (ackErr: any) {
+    } catch (ackErr) {
       console.error("Error acknowledging with error:", ackErr);
     }
   }
@@ -501,7 +510,7 @@ async function handleSessionConfirmationSubmit({ ack, body, view, client }: View
     const study_id = meta.studyId || "";
 
     // Get researcher info from study object (since it's no longer in the modal)
-    const study = await getResearchStudyWithRoles(study_name);
+    const study = (await getResearchStudyWithRoles(study_name))!;
     const researcher_name = study?.researcher_name || meta.researcher_name || "";
     const researcher_email = study?.researcher_email || meta.researcher_email || "";
 
@@ -523,7 +532,7 @@ async function handleSessionConfirmationSubmit({ ack, body, view, client }: View
     }
 
     const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, "participant_outreach.yaml");
-    const renderedYaml = await processYamlTemplate(file.content, data, study.path);
+    const renderedYaml = await processYamlTemplate(file.content, data, study.path ?? '');
     console.log("🚀 ~ handleSessionConfirmationSubmit ~ renderedYaml:", renderedYaml);
 
     if (participantDbId && participantDbId !== 'no_participants') {
@@ -548,9 +557,10 @@ async function handleSessionConfirmationSubmit({ ack, body, view, client }: View
         }),
       });
       console.log("🚀 ~ Successfully updated view with email modal");
-    } catch (updateErr: any) {
+    } catch (updateErr) {
       // If update fails (e.g., hash mismatch), try to get the current view and update again
-      console.warn("First update attempt failed, trying without hash:", updateErr.message);
+      const updateErrMessage = updateErr instanceof Error ? updateErr.message : String(updateErr);
+      console.warn("First update attempt failed, trying without hash:", updateErrMessage);
       const currentView = await (client.views as any).info({ view_id: viewId });
       await client.views.update({
         view_id: viewId,
@@ -569,8 +579,9 @@ async function handleSessionConfirmationSubmit({ ack, body, view, client }: View
       });
     }
 
-  } catch (err: any) {
+  } catch (err) {
     console.error("🚨 Error handling session confirmation modal submission:", err);
+    const message = err instanceof Error ? err.message : String(err);
 
     // Acknowledge with error response
     try {
@@ -586,9 +597,9 @@ async function handleSessionConfirmationSubmit({ ack, body, view, client }: View
       await client.chat.postEphemeral({
         channel: meta.channelId || body.user.id,
         user: body.user.id,
-        text: `❌ Error generating message: ${err.message || 'Unknown error'}. Please try again.`
+        text: `❌ Error generating message: ${message || 'Unknown error'}. Please try again.`
       });
-    } catch (ackErr: any) {
+    } catch (ackErr) {
       console.error("Error acknowledging with error:", ackErr);
     }
   }
@@ -631,7 +642,7 @@ async function handleThankYouSubmit({ ack, body, view, client }: ViewSubmissionC
     const study_id = meta.studyId || "";
 
     // Get researcher info from study object (since it's no longer in the modal)
-    const study = await getResearchStudyWithRoles(study_name);
+    const study = (await getResearchStudyWithRoles(study_name))!;
     const researcher_name = study?.researcher_name || meta.researcher_name || "";
     const researcher_email = study?.researcher_email || meta.researcher_email || "";
 
@@ -650,7 +661,7 @@ async function handleThankYouSubmit({ ack, body, view, client }: ViewSubmissionC
     }
 
     const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, "participant_outreach.yaml");
-    const renderedYaml = await processYamlTemplate(file.content, data, study.path);
+    const renderedYaml = await processYamlTemplate(file.content, data, study.path ?? '');
     console.log("🚀 ~ handleThankYouSubmit ~ renderedYaml:", renderedYaml)
 
     if (participantDbId && participantDbId !== 'no_participants') {
@@ -674,9 +685,10 @@ async function handleThankYouSubmit({ ack, body, view, client }: ViewSubmissionC
         }),
       });
       console.log("🚀 ~ Successfully updated view with email modal");
-    } catch (updateErr: any) {
+    } catch (updateErr) {
       // If update fails (e.g., hash mismatch), try to get the current view and update again
-      console.warn("First update attempt failed, trying without hash:", updateErr.message);
+      const updateErrMessage = updateErr instanceof Error ? updateErr.message : String(updateErr);
+      console.warn("First update attempt failed, trying without hash:", updateErrMessage);
       // The view was already updated with loading, so we can try updating again
       // Slack will provide a new hash if needed
       const currentView = await (client.views as any).info({ view_id: viewId });
@@ -694,7 +706,7 @@ async function handleThankYouSubmit({ ack, body, view, client }: ViewSubmissionC
       });
     }
 
-  } catch (err: any) {
+  } catch (err) {
     console.error("🚨 Error handling thank you modal submission:", err);
 
     // Optionally, update the modal to show an error message
@@ -713,7 +725,7 @@ async function handleThankYouSubmit({ ack, body, view, client }: ViewSubmissionC
           ]
         }
       });
-    } catch (updateErr: any) {
+    } catch (updateErr) {
       console.error("Failed to update modal with error message:", updateErr);
     }
   }
@@ -756,7 +768,7 @@ async function handleFollowUpSubmit({ ack, body, view, client }: ViewSubmissionC
     const study_id = meta.studyId || "";
 
     // Get researcher info from study object (since it's no longer in the modal)
-    const study = await getResearchStudyWithRoles(study_name);
+    const study = (await getResearchStudyWithRoles(study_name))!;
     const researcher_name = study?.researcher_name || meta.researcher_name || "";
     const researcher_email = study?.researcher_email || meta.researcher_email || "";
 
@@ -771,7 +783,7 @@ async function handleFollowUpSubmit({ ack, body, view, client }: ViewSubmissionC
     }
 
     const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, "participant_outreach.yaml");
-    const renderedYaml = await processYamlTemplate(file.content, data, study.path);
+    const renderedYaml = await processYamlTemplate(file.content, data, study.path ?? '');
     console.log("🚀 ~ handleFollowUpSubmit ~ renderedYaml:", renderedYaml)
 
     if (participantDbId && participantDbId !== 'no_participants') {
@@ -795,9 +807,10 @@ async function handleFollowUpSubmit({ ack, body, view, client }: ViewSubmissionC
         }),
       });
       console.log("🚀 ~ Successfully updated view with email modal");
-    } catch (updateErr: any) {
+    } catch (updateErr) {
       // If update fails (e.g., hash mismatch), try to get the current view and update again
-      console.warn("First update attempt failed, trying without hash:", updateErr.message);
+      const updateErrMessage = updateErr instanceof Error ? updateErr.message : String(updateErr);
+      console.warn("First update attempt failed, trying without hash:", updateErrMessage);
       // The view was already updated with loading, so we can try updating again
       // Slack will provide a new hash if needed
       const currentView = await (client.views as any).info({ view_id: viewId });
@@ -815,7 +828,7 @@ async function handleFollowUpSubmit({ ack, body, view, client }: ViewSubmissionC
       });
     }
 
-  } catch (err: any) {
+  } catch (err) {
     console.error("🚨 Error handling follow-up modal submission:", err);
 
     // Optionally, update the modal to show an error message
@@ -834,7 +847,7 @@ async function handleFollowUpSubmit({ ack, body, view, client }: ViewSubmissionC
           ]
         }
       });
-    } catch (updateErr: any) {
+    } catch (updateErr) {
       console.error("Failed to update modal with error message:", updateErr);
     }
   }
@@ -877,7 +890,7 @@ async function handleSessionReminderSubmit({ ack, body, view, client }: ViewSubm
     const study_id = meta.studyId || "";
 
     // Get researcher info from study object (since it's no longer in the modal)
-    const study = await getResearchStudyWithRoles(study_name);
+    const study = (await getResearchStudyWithRoles(study_name))!;
     const researcher_name = study?.researcher_name || meta.researcher_name || "";
     const researcher_email = study?.researcher_email || meta.researcher_email || "";
 
@@ -899,7 +912,7 @@ async function handleSessionReminderSubmit({ ack, body, view, client }: ViewSubm
     }
 
     const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, "participant_outreach.yaml");
-    const renderedYaml = await processYamlTemplate(file.content, data, study.path);
+    const renderedYaml = await processYamlTemplate(file.content, data, study.path ?? '');
     console.log("🚀 ~ handleSessionReminderSubmit ~ renderedYaml:", renderedYaml);
 
     if (participantDbId && participantDbId !== 'no_participants') {
@@ -924,9 +937,10 @@ async function handleSessionReminderSubmit({ ack, body, view, client }: ViewSubm
         }),
       });
       console.log("🚀 ~ Successfully updated view with email modal");
-    } catch (updateErr: any) {
+    } catch (updateErr) {
       // If update fails (e.g., hash mismatch), try to get the current view and update again
-      console.warn("First update attempt failed, trying without hash:", updateErr.message);
+      const updateErrMessage = updateErr instanceof Error ? updateErr.message : String(updateErr);
+      console.warn("First update attempt failed, trying without hash:", updateErrMessage);
       const currentView = await (client.views as any).info({ view_id: viewId });
       await client.views.update({
         view_id: viewId,
@@ -945,8 +959,9 @@ async function handleSessionReminderSubmit({ ack, body, view, client }: ViewSubm
       });
     }
 
-  } catch (err: any) {
+  } catch (err) {
     console.error("🚨 Error handling session reminder modal submission:", err);
+    const message = err instanceof Error ? err.message : String(err);
 
     // Acknowledge with error response
     try {
@@ -962,9 +977,9 @@ async function handleSessionReminderSubmit({ ack, body, view, client }: ViewSubm
       await client.chat.postEphemeral({
         channel: meta.channelId || body.user.id,
         user: body.user.id,
-        text: `❌ Error generating message: ${err.message || 'Unknown error'}. Please try again.`
+        text: `❌ Error generating message: ${message || 'Unknown error'}. Please try again.`
       });
-    } catch (ackErr: any) {
+    } catch (ackErr) {
       console.error("Error acknowledging with error:", ackErr);
     }
   }
@@ -1020,7 +1035,7 @@ async function handleAddParticipantSubmit({ ack, body, view, client }: ViewSubmi
     }
     console.log(`🚀 ~ handleAddParticipantSubmit: study=${data.study_name}, participant=${(data as any).participant_id}`);
 
-    const study = await getResearchStudyWithRoles(study_name);
+    const study = (await getResearchStudyWithRoles(study_name))!;
 
     // Snapshot per-person compensation from study budget
     const compensation = calculatePerPersonCompensation(study);
@@ -1043,9 +1058,9 @@ async function handleAddParticipantSubmit({ ack, body, view, client }: ViewSubmi
     const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, "participant_tracker.yaml");
     const fileData = {
       file: file.content,
-      study_path: study.path
+      study_path: study.path ?? ''
     }
-    const savedParticipant = await studyParticipantService.createParticipant(participantData, fileData);
+    const savedParticipant = await studyParticipantService.createParticipant(participantData, fileData as any);
     console.log("🚀 ~ handleAddParticipantSubmit ~ savedParticipant:", savedParticipant);
 
     // Check if this participant brings the total to 3 and send milestone message
@@ -1148,7 +1163,7 @@ async function handleAddParticipantSubmit({ ack, body, view, client }: ViewSubmi
     //   }
     // });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error("🚨 Error handling add participant modal submission:", error);
 
     // Show error modal
@@ -1208,10 +1223,10 @@ async function handleObserverModalButton({ ack, body, client }: BlockActionConte
           studyId,
           studyName,
         }),
-      },
+      } as View,
     });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error handling observer modal button:", error);
     await client.chat.postEphemeral({
       channel: (body as any).channel?.id || body.user.id,
@@ -1221,7 +1236,7 @@ async function handleObserverModalButton({ ack, body, client }: BlockActionConte
   }
 }
 
-module.exports = {
+export {
   participantOutreachHandler,
   handleParticipantOutreachSubmit,
   handleInitialRecruitmentSubmit,

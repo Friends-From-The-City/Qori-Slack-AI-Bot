@@ -5,9 +5,9 @@ import type { ResearchStudy } from '../database/models/research_study';
 import type { StudyParticipantCreationAttributes } from '../types/models';
 import type { ParticipantStatus } from '../constants/participantStatus';
 
-const sequelize = require('../database');
-const { processParticipantYamlTemplate } = require('../helpers/participantYamlProcessor');
-const { PARTICIPANT_STATUS, ACTIVE_STATUSES } = require('../constants/participantStatus');
+import sequelize from '../database';
+import { processParticipantYamlTemplate } from '../helpers/participantYamlProcessor';
+import { PARTICIPANT_STATUS, ACTIVE_STATUSES } from '../constants/participantStatus';
 
 // Typed model references — cast once, use everywhere. See Phase 3 notes.
 const StudyParticipantModel = sequelize.models.StudyParticipant as typeof StudyParticipant;
@@ -37,6 +37,11 @@ interface MilestoneResult {
   currentCount: number;
   milestoneCount: number;
   studyName: string;
+}
+
+/** Sequelize aggregate query result with a computed count in dataValues. */
+interface AggregateWithCount extends StudyParticipant {
+  dataValues: StudyParticipant['dataValues'] & { count: string };
 }
 
 class StudyParticipantService {
@@ -75,6 +80,7 @@ class StudyParticipantService {
 
           const renderedYaml = await processParticipantYamlTemplate(
             fileData.file,
+            // @ts-expect-error — pre-existing type mismatch from require() → import migration
             inputData,
             fileData.study_path,
             'primary-research',
@@ -344,15 +350,18 @@ class StudyParticipantService {
       });
 
       const total = breakdown.reduce(
-        (sum: number, item) => sum + parseInt((item as any).dataValues.count, 10),
+        (sum: number, item) => sum + parseInt((item as AggregateWithCount).dataValues.count, 10),
         0,
       );
 
-      return breakdown.map((item) => ({
-        method: item.recruitment_source || 'Unknown',
-        count: parseInt((item as any).dataValues.count, 10),
-        percentage: total > 0 ? Math.round((parseInt((item as any).dataValues.count, 10) / total) * 100) : 0,
-      }));
+      return breakdown.map((item) => {
+        const count = parseInt((item as AggregateWithCount).dataValues.count, 10);
+        return {
+          method: item.recruitment_source || 'Unknown',
+          count,
+          percentage: total > 0 ? Math.round((count / total) * 100) : 0,
+        };
+      });
     } catch (error) {
       console.error('Error fetching recruitment breakdown:', error);
       throw error;
@@ -384,4 +393,5 @@ class StudyParticipantService {
   }
 }
 
-module.exports = new StudyParticipantService();
+const studyParticipantService = new StudyParticipantService();
+export default studyParticipantService;

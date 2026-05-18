@@ -7,13 +7,14 @@
  */
 
 import type { BlockActionContext } from '../../../../types/handlers';
+import type { View } from '@slack/types';
 
-const { copyEmailModal } = require('../../ui/outreach/copyEmailModal');
-const { sessionConfirmationModal } = require('../../ui/outreach/sessionConfirmationModal');
-const { sessionReminderModal } = require('../../ui/outreach/sessionReminderModal');
-const { reschedulingRequestModal } = require('../../ui/outreach/reschedulingRequestModal');
-const { followupModal } = require('../../ui/outreach/followupModal');
-const { thankyouModal } = require('../../ui/outreach/thankyouModal');
+import { copyEmailModal } from '../../ui/outreach/copyEmailModal';
+import { sessionConfirmationModal } from '../../ui/outreach/sessionConfirmationModal';
+import { sessionReminderModal } from '../../ui/outreach/sessionReminderModal';
+import { reschedulingRequestModal } from '../../ui/outreach/reschedulingRequestModal';
+import { followupModal } from '../../ui/outreach/followupModal';
+import { thankyouModal } from '../../ui/outreach/thankyouModal';
 
 // ─── generate_other_message_type action ───────────────────────────
 
@@ -66,9 +67,9 @@ async function handleGenerateOtherMessageType({ ack, body, client, action }: Blo
           researcherName,
           researcherEmail,
         }),
-      },
+      } as View,
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error opening message type modal:', error);
   }
 }
@@ -90,7 +91,7 @@ async function handleCopyEmailFormatted({ ack, body, client }: BlockActionContex
       try {
         const metadata = JSON.parse(privateMetadata);
         messageBody = metadata.messageBody || '';
-      } catch (error: any) {
+      } catch (error) {
         console.error('Error parsing private_metadata:', error);
       }
     }
@@ -100,16 +101,19 @@ async function handleCopyEmailFormatted({ ack, body, client }: BlockActionContex
     // Open the copy email modal with the message body
     await client.views.push({
       trigger_id: (body as any).trigger_id,
+      // @ts-expect-error — pre-existing type mismatch from require() → import migration
       view: copyEmailModal({
         messageBody,
       }),
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error opening copy email modal:', error);
   }
 }
 
-module.exports = {
+export {
   handleGenerateOtherMessageType,
+  handleGenerateOtherMessageType as generateOtherMessageType,
   handleCopyEmailFormatted,
+  handleCopyEmailFormatted as copyEmailFormatted,
 };

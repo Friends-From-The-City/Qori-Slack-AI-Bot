@@ -69,9 +69,11 @@ async function handleUserSelectOptions({ ack, body, view, client }: {
   await ack({ options: options.slice(0, 100) });
 }
 
-module.exports = {
+export {
   handleViewClosed,
   handlePlanStudyModalSubmission,
+  handlePlanStudyModalSubmission as handlePlanStudyNoop,
   handleStudySetupSkipForNow,
+  handleStudySetupSkipForNow as handleStudySetupSkip,
   handleUserSelectOptions,
 };

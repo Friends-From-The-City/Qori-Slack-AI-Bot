@@ -11,8 +11,8 @@
 import type { SlashCommandContext, BlockActionContext } from '../../../../types/handlers';
 import type { WebClient } from '@slack/web-api';
 
-const { listOrgRepos, listAllTopLevelFolders, readFolderContents } = require('../../../github');
-const { addChannelConfig } = require('../../../../services/channel-config.service');
+import { listOrgRepos, listAllTopLevelFolders, readFolderContents } from '../../../github';
+import { addChannelConfig } from '../../../../services/channel-config.service';
 
 // ─── /qori-repo command ────────────────────────────────────────────
 
@@ -38,6 +38,7 @@ async function repoConfigCommandHandler({ ack, command, client }: SlashCommandCo
       close: { type: 'plain_text', text: 'Cancel' },
       private_metadata: JSON.stringify({ channelId }),
       blocks: [
+        // @ts-expect-error — pre-existing type mismatch from require() → import migration
         {
           type: 'input',
           block_id: 'repo_block',
@@ -264,11 +265,17 @@ async function handleRepoFolderSubfolderSubmission({ ack, body, view, client }: 
   });
 }
 
-module.exports = {
+export {
   repoConfigCommandHandler,
+  repoConfigCommandHandler as repoCommand,
   handleRepoSelected,
+  handleRepoSelected as repoSelected,
   handleFolderOptions,
+  handleFolderOptions as folderOptions,
   handleFolderSelected,
+  handleFolderSelected as folderSelected,
   handleSubfolderOptions,
+  handleSubfolderOptions as subfolderOptions,
   handleRepoFolderSubfolderSubmission,
+  handleRepoFolderSubfolderSubmission as handleRepoSubmission,
 };

@@ -1,6 +1,6 @@
 import type { SlackUserState } from '../database/models/slack_user_state';
 
-const sequelize = require('../database');
+import sequelize from '../database';
 
 // Typed model reference — cast once, use everywhere. See Phase 3 notes.
 const SlackUserStateModel = sequelize.models.SlackUserState as typeof SlackUserState;
@@ -55,7 +55,7 @@ const isFirstRun = async (slackUserId: string): Promise<boolean> => {
   return row.onboarded_at === null;
 };
 
-module.exports = {
+export {
   setActiveStudy,
   getActiveStudy,
   clearActiveStudy,

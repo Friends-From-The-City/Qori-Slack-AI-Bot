@@ -1,6 +1,7 @@
 import type { User } from '../database/models/user.model';
+import type { CreationAttributes, WhereOptions } from 'sequelize';
 
-const sequelize = require('../database');
+import sequelize from '../database';
 
 // Typed model reference — cast once, use everywhere. See Phase 3 notes.
 const UserModel = sequelize.models.User as typeof User;
@@ -17,21 +18,23 @@ interface LegacyUserInput {
 
 const addNewUser = async (user: LegacyUserInput): Promise<LegacyUserInput> => {
   try {
+    // Legacy boilerplate — platform_user_id/platform_workspace_id don't exist
+    // on the User model. Using WhereOptions cast because the columns are from
+    // the original express-starter template that never matched the actual schema.
+    const legacyWhere = {
+      platform_user_id: user.platform_user_id,
+      platform_workspace_id: user.platform_workspace_id,
+    } as WhereOptions<User>;
+
     const existingUser = await UserModel.findOne({
-      where: {
-        platform_user_id: user.platform_user_id,
-        platform_workspace_id: user.platform_workspace_id,
-      } as any, // these columns don't exist on the User model — legacy boilerplate
+      where: legacyWhere,
     });
 
     if (!existingUser) {
-      await UserModel.create(user as any);
+      await UserModel.create(user as CreationAttributes<User>);
     } else {
-      await UserModel.update(user as any, {
-        where: {
-          platform_user_id: user.platform_user_id,
-          platform_workspace_id: user.platform_workspace_id,
-        } as any,
+      await UserModel.update(user as Partial<CreationAttributes<User>>, {
+        where: legacyWhere,
       });
     }
 
@@ -42,6 +45,6 @@ const addNewUser = async (user: LegacyUserInput): Promise<LegacyUserInput> => {
   }
 };
 
-module.exports = {
+export {
   addNewUser,
 };

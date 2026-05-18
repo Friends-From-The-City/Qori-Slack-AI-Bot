@@ -4,9 +4,9 @@ import type { SessionObserver } from '../database/models/session_observer';
 import type { ResearchStudy } from '../database/models/research_study';
 import type { StudyParticipant } from '../database/models/study_participant';
 import type { ObserverRole, ObserverStatus } from '../types/common';
-import { Op } from 'sequelize';
+import { Op, type CreationAttributes } from 'sequelize';
 
-const sequelize = require('../database');
+import sequelize from '../database';
 
 // Typed model references — cast once, use everywhere. See Phase 3 notes.
 const SessionObserverModel = sequelize.models.SessionObserver as typeof SessionObserver;
@@ -63,7 +63,7 @@ interface ObserverStats {
   total_sessions: number;
 }
 
-interface SessionWithCount {
+export interface SessionWithCount {
   id: string;
   sessionId: string;
   participantId: number;
@@ -125,7 +125,7 @@ class SessionObserverService {
           ...observerData,
           requester_id: this._toArray(observerData.requester_id),
           requester_name: this._toArray(observerData.requester_name),
-        } as any
+        } as CreationAttributes<SessionObserver>
       });
 
       if (!created) {
@@ -180,7 +180,7 @@ class SessionObserverService {
         role,
         status: 'confirmed',
         joined_via,
-      } as any);
+      } as CreationAttributes<SessionObserver>);
 
       console.log('✅ Confirmed observer added:', observer.id, 'session:', session_id);
       return { observer, created: true };
@@ -476,16 +476,18 @@ class SessionObserverService {
         });
         sessions_covered = activeBySession.length;
         sessions_at_cap = activeBySession.filter((r: any) => parseInt(r.cnt, 10) >= MAX_OBSERVERS_PER_SESSION).length;
-      } catch (e: any) {
-        console.error('Error computing session coverage:', e.message);
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        console.error('Error computing session coverage:', message);
       }
 
       try {
         totalSessions = await StudyParticipantModel.count({
           where: { study_id: studyId },
         });
-      } catch (e: any) {
-        console.error('Error counting total sessions:', e.message);
+      } catch (e) {
+        const countMessage = e instanceof Error ? e.message : String(e);
+        console.error('Error counting total sessions:', countMessage);
       }
 
       return {
@@ -580,7 +582,9 @@ class SessionObserverService {
  * Returns array of { id, sessionId, participantId, label, count }.
  */
 const buildSessionsWithCounts = async (studyId: number): Promise<SessionWithCount[]> => {
-  const studyParticipantService = require('./study_participant.service');
+  // Lazy require to break circular dependency (session_observer <-> study_participant)
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const studyParticipantService = require('./study_participant.service').default;
   const participants: StudyParticipant[] = await studyParticipantService.getParticipantsByStudy(studyId);
   const sessions: SessionWithCount[] = [];
 
@@ -601,8 +605,19 @@ const buildSessionsWithCounts = async (studyId: number): Promise<SessionWithCoun
 };
 
 const service = new SessionObserverService();
-(service as any).MAX_OBSERVERS_PER_SESSION = MAX_OBSERVERS_PER_SESSION;
-(service as any).ROLE_LIMITS = ROLE_LIMITS;
-(service as any).buildSessionsWithCounts = buildSessionsWithCounts;
 
-module.exports = service;
+// Augmented type for properties monkey-patched onto the service instance.
+// These live outside the class because they either break circular deps
+// (buildSessionsWithCounts) or are module-level constants (MAX_OBSERVERS_PER_SESSION).
+interface AugmentedService extends SessionObserverService {
+  MAX_OBSERVERS_PER_SESSION: number;
+  ROLE_LIMITS: Record<string, number>;
+  buildSessionsWithCounts: (studyId: number) => Promise<SessionWithCount[]>;
+}
+
+const augmented = service as AugmentedService;
+augmented.MAX_OBSERVERS_PER_SESSION = MAX_OBSERVERS_PER_SESSION;
+augmented.ROLE_LIMITS = ROLE_LIMITS;
+augmented.buildSessionsWithCounts = buildSessionsWithCounts;
+
+export default service as AugmentedService;

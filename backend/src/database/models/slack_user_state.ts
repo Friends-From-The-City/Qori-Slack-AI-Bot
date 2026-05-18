@@ -37,7 +37,7 @@ class SlackUserState extends Model<
   }
 }
 
-module.exports = (sequelize: Sequelize) => {
+export default (sequelize: Sequelize) => {
   SlackUserState.init(
     {
       slack_user_id: {

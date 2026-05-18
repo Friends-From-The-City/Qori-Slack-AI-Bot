@@ -10,7 +10,8 @@
 
 import type { SlashCommandContext, BlockActionContext, ViewSubmissionContext } from '../../../../types/handlers';
 
-const { researchShareoutModal } = require('../../ui/researchShareoutModal');
+import { researchShareoutModal } from '../../ui/researchShareoutModal';
+import type { View } from '@slack/types';
 
 // ─── /run-template command ────────────────────────────────────────
 
@@ -23,10 +24,11 @@ async function runTemplateCommandHandler({ ack, command, client }: SlashCommandC
       view: {
         ...researchShareoutModal,
         private_metadata: JSON.stringify({ channelId: command.channel_id }),
-      },
+      } as View,
     });
-  } catch (error: any) {
-    console.error('Error opening modal:', error.data || error);
+  } catch (error) {
+    const detail = (error as Record<string, unknown>)?.data ?? error;
+    console.error('Error opening modal:', detail);
   }
 }
 
@@ -61,8 +63,9 @@ async function handleTypeSelect({ ack, body, client, action }: BlockActionContex
       hash: body.view.hash,
       view: updatedModal,
     });
-  } catch (error: any) {
-    console.error('Error updating view:', error.data || error);
+  } catch (error) {
+    const detail = (error as Record<string, unknown>)?.data ?? error;
+    console.error('Error updating view:', detail);
   }
 }
 
@@ -95,8 +98,10 @@ async function handleResearchShareoutSubmission({ ack, body, view, client }: Vie
   });
 }
 
-module.exports = {
+export {
   runTemplateCommandHandler,
+  runTemplateCommandHandler as runTemplateCommand,
   handleTypeSelect,
   handleResearchShareoutSubmission,
+  handleResearchShareoutSubmission as handleShareoutSubmission,
 };

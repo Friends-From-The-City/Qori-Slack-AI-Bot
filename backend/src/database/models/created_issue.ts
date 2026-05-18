@@ -25,7 +25,7 @@ class CreatedIssue extends Model<
   declare created_at: CreationOptional<Date>;
 }
 
-module.exports = (sequelize: Sequelize) => {
+export default (sequelize: Sequelize) => {
   CreatedIssue.init(
     {
       id: {

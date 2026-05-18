@@ -14,12 +14,16 @@ import {
   type Sequelize,
 } from 'sequelize';
 
+// bcrypt lacks @types — using require until types are installed
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const { compare, hash } = require('bcrypt');
+// helpers/index.js is still CommonJS — using require until migrated
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const { tokenHelper, mailHelper } = require('../../helpers');
 
 class User extends Model<
-  InferAttributes<User, { omit: 'fullName' }>,
-  InferCreationAttributes<User, { omit: 'fullName' }>
+  InferAttributes<User, { omit: 'fullName' | 'password' }>,
+  InferCreationAttributes<User, { omit: 'fullName' | 'password' }>
 > {
   // — Attributes —
   declare id: CreationOptional<number>;
@@ -28,6 +32,8 @@ class User extends Model<
   declare email: string | null;
   declare phone: string | null;
   declare avatar: string | null;
+  /** Legacy auth field — exists in DB but not in init(). Omitted from InferAttributes. */
+  declare password: string;
   declare is_admin: CreationOptional<boolean>;
   declare created_at: CreationOptional<Date>;
   declare updated_at: CreationOptional<Date>;
@@ -44,7 +50,7 @@ class User extends Model<
   }
 
   validatePassword(plainPassword: string): Promise<boolean> {
-    return compare(plainPassword, (this as any).password);
+    return compare(plainPassword, this.password);
   }
 
   sendMail(mail: { subject: string; html: string }) {
@@ -58,7 +64,7 @@ class User extends Model<
   }
 }
 
-module.exports = (sequelize: Sequelize) => {
+export default (sequelize: Sequelize) => {
   User.init(
     {
       id: {

@@ -8,13 +8,14 @@
  */
 
 import type { SlashCommandContext, ViewSubmissionContext } from '../../../types/handlers';
+import type { View } from '@slack/types';
 
-const { discoverModal } = require('../ui/discoverModal');
-const { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo, createOrUpdateFileOnGitHub, fetchFileFromRepoByPath } = require('../../github');
-const { format } = require('date-fns');
-const { processYamlTemplate } = require('../../yamlProcessor');
-const { processSlackFiles } = require('../../pdfProcessor');
-const { parseDocuments, validateDocuments } = require('../../documentParser');
+import { discoverModal } from '../ui/discoverModal';
+import { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo, createOrUpdateFileOnGitHub, fetchFileFromRepoByPath } from '../../github';
+import { format } from 'date-fns';
+import { processYamlTemplate } from '../../yamlProcessor';
+import { processSlackFiles } from '../../pdfProcessor';
+import { parseDocuments, validateDocuments } from '../../documentParser';
 
 // ─── Types ──────────────────────────────────────────────────────
 
@@ -40,6 +41,7 @@ interface DocumentInfo {
   content: string;
   type: string;
   size: number;
+  [key: string]: unknown;
 }
 
 interface ValidationResult {
@@ -56,6 +58,8 @@ interface UploadedFile {
   name: string;
   mimetype: string;
   url: string;
+  url_private?: string;
+  [key: string]: unknown;
 }
 
 /** Data shape passed to discovery YAML templates. */
@@ -151,15 +155,18 @@ function slugifyTopic(topic: string): string {
 async function scaffoldDiscoveryFolders(team: string): Promise<void> {
   const readmePath = `${team}/_discovery/README.md`;
   try {
+    // @ts-expect-error — pre-existing type mismatch from require() → import migration
     await fetchFileFromRepoByPath(process.env.GITHUB_REPO, readmePath);
     return;
-  } catch (error: any) {
-    if (error.status === 404 || error.message?.includes('Not Found') || error.message?.includes('Could not fetch file')) {
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const status = (error as Record<string, unknown>)?.status;
+    if (status === 404 || message?.includes('Not Found') || message?.includes('Could not fetch file')) {
       console.log(`📁 Scaffolding ${team}/_discovery/ folders in qori-studies...`);
       await createOrUpdateFileOnGitHub(readmePath, DISCOVERY_README);
       console.log(`✅ ${readmePath} created`);
     } else {
-      console.warn(`⚠️ Could not check ${readmePath}, proceeding anyway:`, error.message);
+      console.warn(`⚠️ Could not check ${readmePath}, proceeding anyway:`, message);
     }
   }
 }
@@ -177,10 +184,12 @@ async function discoverHandler({ ack, body, client, command }: SlashCommandConte
       view: {
         ...discoverModal,
         private_metadata: JSON.stringify({ channelId }),
-      },
+      } as View,
     });
-  } catch (err: any) {
-    console.error('Error opening discover modal:', err.data || err);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const detail = (err as Record<string, unknown>)?.data ?? message;
+    console.error('Error opening discover modal:', detail);
     await client.chat.postMessage({
       channel: channelId,
       text: '❌ Failed to open the discovery modal. Please try again.',
@@ -264,6 +273,7 @@ async function handleDiscoverSubmission({ ack, view, body, client }: ViewSubmiss
   const expectedFilename = `${topicSlug}-${typeConfig.fileSlug}-${dateIso}.md`;
   const expectedPath = `${team}/_discovery/${typeConfig.folder}/${expectedFilename}`;
   try {
+    // @ts-expect-error — pre-existing type mismatch from require() → import migration
     await fetchFileFromRepoByPath(process.env.GITHUB_REPO, expectedPath);
     const timeSuffix: string = format(new Date(), 'HHmm');
     topicSlug = `${topicSlug}-${timeSuffix}`;
@@ -282,7 +292,7 @@ async function handleDiscoverSubmission({ ack, view, body, client }: ViewSubmiss
   try {
     await scaffoldDiscoveryFolders(team);
 
-    const processedFiles: ProcessedFile[] = await processSlackFiles(uploadedFiles, process.env.SLACK_BOT_TOKEN);
+    const processedFiles: ProcessedFile[] = await processSlackFiles(uploadedFiles, process.env.SLACK_BOT_TOKEN!);
     const documents: DocumentInfo[] = processedFiles.map((file: ProcessedFile) => ({
       name: file.name,
       content: file.content,
@@ -383,16 +393,17 @@ async function handleDiscoverSubmission({ ack, view, body, client }: ViewSubmiss
       text: `${typeConfig.label} complete for "${topic}". View: ${url}`,
     });
 
-  } catch (error: any) {
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
     console.error('Error processing discovery:', error);
     await client.chat.postMessage({
       channel: replyChannel,
-      text: `❌ Error running ${typeConfig.label}: ${error.message}\n\nPlease try again or contact support.`,
+      text: `❌ Error running ${typeConfig.label}: ${message}\n\nPlease try again or contact support.`,
     });
   }
 }
 
-module.exports = {
+export {
   discoverHandler,
   handleDiscoverSubmission,
 };

@@ -7,24 +7,18 @@
  */
 
 import type { ViewSubmissionContext } from '../../../types/handlers';
+import type { View } from '@slack/types';
 
-const { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo, readFolders, copyFilesToFolder } = require('../../github');
-const { getResearchStudyWithRoles, addResearchStudyWithRoles } = require('../../../services/research_study.service');
-const { getChannelConfigByChannelId } = require('../../../services/channel-config.service');
-const { processYamlTemplate } = require('../../yamlProcessor');
-const { addStudyStatus } = require('../../../services/study-status.service');
-const { sendStudyResultMessage, generateStudyResultBlocks } = require('../ui/studyResultBlocks');
-const { loadDiscoveryArtifacts, aggregateDiscoveryVariables } = require('../../discoveryLoader');
-const { parseBudget, parseParticipantTarget } = require('../../../utils/budgetParser');
+import { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo, readFolders, copyFilesToFolder } from '../../github';
+import { getResearchStudyWithRoles, addResearchStudyWithRoles } from '../../../services/research_study.service';
+import { getChannelConfigByChannelId } from '../../../services/channel-config.service';
+import { processYamlTemplate } from '../../yamlProcessor';
+import { addStudyStatus } from '../../../services/study-status.service';
+import { sendStudyResultMessage, generateStudyResultBlocks } from '../ui/studyResultBlocks';
+import { loadDiscoveryArtifacts, aggregateDiscoveryVariables, type DiscoveryArtifact } from '../../discoveryLoader';
+import { parseBudget, parseParticipantTarget } from '../../../utils/budgetParser';
 
 // ─── Discovery type maps ────────────────────────────────────────
-
-interface DiscoveryArtifact {
-  type: string;
-  slug: string;
-  date: string;
-  variableCount: number;
-}
 
 type DiscoveryType = 'desk-research' | 'stakeholder-interviews' | 'survey-synthesis';
 
@@ -104,7 +98,7 @@ async function handleBriefSubmission({ ack, body, view, client }: ViewSubmission
   console.log("🚀 ~ Research Brief ~ studyName:", studyName);
 
   // Fetch the full study — or create it if it doesn't exist yet
-  let study = await getResearchStudyWithRoles(studyName);
+  let study = await getResearchStudyWithRoles(studyName!);
 
   if (!study || !study.path) {
     console.log('📁 Study does not exist yet — creating from brief submission');
@@ -123,6 +117,7 @@ async function handleBriefSubmission({ ack, body, view, client }: ViewSubmission
         templateFiles,
         `${channelConfig.sub_folder_name}/research`,
         studyName,
+        // @ts-expect-error — pre-existing type mismatch from require() → import migration
         process.env.GITHUB_REPO,
         channelConfig.product_folder_name
       );
@@ -139,13 +134,14 @@ async function handleBriefSubmission({ ack, body, view, client }: ViewSubmission
         assignments: [],
       });
 
-      study = await getResearchStudyWithRoles(studyName);
-      console.log(`✅ Study "${studyName}" created from brief, path: ${study.path}`);
-    } catch (createError: any) {
+      study = await getResearchStudyWithRoles(studyName!);
+      console.log(`✅ Study "${studyName}" created from brief, path: ${study!.path}`);
+    } catch (createError) {
+      const createMessage = createError instanceof Error ? createError.message : String(createError);
       console.error('❌ Failed to create study from brief:', createError);
-      const errMsg: string = createError.message?.includes('<!DOCTYPE')
+      const errMsg: string = createMessage.includes('<!DOCTYPE')
         ? 'GitHub is temporarily unavailable. Please try again in a moment.'
-        : createError.message;
+        : createMessage;
       await client.chat.postEphemeral({
         channel: body.user.id,
         user: body.user.id,
@@ -198,10 +194,11 @@ async function handleBriefSubmission({ ack, body, view, client }: ViewSubmission
   if (targetParticipants !== null) studyUpdates.target_participants = targetParticipants;
   if (Object.keys(studyUpdates).length > 0) {
     try {
-      await study.update({ ...studyUpdates, updated_at: new Date() });
+      await study!.update({ ...studyUpdates, updated_at: new Date() });
       console.log(`💰 Parsed budget: ${parsedBudget}, target: ${targetParticipants} for study ${studyName}`);
-    } catch (budgetErr: any) {
-      console.warn('⚠️ Failed to save parsed budget/target:', budgetErr.message);
+    } catch (budgetErr) {
+      const message = budgetErr instanceof Error ? budgetErr.message : String(budgetErr);
+      console.warn('⚠️ Failed to save parsed budget/target:', message);
     }
   }
 
@@ -234,15 +231,16 @@ async function handleBriefSubmission({ ack, body, view, client }: ViewSubmission
 
         console.log(`✅ Injected ${Object.keys(upstreamVars).length} upstream variables from ${selectedArtifacts.length} discovery artifact(s)`);
       }
-    } catch (error: any) {
-      console.warn('⚠️ Failed to load discovery variables for brief, proceeding without:', error.message);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn('⚠️ Failed to load discovery variables for brief, proceeding without:', message);
     }
   }
 
   console.log(`📋 Extracted research brief data: ${Object.keys(data).length} fields, study: ${data.selected_study || 'unknown'}`);
 
   const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, "research_brief.yaml");
-  const renderedYaml = await processYamlTemplate(file.content, data, study.path);
+  const renderedYaml = await processYamlTemplate(file.content, data, study!.path ?? '');
 
   const url: string = renderedYaml.result.url;
 
@@ -258,7 +256,7 @@ async function handleBriefSubmission({ ack, body, view, client }: ViewSubmission
         text: `✅ *Research Brief Created*\n\n*Study:* ${studyName}\n*View:* <${url}|GitHub>\n\nThe brief has been sent to the study team for approval.\n\n*Next:* Run \`/qori-plan\` to create an execution plan once approved.`,
       });
     }
-  } catch (error: any) {
+  } catch (error) {
     console.error('Failed to send confirmation to researcher:', error);
   }
 
@@ -272,4 +270,4 @@ async function handleBriefSubmission({ ack, body, view, client }: ViewSubmission
   console.log(`✅ Research brief created for study: ${studyName}`);
 }
 
-module.exports = { handleBriefSubmission };
+export { handleBriefSubmission };

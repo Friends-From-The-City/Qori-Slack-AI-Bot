@@ -12,14 +12,15 @@
  */
 
 import type { BlockActionContext, ViewSubmissionContext } from '../../../../types/handlers';
+import type { View } from '@slack/types';
 
-const { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo } = require('../../../github');
-const { getResearchStudyWithRoles, getStudiesByUser } = require('../../../../services/research_study.service');
-const { processYamlTemplate } = require('../../../yamlProcessor');
-const { sendStudyResultMessage, generateStudyResultBlocks } = require('../../ui/studyResultBlocks');
-const { processSlackFiles } = require('../../../pdfProcessor');
-const { parseDocuments, validateDocuments } = require('../../../documentParser');
-const { uploadDeskResearchModal } = require('../../ui/uploadDeskResearchModal');
+import { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo } from '../../../github';
+import { getResearchStudyWithRoles, getStudiesByUser } from '../../../../services/research_study.service';
+import { processYamlTemplate } from '../../../yamlProcessor';
+import { sendStudyResultMessage, generateStudyResultBlocks } from '../../ui/studyResultBlocks';
+import { processSlackFiles } from '../../../pdfProcessor';
+import { parseDocuments, validateDocuments } from '../../../documentParser';
+import { uploadDeskResearchModal } from '../../ui/uploadDeskResearchModal';
 
 // ─── Block Kit manipulation type ──────────────────────────────────
 
@@ -71,8 +72,9 @@ async function openDeskResearchModal({ ack, body, client }: BlockActionContext) 
           studyName = studies[0].name;
           studyId = String(studies[0].id);
         }
-      } catch (e: any) {
-        console.warn('⚠️ Could not infer studyName for upload desk research:', e.message);
+      } catch (e) {
+        const eMessage = e instanceof Error ? e.message : String(e);
+        console.warn('⚠️ Could not infer studyName for upload desk research:', eMessage);
       }
     }
 
@@ -104,10 +106,12 @@ async function openDeskResearchModal({ ack, body, client }: BlockActionContext) 
         ...uploadDeskResearchModal,
         blocks: modalBlocks,
         private_metadata: JSON.stringify({ ...(meta || {}), studyName, studyId, channelId: meta.channelId }),
-      },
+      } as View,
     });
-  } catch (err: any) {
-    console.error('Error opening upload desk research modal:', err.data || err);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const detail = (err as Record<string, unknown>)?.data ?? message;
+    console.error('Error opening upload desk research modal:', detail);
   }
 }
 
@@ -157,7 +161,7 @@ async function handleDeskResearchSubmission({ ack, body, view, client }: ViewSub
       return;
     }
 
-    const processedFiles = await processSlackFiles(uploadedFiles, process.env.SLACK_BOT_TOKEN);
+    const processedFiles = await processSlackFiles(uploadedFiles, process.env.SLACK_BOT_TOKEN!);
 
     const documents = processedFiles.map((file: any) => ({
       name: file.name,
@@ -196,18 +200,20 @@ async function handleDeskResearchSubmission({ ack, body, view, client }: ViewSub
     }
 
     const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, 'desk_research.yaml');
+    // @ts-expect-error — pre-existing type mismatch from require() → import migration
     const renderedYaml = await processYamlTemplate(file.content, deskResearchData, study.path, 'desk-research');
 
     const url: string = renderedYaml.result.url;
     const blocks = generateStudyResultBlocks(studyName, study, url, channelId, 'desk');
     await sendStudyResultMessage(client, channelId, studyName, blocks, 'desk');
-  } catch (error: any) {
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
     console.error('Error processing desk research:', error);
     await client.chat.postMessage({
       channel: channelId,
-      text: `❌ There was an error processing your desk research: ${error.message}\n\nPlease try again or contact support.`,
+      text: `❌ There was an error processing your desk research: ${message}\n\nPlease try again or contact support.`,
     });
   }
 }
 
-module.exports = { openDeskResearchModal, handleDeskResearchSubmission };
+export { openDeskResearchModal, handleDeskResearchSubmission };

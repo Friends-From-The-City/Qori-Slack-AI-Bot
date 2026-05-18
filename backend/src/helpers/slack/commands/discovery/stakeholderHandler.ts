@@ -9,18 +9,19 @@
  */
 
 import type { BlockActionContext, ViewSubmissionContext } from '../../../../types/handlers';
+import type { View } from '@slack/types';
 
-const { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo } = require('../../../github');
-const { getResearchStudyWithRoles, getStudiesByUser } = require('../../../../services/research_study.service');
-const { processYamlTemplate } = require('../../../yamlProcessor');
-const { addStudyStatus } = require('../../../../services/study-status.service');
-const { sendStudyResultMessage, generateStudyResultBlocks } = require('../../ui/studyResultBlocks');
-const { readStudyVariables } = require('../../../studyVariables');
-const { buildCascadeReadiness, buildCascadeBlocks } = require('../../ui/cascadeReadinessBlocks');
-const { stakeholderInterviewGuideModal } = require('../../ui/stakeholderInterviewGuideModal');
-const { uploadStakeholderNotesModal } = require('../../ui/uploadStakeholderNotesModal');
-const { processSlackFiles } = require('../../../pdfProcessor');
-const { parseDocuments, validateDocuments } = require('../../../documentParser');
+import { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo } from '../../../github';
+import { getResearchStudyWithRoles, getStudiesByUser } from '../../../../services/research_study.service';
+import { processYamlTemplate } from '../../../yamlProcessor';
+import { addStudyStatus } from '../../../../services/study-status.service';
+import { sendStudyResultMessage, generateStudyResultBlocks } from '../../ui/studyResultBlocks';
+import { readStudyVariables } from '../../../studyVariables';
+import { buildCascadeReadiness, buildCascadeBlocks } from '../../ui/cascadeReadinessBlocks';
+import { stakeholderInterviewGuideModal } from '../../ui/stakeholderInterviewGuideModal';
+import { uploadStakeholderNotesModal } from '../../ui/uploadStakeholderNotesModal';
+import { processSlackFiles } from '../../../pdfProcessor';
+import { parseDocuments, validateDocuments } from '../../../documentParser';
 
 // ─── Block Kit manipulation type ──────────────────────────────────
 
@@ -87,8 +88,9 @@ async function openStakeholderGuideModal({ ack, body, client }: BlockActionConte
         if (Array.isArray(studies) && studies.length > 0) {
           studyName = studies[0].name;
         }
-      } catch (e: any) {
-        console.warn('⚠️ Could not infer studyName for stakeholder guide:', e.message);
+      } catch (e) {
+        const eMessage = e instanceof Error ? e.message : String(e);
+        console.warn('⚠️ Could not infer studyName for stakeholder guide:', eMessage);
       }
     }
 
@@ -116,12 +118,14 @@ async function openStakeholderGuideModal({ ack, body, client }: BlockActionConte
           const cascadeBlocks = buildCascadeBlocks(cascadeData);
           const firstDivider = modalBlocks.findIndex(b => b.type === 'divider');
           if (firstDivider !== -1) {
+            // @ts-expect-error — pre-existing type mismatch from require() → import migration
             modalBlocks.splice(firstDivider, 0, ...cascadeBlocks);
           }
         }
       }
-    } catch (err: any) {
-      console.warn('⚠️ Cascade readiness failed for stakeholder guide:', err.message);
+    } catch (err) {
+      const errMessage = err instanceof Error ? err.message : String(err);
+      console.warn('⚠️ Cascade readiness failed for stakeholder guide:', errMessage);
     }
 
     await client.views.push({
@@ -130,10 +134,12 @@ async function openStakeholderGuideModal({ ack, body, client }: BlockActionConte
         ...stakeholderInterviewGuideModal,
         blocks: modalBlocks,
         private_metadata: JSON.stringify({ ...(meta || {}), studyName, studyId, channelId: meta.channelId }),
-      },
+      } as View,
     });
-  } catch (err: any) {
-    console.error('Error opening stakeholder guide modal:', err.data || err);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const detail = (err as Record<string, unknown>)?.data ?? message;
+    console.error('Error opening stakeholder guide modal:', detail);
   }
 }
 
@@ -170,8 +176,9 @@ async function openStakeholderInterviewGuideModal({ ack, body, client }: BlockAc
         if (Array.isArray(studies) && studies.length > 0) {
           studyName = studies[0].name;
         }
-      } catch (e: any) {
-        console.warn('⚠️ Could not infer studyName for stakeholder interview guide:', e.message);
+      } catch (e) {
+        const eMessage = e instanceof Error ? e.message : String(e);
+        console.warn('⚠️ Could not infer studyName for stakeholder interview guide:', eMessage);
       }
     }
 
@@ -195,10 +202,12 @@ async function openStakeholderInterviewGuideModal({ ack, body, client }: BlockAc
         ...stakeholderInterviewGuideModal,
         blocks: modalBlocks,
         private_metadata: JSON.stringify({ ...(meta || {}), studyName, studyId, channelId: meta.channelId }),
-      },
+      } as View,
     });
-  } catch (err: any) {
-    console.error('Error opening stakeholder interview guide modal:', err.data || err);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const detail = (err as Record<string, unknown>)?.data ?? message;
+    console.error('Error opening stakeholder interview guide modal:', detail);
   }
 }
 
@@ -206,9 +215,8 @@ async function openStakeholderInterviewGuideModal({ ack, body, client }: BlockAc
 
 async function handleStakeholderGuideSubmission({ ack, body, view, client }: ViewSubmissionContext) {
   // Close the modal immediately to prevent going back to previous modal
-  await ack({
-    response_action: 'clear',
-  } as any);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Bolt ack() types don't include response_action variants
+  await ack({ response_action: 'clear' } as any);
 
   const values = view.state.values;
   const meta = JSON.parse(view.private_metadata || '{}');
@@ -228,8 +236,9 @@ async function handleStakeholderGuideSubmission({ ack, body, view, client }: Vie
       if (Array.isArray(studies) && studies.length > 0) {
         studyName = studies[0].name;
       }
-    } catch (e: any) {
-      console.warn('⚠️ Could not infer studyName on submission:', e.message);
+    } catch (e) {
+      const eMessage = e instanceof Error ? e.message : String(e);
+      console.warn('⚠️ Could not infer studyName on submission:', eMessage);
     }
   }
 
@@ -273,7 +282,7 @@ async function handleStakeholderGuideSubmission({ ack, body, view, client }: Vie
     const study = await getResearchStudyWithRoles(studyName);
     const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, 'stakeholder_interview_guide.yaml');
 
-    const renderedYaml = await processYamlTemplate(file.content, templateData, study.path);
+    const renderedYaml = await processYamlTemplate(file.content, templateData, study!.path ?? '');
     const url: string = renderedYaml.result.url;
 
     console.log('✅ Stakeholder Interview Guide created:', url);
@@ -291,13 +300,14 @@ async function handleStakeholderGuideSubmission({ ack, body, view, client }: Vie
       status: 'created',
       created_by: body.user?.id || null,
     });
-  } catch (error: any) {
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
     console.error('❌ Error processing stakeholder interview guide:', error);
 
     try {
       await client.chat.postMessage({
         channel: channelId || body.user.id,
-        text: `❌ Failed to create stakeholder interview guide: ${error.message}`,
+        text: `❌ Failed to create stakeholder interview guide: ${message}`,
       });
     } catch (msgError) {
       console.error('Error sending error message:', msgError);
@@ -363,10 +373,12 @@ async function openUploadStakeholderNotesModal({ ack, body, client }: BlockActio
         ...uploadStakeholderNotesModal,
         blocks: modalBlocks,
         private_metadata: JSON.stringify({ ...(meta || {}), studyName, studyId, channelId: meta.channelId }),
-      },
+      } as View,
     });
-  } catch (err: any) {
-    console.error('Error opening upload stakeholder notes modal:', err.data || err);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const detail = (err as Record<string, unknown>)?.data ?? message;
+    console.error('Error opening upload stakeholder notes modal:', detail);
   }
 }
 
@@ -426,7 +438,7 @@ async function handleStakeholderNotesSubmission({ ack, body, view, client }: Vie
 
   try {
     // Process uploaded files to extract content
-    const processedFiles = await processSlackFiles(uploadedFiles, process.env.SLACK_BOT_TOKEN);
+    const processedFiles = await processSlackFiles(uploadedFiles, process.env.SLACK_BOT_TOKEN!);
 
     // Prepare documents array
     const documents = processedFiles.map((file: any) => ({
@@ -477,6 +489,7 @@ async function handleStakeholderNotesSubmission({ ack, body, view, client }: Vie
     const renderedYaml = await processYamlTemplate(
       file.content,
       stakeholderNotesData,
+      // @ts-expect-error — pre-existing type mismatch from require() → import migration
       study.path,
     );
 
@@ -495,16 +508,17 @@ async function handleStakeholderNotesSubmission({ ack, body, view, client }: Vie
     // Generate and send result message
     const blocks = generateStudyResultBlocks(studyName, study, url, channelId, 'stakeholder_notes');
     await sendStudyResultMessage(client, channelId, studyName, blocks, 'stakeholder_notes');
-  } catch (error: any) {
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
     console.error('Error processing stakeholder notes:', error);
     await client.chat.postMessage({
       channel: channelId,
-      text: `❌ There was an error processing your stakeholder notes: ${error.message}\n\nPlease try again or contact support.`,
+      text: `❌ There was an error processing your stakeholder notes: ${message}\n\nPlease try again or contact support.`,
     });
   }
 }
 
-module.exports = {
+export {
   openStakeholderGuideModal,
   openStakeholderInterviewGuideModal,
   handleStakeholderGuideSubmission,

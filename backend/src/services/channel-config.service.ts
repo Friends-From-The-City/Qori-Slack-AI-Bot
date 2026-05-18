@@ -1,7 +1,7 @@
 import type { ChannelConfig } from '../database/models/channel_config';
 import type { InferCreationAttributes } from 'sequelize';
 
-const sequelize = require('../database');
+import sequelize from '../database';
 
 // Typed model reference — cast once, use everywhere. See Phase 3 notes.
 const ChannelConfigModel = sequelize.models.ChannelConfig as typeof ChannelConfig;
@@ -42,7 +42,7 @@ const getChannelConfigByChannelId = async (channelId: string): Promise<ChannelCo
 };
 
 
-module.exports = {
+export {
   addChannelConfig,
   getChannelConfigByChannelId
 };

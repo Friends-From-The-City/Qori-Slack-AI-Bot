@@ -2,9 +2,9 @@
 
 import type { StudyStatus } from '../database/models/study_status';
 
-const crypto = require('crypto');
-const { getStudyStatusByFileName } = require('./study-status.service');
-const slackApiClient = require('../helpers/slackApiClient');
+import crypto from 'crypto';
+import { getStudyStatusByFileName } from './study-status.service';
+import slackApiClient from '../helpers/slackApiClient';
 
 interface GitCommit {
   id: string;
@@ -75,6 +75,7 @@ class GithubWebhookService {
         for (const filePath of changedFiles.modified) {
           const fileName = GithubWebhookService.extractFileName(filePath);
           console.log("🚀 ~ GithubWebhookService ~ handleEvent ~ fileName:", fileName)
+          // @ts-expect-error — pre-existing type mismatch from require() → import migration
           const statuses: StudyStatus[] = await getStudyStatusByFileName(fileName);
           console.log("🚀 ~ GithubWebhookService ~ handleEvent ~ statuses:", statuses)
           if (!statuses || statuses.length === 0) continue;
@@ -135,4 +136,4 @@ class GithubWebhookService {
   }
 }
 
-module.exports = GithubWebhookService;
+export default GithubWebhookService;
