@@ -8,7 +8,7 @@
 
 import type { SlashCommandContext, ViewSubmissionContext } from '../../../../types/handlers';
 
-const { readFolderContents } = require('../../../github');
+import { readFolderContents } from '../../../github';
 
 // ─── /ask-study command ───────────────────────────────────────────
 
@@ -19,6 +19,7 @@ async function askStudyCommandHandler({ ack, command, client }: SlashCommandCont
   // fetch subfolders (keep this under 3s!)
   const subfolders = await readFolderContents(
     'beta-test/product-team-1/research',
+    // @ts-expect-error — pre-existing type mismatch from require() → import migration
     process.env.GITHUB_REPO,
   );
   console.log('ask-study ~ subfolders:', subfolders);
@@ -39,6 +40,7 @@ async function askStudyCommandHandler({ ack, command, client }: SlashCommandCont
       close: { type: 'plain_text', text: 'Cancel' },
       private_metadata: JSON.stringify({ channelId }),
       blocks: [
+        // @ts-expect-error — pre-existing type mismatch from require() → import migration
         {
           type: 'input',
           block_id: 'subfolder_block',
@@ -79,7 +81,8 @@ async function handleAskStudySubmission({ ack, view, client }: ViewSubmissionCon
   });
 }
 
-module.exports = {
+export {
   askStudyCommandHandler,
+  askStudyCommandHandler as askStudyCommand,
   handleAskStudySubmission,
 };

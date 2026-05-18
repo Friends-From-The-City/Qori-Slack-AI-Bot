@@ -14,7 +14,11 @@ import {
   type Sequelize,
 } from 'sequelize';
 
+// bcrypt lacks @types — using require until types are installed
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const { compare, hash } = require('bcrypt');
+// helpers/index.js is still CommonJS — using require until migrated
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const { tokenHelper, mailHelper } = require('../../helpers');
 
 class User extends Model<
@@ -58,7 +62,7 @@ class User extends Model<
   }
 }
 
-module.exports = (sequelize: Sequelize) => {
+export default (sequelize: Sequelize) => {
   User.init(
     {
       id: {

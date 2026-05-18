@@ -10,7 +10,7 @@ See ADR 0013 for the decision and rationale. This file tracks actual progress ag
 | 2 | Type definitions: cascade variables, models, handlers | 3-4 days | ~0.5 day | 2026-05-13 | YAML schema audit was the bulk of the work. Sequelize pattern decision (ADR 0014) was straightforward once models were audited. |
 | 3 | Service + model layer migration | 4-6 days | ~1 day | 2026-05-13 | Stage 1 review gate caught the model-return-type issue (Option A — class at module scope). Once that pattern was established, bulk migration was mechanical. 13 models, 12 services. |
 | 4 | Handler layer migration | 4-6 days | ~2 days CC time | 2026-05-15 | 4 stages over ~3 weeks calendar. Stage 1: planHandler pattern + review gate. Stage 2: synthesis + readout handlers. Stage 3: extraction of 20 handlers from events.js. Stage 4: 7 remaining .js handlers. Smoke tested all 10 command areas on staging. Surfaced 5 latent bugs: studySetupModal static object, private_metadata key mismatch, TemplateContractError instanceof failure, brief modal wrong params, approval import name mismatch. |
-| 5 | Utilities, parsers, events.js | 3-5 days | — | — | Not started |
+| 5 | Utilities, parsers, UI builders, helpers, require→import, modal metadata, cascade audit, variableExtractor, timing logs | 6-9 days | ~2 days CC time | 2026-05-15 | 8 streams + close-out. 2 utility + 41 UI builder + 16 helper files migrated to .ts. ~480 require()→import conversions. 28 modal metadata interfaces. Cascade access audit in docs/cascade-access-patterns.md. Typed cascade emission via CascadeVariableMap[K]. 32 timing points in 7 handlers. 51 parser fuzz tests. 4 require() remain (circular deps + bcrypt). 47 @ts-expect-error for deep structural mismatches. |
 | 6 | End-to-end tests | 3-5 days | — | — | Not started |
 | 7 | Sign-off, documentation, resume template work | 1 day | — | — | Not started |
 
@@ -30,15 +30,22 @@ See ADR 0013 for the decision and rationale. This file tracks actual progress ag
 - **`allowDeclareFields` missing from `.babelrc` (Phase 4, Stage 3):** Babel's `@babel/preset-typescript` needs `allowDeclareFields: true` to compile the `declare` keyword on Sequelize model class fields. Without it, `npm run build` crashes. Railway was down from Phase 3 merge until this was fixed.
 - **`dist/bin/www.js` broken relative paths (Phase 4, Stage 3):** `www.js` does `require('./app')` which resolves to `dist/bin/app.js` (doesn't exist — `app.js` is at `dist/app.js`). This is express-starter boilerplate that never worked from the compiled dist. Railway start command changed to `npm run build && node ./dist/app.js`.
 
-## Pending Phase 5 / v1.1
+## Phase 5 completed (2026-05-15)
 
-- **Modal metadata contracts (Phase 5 or v1.1):** `private_metadata` travels as an untyped JSON string between modal builders and handlers. The `channel_id` vs `channelId` divergence in the plan modal (fixed 2026-05-14) is the visible symptom; there are likely more latent across the ~30 modals. Fix pattern: each modal builder defines a TypeScript interface for its `private_metadata` shape; the corresponding handler imports the interface and uses typed destructuring. Same pattern as `PlanTemplateInput` from Stage 1.
+- **Modal metadata contracts:** 28 typed interfaces across all modal+handler pairs. `satisfies` on setter, `as XxxMetadata` on reader.
+- **Cascade access patterns:** Audited and documented in `docs/cascade-access-patterns.md`. No consolidation needed — 7 functions serve distinct purposes.
+- **Cascade emission typing:** `variableExtractor.ts` has `typedExtraction<K extends CascadeVariableKey>()` generic bridging runtime extraction to `CascadeVariableMap[K]`.
+- **require()→import:** 480+ conversions. 4 intentional require() remain (circular deps + bcrypt).
+- **Big three helpers migrated:** github.ts (650 lines), studyVariables.ts (940 lines), participantYamlProcessor.ts (593 lines) — all with typed return values.
+- **12 additional helpers migrated:** yamlProcessor.ts, langchain.ts, documentParser.ts, pdfProcessor.ts, discoveryLoader.ts, observerYamlProcessor.ts, markChangesCompleteHandler.ts, requestChangesHandler.ts, utils.ts, slackApiClient.ts, mail.ts, generateFileCheckboxOptions.ts.
+- **Timing instrumentation:** 32 `⏱️`-prefixed timing points across 7 document-creation handlers.
 
-## Phase 5 observations
+## Pending v1.1
 
-- **Three cascade access patterns coexist:** `readUpstreamVariables` (consumes-spec style), `readStudyVariables` (full study dump), and direct `StudyVariable.findOne`. Worth auditing during Phase 5 utilities migration — consolidate if they overlap, document the differences if they serve distinct purposes.
-- **Cascade emission: two-layer safety with a drift gap.** Runtime validation against YAML schemas checks emission at the extraction boundary. TypeScript types on consumers check reads at the handler boundary. The two layers aren't programmatically linked — drift between YAML schemas and `types/cascade.ts` is invisible. Phase 5: when `variableExtractor.js` migrates, consider typing its return shape using `CascadeVariableMap` (the `variable_key` is runtime-dynamic, so this requires generic gymnastics or a cast at the emission boundary — acceptable to do minimal typing if it adds friction). Future (v1.1 / pre-government-handoff): generate `types/cascade.ts` from YAML schemas via YAML → JSON Schema → TypeScript generator. Closes the drift gap mechanically but adds build complexity.
-- **Cascade helper deferred (Phase 4, Stage 2):** Only 7 cascade-specific narrowing points across 8 handlers (0-3 per handler). `as ResearchQuestion[]` assertions are readable at this volume. Revisit if Phase 5 surfaces more.
+- **9 remaining `.js` helper files:** index.js, prompts.js, queue/\*.js, rag.js, ragV2.js, slack/auth.js, token.js, yamlPrompt.js — all unused by `.ts` handlers (dead code, disabled features, or infrastructure barrels).
+- **47 `@ts-expect-error` suppressions:** Deep structural mismatches (null vs undefined in Sequelize model fields, Bolt body type gaps) that need proper interface alignment to resolve.
+- **`catch (error: any)` cleanup (~208 instances):** Convert to `catch (error: unknown)` with `instanceof Error` narrowing.
+- **YAML→TypeScript schema generation:** Generate `types/cascade.ts` from YAML schemas mechanically to close the drift gap.
 
 ## Key decisions made during migration
 

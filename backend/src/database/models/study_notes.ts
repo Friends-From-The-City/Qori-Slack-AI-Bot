@@ -47,7 +47,7 @@ class StudyNotes extends Model<
   }
 }
 
-module.exports = (sequelize: Sequelize) => {
+export default (sequelize: Sequelize) => {
   StudyNotes.init(
     {
       id: {

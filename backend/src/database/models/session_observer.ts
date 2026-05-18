@@ -61,7 +61,7 @@ class SessionObserver extends Model<
   }
 }
 
-module.exports = (sequelize: Sequelize) => {
+export default (sequelize: Sequelize) => {
   SessionObserver.init(
     {
       id: {

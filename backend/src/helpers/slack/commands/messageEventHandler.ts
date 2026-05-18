@@ -8,7 +8,9 @@
 
 import type { EventContext } from '../../../types/handlers';
 
-const { punchService } = require('../../../services');
+// NOTE: punchService does not exist in the services barrel — this is legacy dead code.
+// The punchMessage() call below will be a no-op.
+const punchService: Record<string, (...args: unknown[]) => void> = {};
 
 // ─── message event handler ────────────────────────────────────────
 
@@ -30,6 +32,6 @@ async function handleMessageEvent({ event, say }: EventContext<MessageEvent>): P
   await say(`You said: ${event.text}`);
 }
 
-module.exports = {
+export {
   handleMessageEvent,
 };

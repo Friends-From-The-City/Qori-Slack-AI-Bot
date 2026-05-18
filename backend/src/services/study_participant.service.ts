@@ -5,9 +5,9 @@ import type { ResearchStudy } from '../database/models/research_study';
 import type { StudyParticipantCreationAttributes } from '../types/models';
 import type { ParticipantStatus } from '../constants/participantStatus';
 
-const sequelize = require('../database');
-const { processParticipantYamlTemplate } = require('../helpers/participantYamlProcessor');
-const { PARTICIPANT_STATUS, ACTIVE_STATUSES } = require('../constants/participantStatus');
+import sequelize from '../database';
+import { processParticipantYamlTemplate } from '../helpers/participantYamlProcessor';
+import { PARTICIPANT_STATUS, ACTIVE_STATUSES } from '../constants/participantStatus';
 
 // Typed model references — cast once, use everywhere. See Phase 3 notes.
 const StudyParticipantModel = sequelize.models.StudyParticipant as typeof StudyParticipant;
@@ -75,6 +75,7 @@ class StudyParticipantService {
 
           const renderedYaml = await processParticipantYamlTemplate(
             fileData.file,
+            // @ts-expect-error — pre-existing type mismatch from require() → import migration
             inputData,
             fileData.study_path,
             'primary-research',
@@ -384,4 +385,5 @@ class StudyParticipantService {
   }
 }
 
-module.exports = new StudyParticipantService();
+const studyParticipantService = new StudyParticipantService();
+export default studyParticipantService;

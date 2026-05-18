@@ -33,7 +33,7 @@ class StudyStatus extends Model<
   }
 }
 
-module.exports = (sequelize: Sequelize) => {
+export default (sequelize: Sequelize) => {
   StudyStatus.init(
     {
       id: {

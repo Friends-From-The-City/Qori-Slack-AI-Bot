@@ -36,7 +36,7 @@ class StudyVariable extends Model<
   declare updated_at: CreationOptional<Date>;
 }
 
-module.exports = (sequelize: Sequelize) => {
+export default (sequelize: Sequelize) => {
   StudyVariable.init(
     {
       id: {

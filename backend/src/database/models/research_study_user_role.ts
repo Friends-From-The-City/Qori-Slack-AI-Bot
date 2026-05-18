@@ -38,7 +38,7 @@ class ResearchStudyUserRole extends Model<
   }
 }
 
-module.exports = (sequelize: Sequelize) => {
+export default (sequelize: Sequelize) => {
   ResearchStudyUserRole.init(
     {
       id: {

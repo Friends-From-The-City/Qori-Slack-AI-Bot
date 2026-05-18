@@ -42,7 +42,7 @@ class SessionSummary extends Model<
   }
 }
 
-module.exports = (sequelize: Sequelize) => {
+export default (sequelize: Sequelize) => {
   SessionSummary.init(
     {
       id: {

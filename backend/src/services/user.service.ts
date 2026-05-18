@@ -1,6 +1,6 @@
 import type { User } from '../database/models/user.model';
 
-const sequelize = require('../database');
+import sequelize from '../database';
 
 // Typed model reference — cast once, use everywhere. See Phase 3 notes.
 const UserModel = sequelize.models.User as typeof User;
@@ -42,6 +42,6 @@ const addNewUser = async (user: LegacyUserInput): Promise<LegacyUserInput> => {
   }
 };
 
-module.exports = {
+export {
   addNewUser,
 };

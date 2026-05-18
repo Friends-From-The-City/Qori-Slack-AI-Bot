@@ -42,7 +42,7 @@ class ResearchPlan extends Model<
   }
 }
 
-module.exports = (sequelize: Sequelize) => {
+export default (sequelize: Sequelize) => {
   ResearchPlan.init(
     {
       id: {

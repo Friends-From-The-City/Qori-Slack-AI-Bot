@@ -1,7 +1,7 @@
 import type { StudyStatus } from '../database/models/study_status';
 import { Op } from 'sequelize';
 
-const sequelize = require('../database');
+import sequelize from '../database';
 
 // Typed model reference — cast once, use everywhere. See Phase 3 notes.
 const StudyStatusModel = sequelize.models.StudyStatus as typeof StudyStatus;
@@ -134,4 +134,4 @@ const getStudyStakeholderGuide = async (studyName?: string): Promise<StudyStatus
   }
 };
 
-module.exports = { addStudyStatus, getStudyStatusByStudyName, getStudyStatusByFileName, getStudyStatusById, getStudyStakeholderGuide };
+export { addStudyStatus, getStudyStatusByStudyName, getStudyStatusByFileName, getStudyStatusById, getStudyStakeholderGuide };

@@ -86,7 +86,7 @@ class ResearchStudy extends Model<
   }
 }
 
-module.exports = (sequelize: Sequelize) => {
+export default (sequelize: Sequelize) => {
   ResearchStudy.init(
     {
       id: {

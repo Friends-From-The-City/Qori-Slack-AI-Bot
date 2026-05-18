@@ -7,12 +7,12 @@
 
 import type { BlockActionContext, ViewSubmissionContext } from '../../../../types/handlers';
 
-const {
+import {
   handleApprove,
   handleApproveSubmission,
   handleRequestChanges,
   handleRequestChangesSubmission,
-} = require('../../requestChangesHandler');
+} from '../../requestChangesHandler';
 
 // ─── Plan approval ─────────────────────────────────────────────────
 
@@ -54,7 +54,7 @@ async function handleRequestChangesBriefModal({ ack, view, body, client }: ViewS
   await handleRequestChangesSubmission(ack, view, body, client);
 }
 
-module.exports = {
+export {
   handleApprovePlan,
   handleConfirmApprovePlan,
   handleRequestChangesPlan,

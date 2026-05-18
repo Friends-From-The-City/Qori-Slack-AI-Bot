@@ -168,7 +168,8 @@ async function handleStudySelect({ ack, body, client }: BlockActionContext): Pro
   });
 }
 
-module.exports = {
+export {
   qoriMainHandler,
+  qoriMainHandler as qoriMainCommand,
   handleStudySelect,
 };

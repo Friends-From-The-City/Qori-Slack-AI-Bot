@@ -43,11 +43,3 @@ export const TERMINAL_STATUSES: readonly ParticipantStatus[] = [
   PARTICIPANT_STATUS.CANCELED,
 ];
 
-// CommonJS export for backward compatibility with existing require() calls
-module.exports = {
-  PARTICIPANT_STATUS,
-  PARTICIPANT_STATUS_VALUES,
-  PARTICIPANT_STATUS_LABELS,
-  ACTIVE_STATUSES,
-  TERMINAL_STATUSES,
-};

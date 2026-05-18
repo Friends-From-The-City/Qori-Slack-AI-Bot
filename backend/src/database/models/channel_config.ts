@@ -30,7 +30,7 @@ class ChannelConfig extends Model<
   }
 }
 
-module.exports = (sequelize: Sequelize) => {
+export default (sequelize: Sequelize) => {
   ChannelConfig.init(
     {
       id: {

@@ -1,0 +1,411 @@
+// yamlProcessor.ts
+import yaml from 'js-yaml';
+import Handlebars from 'handlebars';
+import { format } from 'date-fns';
+import path from 'path';
+import { createOrUpdateFileOnGitHub, type GitHubWriteResult } from './github';
+import { executeAiGenerationTasks } from './langchain';
+import { extractVariables, type EmitSpec, type ExtractionResult } from './variableExtractor';
+import {
+  readStudyVariables,
+  writeStudyVariables,
+  mergeVariables,
+  readUpstreamVariables,
+  readDiscoveryVariables,
+  writeDiscoveryVariables,
+  mergeDiscoveryVariables,
+  readUpstreamDiscoveryVariables,
+  type ConsumeSpec,
+  type UpstreamVariables,
+  type DiscoveryVariablesStructure,
+} from './studyVariables';
+
+// ---------------------------------------------------------------------------
+// TemplateContractError
+// ---------------------------------------------------------------------------
+
+/**
+ * Thrown when a template's cascade contract is violated — a required
+ * upstream variable is missing. Handlers should catch this and surface
+ * a user-friendly message instead of producing broken output.
+ */
+export class TemplateContractError extends Error {
+  public readonly templateId: string;
+  public readonly variableKey: string;
+  public readonly userMessage: string;
+
+  constructor(templateId: string, variableKey: string, message?: string) {
+    super(
+      message ||
+        `Required cascade variable '${variableKey}' is missing for template '${templateId}'.`,
+    );
+    this.name = 'TemplateContractError';
+    this.templateId = templateId;
+    this.variableKey = variableKey;
+    this.userMessage =
+      `The research brief is missing required data (*${variableKey}*). ` +
+      `This variable must be emitted by an upstream template before *${templateId}* can render.`;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Interfaces
+// ---------------------------------------------------------------------------
+
+interface YamlConfig {
+  id: string;
+  version?: string;
+  output_template?: string;
+  output_options?: {
+    filename?: string;
+    path?: string;
+  };
+  ai_generation_tasks?: AiGenerationTask[];
+  consumes?: ConsumeSpec[];
+  emits?: EmitSpec[];
+  discovery_scope?: boolean;
+  [key: string]: unknown;
+}
+
+interface AiGenerationTask {
+  task_id: string;
+  prompt: string;
+  output_format?: string;
+  [key: string]: unknown;
+}
+
+interface ExtractionOutcome {
+  success: boolean;
+  error?: string;
+  variableCount: number;
+  keys?: string[];
+}
+
+export interface ProcessResult {
+  result: GitHubWriteResult;
+  outputTemplate: string;
+  aiResponses?: Record<string, string>;
+  extractionPromise: Promise<ExtractionOutcome> | null;
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Slugify a filename: lowercase, hyphens, no spaces or special chars, preserve extension */
+function slugifyFilename(filename: string): string {
+  const ext = path.extname(filename);
+  const base = path.basename(filename, ext);
+  const slugged = base
+    .toLowerCase()
+    .replace(/[_\s]+/g, '-')
+    .replace(/[^a-z0-9\-.]/g, '')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+  return slugged + ext.toLowerCase();
+}
+
+/** Build traceability metadata footer (appended to every generated document) */
+function buildTraceabilityFooter(
+  yamlConfig: YamlConfig,
+  inputValues: Record<string, unknown>,
+): string {
+  const now = new Date();
+  const dateStr = format(now, "MMMM d, yyyy 'at' h:mm a") + ' UTC';
+  const model = process.env.ANTHROPIC_MODEL_NAME || 'claude-sonnet-4-20250514';
+  const templateId = yamlConfig.id;
+  const templateVersion = yamlConfig.version;
+  const study =
+    (inputValues.selected_study as string | undefined) ||
+    (inputValues.study_name as string | undefined);
+  const maxTokens = process.env.ANTHROPIC_MAX_TOKENS || '8192';
+
+  const lines = [
+    '',
+    '---',
+    '',
+    '## Document Information',
+    '',
+    '| Field | Value |',
+    '|-------|-------|',
+  ];
+
+  if (dateStr) lines.push(`| Generated | ${dateStr} |`);
+  if (model) lines.push(`| Model | ${model} |`);
+  if (templateId && templateVersion) {
+    lines.push(`| Template | ${templateId} ${templateVersion} |`);
+  } else if (templateId) {
+    lines.push(`| Template | ${templateId} |`);
+  }
+  if (study) lines.push(`| Study | ${study} |`);
+
+  const noteFiles = inputValues.selected_note_files;
+  if (noteFiles) {
+    const files = (Array.isArray(noteFiles) ? noteFiles : [noteFiles]).filter(Boolean) as string[];
+    if (files.length > 0 && files.length < 5) {
+      lines.push(`| Source files | ${files.join(', ')} |`);
+    } else if (files.length >= 5) {
+      lines.push(
+        `| Source files | <details><summary>${files.length} files</summary>${files.map((f) => `<br>${f}`).join('')}</details> |`,
+      );
+    }
+  }
+
+  lines.push(`| Max tokens | ${maxTokens} |`);
+
+  if (yamlConfig.emits && yamlConfig.emits.length > 0) {
+    lines.push(`| Cascade | Emits ${yamlConfig.emits.length} variable types |`);
+  }
+
+  lines.push('');
+  lines.push('*Generated by Qori*');
+  lines.push('');
+
+  return lines.join('\n');
+}
+
+/** Generate the output content using Handlebars for different templates */
+function generateOutputTemplate(
+  outputTemplate: string,
+  { aiGenerated, ...inputValues }: Record<string, unknown> & { aiGenerated?: Record<string, string> },
+): string {
+  const template = Handlebars.compile(outputTemplate, { noEscape: true });
+  return template({
+    ...inputValues,
+    current_date: format(new Date(), 'MMMM d, yyyy'),
+    current_date_iso: format(new Date(), 'yyyy-MM-dd'),
+    ai_generated: aiGenerated,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Main processor
+// ---------------------------------------------------------------------------
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function processYamlTemplate(
+  rawYamlContent: string,
+  inputValues: Record<string, any>,
+  baseFolderEncoded: string,
+  extraFolder = 'primary-research',
+  aiCheck = false,
+): Promise<ProcessResult> {
+  // 1. Parse the raw YAML content first
+  const yamlConfig = yaml.load(rawYamlContent) as YamlConfig | null;
+  if (!yamlConfig) {
+    throw new Error('Failed to parse YAML configuration');
+  }
+
+  // 2. Decode base folder
+  const baseFolder = decodeURIComponent(baseFolderEncoded);
+
+  // 3. Check if output_template exists
+  if (!yamlConfig.output_template) {
+    throw new Error('Missing output_template in YAML configuration');
+  }
+
+  // 3.5 TRANSFORM PHASE: Read upstream variables if consumes spec exists
+  const isDiscoveryScope = yamlConfig.discovery_scope === true;
+  if (yamlConfig.consumes && yamlConfig.consumes.length > 0) {
+    try {
+      const upstream: UpstreamVariables = isDiscoveryScope
+        ? await readUpstreamDiscoveryVariables(
+            (inputValues._discovery_team as string) || '',
+            (inputValues._discovery_type as string) || '',
+            (inputValues.topic_slug as string) || '',
+            yamlConfig.consumes,
+          )
+        : await readUpstreamVariables(baseFolder, yamlConfig.consumes);
+
+      // Enforce cascade contracts: required variables must be present
+      for (const spec of yamlConfig.consumes) {
+        if (spec.required && !upstream[spec.key]) {
+          throw new TemplateContractError(
+            yamlConfig.id,
+            spec.key,
+            `Required cascade variable '${spec.key}' is missing for template '${yamlConfig.id}'. ` +
+              `Upstream template '${spec.source || 'unknown'}' must emit '${spec.key}' before '${yamlConfig.id}' can render.`,
+          );
+        }
+      }
+
+      if (Object.keys(upstream).length > 0) {
+        inputValues.upstream_variables = upstream;
+
+        for (const [key, variable] of Object.entries(upstream)) {
+          inputValues[`upstream_${key}`] =
+            typeof variable.value === 'string'
+              ? variable.value
+              : JSON.stringify(variable.value, null, 2);
+          inputValues[`upstream_${key}_data`] = variable.value;
+        }
+
+        console.log(
+          `Transform: Injected ${Object.keys(upstream).length} upstream variables for ${yamlConfig.id}`,
+        );
+
+        const hasReferenceUpstream = yamlConfig.consumes.some(
+          (c) => c.inject_as === 'reference' && c.required && upstream[c.key],
+        );
+        if (hasReferenceUpstream && inputValues.combined_file_content) {
+          const originalLen = (inputValues.combined_file_content as string).length;
+          if (originalLen > 2500) {
+            inputValues.combined_file_content =
+              (inputValues.combined_file_content as string).slice(0, 2000) +
+              `\n\n[... ${Math.round((originalLen - 2000) / 1000)}K chars truncated — structured upstream variables contain the primary data ...]`;
+            console.log(
+              `Transform: Truncated combined_file_content from ${originalLen} to ~2000 chars (upstream reference data is primary)`,
+            );
+          }
+        }
+      }
+    } catch (error: unknown) {
+      if (error instanceof TemplateContractError) throw error;
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(
+        `Transform phase failed for ${yamlConfig.id}, continuing without upstream variables:`,
+        message,
+      );
+    }
+  }
+
+  // 4. Prepare LangChain tasks for AI generation (optional)
+  let aiResponses: Record<string, string> = {};
+  if (yamlConfig.ai_generation_tasks && yamlConfig.ai_generation_tasks.length > 0) {
+    aiResponses = await executeAiGenerationTasks(yamlConfig.ai_generation_tasks, {
+      ...inputValues,
+      current_date: format(new Date(), 'MMMM d, yyyy'),
+      current_date_iso: format(new Date(), 'yyyy-MM-dd'),
+    });
+    console.log(
+      `AI generation complete for ${yamlConfig.id}: ${Object.keys(aiResponses).length} task(s), ${Object.values(aiResponses).reduce((sum, v) => sum + (typeof v === 'string' ? v.length : 0), 0)} chars total`,
+    );
+  }
+
+  // 4.5 Parse structured AI outputs (output_format: json)
+  const parsedStructured: Record<string, unknown> = {};
+  if (yamlConfig.ai_generation_tasks) {
+    for (const task of yamlConfig.ai_generation_tasks) {
+      if (task.output_format === 'json' && aiResponses[task.task_id]) {
+        try {
+          let raw = aiResponses[task.task_id];
+          const fenceMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
+          if (fenceMatch) raw = fenceMatch[1];
+          parsedStructured[task.task_id] = JSON.parse(raw.trim());
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : String(err);
+          throw new TemplateContractError(
+            yamlConfig.id,
+            task.task_id,
+            `AI task '${task.task_id}' in template '${yamlConfig.id}' returned invalid JSON: ${message}`,
+          );
+        }
+      }
+    }
+  }
+
+  // 5. Build the output content using the responses from LLM (if any)
+  const outputTemplate = generateOutputTemplate(yamlConfig.output_template, {
+    ...inputValues,
+    ...parsedStructured,
+    aiGenerated: aiResponses,
+  });
+
+  // 6. Generate filename and path from YAML configuration
+  const filenameTemplate =
+    (yamlConfig.output_options && yamlConfig.output_options.filename) || 'research_brief.md';
+  const filePathTemplate =
+    (yamlConfig.output_options && yamlConfig.output_options.path) || '';
+
+  const rawFilename = generateOutputTemplate(filenameTemplate, {
+    ...inputValues,
+    aiGenerated: aiResponses,
+    current_date: format(new Date(), 'MMMM d, yyyy'),
+    current_date_iso: format(new Date(), 'yyyy-MM-dd'),
+  });
+  const filename = slugifyFilename(rawFilename);
+
+  const filePath = generateOutputTemplate(filePathTemplate, {
+    ...inputValues,
+    aiGenerated: aiResponses,
+    current_date: format(new Date(), 'MMMM d, yyyy'),
+    current_date_iso: format(new Date(), 'yyyy-MM-dd'),
+  });
+
+  // 7. Append traceability metadata footer and push to GitHub IMMEDIATELY
+  const footer = buildTraceabilityFooter(yamlConfig, inputValues);
+  const fullContent = outputTemplate + footer;
+  const fullPath = path.posix.join(baseFolder, extraFolder, filePath, filename);
+  const result = await createOrUpdateFileOnGitHub(fullPath, fullContent);
+
+  // 8. EXTRACT PHASE: Runs AFTER document is written — non-blocking but trackable.
+  let extractionPromise: Promise<ExtractionOutcome> | null = null;
+  if (yamlConfig.emits && yamlConfig.emits.length > 0) {
+    console.log(
+      `Extract: Starting extraction for ${yamlConfig.id} (${yamlConfig.emits.length} variables)`,
+    );
+    extractionPromise = (async (): Promise<ExtractionOutcome> => {
+      const extractionResult: ExtractionResult | null = await extractVariables(
+        outputTemplate,
+        yamlConfig.emits!,
+        inputValues,
+      );
+      if (!extractionResult) {
+        console.warn(`Extract phase returned null for ${yamlConfig.id}`);
+        return { success: false, error: 'Extraction returned null', variableCount: 0 };
+      }
+      console.log(
+        `Extract: Got ${Object.keys(extractionResult).length} variables for ${yamlConfig.id}`,
+      );
+
+      if (
+        isDiscoveryScope &&
+        inputValues.topic_slug &&
+        inputValues._discovery_type &&
+        inputValues._discovery_team
+      ) {
+        const team = inputValues._discovery_team as string;
+        const discoveryVars: DiscoveryVariablesStructure = await readDiscoveryVariables(
+          team,
+          inputValues._discovery_type as string,
+        );
+        const merged = mergeDiscoveryVariables(
+          discoveryVars,
+          extractionResult,
+          inputValues.topic_slug as string,
+          yamlConfig.id,
+          yamlConfig.version || '',
+        );
+        await writeDiscoveryVariables(team, inputValues._discovery_type as string, merged);
+        console.log(
+          `Extract: Wrote discovery variables for ${yamlConfig.id} to ${team}/_discovery/${inputValues._discovery_type}`,
+        );
+      } else {
+        const studyVars = await readStudyVariables(baseFolder);
+        const merged = await mergeVariables(
+          studyVars,
+          extractionResult,
+          yamlConfig.id,
+          yamlConfig.version || '',
+        );
+        await writeStudyVariables(baseFolder, merged);
+        console.log(`Extract: Wrote variables for ${yamlConfig.id} to study-variables.json`);
+      }
+
+      const variableCount = Object.values(extractionResult).reduce((sum, v) => {
+        return sum + (Array.isArray(v.value) ? v.value.length : 1);
+      }, 0);
+      return { success: true, variableCount, keys: Object.keys(extractionResult) };
+    })().catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`Extract failed for ${yamlConfig.id}: ${message}`);
+      return { success: false, error: message, variableCount: 0 };
+    });
+  }
+
+  if (aiCheck) {
+    return { result, outputTemplate, aiResponses, extractionPromise };
+  } else {
+    return { result, outputTemplate, extractionPromise };
+  }
+}

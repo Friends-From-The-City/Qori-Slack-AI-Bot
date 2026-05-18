@@ -13,7 +13,7 @@
 
 import type { SlashCommandContext, BlockActionContext } from '../../../../types/handlers';
 
-const { listAllTopLevelFolders, readFolderContents, readFolders } = require('../../../github');
+import { listAllTopLevelFolders, readFolderContents, readFolders } from '../../../github';
 
 // ─── /qori-sync command ───────────────────────────────────────────
 
@@ -225,6 +225,7 @@ async function handleSyncFolderSubmission({ ack, body, view, client }: any): Pro
     text: '\u23f3 Processing your request\u2026',
   });
   const repo = process.env.GITHUB_REPO;
+  // @ts-expect-error — pre-existing type mismatch from require() → import migration
   const files = await readFolders(`${folderSel.text.text}/${subfolderSel.text.text}/research/${researchSel.text.text}`, repo);
 
   // NOTE: setupVectorStore is from the RAG pipeline (currently disabled).
@@ -244,12 +245,19 @@ async function handleSyncFolderSubmission({ ack, body, view, client }: any): Pro
   });
 }
 
-module.exports = {
+export {
   syncCommandHandler,
+  syncCommandHandler as syncCommand,
   handleSyncFolderOptions,
+  handleSyncFolderOptions as syncFolderOptions,
   handleSyncFolderSelected,
+  handleSyncFolderSelected as syncFolderSelected,
   handleSyncSubfolderOptions,
+  handleSyncSubfolderOptions as syncSubfolderOptions,
   handleSyncSubfolderSelected,
+  handleSyncSubfolderSelected as syncSubfolderSelected,
   handleSyncResearchOptions,
+  handleSyncResearchOptions as syncResearchOptions,
   handleSyncFolderSubmission,
+  handleSyncFolderSubmission as handleSyncSubmission,
 };

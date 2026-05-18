@@ -1,9 +1,9 @@
-const userService = require('./user.service');
-const studyNotesService = require('./study-notes.service');
-const slackUserStateService = require('./slack-user-state.service');
+import * as userService from './user.service';
+import studyNotesService from './study-notes.service';
+import * as slackUserStateService from './slack-user-state.service';
 
-module.exports = {
+export {
   userService,
   studyNotesService,
   slackUserStateService,
-}
+};
