@@ -144,4 +144,4 @@ Previous answer (2026-Q2 initial): "The output template architecture. Computed v
 - L001 (fetch all attributes): Partial — grandfathered whitelists persist, no new ones added
 - L003 (end-to-end tests): Conforms — 7 integration test files
 
-**6.2 Decisions without ADRs.** The Bolt native middleware types migration (Phase 6 Stream 1) is a pattern decision worth a lightweight ADR. It affects how all future handlers are written and removes an abstraction layer. Not urgent — the decision is clear in the code — but worth documenting before the next developer encounter.
+**6.2 Decisions without ADRs.** The Bolt native middleware types migration (Phase 6 Stream 1) was a pattern decision that warranted an ADR. Filed as ADR 0015 during Phase 6 close-out. No remaining undocumented architectural decisions.
