@@ -222,6 +222,9 @@ slackApp.view('create_study_modal', handleCreateStudySubmission);
 slackApp.view('plan_study_modal', handlePlanStudyNoop);
 slackApp.view('study-setup-modal-start-research', handleStudySetupSkip);
 slackApp.view('delete-study-modal', handleDeleteStudySubmission);
+// Bolt type gap: 'view_closed' isn't a recognized SlackEvent subtype, so
+// EventFromType<'view_closed'> resolves to BaseSlackEvent which lacks .view.
+// The handler uses an inline type with { event: { view: { callback_id } } }.
 slackApp.event('view_closed', handleViewClosed as any);
 
 // ─── Research brief ─────────────────────────────────────────────
