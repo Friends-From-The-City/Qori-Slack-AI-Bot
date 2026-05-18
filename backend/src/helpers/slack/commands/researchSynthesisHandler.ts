@@ -9,26 +9,26 @@
 import type { SlashCommandContext, ViewSubmissionContext, BlockActionContext } from '../../../types/handlers';
 import { TemplateContractError } from '../../../types/handlers';
 
-const { researchSynthesisModal } = require("../ui/researchSynthesisModal");
-const { getStudiesByUser, getResearchStudyWithRoles } = require("../../../services/research_study.service");
-const { getActiveStudy, setActiveStudy } = require("../../../services/slack-user-state.service");
-const { studyNotesService } = require("../../../services");
-const sessionSummaryService = require("../../../services/session-summary.service");
-const { getStudyStakeholderGuide } = require("../../../services/study-status.service");
-const { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepoByPath, fetchFileFromRepo, readFolderContents } = require("../../../helpers/github");
-const { processYamlTemplate } = require("../../../helpers/yamlProcessor");
-const { readStudyVariables } = require("../../../helpers/studyVariables");
-const { buildCascadeReadiness } = require("../ui/cascadeReadinessBlocks");
+import { researchSynthesisModal } from "../ui/researchSynthesisModal";
+import { getStudiesByUser, getResearchStudyWithRoles } from "../../../services/research_study.service";
+import { getActiveStudy, setActiveStudy } from "../../../services/slack-user-state.service";
+import { studyNotesService } from "../../../services";
+import sessionSummaryService from "../../../services/session-summary.service";
+import { getStudyStakeholderGuide } from "../../../services/study-status.service";
+import { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepoByPath, fetchFileFromRepo, readFolderContents } from "../../../helpers/github";
+import { processYamlTemplate } from "../../../helpers/yamlProcessor";
+import { readStudyVariables } from '../../studyVariables';
+import { buildCascadeReadiness } from "../ui/cascadeReadinessBlocks";
 
 // ─── Types ──────────────────────────────────────────────────────
 
 interface Study {
   id: number;
   name: string;
-  path?: string;
-  channel_name?: string;
-  researcher_name?: string;
-  researcher_email?: string;
+  path?: string | null;
+  channel_name?: string | null;
+  researcher_name?: string | null;
+  researcher_email?: string | null;
 }
 
 interface SessionSummary {
@@ -47,9 +47,10 @@ interface Transcript {
 }
 
 interface StakeholderGuide {
-  id: number;
-  file_name: string;
-  path: string;
+  id: number | string;
+  file_name?: string | null;
+  path?: string | null;
+  [key: string]: unknown;
 }
 
 interface AnalysisFile {
@@ -140,7 +141,7 @@ async function scanAnalysisFolders(studyPath: string): Promise<AnalysisFile[]> {
   for (const scan of ANALYSIS_SCANS) {
     try {
       const scanPath = `${analysisBase}/${scan.folder}`;
-      const files: GithubFile[] = await readFolderContents(scanPath, process.env.GITHUB_REPO);
+      const files: GithubFile[] = await readFolderContents(scanPath, process.env.GITHUB_REPO!);
       const validFiles = files.filter((f: GithubFile) => f.name !== 'readme.md' && f.name !== '.gitkeep');
 
       if (validFiles.length > 0) {
@@ -172,16 +173,17 @@ const researchSynthesisHandler = async ({ ack, body, client }: SlashCommandConte
 
     await client.views.open({
       trigger_id: body.trigger_id,
-      view: researchSynthesisModal(studies, activeStudy, [], [], null, [])
+      view: researchSynthesisModal(studies as any, activeStudy?.id ?? null, [], [], null, [])
     });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error opening research synthesis modal:", error);
+    const message = error instanceof Error ? error.message : String(error);
 
     await client.chat.postEphemeral({
       channel: body.user_id,
       user: body.user_id,
-      text: `❌ Failed to open research synthesis modal: ${error.message}`,
+      text: `❌ Failed to open research synthesis modal: ${message}`,
     });
   }
 };
@@ -206,7 +208,7 @@ const handleStudySelectionChange = async ({ ack, body, client }: BlockActionCont
       const studies = await getStudiesByUser(body.user.id);
       await client.views.update({
         view_id: view.id,
-        view: researchSynthesisModal(studies, null, [], [], null, [])
+        view: researchSynthesisModal(studies as any, null, [], [], null, [])
       });
       return;
     }
@@ -220,7 +222,7 @@ const handleStudySelectionChange = async ({ ack, body, client }: BlockActionCont
     const studies = await getStudiesByUser(body.user.id);
 
     // First update: show button immediately
-    let updatedModal = researchSynthesisModal(studies, studyId, [], [], currentAnalysisMethod, []);
+    let updatedModal = researchSynthesisModal(studies as any, studyId, [], [], currentAnalysisMethod, []);
     if (view.private_metadata) {
       updatedModal.private_metadata = view.private_metadata;
     }
@@ -237,7 +239,7 @@ const handleStudySelectionChange = async ({ ack, body, client }: BlockActionCont
     try {
       sessionSummaries = await sessionSummaryService.getSessionSummariesByStudyId(parseInt(studyId));
       console.log(`✅ Fetched ${sessionSummaries.length} session summaries`);
-    } catch (error: any) {
+    } catch (error) {
       console.error("❌ Error fetching session summaries:", error);
     }
 
@@ -254,7 +256,7 @@ const handleStudySelectionChange = async ({ ack, body, client }: BlockActionCont
           file_url: note.file_url,
         }));
       console.log(`✅ Formatted ${transcripts.length} transcripts`);
-    } catch (error: any) {
+    } catch (error) {
       console.error("❌ Error fetching transcripts:", error);
     }
 
@@ -262,16 +264,16 @@ const handleStudySelectionChange = async ({ ack, body, client }: BlockActionCont
     try {
       const selectedStudy = studies.find((s: Study) => s.id.toString() === studyId.toString());
       if (selectedStudy) {
-        stakeholderGuides = await getStudyStakeholderGuide(selectedStudy.name);
+        stakeholderGuides = await getStudyStakeholderGuide(selectedStudy.name) as unknown as StakeholderGuide[];
         console.log(`✅ Fetched ${stakeholderGuides.length} stakeholder interview guides`);
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error("❌ Error fetching stakeholder guides:", error);
     }
 
     // Validate DB records against GitHub
     try {
-      const repo = process.env.GITHUB_REPO;
+      const repo = process.env.GITHUB_REPO!;
       const allRecords: FolderRecord[] = [
         ...sessionSummaries.map((s: SessionSummary) => ({ record: s, type: 'summary' as const, path: s.file_path })),
         ...transcripts.map((t: Transcript) => ({ record: t, type: 'transcript' as const, path: t.file_path })),
@@ -302,8 +304,10 @@ const handleStudySelectionChange = async ({ ack, body, client }: BlockActionCont
               }
             }
           }
-        } catch (folderError: any) {
-          if (folderError.status === 404) {
+        } catch (folderError) {
+          const folderErrMessage = folderError instanceof Error ? folderError.message : String(folderError);
+          const folderErrStatus = (folderError as Record<string, unknown>)?.status;
+          if (folderErrStatus === 404) {
             console.log(`🗑️ Folder not found in GitHub: ${folder}, pruning ${records.length} records`);
             for (const r of records) {
               if (r.type === 'summary') {
@@ -315,7 +319,7 @@ const handleStudySelectionChange = async ({ ack, body, client }: BlockActionCont
               }
             }
           } else {
-            console.error(`⚠️ Error checking GitHub folder ${folder}:`, folderError.message);
+            console.error(`⚠️ Error checking GitHub folder ${folder}:`, folderErrMessage);
           }
         }
       }
@@ -332,8 +336,8 @@ const handleStudySelectionChange = async ({ ack, body, client }: BlockActionCont
             console.log(`🗑️ Pruning stale stakeholder record: ${fileName}`);
             stakeholderGuides = stakeholderGuides.filter((g: StakeholderGuide) => g.id !== guide.id);
           }
-        } catch (err: any) {
-          if (err.status === 404) {
+        } catch (err) {
+          if ((err as Record<string, unknown>)?.status === 404) {
             console.log(`🗑️ Stakeholder file folder not found, pruning: ${guide.file_name}`);
             stakeholderGuides = stakeholderGuides.filter((g: StakeholderGuide) => g.id !== guide.id);
           }
@@ -341,8 +345,9 @@ const handleStudySelectionChange = async ({ ack, body, client }: BlockActionCont
       }
 
       console.log(`✅ GitHub validation complete: ${sessionSummaries.length} summaries, ${transcripts.length} transcripts, ${stakeholderGuides.length} stakeholder files`);
-    } catch (validationError: any) {
-      console.error("⚠️ GitHub validation failed (continuing):", validationError.message);
+    } catch (validationError) {
+      const message = validationError instanceof Error ? validationError.message : String(validationError);
+      console.error("⚠️ GitHub validation failed (continuing):", message);
     }
 
     // Scan analysis-layer folders
@@ -356,12 +361,13 @@ const handleStudySelectionChange = async ({ ack, body, client }: BlockActionCont
           console.log(`✅ Found ${analysisFiles.length} analysis-layer files`);
         }
       }
-    } catch (analysisError: any) {
-      console.error("⚠️ Analysis file scan failed:", analysisError.message);
+    } catch (analysisError) {
+      const message = analysisError instanceof Error ? analysisError.message : String(analysisError);
+      console.error("⚠️ Analysis file scan failed:", message);
     }
 
     // Update modal with loaded files
-    updatedModal = researchSynthesisModal(studies, studyId, sessionSummaries, transcripts, currentAnalysisMethod, stakeholderGuides, analysisFiles);
+    updatedModal = researchSynthesisModal(studies as any, studyId, sessionSummaries, transcripts, currentAnalysisMethod, stakeholderGuides, analysisFiles);
     if (view.private_metadata) {
       updatedModal.private_metadata = view.private_metadata;
     }
@@ -370,7 +376,7 @@ const handleStudySelectionChange = async ({ ack, body, client }: BlockActionCont
       throw new Error("Generated modal has no blocks");
     }
 
-    const blockIds: string[] = updatedModal.blocks.map((block: { block_id?: string }) => block.block_id).filter(Boolean);
+    const blockIds: string[] = updatedModal.blocks.map((block: { block_id?: string }) => block.block_id).filter(Boolean) as string[];
     const uniqueBlockIds = new Set(blockIds);
     if (blockIds.length !== uniqueBlockIds.size) {
       throw new Error("Modal has duplicate block_ids");
@@ -385,16 +391,17 @@ const handleStudySelectionChange = async ({ ack, body, client }: BlockActionCont
 
     console.log("✅ Modal updated successfully with files and analysis");
 
-  } catch (error: any) {
+  } catch (error) {
     console.error("🚨 Error in handleStudySelectionChange:", error);
+    const message = error instanceof Error ? error.message : String(error);
 
     try {
       await client.chat.postEphemeral({
         channel: body.user.id,
         user: body.user.id,
-        text: `❌ Error loading files for selected study: ${error.message}`,
+        text: `❌ Error loading files for selected study: ${message}`,
       });
-    } catch (ephemeralError: any) {
+    } catch (ephemeralError) {
       console.error("Failed to send error message:", ephemeralError);
     }
   }
@@ -414,7 +421,7 @@ const handleFileCheckboxChange = async ({ ack, body, client }: BlockActionContex
     let metadata: Record<string, unknown> = {};
     try {
       metadata = JSON.parse(view.private_metadata);
-    } catch (error: any) {
+    } catch (error) {
       throw error;
     }
 
@@ -430,7 +437,7 @@ const handleFileCheckboxChange = async ({ ack, body, client }: BlockActionContex
     }
 
     const studies = await getStudiesByUser(body.user.id);
-    const updatedModal = researchSynthesisModal(studies, selectedFiles || []);
+    const updatedModal = researchSynthesisModal(studies as any, selectedFiles as any);
     updatedModal.private_metadata = JSON.stringify(metadata);
 
     await client.views.update({
@@ -438,7 +445,7 @@ const handleFileCheckboxChange = async ({ ack, body, client }: BlockActionContex
       view: updatedModal
     });
 
-  } catch (error: any) {
+  } catch (error) {
     throw error;
   }
 };
@@ -476,7 +483,7 @@ const handleLoadSynthesisFiles = async ({ ack, body, client }: BlockActionContex
     try {
       sessionSummaries = await sessionSummaryService.getSessionSummariesByStudyId(parseInt(studyId));
       console.log(`✅ Fetched ${sessionSummaries.length} session summaries`);
-    } catch (error: any) {
+    } catch (error) {
       console.error("❌ Error fetching session summaries:", error);
     }
 
@@ -493,7 +500,7 @@ const handleLoadSynthesisFiles = async ({ ack, body, client }: BlockActionContex
           file_url: note.file_url,
         }));
       console.log(`✅ Formatted ${transcripts.length} transcripts`);
-    } catch (error: any) {
+    } catch (error) {
       console.error("❌ Error fetching transcripts:", error);
     }
 
@@ -502,10 +509,10 @@ const handleLoadSynthesisFiles = async ({ ack, body, client }: BlockActionContex
     try {
       const selectedStudy = studies.find((s: Study) => s.id.toString() === studyId.toString());
       if (selectedStudy) {
-        stakeholderGuides = await getStudyStakeholderGuide(selectedStudy.name);
+        stakeholderGuides = await getStudyStakeholderGuide(selectedStudy.name) as unknown as StakeholderGuide[];
         console.log(`✅ Fetched ${stakeholderGuides.length} stakeholder interview guides`);
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error("❌ Error fetching stakeholder guides:", error);
     }
 
@@ -520,8 +527,9 @@ const handleLoadSynthesisFiles = async ({ ack, body, client }: BlockActionContex
           console.log(`✅ Found ${analysisFiles.length} analysis-layer files (Load Files)`);
         }
       }
-    } catch (analysisError: any) {
-      console.error("⚠️ Analysis file scan failed:", analysisError.message);
+    } catch (analysisError) {
+      const message = analysisError instanceof Error ? analysisError.message : String(analysisError);
+      console.error("⚠️ Analysis file scan failed:", message);
     }
 
     // Read cascade variables
@@ -534,16 +542,17 @@ const handleLoadSynthesisFiles = async ({ ack, body, client }: BlockActionContex
           const decodedPath = decodeURIComponent(study.path);
           const studyVars = await readStudyVariables(decodedPath);
           if (studyVars && Object.keys(studyVars.variables).length > 0) {
-            cascadeData = buildCascadeReadiness(studyVars, currentAnalysisMethod) as CascadeData;
+            cascadeData = buildCascadeReadiness(studyVars, currentAnalysisMethod ?? '') as unknown as CascadeData;
             console.log(`✅ Cascade: ${cascadeData!.available.length} variables available, ${cascadeData!.missing.length} missing`);
           }
         }
       }
-    } catch (cascadeError: any) {
-      console.warn('⚠️ Could not read cascade variables:', cascadeError.message);
+    } catch (cascadeError) {
+      const message = cascadeError instanceof Error ? cascadeError.message : String(cascadeError);
+      console.warn('⚠️ Could not read cascade variables:', message);
     }
 
-    const updatedModal = researchSynthesisModal(studies, studyId, sessionSummaries, transcripts, currentAnalysisMethod, stakeholderGuides, analysisFiles, cascadeData);
+    const updatedModal = researchSynthesisModal(studies as any, studyId, sessionSummaries, transcripts, currentAnalysisMethod, stakeholderGuides, analysisFiles, cascadeData as any);
 
     if (view.private_metadata) {
       updatedModal.private_metadata = view.private_metadata;
@@ -558,16 +567,17 @@ const handleLoadSynthesisFiles = async ({ ack, body, client }: BlockActionContex
 
     console.log("✅ Files loaded and modal updated successfully");
 
-  } catch (error: any) {
+  } catch (error) {
     console.error("🚨 Error in handleLoadSynthesisFiles:", error);
+    const message = error instanceof Error ? error.message : String(error);
 
     try {
       await client.chat.postEphemeral({
         channel: body.user.id,
         user: body.user.id,
-        text: `❌ Error loading files: ${error.message}`,
+        text: `❌ Error loading files: ${message}`,
       });
-    } catch (ephemeralError: any) {
+    } catch (ephemeralError) {
       console.error("Failed to send error message:", ephemeralError);
     }
   }
@@ -601,7 +611,7 @@ const handleLoadStudyNotes = async ({ ack, body, client }: BlockActionContext): 
     let sessionSummaries: SessionSummary[] = [];
     try {
       sessionSummaries = await sessionSummaryService.getSessionSummariesByStudyId(parseInt(studyId));
-    } catch (error: any) {
+    } catch (error) {
       console.error("Error fetching session summaries:", error);
     }
 
@@ -615,7 +625,7 @@ const handleLoadStudyNotes = async ({ ack, body, client }: BlockActionContext): 
         file_path: note.file_path,
         file_url: note.file_url,
       }));
-    } catch (error: any) {
+    } catch (error) {
       console.error("Error fetching transcripts:", error);
     }
 
@@ -625,20 +635,20 @@ const handleLoadStudyNotes = async ({ ack, body, client }: BlockActionContext): 
     try {
       const selectedStudy = studies.find((s: Study) => s.id.toString() === studyId.toString());
       if (selectedStudy) {
-        stakeholderGuides = await getStudyStakeholderGuide(selectedStudy.name);
+        stakeholderGuides = await getStudyStakeholderGuide(selectedStudy.name) as unknown as StakeholderGuide[];
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error("Error fetching stakeholder guides:", error);
     }
 
-    const updatedModal = researchSynthesisModal(studies, studyId, sessionSummaries, transcripts, currentAnalysisMethod, stakeholderGuides, []);
+    const updatedModal = researchSynthesisModal(studies as any, studyId, sessionSummaries, transcripts, currentAnalysisMethod, stakeholderGuides, []);
 
     await client.views.update({
       view_id: view.id,
       view: updatedModal
     });
 
-  } catch (error: any) {
+  } catch (error) {
     throw error;
   }
 };
@@ -714,7 +724,7 @@ const handleResearchSynthesisSubmission = async ({ ack, body, view, client }: Vi
       throw new Error("Please select at least one file or data source for analysis.");
     }
 
-    const study = await getResearchStudyWithRoles(selectedStudyName);
+    const study = await getResearchStudyWithRoles(selectedStudyName!);
 
     // Cascade validation: synthesis methods that require upstream nuggets
     if (NUGGET_REQUIRED_METHODS.includes(analysisMethod) && study?.path) {
@@ -734,11 +744,12 @@ const handleResearchSynthesisSubmission = async ({ ack, body, view, client }: Vi
             'Run `/qori-analyze` on session transcripts first to build the nugget pool.',
           );
         }
-      } catch (validationError: any) {
+      } catch (validationError) {
         if (validationError instanceof TemplateContractError) {
           throw validationError;
         }
-        console.warn('⚠️ Cascade validation check failed (continuing):', validationError.message);
+        const message = validationError instanceof Error ? validationError.message : String(validationError);
+        console.warn('⚠️ Cascade validation check failed (continuing):', message);
       }
     }
 
@@ -756,7 +767,7 @@ const handleResearchSynthesisSubmission = async ({ ack, body, view, client }: Vi
           file_type: 'session_summary',
           file_path: summary.file_path
         })));
-      } catch (error: any) {
+      } catch (error) {
         console.error("Error fetching session summaries:", error);
       }
     }
@@ -772,19 +783,19 @@ const handleResearchSynthesisSubmission = async ({ ack, body, view, client }: Vi
           file_type: note.transcript ? 'transcript' : 'study_note',
           file_path: note.file_path || note.path
         })));
-      } catch (error: any) {
+      } catch (error) {
         console.error("Error fetching transcripts:", error);
       }
     }
 
     if (selectedStakeholderGuideIds.length > 0) {
       try {
-        const allStakeholderGuides: StakeholderGuide[] = await getStudyStakeholderGuide(selectedStudyName);
+        const allStakeholderGuides: StakeholderGuide[] = await getStudyStakeholderGuide(selectedStudyName!) as unknown as StakeholderGuide[];
         const selectedGuides = allStakeholderGuides.filter((guide: StakeholderGuide) =>
           selectedStakeholderGuideIds.includes(guide.id.toString())
         );
         allFiles = allFiles.concat(selectedGuides.map((guide: StakeholderGuide) => {
-          let filePath: string | null = guide.path;
+          let filePath: string | null = guide.path ?? null;
           if (filePath && filePath.includes('github.com')) {
             const urlMatch = filePath.match(/github\.com\/[^/]+\/[^/]+\/(?:blob|tree)\/[^/]+\/(.+)$/);
             if (urlMatch) {
@@ -801,7 +812,7 @@ const handleResearchSynthesisSubmission = async ({ ack, body, view, client }: Vi
             filename: guide.file_name || filePath?.split('/').pop() || 'Unknown'
           };
         }));
-      } catch (error: any) {
+      } catch (error) {
         console.error("Error fetching stakeholder guides:", error);
       }
     }
@@ -817,7 +828,7 @@ const handleResearchSynthesisSubmission = async ({ ack, body, view, client }: Vi
     // Fetch selected analysis files
     const selectedAnalysisFiles = view.state.values.analysis_files_list_0?.analysis_files_checkboxes?.selected_options || [];
     if (selectedAnalysisFiles.length > 0) {
-      const decodedStudyPath = decodeURIComponent(study.path);
+      const decodedStudyPath = decodeURIComponent(study!.path!);
       for (const opt of selectedAnalysisFiles) {
         const relativePath: string = opt.value.replace(/^analysis_\d+_/, '');
         const fullPath = `${decodedStudyPath}/primary-research/${relativePath}`;
@@ -850,7 +861,7 @@ const handleResearchSynthesisSubmission = async ({ ack, body, view, client }: Vi
           } as FileWithContent;
         }
 
-        const githubFile = await fetchFileFromRepoByPath(process.env.GITHUB_REPO, file.file_path);
+        const githubFile = await fetchFileFromRepoByPath(process.env.GITHUB_REPO!, file.file_path as string);
         return {
           ...file,
           filename: (file.filename as string) || 'Unknown',
@@ -858,13 +869,14 @@ const handleResearchSynthesisSubmission = async ({ ack, body, view, client }: Vi
           content: githubFile.content || '[Content not available]',
           githubPath: file.file_path as string
         } as FileWithContent;
-      } catch (error: any) {
-        console.error(`🚀 ~ Error fetching file ${file.filename}:`, error.message);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(`🚀 ~ Error fetching file ${file.filename}:`, message);
         return {
           ...file,
           filename: (file.filename as string) || 'Unknown',
           file_type: (file.file_type as string) || 'unknown',
-          content: `[Error fetching content: ${error.message}]`,
+          content: `[Error fetching content: ${message}]`,
           githubPath: (file.file_path as string) || 'unknown'
         } as FileWithContent;
       }
@@ -912,7 +924,7 @@ const handleResearchSynthesisSubmission = async ({ ack, body, view, client }: Vi
 
     try {
       const yamlTemplateFile = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, yamlFileName);
-      const renderedAnalysis = await processYamlTemplate(yamlTemplateFile.content, analysisData, study?.path);
+      const renderedAnalysis = await processYamlTemplate(yamlTemplateFile.content, analysisData, study?.path ?? '');
       console.log(`✅ Synthesis complete: ${renderedAnalysis.outputTemplate?.length || 0} chars`);
 
       const outputLines: string[] = renderedAnalysis.outputTemplate.split('\n').filter((line: string) => line.trim());
@@ -995,35 +1007,38 @@ const handleResearchSynthesisSubmission = async ({ ack, body, view, client }: Vi
                 text: `Warning: Variable extraction failed — ${extractResult.error}. The document was saved but cascade variables were not updated.`,
               });
             }
-          } catch (msgErr: any) {
-            console.error('Failed to send extraction status message:', msgErr.message);
+          } catch (msgErr) {
+            const message = msgErr instanceof Error ? msgErr.message : String(msgErr);
+            console.error('Failed to send extraction status message:', message);
           }
         });
       }
 
-    } catch (error: any) {
-      console.error(`❌ Synthesis failed [${yamlFileName}]: ${error.message}`);
-      if (error.stack) console.error(error.stack.split('\n').slice(0, 5).join('\n'));
+    } catch (error) {
+      const errObj = error instanceof Error ? error : new Error(String(error));
+      console.error(`❌ Synthesis failed [${yamlFileName}]: ${errObj.message}`);
+      if (errObj.stack) console.error(errObj.stack.split('\n').slice(0, 5).join('\n'));
 
       await client.chat.postEphemeral({
         channel: body.user.id,
         user: body.user.id,
-        text: `*Synthesis failed*\n\n*Study:* ${selectedStudyName}\n*Method:* ${analysisMethod}\n*Error:* ${error.message}\n\nPlease try again or contact support.`,
+        text: `*Synthesis failed*\n\n*Study:* ${selectedStudyName}\n*Method:* ${analysisMethod}\n*Error:* ${errObj.message}\n\nPlease try again or contact support.`,
       });
     }
 
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error handling research synthesis submission:", error);
+    const message = error instanceof Error ? error.message : String(error);
 
     await client.chat.postEphemeral({
       channel: body.user.id,
       user: body.user.id,
-      text: `❌ Error: ${error.message}`,
+      text: `❌ Error: ${message}`,
     });
   }
 };
 
-module.exports = {
+export {
   researchSynthesisHandler,
   handleResearchSynthesisSubmission,
   handleStudySelectionChange,

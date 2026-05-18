@@ -1,7 +1,7 @@
 import type { SessionSummary } from '../database/models/session_summary';
 import type { ResearchStudy } from '../database/models/research_study';
 
-const sequelize = require('../database');
+import sequelize from '../database';
 
 // Typed model references — cast once, use everywhere. See Phase 3 notes.
 const SessionSummaryModel = sequelize.models.SessionSummary as typeof SessionSummary;
@@ -66,9 +66,9 @@ class SessionSummaryService {
         const summary = await SessionSummaryModel.create(summaryData as any);
         return summary;
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error creating/updating session summary:', error);
-      throw new Error(`Failed to create/update session summary: ${error.message}`);
+      throw new Error(`Failed to create/update session summary: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -92,9 +92,9 @@ class SessionSummaryService {
       }
 
       return summary;
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error getting session summary by ID:', error);
-      throw new Error(`Failed to get session summary: ${error.message}`);
+      throw new Error(`Failed to get session summary: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -122,9 +122,9 @@ class SessionSummaryService {
       });
 
       return summaries;
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error getting session summaries by study ID:', error);
-      throw new Error(`Failed to get session summaries: ${error.message}`);
+      throw new Error(`Failed to get session summaries: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -148,9 +148,9 @@ class SessionSummaryService {
       });
 
       return summaries;
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error getting session summaries by study name:', error);
-      throw new Error(`Failed to get session summaries: ${error.message}`);
+      throw new Error(`Failed to get session summaries: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -175,9 +175,9 @@ class SessionSummaryService {
       });
 
       return summaries;
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error getting all session summaries:', error);
-      throw new Error(`Failed to get session summaries: ${error.message}`);
+      throw new Error(`Failed to get session summaries: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -194,11 +194,12 @@ class SessionSummaryService {
 
       await summary.destroy();
       return true;
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error deleting session summary:', error);
-      throw new Error(`Failed to delete session summary: ${error.message}`);
+      throw new Error(`Failed to delete session summary: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 }
 
-module.exports = new SessionSummaryService();
+const sessionSummaryService = new SessionSummaryService();
+export default sessionSummaryService;

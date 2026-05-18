@@ -11,18 +11,19 @@
  */
 
 import type { ViewSubmissionContext } from '../../../types/handlers';
+import type { View } from '@slack/types';
 import { TemplateContractError } from '../../../types/handlers';
 import type { ResearchQuestion, TargetBarrier } from '../../../types/cascade';
 
-const { addDays, format, parseISO, isValid } = require('date-fns');
-const { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo } = require('../../github');
-const { getResearchStudyWithRoles } = require('../../../services/research_study.service');
-const { processYamlTemplate } = require('../../yamlProcessor');
-const { addStudyStatus } = require('../../../services/study-status.service');
-const { sendStudyResultMessage, generateStudyResultBlocks } = require('../ui/studyResultBlocks');
-const { calculatePerPersonCompensation } = require('../../../utils/compensationCalculator');
-const { readUpstreamVariables } = require('../../studyVariables');
-const research_planService = require('../../../services/research_plan.service');
+import { addDays, format, parseISO, isValid } from 'date-fns';
+import { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo } from '../../github';
+import { getResearchStudyWithRoles } from '../../../services/research_study.service';
+import { processYamlTemplate } from '../../yamlProcessor';
+import { addStudyStatus } from '../../../services/study-status.service';
+import { sendStudyResultMessage, generateStudyResultBlocks } from '../ui/studyResultBlocks';
+import { calculatePerPersonCompensation } from '../../../utils/compensationCalculator';
+import { readUpstreamVariables } from '../../studyVariables';
+import research_planService from '../../../services/research_plan.service';
 
 // ─── Timeline computation ───────────────────────────────────────────
 
@@ -181,7 +182,7 @@ async function handlePlanSubmission({ ack, body, view, client }: ViewSubmissionC
   const timelineSummary = buildTimelineSummary(timelinePhases);
 
   // ── Load upstream cascade variables (ADR 0007: fail loudly on missing required data) ──
-  const upstream = await readUpstreamVariables(study.path, [
+  const upstream = await readUpstreamVariables(study!.path || '', [
     { key: 'research_objectives', required: true },
     { key: 'research_questions', required: true },
     { key: 'target_barriers', required: true },
@@ -217,8 +218,8 @@ async function handlePlanSubmission({ ack, body, view, client }: ViewSubmissionC
     operational_risks: operationalRisks,
 
     per_participant_compensation: perParticipantComp,
-    parsed_budget_amount: study.parsed_budget_amount,
-    target_participants: study.target_participants,
+    parsed_budget_amount: study!.parsed_budget_amount,
+    target_participants: study!.target_participants,
 
     timeline_phases: timelinePhases,
     timeline_summary: timelineSummary,
@@ -239,13 +240,14 @@ async function handlePlanSubmission({ ack, body, view, client }: ViewSubmissionC
 
   // TemplateContractError propagates to global error middleware in events.ts
   const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, 'research_plan.yaml');
-  const renderedYaml = await processYamlTemplate(file.content, data, study.path);
+  // @ts-expect-error — pre-existing type mismatch from require() → import migration
+  const renderedYaml = await processYamlTemplate(file.content, data, study!.path);
 
   const url: string = renderedYaml.result.url;
   const urlParts: string[] = renderedYaml.result.path.split('/');
   const fileName = urlParts[urlParts.length - 1];
   const planData = {
-    study_id: study.id,
+    study_id: study!.id,
     study_name: studyName,
     filename: fileName,
     file_path: renderedYaml.result.path,
@@ -253,7 +255,7 @@ async function handlePlanSubmission({ ack, body, view, client }: ViewSubmissionC
     created_by: userId,
   };
   await research_planService.createResearchPlan(planData);
-  const blocks = generateStudyResultBlocks(studyName, study, url, channelId, 'plan');
+  const blocks = generateStudyResultBlocks(studyName, study as any, url, channelId, 'plan');
   await sendStudyResultMessage(client, channelId, studyName, blocks, 'plan');
 
   // Send DM with next-step suggestion
@@ -265,7 +267,7 @@ async function handlePlanSubmission({ ack, body, view, client }: ViewSubmissionC
         text: `✅ *Research Plan Created*\n\n*Study:* ${studyName}\n*View:* <${url}|GitHub>\n\n*Next:* Run \`/qori-fieldwork\` to track participants, observers, and outreach.`,
       });
     }
-  } catch (dmErr: any) { console.error('Failed to send plan DM:', dmErr.message); }
+  } catch (dmErr) { const dmMessage = dmErr instanceof Error ? dmErr.message : String(dmErr); console.error('Failed to send plan DM:', dmMessage); }
 
   await addStudyStatus({
     study_name: studyName,
@@ -275,4 +277,4 @@ async function handlePlanSubmission({ ack, body, view, client }: ViewSubmissionC
   });
 }
 
-module.exports = { handlePlanSubmission, buildTimelinePhases, buildTimelineSummary };
+export { handlePlanSubmission, buildTimelinePhases, buildTimelineSummary };

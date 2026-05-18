@@ -1,7 +1,8 @@
 import type { ResearchPlan } from '../database/models/research_plan';
 import type { ResearchStudy } from '../database/models/research_study';
+import { Op } from 'sequelize';
 
-const sequelize = require('../database');
+import sequelize from '../database';
 
 // Typed model references — cast once, use everywhere. See Phase 3 notes.
 const ResearchPlanModel = sequelize.models.ResearchPlan as typeof ResearchPlan;
@@ -49,9 +50,9 @@ class ResearchPlanService {
 
       const plan = await ResearchPlanModel.create(planData as any);
       return plan;
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error creating research plan:', error);
-      throw new Error(`Failed to create research plan: ${error.message}`);
+      throw new Error(`Failed to create research plan: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -75,9 +76,9 @@ class ResearchPlanService {
       }
 
       return plan;
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error getting research plan by ID:', error);
-      throw new Error(`Failed to get research plan: ${error.message}`);
+      throw new Error(`Failed to get research plan: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -103,9 +104,9 @@ class ResearchPlanService {
       });
 
       return plans;
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error getting research plans by study ID:', error);
-      throw new Error(`Failed to get research plans: ${error.message}`);
+      throw new Error(`Failed to get research plans: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -131,9 +132,9 @@ class ResearchPlanService {
       });
 
       return plans;
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error getting research plans by user ID:', error);
-      throw new Error(`Failed to get research plans: ${error.message}`);
+      throw new Error(`Failed to get research plans: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -165,9 +166,9 @@ class ResearchPlanService {
       });
 
       return plans;
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error getting research plans by exact study name:', error);
-      throw new Error(`Failed to get research plans by exact study name: ${error.message}`);
+      throw new Error(`Failed to get research plans by exact study name: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -180,11 +181,11 @@ class ResearchPlanService {
 
       // Add search criteria
       if (searchCriteria.study_name) {
-        where.study_name = { [sequelize.Op.iLike]: `%${searchCriteria.study_name}%` };
+        where.study_name = { [Op.iLike]: `%${searchCriteria.study_name}%` };
       }
 
       if (searchCriteria.filename) {
-        where.filename = { [sequelize.Op.iLike]: `%${searchCriteria.filename}%` };
+        where.filename = { [Op.iLike]: `%${searchCriteria.filename}%` };
       }
 
       const plans = await ResearchPlanModel.findAll({
@@ -202,9 +203,9 @@ class ResearchPlanService {
       });
 
       return plans;
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error searching research plans:', error);
-      throw new Error(`Failed to search research plans: ${error.message}`);
+      throw new Error(`Failed to search research plans: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -226,9 +227,9 @@ class ResearchPlanService {
       await plan.update(updateData);
 
       return plan;
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error updating research plan:', error);
-      throw new Error(`Failed to update research plan: ${error.message}`);
+      throw new Error(`Failed to update research plan: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -245,9 +246,9 @@ class ResearchPlanService {
 
       await plan.destroy();
       return true;
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error deleting research plan:', error);
-      throw new Error(`Failed to delete research plan: ${error.message}`);
+      throw new Error(`Failed to delete research plan: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -270,11 +271,12 @@ class ResearchPlanService {
       });
 
       return plans;
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error getting all research plans:', error);
-      throw new Error(`Failed to get research plans: ${error.message}`);
+      throw new Error(`Failed to get research plans: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 }
 
-module.exports = new ResearchPlanService();
+const researchPlanService = new ResearchPlanService();
+export default researchPlanService;

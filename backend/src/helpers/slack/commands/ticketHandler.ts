@@ -7,10 +7,12 @@
  */
 
 import type { SlashCommandContext, ViewSubmissionContext } from '../../../types/handlers';
+import type { View } from '@slack/types';
 import type { SlashCommand } from '@slack/bolt';
 
-const { getStudiesByUser, getResearchStudyWithRoles } = require('../../../services/research_study.service');
-const { getActiveStudy, setActiveStudy } = require('../../../services/slack-user-state.service');
+import { getStudiesByUser, getResearchStudyWithRoles } from '../../../services/research_study.service';
+import { getActiveStudy, setActiveStudy } from '../../../services/slack-user-state.service';
+import sequelize from '../../../database';
 
 // ─── Types ──────────────────────────────────────────────────────
 
@@ -146,8 +148,9 @@ const ticketHandler = async ({ ack, body, client, command }: SlashCommandContext
       // because the return type doesn't exactly match Bolt's strict View union
       view: buildStep1Modal(studies, command, activeStudyId) as unknown as Parameters<typeof client.views.open>[0]['view'],
     });
-  } catch (error: any) {
-    console.error('❌ ticketHandler error:', error.message);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('❌ ticketHandler error:', message);
   }
 };
 
@@ -245,7 +248,6 @@ const handleStep1Submit = async ({ ack, body, view, client }: ViewSubmissionCont
   await setActiveStudy(body.user.id, study.id);
 
   // Query ticket_candidates from Postgres
-  const sequelize = require('../../../database');
   const StudyVariable = sequelize.models?.StudyVariable;
   const CreatedIssue = sequelize.models?.CreatedIssue;
 
@@ -260,7 +262,7 @@ const handleStep1Submit = async ({ ack, body, view, client }: ViewSubmissionCont
       attributes: ['value'],
     });
 
-    if (!row || !row.value || !Array.isArray(row.value)) {
+    if (!row || !(row as any).value || !Array.isArray((row as any).value)) {
       await (ack as Function)({
         response_action: 'errors',
         errors: { audience_select: `No ${config.label} tickets found. Generate the ${config.label} readout first.` },
@@ -268,9 +270,10 @@ const handleStep1Submit = async ({ ack, body, view, client }: ViewSubmissionCont
       return;
     }
 
-    tickets = row.value as TicketCandidate[];
-  } catch (err: any) {
-    console.error('❌ Error loading tickets:', err.message);
+    tickets = (row as any).value as TicketCandidate[];
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('❌ Error loading tickets:', message);
     await (ack as Function)({ response_action: 'errors', errors: { study_select: 'Error loading tickets' } });
     return;
   }
@@ -279,12 +282,14 @@ const handleStep1Submit = async ({ ack, body, view, client }: ViewSubmissionCont
   let existingIssues: Array<{ ticket_id: string; github_issue_number: number; github_url: string }> = [];
   if (CreatedIssue) {
     try {
+      // @ts-expect-error — pre-existing type mismatch from require() → import migration
       existingIssues = await CreatedIssue.findAll({
         where: { study_name: study.name, audience },
         attributes: ['ticket_id', 'github_issue_number', 'github_url'],
       });
-    } catch (err: any) {
-      console.warn('⚠️ Could not check existing issues:', err.message);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn('⚠️ Could not check existing issues:', message);
     }
   }
   const existingTicketIds = new Set(existingIssues.map(i => i.ticket_id));
@@ -382,7 +387,6 @@ const handleStep2Submit = async ({ ack, body, view, client }: ViewSubmissionCont
   if (!config) return;
 
   // Load full ticket data from Postgres
-  const sequelize = require('../../../database');
   const StudyVariable = sequelize.models?.StudyVariable;
   const CreatedIssue = sequelize.models?.CreatedIssue;
 
@@ -394,12 +398,14 @@ const handleStep2Submit = async ({ ack, body, view, client }: ViewSubmissionCont
       where: { study_name: studyName, variable_key: config.variableKey, scope: 'study' },
       attributes: ['value'],
     });
+    // @ts-expect-error — pre-existing type mismatch from require() → import migration
     tickets = ((ticketRow?.value || []) as TicketCandidate[]).filter(t => selectedTicketIds.includes(t.id));
 
     const findingsRow = await StudyVariable.findOne({
       where: { study_name: studyName, variable_key: 'prioritized_findings', scope: 'study' },
       attributes: ['value'],
     });
+    // @ts-expect-error — pre-existing type mismatch from require() → import migration
     findings = (findingsRow?.value || []) as PrioritizedFinding[];
 
     const detailRows = await StudyVariable.findAll({
@@ -407,17 +413,18 @@ const handleStep2Submit = async ({ ack, body, view, client }: ViewSubmissionCont
       attributes: ['item_key', 'value'],
     });
     for (const row of detailRows) {
-      if (row.item_key && row.value) {
-        nuggetDetails[row.item_key] = row.value as NuggetDetail;
-      } else if (!row.item_key && Array.isArray(row.value)) {
-        for (const item of row.value as NuggetDetail[]) {
+      if ((row as any).item_key && (row as any).value) {
+        nuggetDetails[(row as any).item_key] = (row as any).value as NuggetDetail;
+      } else if (!(row as any).item_key && Array.isArray((row as any).value)) {
+        for (const item of (row as any).value as NuggetDetail[]) {
           if (item.id) nuggetDetails[item.id] = item;
         }
       }
     }
-  } catch (err: any) {
-    console.error('❌ Error loading ticket data:', err.message);
-    await client.chat.postMessage({ channel: userId, text: `❌ Error loading tickets: ${err.message}` });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('❌ Error loading ticket data:', message);
+    await client.chat.postMessage({ channel: userId, text: `❌ Error loading tickets: ${message}` });
     return;
   }
 
@@ -466,16 +473,18 @@ const handleStep2Submit = async ({ ack, body, view, client }: ViewSubmissionCont
             github_repo: repoFull,
             created_by: userId,
           });
-        } catch (dbErr: any) {
-          console.warn(`⚠️ Could not track issue in DB: ${dbErr.message}`);
+        } catch (dbErr) {
+          const dbMessage = dbErr instanceof Error ? dbErr.message : String(dbErr);
+          console.warn(`⚠️ Could not track issue in DB: ${dbMessage}`);
         }
       }
 
       created.push({ number: data.number, url: data.html_url, title: ticket.title, id: ticket.id });
       console.log(`✅ Created issue #${data.number}: ${ticket.title}`);
-    } catch (err: any) {
-      console.error(`❌ Failed to create issue "${ticket.title}":`, err.message);
-      failed.push({ id: ticket.id, title: ticket.title, error: err.message });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(`❌ Failed to create issue "${ticket.title}":`, message);
+      failed.push({ id: ticket.id, title: ticket.title, error: message });
     }
   }
 
@@ -707,7 +716,7 @@ function buildLabels(ticket: TicketCandidate, audience: AudienceKey, studyName: 
   return labels;
 }
 
-module.exports = {
+export {
   ticketHandler,
   handleStep1Submit,
   handleStep2Submit,

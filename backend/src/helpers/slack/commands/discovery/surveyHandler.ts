@@ -7,14 +7,15 @@
  */
 
 import type { BlockActionContext, ViewSubmissionContext } from '../../../../types/handlers';
+import type { View } from '@slack/types';
 
-const { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo } = require('../../../github');
-const { getResearchStudyWithRoles, getStudiesByUser } = require('../../../../services/research_study.service');
-const { processYamlTemplate } = require('../../../yamlProcessor');
-const { sendStudyResultMessage, generateStudyResultBlocks } = require('../../ui/studyResultBlocks');
-const { uploadSurveyDataModal } = require('../../ui/uploadSurveyDataModal');
-const { processSlackFiles } = require('../../../pdfProcessor');
-const { parseDocuments, validateDocuments } = require('../../../documentParser');
+import { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo } from '../../../github';
+import { getResearchStudyWithRoles, getStudiesByUser } from '../../../../services/research_study.service';
+import { processYamlTemplate } from '../../../yamlProcessor';
+import { sendStudyResultMessage, generateStudyResultBlocks } from '../../ui/studyResultBlocks';
+import { uploadSurveyDataModal } from '../../ui/uploadSurveyDataModal';
+import { processSlackFiles } from '../../../pdfProcessor';
+import { parseDocuments, validateDocuments } from '../../../documentParser';
 
 // ─── Block Kit manipulation type ──────────────────────────────────
 
@@ -95,10 +96,12 @@ async function openUploadSurveyDataModal({ ack, body, client }: BlockActionConte
         ...uploadSurveyDataModal,
         blocks: modalBlocks,
         private_metadata: JSON.stringify({ ...(meta || {}), studyName, studyId, channelId: meta.channelId }),
-      },
+      } as View,
     });
-  } catch (err: any) {
-    console.error('Error opening upload survey data modal:', err.data || err);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const detail = (err as Record<string, unknown>)?.data ?? message;
+    console.error('Error opening upload survey data modal:', detail);
   }
 }
 
@@ -165,7 +168,7 @@ async function handleSurveyDataSubmission({ ack, body, view, client }: ViewSubmi
 
   try {
     // Process uploaded files to extract content
-    const processedFiles = await processSlackFiles(uploadedFiles, process.env.SLACK_BOT_TOKEN);
+    const processedFiles = await processSlackFiles(uploadedFiles, process.env.SLACK_BOT_TOKEN!);
 
     // Prepare documents array
     const documents = processedFiles.map((file: any) => ({
@@ -218,21 +221,23 @@ async function handleSurveyDataSubmission({ ack, body, view, client }: ViewSubmi
     const renderedYaml = await processYamlTemplate(
       file.content,
       surveyData,
+      // @ts-expect-error — pre-existing type mismatch from require() → import migration
       study.path,
     );
 
     const url: string = renderedYaml.result.url;
 
     // Generate and send result message
-    const blocks = generateStudyResultBlocks(studyName, study, url, channelId, 'survey_data');
+    const blocks = generateStudyResultBlocks(studyName, study as any, url, channelId, 'survey_data');
     await sendStudyResultMessage(client, channelId, studyName, blocks, 'survey_data');
-  } catch (error: any) {
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
     console.error('Error processing survey data:', error);
     await client.chat.postMessage({
       channel: channelId,
-      text: `❌ There was an error processing your survey data: ${error.message}\n\nPlease try again or contact support.`,
+      text: `❌ There was an error processing your survey data: ${message}\n\nPlease try again or contact support.`,
     });
   }
 }
 
-module.exports = { openUploadSurveyDataModal, handleSurveyDataSubmission };
+export { openUploadSurveyDataModal, handleSurveyDataSubmission };

@@ -11,11 +11,12 @@
  */
 
 import type { BlockActionContext } from '../../../../types/handlers';
+import type { View } from '@slack/types';
 
-const { getResearchStudyWithRoles, getStudiesByUser } = require('../../../../services/research_study.service');
-const { researchPlanGeneratorModal } = require('../../ui/researchPlanGeneratorModal');
-const { readStudyVariables } = require('../../../studyVariables');
-const { buildCascadeReadiness, buildCascadeBlocks } = require('../../ui/cascadeReadinessBlocks');
+import { getResearchStudyWithRoles, getStudiesByUser } from '../../../../services/research_study.service';
+import { researchPlanGeneratorModal } from '../../ui/researchPlanGeneratorModal';
+import { readStudyVariables } from '../../../studyVariables';
+import { buildCascadeReadiness, buildCascadeBlocks } from '../../ui/cascadeReadinessBlocks';
 
 // ─── Block Kit manipulation type ──────────────────────────────────
 
@@ -67,16 +68,18 @@ async function openResearchPlanModal({ ack, body, client }: BlockActionContext) 
       if (study && study.researcher_name) {
         leadResearcher = study.researcher_name;
       }
-    } catch (error: any) {
-      console.warn('Could not fetch study for lead researcher:', error.message);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn('Could not fetch study for lead researcher:', message);
     }
     if (!leadResearcher) {
       try {
         const userInfo = await client.users.info({ user: userId });
         const user = userInfo.user as Record<string, any> | undefined;
         leadResearcher = user?.real_name || user?.profile?.display_name || user?.name || '';
-      } catch (err: any) {
-        console.warn('Could not fetch Slack profile for lead researcher:', err.message);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.warn('Could not fetch Slack profile for lead researcher:', message);
       }
     }
 
@@ -125,12 +128,14 @@ async function openResearchPlanModal({ ack, body, client }: BlockActionContext) 
           // Insert cascade blocks after the first divider
           const firstDivider = blocks.findIndex(b => b.type === 'divider');
           if (firstDivider !== -1) {
+            // @ts-expect-error — pre-existing type mismatch from require() → import migration
             blocks.splice(firstDivider, 0, ...cascadeBlocks);
           }
         }
       }
-    } catch (err: any) {
-      console.warn('⚠️ Cascade readiness failed for research plan:', err.message);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn('⚠️ Cascade readiness failed for research plan:', message);
     }
 
     // views.update does NOT take trigger_id
@@ -140,11 +145,11 @@ async function openResearchPlanModal({ ack, body, client }: BlockActionContext) 
         ...researchPlanGeneratorModal,
         blocks,
         private_metadata: JSON.stringify({ ...(meta || {}), studyName: preselectStudyName, studyId: preselectStudyId, userId }),
-      },
+      } as View,
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error opening research plan modal:', error);
   }
 }
 
-module.exports = { openResearchPlanModal };
+export { openResearchPlanModal };

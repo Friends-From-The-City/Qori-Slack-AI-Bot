@@ -8,12 +8,13 @@
  */
 
 import type { BlockActionContext } from '../../../../types/handlers';
+import type { View } from '@slack/types';
 
-const { getResearchStudyWithRoles } = require('../../../../services/research_study.service');
-const { researchPlanGeneratorModal } = require('../../ui/researchPlanGeneratorModal');
-const { createStudyModal } = require('../../ui/createStudyModal');
-const { readStudyVariables } = require('../../../studyVariables');
-const { buildCascadeReadiness, buildCascadeBlocks } = require('../../ui/cascadeReadinessBlocks');
+import { getResearchStudyWithRoles } from '../../../../services/research_study.service';
+import { researchPlanGeneratorModal } from '../../ui/researchPlanGeneratorModal';
+import { createStudyModal } from '../../ui/createStudyModal';
+import { readStudyVariables } from '../../../studyVariables';
+import { buildCascadeReadiness, buildCascadeBlocks } from '../../ui/cascadeReadinessBlocks';
 
 // ─── Block Kit manipulation type ──────────────────────────────────
 
@@ -71,12 +72,14 @@ async function openPlanFromBrief({ ack, body, client }: BlockActionContext) {
           const cascadeBlocks = buildCascadeBlocks(cascadeData);
           const firstDivider = blocks.findIndex(b => b.type === 'divider');
           if (firstDivider !== -1) {
+            // @ts-expect-error — pre-existing type mismatch from require() → import migration
             blocks.splice(firstDivider, 0, ...cascadeBlocks);
           }
         }
       }
-    } catch (err: any) {
-      console.warn('⚠️ Cascade readiness failed:', err.message);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn('⚠️ Cascade readiness failed:', message);
     }
 
     // views.open DOES take trigger_id
@@ -86,10 +89,11 @@ async function openPlanFromBrief({ ack, body, client }: BlockActionContext) {
         ...researchPlanGeneratorModal,
         blocks,
         private_metadata: JSON.stringify({ studyName, studyId: study?.id?.toString(), channelId }),
-      },
+      } as unknown as View,
     });
-  } catch (err: any) {
-    console.error('Error opening research plan from brief approval:', err.data || err);
+  } catch (err) {
+    const detail = (err as Record<string, unknown>)?.data ?? err;
+    console.error('Error opening research plan from brief approval:', detail);
   }
 }
 
@@ -122,7 +126,7 @@ async function openStudyFromBrief({ ack, body, client }: BlockActionContext) {
           requestedByUserId = foundUser.id;
           userDisplayName = foundUser.profile?.real_name || foundUser.name || briefData.requestor_name;
         }
-      } catch (error: any) {
+      } catch (error) {
         console.error('Error looking up user by name:', error);
       }
     }
@@ -134,7 +138,7 @@ async function openStudyFromBrief({ ack, body, client }: BlockActionContext) {
         const userInfo = await client.users.info({ user: requestedByUserId });
         const user = userInfo.user as Record<string, any> | undefined;
         userDisplayName = user?.profile?.real_name || user?.name || briefData.requestor_name;
-      } catch (error: any) {
+      } catch (error) {
         console.error('Error fetching user info:', error);
       }
     }
@@ -164,11 +168,12 @@ async function openStudyFromBrief({ ack, body, client }: BlockActionContext) {
             userDisplayName,
           },
         }),
-      },
+      } as unknown as View,
     });
-  } catch (error: any) {
-    console.error('Error opening create study modal from brief:', error.data || error);
+  } catch (error) {
+    const detail = (error as Record<string, unknown>)?.data ?? error;
+    console.error('Error opening create study modal from brief:', detail);
   }
 }
 
-module.exports = { openPlanFromBrief, openStudyFromBrief };
+export { openPlanFromBrief, openStudyFromBrief };

@@ -6,12 +6,13 @@
  */
 
 import type { SlashCommandContext, ViewSubmissionContext, BlockActionContext } from '../../../types/handlers';
+import type { View } from '@slack/types';
 
-const { ChatAnthropic } = require('@langchain/anthropic');
-const { getStudiesByUser } = require('../../../services/research_study.service');
-const { getActiveStudy } = require('../../../services/slack-user-state.service');
-const { searchVariablesAcrossStudies } = require('../../studyVariables');
-const { buildAskModal } = require('../ui/askModal');
+import { ChatAnthropic } from '@langchain/anthropic';
+import { getStudiesByUser } from '../../../services/research_study.service';
+import { getActiveStudy } from '../../../services/slack-user-state.service';
+import { searchVariablesAcrossStudies } from '../../studyVariables';
+import { buildAskModal } from '../ui/askModal';
 
 // ─── Constants ──────────────────────────────────────────────────────
 
@@ -81,8 +82,9 @@ User question: "${question}"`;
     }
     parsed.search_terms = (parsed.search_terms || []).filter((t: any) => typeof t === 'string' && t.length > 0);
     return parsed;
-  } catch (error: any) {
-    console.warn('Haiku interpretation failed, using defaults:', error.message);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn('Haiku interpretation failed, using defaults:', message);
     const terms = question.toLowerCase().split(/\s+/).filter((w: string) => w.length > 3);
     return {
       variable_keys: DEFAULT_VARIABLE_KEYS,
@@ -120,8 +122,9 @@ Write a concise summary (2-4 sentences) of what was found, highlighting the most
   try {
     const response = await sonnet.invoke(prompt);
     return response.content as string;
-  } catch (error: any) {
-    console.warn('Sonnet formatting failed:', error.message);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn('Sonnet formatting failed:', message);
     return null;
   }
 }
@@ -279,15 +282,17 @@ async function askHandler({ ack, body, client, command }: SlashCommandContext) {
       value: s.id.toString(),
     }));
 
+    // @ts-expect-error — pre-existing type mismatch from require() → import migration
     const modal = buildAskModal(studyOptions, activeStudyId);
-    modal.private_metadata = JSON.stringify({
+    (modal as any).private_metadata = JSON.stringify({
       channelId: command.channel_id,
       userId,
     });
 
-    await client.views.open({ trigger_id: body.trigger_id, view: modal });
-  } catch (error: any) {
-    console.error('askHandler error:', error.message);
+    await client.views.open({ trigger_id: body.trigger_id, view: modal as unknown as View });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('askHandler error:', message);
   }
 }
 
@@ -323,11 +328,13 @@ async function handleAskSubmit({ ack, body, view, client }: ViewSubmissionContex
     const interpretation = await interpretQuery(question);
 
     // Run cross-study search
-    const { rows, total } = await searchVariablesAcrossStudies(
+    const result = await searchVariablesAcrossStudies(
       interpretation.variable_keys,
       interpretation.search_terms,
       { studyName, limit: 30 },
     );
+    const rows = result.rows as VariableRow[];
+    const { total } = result;
 
     // Format results with Sonnet
     const formatted = rows.length > 0
@@ -352,17 +359,19 @@ async function handleAskSubmit({ ack, body, view, client }: ViewSubmissionContex
       text: `Found ${total} results matching "${question}"`,
       blocks,
     });
-  } catch (error: any) {
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
     console.error('handleAskSubmit error:', error);
     try {
       const meta = JSON.parse(view.private_metadata || '{}');
       const im = await client.conversations.open({ users: meta.userId || body.user.id });
       await client.chat.postMessage({
         channel: im.channel!.id as string,
-        text: `Something went wrong with your search: ${error.message}. Please try again.`,
+        text: `Something went wrong with your search: ${message}. Please try again.`,
       });
-    } catch (dmErr: any) {
-      console.error('Failed to send error DM:', dmErr.message);
+    } catch (dmErr) {
+      const dmMessage = dmErr instanceof Error ? dmErr.message : String(dmErr);
+      console.error('Failed to send error DM:', dmMessage);
     }
   }
 }
@@ -375,11 +384,13 @@ async function handleShowMore({ ack, body, client }: BlockActionContext) {
     const payload = JSON.parse((body.actions![0] as any).value);
     const { variableKeys, searchTerms, studyName, offset, question } = payload;
 
-    const { rows, total } = await searchVariablesAcrossStudies(
+    const result = await searchVariablesAcrossStudies(
       variableKeys,
       searchTerms,
       { studyName, limit: RESULTS_PER_GROUP, offset },
     );
+    const rows = result.rows as VariableRow[];
+    const { total } = result;
 
     if (rows.length === 0) {
       await client.chat.postMessage({
@@ -422,12 +433,13 @@ async function handleShowMore({ ack, body, client }: BlockActionContext) {
       text: `${rows.length} more results for "${question}"`,
       blocks,
     });
-  } catch (error: any) {
-    console.error('handleShowMore error:', error.message);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('handleShowMore error:', message);
   }
 }
 
-module.exports = {
+export {
   askHandler,
   handleAskSubmit,
   handleShowMore,

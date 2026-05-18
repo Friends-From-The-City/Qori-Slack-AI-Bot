@@ -7,15 +7,16 @@
  */
 
 import type { BlockActionContext, ViewSubmissionContext } from '../../../../types/handlers';
+import type { View } from '@slack/types';
 
-const { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo } = require('../../../github');
-const { getResearchStudyWithRoles, getStudiesByUser } = require('../../../../services/research_study.service');
-const { processYamlTemplate } = require('../../../yamlProcessor');
-const { addStudyStatus } = require('../../../../services/study-status.service');
-const { sendStudyResultMessage, generateStudyResultBlocks } = require('../../ui/studyResultBlocks');
-const { readStudyVariables } = require('../../../studyVariables');
-const { buildCascadeReadiness, buildCascadeBlocks } = require('../../ui/cascadeReadinessBlocks');
-const { discussionGuideModal } = require('../../ui/discussionGuideModal');
+import { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo } from '../../../github';
+import { getResearchStudyWithRoles, getStudiesByUser } from '../../../../services/research_study.service';
+import { processYamlTemplate } from '../../../yamlProcessor';
+import { addStudyStatus } from '../../../../services/study-status.service';
+import { sendStudyResultMessage, generateStudyResultBlocks } from '../../ui/studyResultBlocks';
+import { readStudyVariables } from '../../../studyVariables';
+import { buildCascadeReadiness, buildCascadeBlocks } from '../../ui/cascadeReadinessBlocks';
+import { discussionGuideModal } from '../../ui/discussionGuideModal';
 
 // ─── Block Kit manipulation type ──────────────────────────────────
 
@@ -78,8 +79,9 @@ async function openDiscussionGuideModal({ ack, body, client }: BlockActionContex
           studyName = studies[0].name;
           studyId = String(studies[0].id);
         }
-      } catch (e: any) {
-        console.warn('⚠️ Could not infer studyName for discussion guide:', e.message);
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        console.warn('⚠️ Could not infer studyName for discussion guide:', message);
       }
     }
 
@@ -124,12 +126,14 @@ async function openDiscussionGuideModal({ ack, body, client }: BlockActionContex
           const cascadeBlocks = buildCascadeBlocks(cascadeData);
           const firstDivider = blocks.findIndex(b => b.type === 'divider');
           if (firstDivider !== -1) {
+            // @ts-expect-error — pre-existing type mismatch from require() → import migration
             blocks.splice(firstDivider, 0, ...cascadeBlocks);
           }
         }
       }
-    } catch (err: any) {
-      console.warn('⚠️ Cascade readiness failed for discussion guide:', err.message);
+    } catch (err) {
+      const cascadeMessage = err instanceof Error ? err.message : String(err);
+      console.warn('⚠️ Cascade readiness failed for discussion guide:', cascadeMessage);
     }
 
     await client.views.update({
@@ -138,10 +142,11 @@ async function openDiscussionGuideModal({ ack, body, client }: BlockActionContex
         ...discussionGuideModal,
         blocks,
         private_metadata: JSON.stringify({ ...(meta || {}), studyName, studyId }),
-      },
+      } as View,
     });
-  } catch (err: any) {
-    console.error('Error opening discussion guide modal:', err.data || err);
+  } catch (err) {
+    const detail = (err as Record<string, unknown>)?.data ?? err;
+    console.error('Error opening discussion guide modal:', detail);
   }
 }
 
@@ -168,8 +173,9 @@ async function handleDiscussionGuideSubmission({ ack, body, view, client }: View
       if (Array.isArray(studies) && studies.length > 0) {
         studyName = studies[0].name;
       }
-    } catch (e: any) {
-      console.warn('⚠️ Could not infer studyName on submission:', e.message);
+    } catch (e) {
+      const submissionMessage = e instanceof Error ? e.message : String(e);
+      console.warn('⚠️ Could not infer studyName on submission:', submissionMessage);
     }
   }
 
@@ -196,10 +202,10 @@ async function handleDiscussionGuideSubmission({ ack, body, view, client }: View
 
   const study = await getResearchStudyWithRoles(studyName);
   const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, 'discussion_guide.yaml');
-  const renderedYaml = await processYamlTemplate(file.content, guideData, study.path);
+  const renderedYaml = await processYamlTemplate(file.content, guideData, study!.path ?? '');
 
   const url: string = renderedYaml.result.url;
-  const blocks = generateStudyResultBlocks(studyName, study, url, channelId, 'discussion');
+  const blocks = generateStudyResultBlocks(studyName, study as any, url, channelId, 'discussion');
   await sendStudyResultMessage(client, channelId, studyName, blocks, 'discussion');
 
   await addStudyStatus({
@@ -210,4 +216,4 @@ async function handleDiscussionGuideSubmission({ ack, body, view, client }: View
   });
 }
 
-module.exports = { openDiscussionGuideModal, handleDiscussionGuideSubmission };
+export { openDiscussionGuideModal, handleDiscussionGuideSubmission };

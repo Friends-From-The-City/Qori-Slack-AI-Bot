@@ -1,10 +1,11 @@
 import type { SlashCommandContext, BlockActionContext, ViewSubmissionContext } from '../../../types/handlers';
 
-const { requestResearchModal } = require('../ui/requestResearchModal');
-const { createStudyFromRequestModal } = require('../ui/createStudyFromRequestModal');
-const { researchBriefModal } = require('../ui/researchBriefModal');
-const { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo } = require('../../github');
-const { processYamlTemplate } = require('../../yamlProcessor');
+import { requestResearchModal } from '../ui/requestResearchModal';
+import { createStudyFromRequestModal } from '../ui/createStudyFromRequestModal';
+import { researchBriefModal } from '../ui/researchBriefModal';
+import { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo } from '../../github';
+import { processYamlTemplate } from '../../yamlProcessor';
+import type { View } from '@slack/types';
 
 // ─── Types ──────────────────────────────────────────────────────────
 
@@ -67,10 +68,11 @@ async function requestResearchHandler({ ack, command, client }: SlashCommandCont
           userName,
           userTitle,
         }),
-      },
+      } as View,
     });
-  } catch (error: any) {
-    console.error('Error opening request research modal:', error.data || error);
+  } catch (error) {
+    const detail = (error as Record<string, unknown>)?.data ?? error;
+    console.error('Error opening request research modal:', detail);
   }
 }
 
@@ -137,7 +139,7 @@ async function handleRequestResearchSubmission({ ack, body, view, client }: View
       requestPath = renderedYaml.result.path;
 
       console.log('✅ Research request file created:', requestUrl);
-    } catch (yamlError: any) {
+    } catch (yamlError) {
       console.error('⚠️ Error processing research request YAML:', yamlError);
     }
 
@@ -206,11 +208,12 @@ async function handleRequestResearchSubmission({ ack, body, view, client }: View
           blocks: notificationBlocks,
         });
         console.log(`✅ Research request notification sent to channel ${researchTeamChannelId}`);
-      } catch (channelError: any) {
-        console.error(`❌ Failed to send research team notification to ${researchTeamChannelId}:`, channelError.message);
+      } catch (channelError) {
+        const message = channelError instanceof Error ? channelError.message : String(channelError);
+        console.error(`❌ Failed to send research team notification to ${researchTeamChannelId}:`, message);
       }
     }
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error processing research request:', error);
     await client.chat.postMessage({
       channel: userId,
@@ -270,10 +273,11 @@ async function handleCreateBriefFromRequest({ ack, body, client }: BlockActionCo
           requestData,
           studyName: requestData.project_title || 'Research Request',
         }),
-      },
+      } as View,
     });
-  } catch (error: any) {
-    console.error('Error opening research brief modal from request:', error.data || error);
+  } catch (error) {
+    const detail = (error as Record<string, unknown>)?.data ?? error;
+    console.error('Error opening research brief modal from request:', detail);
   }
 }
 
@@ -313,14 +317,15 @@ async function handleCreateStudyFromRequest({ ack, body, client }: BlockActionCo
           isFromRequest: true,
           requestData,
         }),
-      },
+      } as View,
     });
-  } catch (error: any) {
-    console.error('Error opening create study from request modal:', error.data || error);
+  } catch (error) {
+    const detail = (error as Record<string, unknown>)?.data ?? error;
+    console.error('Error opening create study from request modal:', detail);
   }
 }
 
-module.exports = {
+export {
   requestResearchHandler,
   handleRequestResearchSubmission,
   handleCreateBriefFromRequest,

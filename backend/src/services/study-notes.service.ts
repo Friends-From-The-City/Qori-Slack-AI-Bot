@@ -1,7 +1,8 @@
 import type { StudyNotes } from '../database/models/study_notes';
 import type { ResearchStudy } from '../database/models/research_study';
+import { Op } from 'sequelize';
 
-const sequelize = require('../database');
+import sequelize from '../database';
 
 // Typed model references — cast once, use everywhere. See Phase 3 notes.
 const StudyNotesModel = sequelize.models.StudyNotes as typeof StudyNotes;
@@ -65,9 +66,9 @@ class StudyNotesService {
 
       const note = await StudyNotesModel.create(noteData as any);
       return note;
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error creating study note:', error);
-      throw new Error(`Failed to create study note: ${error.message}`);
+      throw new Error(`Failed to create study note: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -91,9 +92,9 @@ class StudyNotesService {
       }
 
       return note;
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error getting study note by ID:', error);
-      throw new Error(`Failed to get study note: ${error.message}`);
+      throw new Error(`Failed to get study note: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -122,9 +123,9 @@ class StudyNotesService {
       });
 
       return notes;
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error getting study notes by study ID:', error);
-      throw new Error(`Failed to get study notes: ${error.message}`);
+      throw new Error(`Failed to get study notes: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -150,9 +151,9 @@ class StudyNotesService {
       });
 
       return notes;
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error getting study notes by user ID:', error);
-      throw new Error(`Failed to get study notes: ${error.message}`);
+      throw new Error(`Failed to get study notes: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -188,9 +189,9 @@ class StudyNotesService {
       });
 
       return notes;
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error getting study notes by exact study name:', error);
-      throw new Error(`Failed to get study notes by exact study name: ${error.message}`);
+      throw new Error(`Failed to get study notes by exact study name: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -222,9 +223,9 @@ class StudyNotesService {
       });
 
       return notes;
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error getting study notes by exact study name:', error);
-      throw new Error(`Failed to get study notes by exact study name: ${error.message}`);
+      throw new Error(`Failed to get study notes by exact study name: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -237,15 +238,15 @@ class StudyNotesService {
 
       // Add search criteria
       if (searchCriteria.study_name) {
-        where.study_name = { [sequelize.Op.iLike]: `%${searchCriteria.study_name}%` };
+        where.study_name = { [Op.iLike]: `%${searchCriteria.study_name}%` };
       }
 
       if (searchCriteria.filename) {
-        where.filename = { [sequelize.Op.iLike]: `%${searchCriteria.filename}%` };
+        where.filename = { [Op.iLike]: `%${searchCriteria.filename}%` };
       }
 
       if (searchCriteria.participant_name) {
-        where.participant_name = { [sequelize.Op.iLike]: `%${searchCriteria.participant_name}%` };
+        where.participant_name = { [Op.iLike]: `%${searchCriteria.participant_name}%` };
       }
 
       const notes = await StudyNotesModel.findAll({
@@ -263,9 +264,9 @@ class StudyNotesService {
       });
 
       return notes;
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error searching study notes:', error);
-      throw new Error(`Failed to search study notes: ${error.message}`);
+      throw new Error(`Failed to search study notes: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -287,9 +288,9 @@ class StudyNotesService {
       await note.update(updateData);
 
       return note;
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error updating study note:', error);
-      throw new Error(`Failed to update study note: ${error.message}`);
+      throw new Error(`Failed to update study note: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -306,13 +307,14 @@ class StudyNotesService {
 
       await note.destroy();
       return true;
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error deleting study note:', error);
-      throw new Error(`Failed to delete study note: ${error.message}`);
+      throw new Error(`Failed to delete study note: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
 
 }
 
-module.exports = new StudyNotesService();
+const studyNotesService = new StudyNotesService();
+export default studyNotesService;

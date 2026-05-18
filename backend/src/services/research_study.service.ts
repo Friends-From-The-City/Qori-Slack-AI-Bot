@@ -1,7 +1,7 @@
 import type { ResearchStudy } from '../database/models/research_study';
 import type { ResearchStudyUserRole } from '../database/models/research_study_user_role';
 
-const sequelize = require('../database');
+import sequelize from '../database';
 
 // Typed model references — cast once, use everywhere. See Phase 3 notes.
 const ResearchStudyModel = sequelize.models.ResearchStudy as typeof ResearchStudy;
@@ -142,16 +142,17 @@ const deleteResearchStudy = async (studyId: number, userId: string): Promise<Del
       studyName: study.name,
       studyPath: study.path
     };
-  } catch (err: any) {
+  } catch (err) {
     await t.rollback();
     console.error('deleteResearchStudy failed:', err);
-    throw new Error(`Failed to delete research study: ${err.message}`);
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Error(`Failed to delete research study: ${message}`);
   }
 };
 
-module.exports = {
+export {
   addResearchStudyWithRoles,
   getResearchStudyWithRoles,
   getStudiesByUser,
-  deleteResearchStudy
+  deleteResearchStudy,
 };

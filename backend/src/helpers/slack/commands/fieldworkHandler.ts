@@ -7,17 +7,18 @@
 
 import type { SlashCommandContext, BlockActionContext, ViewSubmissionContext } from '../../../types/handlers';
 
-const { getStudiesByUser, getResearchStudyWithRoles } = require('../../../services/research_study.service');
-const studyParticipantService = require('../../../services/study_participant.service');
-const sessionObserverService = require('../../../services/session_observer.service');
-const { getActiveStudy, setActiveStudy } = require('../../../services/slack-user-state.service');
-const { buildFieldworkDashboard, buildFieldworkStudyPicker } = require('../ui/fieldworkDashboardModal');
-const { PARTICIPANT_STATUS } = require('../../../constants/participantStatus');
-const { addParticipantModal } = require('../ui/addParticipantModal');
-const { updateParticipantStatusModal } = require('../ui/outreach/updateParticipantStatusModal');
-const { buildAddObserverModal } = require('../ui/addObserverModal');
-const { participantOutreachModal } = require('../ui/outreach/participantOutreachModal');
-const { buildSessionNotesView } = require('../ui/sessionNotesModal');
+import { getStudiesByUser, getResearchStudyWithRoles } from '../../../services/research_study.service';
+import studyParticipantService from '../../../services/study_participant.service';
+import sessionObserverService from '../../../services/session_observer.service';
+import { getActiveStudy, setActiveStudy } from '../../../services/slack-user-state.service';
+import { buildFieldworkDashboard, buildFieldworkStudyPicker } from '../ui/fieldworkDashboardModal';
+import { PARTICIPANT_STATUS } from '../../../constants/participantStatus';
+import { addParticipantModal } from '../ui/addParticipantModal';
+import { updateParticipantStatusModal } from '../ui/outreach/updateParticipantStatusModal';
+import { buildAddObserverModal } from '../ui/addObserverModal';
+import { participantOutreachModal } from '../ui/outreach/participantOutreachModal';
+import { buildSessionNotesView } from '../ui/sessionNotesModal';
+import type { View } from '@slack/types';
 
 // ── Helpers ────────────────────────────────────────────────
 
@@ -76,7 +77,7 @@ async function fetchAndRenderDashboard(client: any, viewId: string, study: any, 
   const { outreachStats, context } = buildDashboardContext(allParticipants, study);
 
   const dashboard = buildFieldworkDashboard(study, participantStats, observerStats, outreachStats, context);
-  dashboard.private_metadata = JSON.stringify(meta);
+  (dashboard as any).private_metadata = JSON.stringify(meta);
 
   await client.views.update({ view_id: viewId, view: dashboard });
 }
@@ -113,7 +114,7 @@ async function fieldworkHandler({ ack, body, client, command }: SlashCommandCont
       const { outreachStats, context } = buildDashboardContext(allParticipants, study);
 
       const dashboard = buildFieldworkDashboard(study, participantStats, observerStats, outreachStats, context);
-      dashboard.private_metadata = JSON.stringify({ channelId, userId, studyId: study.id, studyName: study.name });
+      (dashboard as any).private_metadata = JSON.stringify({ channelId, userId, studyId: study.id, studyName: study.name });
 
       await client.views.open({ trigger_id: body.trigger_id, view: dashboard });
       return;
@@ -129,8 +130,10 @@ async function fieldworkHandler({ ack, body, client, command }: SlashCommandCont
     picker.private_metadata = JSON.stringify({ channelId, userId });
 
     await client.views.open({ trigger_id: body.trigger_id, view: picker });
-  } catch (error: any) {
-    console.error('fieldworkHandler error:', error.data || error.message);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const detail = (error as Record<string, unknown>)?.data ?? message;
+    console.error('fieldworkHandler error:', detail);
   }
 }
 
@@ -157,10 +160,10 @@ async function handleFieldworkStudyPickerSubmit({ ack, body, view, client }: Vie
 
     const dashboardMeta = { ...meta, studyId: study.id, studyName: study.name };
     const dashboard = buildFieldworkDashboard(study, participantStats, observerStats, outreachStats, context);
-    dashboard.private_metadata = JSON.stringify(dashboardMeta);
+    (dashboard as any).private_metadata = JSON.stringify(dashboardMeta);
 
     await ack({ response_action: 'update', view: dashboard } as any);
-  } catch (error: any) {
+  } catch (error) {
     console.error('handleFieldworkStudyPickerSubmit error:', error);
     await ack();
   }
@@ -185,8 +188,9 @@ async function refreshDashboardAfterAction(client: any, rootViewId: string, stud
     await fetchAndRenderDashboard(client, rootViewId, study, {
       channelId, userId, studyId: study.id, studyName: study.name,
     });
-  } catch (error: any) {
-    console.error('refreshDashboardAfterAction error:', error.message);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('refreshDashboardAfterAction error:', message);
     // Non-fatal — the sub-modal action already succeeded
   }
 }
@@ -222,10 +226,11 @@ async function handleFieldworkAddParticipant({ ack, body, client }: BlockActionC
         ...addParticipantModal,
         blocks,
         private_metadata: JSON.stringify({ ...dashboardMeta, studyId, studyName, rootViewId: (body as any).view.id }),
-      },
+      } as View,
     });
-  } catch (error: any) {
-    console.error('handleFieldworkAddParticipant error:', error.message);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('handleFieldworkAddParticipant error:', message);
   }
 }
 
@@ -266,10 +271,11 @@ async function handleFieldworkUpdateStatus({ ack, body, client }: BlockActionCon
         ...updateParticipantStatusModal,
         blocks,
         private_metadata: JSON.stringify({ ...dashboardMeta, studyId, studyName, rootViewId: (body as any).view.id }),
-      },
+      } as View,
     });
-  } catch (error: any) {
-    console.error('handleFieldworkUpdateStatus error:', error.message);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('handleFieldworkUpdateStatus error:', message);
   }
 }
 
@@ -314,10 +320,11 @@ async function handleFieldworkObserve({ ack, body, client }: BlockActionContext)
           userId: body.user.id,
           rootViewId: (body as any).view.id,
         }),
-      },
+      } as View,
     });
-  } catch (error: any) {
-    console.error('handleFieldworkObserve error:', error.message);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('handleFieldworkObserve error:', message);
   }
 }
 
@@ -356,10 +363,11 @@ async function handleFieldworkOutreach({ ack, body, client }: BlockActionContext
         ...participantOutreachModal,
         blocks,
         private_metadata: JSON.stringify({ ...dashboardMeta, studyId, studyName, rootViewId: (body as any).view.id }),
-      },
+      } as View,
     });
-  } catch (error: any) {
-    console.error('handleFieldworkOutreach error:', error.message);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('handleFieldworkOutreach error:', message);
   }
 }
 
@@ -388,6 +396,7 @@ async function handleFieldworkUploadNotes({ ack, body, client }: BlockActionCont
       }
 
       mode = 'researcher';
+      // @ts-expect-error — pre-existing type mismatch from require() → import migration
       sessions = participants.map((p: any, idx: number) => ({
         id: `p_${p.id}`,
         study: p.study || { id: studyId, name: studyName },
@@ -425,19 +434,21 @@ async function handleFieldworkUploadNotes({ ack, body, client }: BlockActionCont
 
     await client.views.push({
       trigger_id: (body as any).trigger_id,
-      view: buildSessionNotesView(initialState),
+      view: buildSessionNotesView(initialState as any) as View,
     });
-  } catch (error: any) {
-    console.error('handleFieldworkUploadNotes error:', error.message, error.data || '');
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const detail = (error as Record<string, unknown>)?.data ?? '';
+    console.error('handleFieldworkUploadNotes error:', message, detail);
     await client.chat.postEphemeral({
       channel: body.user.id,
       user: body.user.id,
-      text: `Failed to open notes modal: ${error.message}`,
+      text: `Failed to open notes modal: ${message}`,
     }).catch(() => {});
   }
 }
 
-module.exports = {
+export {
   fieldworkHandler,
   handleFieldworkStudyPickerSubmit,
   refreshDashboardAfterAction,

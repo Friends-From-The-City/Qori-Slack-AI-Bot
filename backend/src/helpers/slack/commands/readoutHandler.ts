@@ -7,14 +7,16 @@
  */
 
 import type { SlashCommandContext, ViewSubmissionContext, BlockActionContext } from '../../../types/handlers';
+import type { View } from '@slack/types';
 
-const { buildReadoutModal } = require('../ui/readoutModal');
-const { getResearchStudyWithRoles, getStudiesByUser } = require('../../../services/research_study.service');
-const { getActiveStudy, setActiveStudy } = require('../../../services/slack-user-state.service');
-const { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo, fetchFileFromRepoByPath, readFolders, readFolderContents } = require('../../github');
-const { processYamlTemplate } = require('../../yamlProcessor');
-const researchPlanService = require('../../../services/research_plan.service');
-const sessionSummaryService = require('../../../services/session-summary.service');
+import { buildReadoutModal } from '../ui/readoutModal';
+import { getResearchStudyWithRoles, getStudiesByUser } from '../../../services/research_study.service';
+import { getActiveStudy, setActiveStudy } from '../../../services/slack-user-state.service';
+import { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo, fetchFileFromRepoByPath, readFolders, readFolderContents } from '../../github';
+import { processYamlTemplate } from '../../yamlProcessor';
+import researchPlanService from '../../../services/research_plan.service';
+import sessionSummaryService from '../../../services/session-summary.service';
+import sequelize from '../../../database';
 
 // ─── Types ──────────────────────────────────────────────────────
 
@@ -75,7 +77,6 @@ interface ReadoutTemplateInput {
  */
 async function checkReadoutExists(studyPath: string): Promise<ReadoutExistenceCheck | false> {
   try {
-    const sequelize = require('../../../database');
     const StudyVariable = sequelize.models?.StudyVariable;
     if (!StudyVariable) return false;
 
@@ -89,12 +90,13 @@ async function checkReadoutExists(studyPath: string): Promise<ReadoutExistenceCh
       attributes: ['id', 'value'],
     });
 
-    if (!row || !row.value) return false;
+    if (!row || !(row as any).value) return false;
 
-    const findingsCount: number = Array.isArray(row.value) ? row.value.length : 0;
+    const findingsCount: number = Array.isArray((row as any).value) ? (row as any).value.length : 0;
     return { exists: true, findingsCount };
-  } catch (err: any) {
-    console.warn('⚠️ Could not check readout existence:', err.message);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn('⚠️ Could not check readout existence:', message);
     return false;
   }
 }
@@ -138,19 +140,20 @@ const openReadoutModal = async ({ ack, body, client, command }: SlashCommandCont
 
     await client.views.open({
       trigger_id: command.trigger_id,
-      view: buildReadoutModal(initialState)
+      view: buildReadoutModal(initialState as any)
     });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error opening readout modal:', error);
+    const message = error instanceof Error ? error.message : String(error);
 
     try {
       await client.chat.postEphemeral({
         channel: command.channel_id,
         user: command.user_id,
-        text: `❌ Error opening readout modal: ${error.message}`
+        text: `❌ Error opening readout modal: ${message}`
       });
-    } catch (chatError: any) {
+    } catch (chatError) {
       console.error('Error sending error message:', chatError);
     }
   }
@@ -217,14 +220,14 @@ const handleReadoutModalInteraction = async ({ ack, body, client, action }: Bloc
       ...updatedState,
       availableStudies: studies
     };
-    const updatedView = buildReadoutModal(modalState);
+    const updatedView = buildReadoutModal(modalState as any);
 
     await client.views.update({
       view_id: body.view!.id,
       view: updatedView
     });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error handling readout modal interaction:', error);
   }
 };
@@ -248,9 +251,9 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }: ViewSub
       return;
     }
 
-    const selectedStudy = await getResearchStudyWithRoles(selectedStudyName);
+    const selectedStudy = (await getResearchStudyWithRoles(selectedStudyName))!;
     if (selectedStudy) await setActiveStudy(body.user.id, selectedStudy.id);
-    const folderPath: string = selectedStudy.path;
+    const folderPath: string = selectedStudy.path ?? '';
     const reportType: string = state.reportType;
 
     let contentArray: ContentItem[] = [];
@@ -267,7 +270,7 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }: ViewSub
       console.log(`Fetching files from findings folder: ${findingsPath}`);
 
       try {
-        const findingsFiles = await readFolders(findingsPath, process.env.GITHUB_REPO);
+        const findingsFiles = await readFolders(findingsPath, process.env.GITHUB_REPO!);
         console.log(`Found ${findingsFiles.length} files in findings folder`);
 
         contentArray = findingsFiles.map((file: { name: string; content: string }) => ({
@@ -275,9 +278,9 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }: ViewSub
         }));
 
         detectedFiles = findingsFiles.map((file: { name: string }) => file.name);
-      } catch (error: any) {
+      } catch (error) {
         console.error('Error fetching findings folder:', error);
-        if (error.status === 404) {
+        if ((error as Record<string, unknown>)?.status === 404) {
           console.warn(`⚠️ Findings folder not found at: ${findingsPath}`);
         }
         contentArray = [];
@@ -288,14 +291,14 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }: ViewSub
       try {
         researchPlans = await researchPlanService.getResearchPlansByStudyName(selectedStudyName);
         console.log(`Found ${researchPlans.length} research plans`);
-      } catch (error: any) {
+      } catch (error) {
         console.error('Error fetching research plans:', error);
       }
 
       try {
         sessionSummaries = await sessionSummaryService.getSessionSummariesByStudyName(selectedStudyName);
         console.log(`Found ${sessionSummaries.length} session summaries`);
-      } catch (error: any) {
+      } catch (error) {
         console.error('Error fetching session summaries:', error);
       }
 
@@ -305,12 +308,13 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }: ViewSub
       for (const plan of researchPlans) {
         if (plan.file_path) {
           contentPromises.push(
-            fetchFileFromRepoByPath(process.env.GITHUB_REPO, plan.file_path)
+            fetchFileFromRepoByPath(process.env.GITHUB_REPO!, plan.file_path)
               .then((file: { path: string; content: string }) => ({
                 [plan.filename || file.path.split('/').pop()!]: file.content
               }))
-              .catch((error: any) => {
-                console.log(`Error fetching research plan ${plan.filename}:`, error.message);
+              .catch((error: unknown) => {
+                const message = error instanceof Error ? error.message : String(error);
+                console.log(`Error fetching research plan ${plan.filename}:`, message);
                 return null;
               })
           );
@@ -320,12 +324,13 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }: ViewSub
       for (const summary of sessionSummaries) {
         if (summary.file_path) {
           contentPromises.push(
-            fetchFileFromRepoByPath(process.env.GITHUB_REPO, summary.file_path)
+            fetchFileFromRepoByPath(process.env.GITHUB_REPO!, summary.file_path)
               .then((file: { path: string; content: string }) => ({
                 [summary.filename || file.path.split('/').pop()!]: file.content
               }))
-              .catch((error: any) => {
-                console.log(`Error fetching session summary ${summary.filename}:`, error.message);
+              .catch((error: unknown) => {
+                const message = error instanceof Error ? error.message : String(error);
+                console.log(`Error fetching session summary ${summary.filename}:`, message);
                 return null;
               })
           );
@@ -341,18 +346,19 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }: ViewSub
         console.log(`Fetching participant tracker from: ${participantTrackerPath}`);
 
         contentPromises.push(
-          fetchFileFromRepoByPath(process.env.GITHUB_REPO, participantTrackerPath)
+          fetchFileFromRepoByPath(process.env.GITHUB_REPO!, participantTrackerPath)
             .then((file: { content: string }) => ({
               [participantTrackerFilename]: file.content
             }))
-            .catch((error: any) => {
-              console.log(`Error fetching participant tracker ${participantTrackerFilename}:`, error.message);
+            .catch((error: unknown) => {
+              const message = error instanceof Error ? error.message : String(error);
+              console.log(`Error fetching participant tracker ${participantTrackerFilename}:`, message);
               return null;
             })
         );
 
         detectedFiles.push(participantTrackerFilename);
-      } catch (error: any) {
+      } catch (error) {
         console.error('Error setting up participant tracker fetch:', error);
       }
 
@@ -390,7 +396,7 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }: ViewSub
       for (const scan of ANALYSIS_SCANS) {
         try {
           const scanPath = `${primaryResearchBase}${scan.folder}`;
-          const files = await readFolderContents(scanPath, process.env.GITHUB_REPO);
+          const files = await readFolderContents(scanPath, process.env.GITHUB_REPO!);
           const validFiles = files.filter((f: { name: string }) => f.name !== 'README.md' && f.name !== '.gitkeep');
 
           const byBase: Record<string, { name: string }> = {};
@@ -442,8 +448,8 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }: ViewSub
 
     // Get actual user names from selected roles
     const roleToUserMap: Record<string, string> = {};
-    if (selectedStudy && selectedStudy.userRoles) {
-      selectedStudy.userRoles.forEach((userRole: { role: string; user_id: string }) => {
+    if (selectedStudy && (selectedStudy as any).userRoles) {
+      (selectedStudy as any).userRoles.forEach((userRole: { role: string; user_id: string }) => {
         roleToUserMap[userRole.role] = userRole.user_id;
       });
     }
@@ -533,7 +539,7 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }: ViewSub
           try {
             const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, templateName);
             const audienceReportData: ReadoutTemplateInput = { ...reportData, target_audience: audience };
-            const rendered = await processYamlTemplate(file.content, audienceReportData, selectedStudy.path, 'primary-research');
+            const rendered = await processYamlTemplate(file.content, audienceReportData, selectedStudy.path ?? '', 'primary-research');
 
             results.push({ audience, url: rendered.result.url, success: true });
 
@@ -550,13 +556,14 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }: ViewSub
                 },
               ],
             });
-          } catch (err: any) {
-            console.error(`❌ Error generating ${audience} readout:`, err.message);
-            results.push({ audience, error: err.message, success: false });
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            console.error(`❌ Error generating ${audience} readout:`, message);
+            results.push({ audience, error: message, success: false });
 
             await client.chat.postMessage({
               channel: body.user.id,
-              text: `❌ Error generating *${audience}* readout: ${err.message}`,
+              text: `❌ Error generating *${audience}* readout: ${message}`,
             });
           }
         }
@@ -586,7 +593,7 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }: ViewSub
       // Research readout (existing flow)
       const yamlTemplateName = 'research_readout.yaml';
       const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, yamlTemplateName);
-      const renderedYaml = await processYamlTemplate(file.content, reportData, selectedStudy.path, 'primary-research');
+      const renderedYaml = await processYamlTemplate(file.content, reportData, selectedStudy.path ?? '', 'primary-research');
 
       await client.chat.postMessage({
         channel: body.user.id,
@@ -611,17 +618,18 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }: ViewSub
       });
     }
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error handling readout modal submission:', error);
+    const message = error instanceof Error ? error.message : String(error);
 
     await client.chat.postMessage({
       channel: body.user.id,
-      text: `❌ Error generating report: ${error.message}`,
+      text: `❌ Error generating report: ${message}`,
     });
   }
 };
 
-module.exports = {
+export {
   openReadoutModal,
   handleReadoutModalInteraction,
   handleReadoutModalSubmission
