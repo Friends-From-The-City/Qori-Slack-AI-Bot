@@ -102,19 +102,24 @@ const slackApp = new App({
 
 slackApp.error(async ({ error, body, logger }: { error: Error; body: any; logger: any }) => {
   // Bolt wraps errors — unwrap to find the original thrown error
-  const original = (error as any).original || error;
+  interface BoltError extends Error {
+    original?: Error & { userMessage?: string };
+  }
+  const boltError = error as BoltError;
+  const original = boltError.original || error;
 
   if (original.name === 'TemplateContractError') {
     logger.warn(`⚠️ Cascade contract error: ${original.message}`);
     const userId = body?.user?.id || body?.user_id;
-    if (userId && original.userMessage) {
+    const userMessage = (original as BoltError['original'] & { userMessage?: string }).userMessage;
+    if (userId && userMessage) {
       try {
         const client = slackApp.client;
         const im = await client.conversations.open({ users: userId });
         if (im.channel?.id) {
           await client.chat.postMessage({
             channel: im.channel.id,
-            text: `⚠️ *Could not complete that action*\n\n${original.userMessage}`,
+            text: `⚠️ *Could not complete that action*\n\n${userMessage}`,
           });
         }
       } catch (dmErr) {

@@ -13,6 +13,7 @@ import type { SlashCommand } from '@slack/bolt';
 import { getStudiesByUser, getResearchStudyWithRoles } from '../../../services/research_study.service';
 import { getActiveStudy, setActiveStudy } from '../../../services/slack-user-state.service';
 import sequelize from '../../../database';
+import type { StudyVariableAttributes } from '../../../types/models';
 
 // ─── Types ──────────────────────────────────────────────────────
 
@@ -262,7 +263,8 @@ const handleStep1Submit = async ({ ack, body, view, client }: ViewSubmissionCont
       attributes: ['value'],
     });
 
-    if (!row || !(row as any).value || !Array.isArray((row as any).value)) {
+    const typedRow = row as unknown as StudyVariableAttributes | null;
+    if (!typedRow || !typedRow.value || !Array.isArray(typedRow.value)) {
       await (ack as Function)({
         response_action: 'errors',
         errors: { audience_select: `No ${config.label} tickets found. Generate the ${config.label} readout first.` },
@@ -270,7 +272,7 @@ const handleStep1Submit = async ({ ack, body, view, client }: ViewSubmissionCont
       return;
     }
 
-    tickets = (row as any).value as TicketCandidate[];
+    tickets = typedRow.value as TicketCandidate[];
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error('❌ Error loading tickets:', message);
@@ -398,25 +400,26 @@ const handleStep2Submit = async ({ ack, body, view, client }: ViewSubmissionCont
       where: { study_name: studyName, variable_key: config.variableKey, scope: 'study' },
       attributes: ['value'],
     });
-    // @ts-expect-error — pre-existing type mismatch from require() → import migration
-    tickets = ((ticketRow?.value || []) as TicketCandidate[]).filter(t => selectedTicketIds.includes(t.id));
+    const typedTicketRow = ticketRow as unknown as StudyVariableAttributes | null;
+    tickets = ((typedTicketRow?.value || []) as TicketCandidate[]).filter(t => selectedTicketIds.includes(t.id));
 
     const findingsRow = await StudyVariable.findOne({
       where: { study_name: studyName, variable_key: 'prioritized_findings', scope: 'study' },
       attributes: ['value'],
     });
-    // @ts-expect-error — pre-existing type mismatch from require() → import migration
-    findings = (findingsRow?.value || []) as PrioritizedFinding[];
+    const typedFindingsRow = findingsRow as unknown as StudyVariableAttributes | null;
+    findings = (typedFindingsRow?.value || []) as PrioritizedFinding[];
 
     const detailRows = await StudyVariable.findAll({
       where: { study_name: studyName, variable_key: 'atomic_nugget_detail', scope: 'study' },
       attributes: ['item_key', 'value'],
     });
-    for (const row of detailRows) {
-      if ((row as any).item_key && (row as any).value) {
-        nuggetDetails[(row as any).item_key] = (row as any).value as NuggetDetail;
-      } else if (!(row as any).item_key && Array.isArray((row as any).value)) {
-        for (const item of (row as any).value as NuggetDetail[]) {
+    const typedDetailRows = detailRows as unknown as StudyVariableAttributes[];
+    for (const row of typedDetailRows) {
+      if (row.item_key && row.value) {
+        nuggetDetails[row.item_key] = row.value as NuggetDetail;
+      } else if (!row.item_key && Array.isArray(row.value)) {
+        for (const item of row.value as NuggetDetail[]) {
           if (item.id) nuggetDetails[item.id] = item;
         }
       }

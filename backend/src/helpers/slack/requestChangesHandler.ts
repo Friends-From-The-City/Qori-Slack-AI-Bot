@@ -1,5 +1,6 @@
 import type { WebClient } from '@slack/web-api';
 import type { BlockAction, ViewSubmitAction, AckFn } from '@slack/bolt';
+import type { View } from '@slack/types';
 import { requestStudyChangesModal } from './ui/requestStudyChangesModal';
 import { getResearchStudyWithRoles } from '../../services/research_study.service';
 
@@ -247,12 +248,11 @@ export async function handleRequestChanges(
 
   await client.views.open({
     trigger_id: body.trigger_id,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     view: {
       ...requestStudyChangesModal(fileOptions),
       callback_id: `request_changes_${type}_modal`,
       private_metadata: JSON.stringify({ studyName, channelId, url, type }),
-    } as any,
+    } as View,
   });
 }
 

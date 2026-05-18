@@ -1,5 +1,6 @@
 import type { ResearchStudy } from '../database/models/research_study';
 import type { ResearchStudyUserRole } from '../database/models/research_study_user_role';
+import type { CreationAttributes } from 'sequelize';
 
 import sequelize from '../database';
 
@@ -24,6 +25,13 @@ interface DeleteResult {
   studyPath: string | null;
 }
 
+/** Computed counts injected onto study instances but not stored in the model schema. */
+interface StudyComputedCounts {
+  total_sessions: number;
+  total_transcripts: number;
+  total_summaries: number;
+}
+
 const addResearchStudyWithRoles = async (data: StudyInput): Promise<ResearchStudy> => {
   const { assignments = [], ...studyData } = data;
 
@@ -42,7 +50,7 @@ const addResearchStudyWithRoles = async (data: StudyInput): Promise<ResearchStud
       await study.update(studyData, { transaction: t });
       console.log('🔄 updated study', study.id);
     } else {
-      study = await ResearchStudyModel.create(studyData as any, { transaction: t });
+      study = await ResearchStudyModel.create(studyData as CreationAttributes<ResearchStudy>, { transaction: t });
       console.log('✨ created study', study.id);
     }
 
@@ -92,9 +100,12 @@ const getResearchStudyWithRoles = async (name: string): Promise<ResearchStudy | 
   // Add computed counts (using the fields that are already in the study table)
   if (study) {
     study.total_participants = study.total_participants || 0; // Use the field from the table
-    (study as any).total_sessions = 0; // Placeholder for now
-    (study as any).total_transcripts = 0; // Placeholder for now
-    (study as any).total_summaries = 0; // Placeholder for now
+    // Placeholder computed counts — injected onto the instance but not part of
+    // the model schema. Cast through intersection to avoid `as any`.
+    const withCounts = study as ResearchStudy & StudyComputedCounts;
+    withCounts.total_sessions = 0;
+    withCounts.total_transcripts = 0;
+    withCounts.total_summaries = 0;
   }
 
   return study;

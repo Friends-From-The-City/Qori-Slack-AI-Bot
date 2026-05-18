@@ -1,4 +1,4 @@
-import { Sequelize } from 'sequelize';
+import { Model, Sequelize } from 'sequelize';
 import config from '../config/sequelize';
 
 // Import your model definition functions
@@ -48,8 +48,9 @@ for (const defineModel of modelDefiners) {
 
 // Run .associate() on each model if defined
 Object.keys(sequelize.models).forEach((modelName) => {
-  if ((sequelize.models[modelName] as any).associate) {
-    (sequelize.models[modelName] as any).associate(sequelize.models);
+  const model = sequelize.models[modelName] as typeof Model & { associate?: (models: typeof sequelize.models) => void };
+  if (model.associate) {
+    model.associate(sequelize.models);
   }
 });
 

@@ -39,6 +39,11 @@ interface MilestoneResult {
   studyName: string;
 }
 
+/** Sequelize aggregate query result with a computed count in dataValues. */
+interface AggregateWithCount extends StudyParticipant {
+  dataValues: StudyParticipant['dataValues'] & { count: string };
+}
+
 class StudyParticipantService {
   /**
    * Create a new participant for a study and update the tracker YAML.
@@ -345,15 +350,18 @@ class StudyParticipantService {
       });
 
       const total = breakdown.reduce(
-        (sum: number, item) => sum + parseInt((item as any).dataValues.count, 10),
+        (sum: number, item) => sum + parseInt((item as AggregateWithCount).dataValues.count, 10),
         0,
       );
 
-      return breakdown.map((item) => ({
-        method: item.recruitment_source || 'Unknown',
-        count: parseInt((item as any).dataValues.count, 10),
-        percentage: total > 0 ? Math.round((parseInt((item as any).dataValues.count, 10) / total) * 100) : 0,
-      }));
+      return breakdown.map((item) => {
+        const count = parseInt((item as AggregateWithCount).dataValues.count, 10);
+        return {
+          method: item.recruitment_source || 'Unknown',
+          count,
+          percentage: total > 0 ? Math.round((count / total) * 100) : 0,
+        };
+      });
     } catch (error) {
       console.error('Error fetching recruitment breakdown:', error);
       throw error;

@@ -17,6 +17,7 @@ import { processYamlTemplate } from '../../yamlProcessor';
 import researchPlanService from '../../../services/research_plan.service';
 import sessionSummaryService from '../../../services/session-summary.service';
 import sequelize from '../../../database';
+import type { StudyVariableAttributes } from '../../../types/models';
 
 // ─── Types ──────────────────────────────────────────────────────
 
@@ -34,9 +35,15 @@ interface AnalysisScan {
   label: string;
 }
 
+interface ModalStudy {
+  id: number | string;
+  name: string;
+  path?: string | null;
+}
+
 interface ModalState {
-  availableStudies: unknown[];
-  selectedStudy: unknown;
+  availableStudies: ModalStudy[];
+  selectedStudy: ModalStudy | null | undefined;
   selectedStudyId?: number;
   reportType: string;
   targetAudience?: string;
@@ -90,9 +97,10 @@ async function checkReadoutExists(studyPath: string): Promise<ReadoutExistenceCh
       attributes: ['id', 'value'],
     });
 
-    if (!row || !(row as any).value) return false;
+    const typedRow = row as unknown as StudyVariableAttributes | null;
+    if (!typedRow || !typedRow.value) return false;
 
-    const findingsCount: number = Array.isArray((row as any).value) ? (row as any).value.length : 0;
+    const findingsCount: number = Array.isArray(typedRow.value) ? typedRow.value.length : 0;
     return { exists: true, findingsCount };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -140,7 +148,7 @@ const openReadoutModal = async ({ ack, body, client, command }: SlashCommandCont
 
     await client.views.open({
       trigger_id: command.trigger_id,
-      view: buildReadoutModal(initialState as any)
+      view: buildReadoutModal(initialState)
     });
 
   } catch (error) {
@@ -220,7 +228,7 @@ const handleReadoutModalInteraction = async ({ ack, body, client, action }: Bloc
       ...updatedState,
       availableStudies: studies
     };
-    const updatedView = buildReadoutModal(modalState as any);
+    const updatedView = buildReadoutModal(modalState);
 
     await client.views.update({
       view_id: body.view!.id,
@@ -448,8 +456,8 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }: ViewSub
 
     // Get actual user names from selected roles
     const roleToUserMap: Record<string, string> = {};
-    if (selectedStudy && (selectedStudy as any).userRoles) {
-      (selectedStudy as any).userRoles.forEach((userRole: { role: string; user_id: string }) => {
+    if (selectedStudy?.userRoles) {
+      selectedStudy.userRoles.forEach((userRole) => {
         roleToUserMap[userRole.role] = userRole.user_id;
       });
     }

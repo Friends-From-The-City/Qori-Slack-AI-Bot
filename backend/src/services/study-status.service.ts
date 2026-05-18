@@ -1,5 +1,5 @@
 import type { StudyStatus } from '../database/models/study_status';
-import { Op } from 'sequelize';
+import { Op, type CreationAttributes } from 'sequelize';
 
 import sequelize from '../database';
 
@@ -64,7 +64,7 @@ const addStudyStatus = async (data: StudyStatusInput): Promise<StudyStatus> => {
       file_name: fileName,
     };
 
-    const record = await StudyStatusModel.create(createData as any);
+    const record = await StudyStatusModel.create(createData as CreationAttributes<StudyStatus>);
     return record;
   } catch (err) {
     console.error('addStudyStatus error:', err);

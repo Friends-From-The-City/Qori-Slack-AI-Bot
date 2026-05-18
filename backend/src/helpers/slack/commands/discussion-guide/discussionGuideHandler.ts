@@ -205,7 +205,7 @@ async function handleDiscussionGuideSubmission({ ack, body, view, client }: View
   const renderedYaml = await processYamlTemplate(file.content, guideData, study!.path ?? '');
 
   const url: string = renderedYaml.result.url;
-  const blocks = generateStudyResultBlocks(studyName, study as any, url, channelId, 'discussion');
+  const blocks = generateStudyResultBlocks(studyName, study, url, channelId, 'discussion');
   await sendStudyResultMessage(client, channelId, studyName, blocks, 'discussion');
 
   await addStudyStatus({

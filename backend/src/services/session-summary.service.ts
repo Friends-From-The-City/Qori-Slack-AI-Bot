@@ -1,5 +1,6 @@
 import type { SessionSummary } from '../database/models/session_summary';
 import type { ResearchStudy } from '../database/models/research_study';
+import type { CreationAttributes } from 'sequelize';
 
 import sequelize from '../database';
 
@@ -63,7 +64,7 @@ class SessionSummaryService {
       } else {
         // Create new summary
         summaryData.created_at = now;
-        const summary = await SessionSummaryModel.create(summaryData as any);
+        const summary = await SessionSummaryModel.create(summaryData as CreationAttributes<SessionSummary>);
         return summary;
       }
     } catch (error) {

@@ -244,7 +244,7 @@ async function handleBriefSubmission({ ack, body, view, client }: ViewSubmission
 
   const url: string = renderedYaml.result.url;
 
-  const blocks = generateStudyResultBlocks(studyName, study as any, url, channelId, 'brief');
+  const blocks = generateStudyResultBlocks(studyName, study, url, channelId, 'brief');
   await sendStudyResultMessage(client, channelId, studyName, blocks, 'brief');
 
   // Notify researcher via DM

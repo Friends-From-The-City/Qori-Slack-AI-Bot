@@ -228,7 +228,7 @@ async function handleSurveyDataSubmission({ ack, body, view, client }: ViewSubmi
     const url: string = renderedYaml.result.url;
 
     // Generate and send result message
-    const blocks = generateStudyResultBlocks(studyName, study as any, url, channelId, 'survey_data');
+    const blocks = generateStudyResultBlocks(studyName, study, url, channelId, 'survey_data');
     await sendStudyResultMessage(client, channelId, studyName, blocks, 'survey_data');
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

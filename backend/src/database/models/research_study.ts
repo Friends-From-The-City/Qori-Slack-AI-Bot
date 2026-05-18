@@ -48,6 +48,7 @@ class ResearchStudy extends Model<
 
   // — Association mixins (other associations) —
   declare getUserRoles: HasManyGetAssociationsMixin<ResearchStudyUserRole>;
+  declare userRoles?: NonAttribute<ResearchStudyUserRole[]>;
   declare getStudyNotes: HasManyGetAssociationsMixin<StudyNotes>;
   declare getPlans: HasManyGetAssociationsMixin<ResearchPlan>;
   declare getSessionSummaries: HasManyGetAssociationsMixin<SessionSummary>;

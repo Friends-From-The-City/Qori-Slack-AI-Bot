@@ -1,6 +1,7 @@
 import type { BlockActionContext, ViewSubmissionContext } from '../../types/handlers';
 import type { WebClient } from '@slack/web-api';
 import type { BlockAction, ViewSubmitAction } from '@slack/bolt';
+import type { View } from '@slack/types';
 
 import { getStudyStatusById, addStudyStatus } from '../../services/study-status.service';
 import { markChangesCompleteModal } from './ui/markChangesCompleteModal';
@@ -50,8 +51,7 @@ export async function handleMarkChangesCompleteAction({
   const filePath = status?.path ?? '';
   await client.views.open({
     trigger_id: (body as BlockAction).trigger_id,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    view: markChangesCompleteModal(fileName, filePath, statusId, requestedBy) as any,
+    view: markChangesCompleteModal(fileName, filePath, statusId, requestedBy) as View,
   });
 }
 

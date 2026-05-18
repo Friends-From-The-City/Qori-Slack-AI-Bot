@@ -204,7 +204,7 @@ async function handleDeskResearchSubmission({ ack, body, view, client }: ViewSub
     const renderedYaml = await processYamlTemplate(file.content, deskResearchData, study.path, 'desk-research');
 
     const url: string = renderedYaml.result.url;
-    const blocks = generateStudyResultBlocks(studyName, study as any, url, channelId, 'desk');
+    const blocks = generateStudyResultBlocks(studyName, study, url, channelId, 'desk');
     await sendStudyResultMessage(client, channelId, studyName, blocks, 'desk');
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

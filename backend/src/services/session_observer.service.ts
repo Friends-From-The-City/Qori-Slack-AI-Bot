@@ -4,7 +4,7 @@ import type { SessionObserver } from '../database/models/session_observer';
 import type { ResearchStudy } from '../database/models/research_study';
 import type { StudyParticipant } from '../database/models/study_participant';
 import type { ObserverRole, ObserverStatus } from '../types/common';
-import { Op } from 'sequelize';
+import { Op, type CreationAttributes } from 'sequelize';
 
 import sequelize from '../database';
 
@@ -125,7 +125,7 @@ class SessionObserverService {
           ...observerData,
           requester_id: this._toArray(observerData.requester_id),
           requester_name: this._toArray(observerData.requester_name),
-        } as any
+        } as CreationAttributes<SessionObserver>
       });
 
       if (!created) {
@@ -180,7 +180,7 @@ class SessionObserverService {
         role,
         status: 'confirmed',
         joined_via,
-      } as any);
+      } as CreationAttributes<SessionObserver>);
 
       console.log('✅ Confirmed observer added:', observer.id, 'session:', session_id);
       return { observer, created: true };
@@ -615,8 +615,9 @@ interface AugmentedService extends SessionObserverService {
   buildSessionsWithCounts: (studyId: number) => Promise<SessionWithCount[]>;
 }
 
-(service as any).MAX_OBSERVERS_PER_SESSION = MAX_OBSERVERS_PER_SESSION;
-(service as any).ROLE_LIMITS = ROLE_LIMITS;
-(service as any).buildSessionsWithCounts = buildSessionsWithCounts;
+const augmented = service as AugmentedService;
+augmented.MAX_OBSERVERS_PER_SESSION = MAX_OBSERVERS_PER_SESSION;
+augmented.ROLE_LIMITS = ROLE_LIMITS;
+augmented.buildSessionsWithCounts = buildSessionsWithCounts;
 
 export default service as AugmentedService;

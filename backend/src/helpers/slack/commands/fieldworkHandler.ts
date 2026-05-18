@@ -77,7 +77,7 @@ async function fetchAndRenderDashboard(client: any, viewId: string, study: any, 
   const { outreachStats, context } = buildDashboardContext(allParticipants, study);
 
   const dashboard = buildFieldworkDashboard(study, participantStats, observerStats, outreachStats, context);
-  (dashboard as any).private_metadata = JSON.stringify(meta);
+  dashboard.private_metadata = JSON.stringify(meta);
 
   await client.views.update({ view_id: viewId, view: dashboard });
 }

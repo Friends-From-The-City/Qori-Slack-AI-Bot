@@ -1,4 +1,6 @@
+import type { KnownBlock } from '@slack/types';
 import type { WebClient } from '@slack/web-api';
+import type { ResearchStudyUserRole } from '../../../database/models/research_study_user_role';
 import { getResearchStudyWithRoles } from '../../../services/research_study.service';
 
 interface UserRole {
@@ -8,12 +10,11 @@ interface UserRole {
 
 /**
  * Study with eagerly-loaded userRoles association.
- * Accepts any object shape (Sequelize Model instances, plain objects)
- * and optionally reads the `userRoles` association if present.
+ * Accepts Sequelize Model instances (ResearchStudy) and plain objects
+ * with an optional `userRoles` association.
  */
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
 interface StudyWithRoles {
-  userRoles?: UserRole[];
+  userRoles?: ResearchStudyUserRole[] | UserRole[];
 }
 
 // Generic function to generate study result blocks with action buttons
@@ -251,7 +252,7 @@ export const sendStudyResultMessage = async (
               await client.chat.postMessage({
                 channel: im.channel.id,
                 text: `🔔 New ${documentType} for *${studyName}* - Please review and take action`,
-                blocks: blocks as any[],
+                blocks: blocks as unknown as KnownBlock[],
               });
             }
           } catch (error) {
@@ -265,7 +266,7 @@ export const sendStudyResultMessage = async (
       await client.chat.postMessage({
         channel: channelId,
         text: fallbackText,
-        blocks: blocks as any[],
+        blocks: blocks as unknown as KnownBlock[],
       });
     }
   } catch (err) {

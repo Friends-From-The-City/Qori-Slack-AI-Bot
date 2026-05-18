@@ -1,6 +1,6 @@
 import type { ResearchPlan } from '../database/models/research_plan';
 import type { ResearchStudy } from '../database/models/research_study';
-import { Op } from 'sequelize';
+import { Op, type CreationAttributes } from 'sequelize';
 
 import sequelize from '../database';
 
@@ -48,7 +48,7 @@ class ResearchPlanService {
       planData.created_at = now;
       planData.updated_at = now;
 
-      const plan = await ResearchPlanModel.create(planData as any);
+      const plan = await ResearchPlanModel.create(planData as CreationAttributes<ResearchPlan>);
       return plan;
     } catch (error) {
       console.error('Error creating research plan:', error);

@@ -255,7 +255,7 @@ async function handlePlanSubmission({ ack, body, view, client }: ViewSubmissionC
     created_by: userId,
   };
   await research_planService.createResearchPlan(planData);
-  const blocks = generateStudyResultBlocks(studyName, study as any, url, channelId, 'plan');
+  const blocks = generateStudyResultBlocks(studyName, study, url, channelId, 'plan');
   await sendStudyResultMessage(client, channelId, studyName, blocks, 'plan');
 
   // Send DM with next-step suggestion

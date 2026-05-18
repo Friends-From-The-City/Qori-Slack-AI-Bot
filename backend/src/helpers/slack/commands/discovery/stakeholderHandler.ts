@@ -215,9 +215,8 @@ async function openStakeholderInterviewGuideModal({ ack, body, client }: BlockAc
 
 async function handleStakeholderGuideSubmission({ ack, body, view, client }: ViewSubmissionContext) {
   // Close the modal immediately to prevent going back to previous modal
-  await ack({
-    response_action: 'clear',
-  } as any);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Bolt ack() types don't include response_action variants
+  await ack({ response_action: 'clear' } as any);
 
   const values = view.state.values;
   const meta = JSON.parse(view.private_metadata || '{}');
@@ -289,7 +288,7 @@ async function handleStakeholderGuideSubmission({ ack, body, view, client }: Vie
     console.log('✅ Stakeholder Interview Guide created:', url);
 
     // Send result message to Slack
-    const blocks = generateStudyResultBlocks(studyName, study as any, url, channelId, 'stakeholder_guide');
+    const blocks = generateStudyResultBlocks(studyName, study, url, channelId, 'stakeholder_guide');
     await sendStudyResultMessage(client, channelId, studyName, blocks, 'stakeholder_guide');
 
     // Add study status for created file
@@ -507,7 +506,7 @@ async function handleStakeholderNotesSubmission({ ack, body, view, client }: Vie
     });
 
     // Generate and send result message
-    const blocks = generateStudyResultBlocks(studyName, study as any, url, channelId, 'stakeholder_notes');
+    const blocks = generateStudyResultBlocks(studyName, study, url, channelId, 'stakeholder_notes');
     await sendStudyResultMessage(client, channelId, studyName, blocks, 'stakeholder_notes');
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

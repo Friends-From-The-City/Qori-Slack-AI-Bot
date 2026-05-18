@@ -19,6 +19,7 @@ import { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepoByPath, fetchFileFr
 import { processYamlTemplate } from "../../../helpers/yamlProcessor";
 import { readStudyVariables } from '../../studyVariables';
 import { buildCascadeReadiness } from "../ui/cascadeReadinessBlocks";
+import type { CascadeData } from "../ui/cascadeReadinessBlocks";
 
 // ─── Types ──────────────────────────────────────────────────────
 
@@ -71,11 +72,6 @@ interface FileWithContent {
   file_path: string | null;
   content: string;
   githubPath: string | null;
-}
-
-interface CascadeData {
-  available: string[];
-  missing: string[];
 }
 
 interface GithubFile {
@@ -173,7 +169,7 @@ const researchSynthesisHandler = async ({ ack, body, client }: SlashCommandConte
 
     await client.views.open({
       trigger_id: body.trigger_id,
-      view: researchSynthesisModal(studies as any, activeStudy?.id ?? null, [], [], null, [])
+      view: researchSynthesisModal(studies as Study[], activeStudy?.id ?? null, [], [], null, [])
     });
 
   } catch (error) {
@@ -208,7 +204,7 @@ const handleStudySelectionChange = async ({ ack, body, client }: BlockActionCont
       const studies = await getStudiesByUser(body.user.id);
       await client.views.update({
         view_id: view.id,
-        view: researchSynthesisModal(studies as any, null, [], [], null, [])
+        view: researchSynthesisModal(studies as Study[], null, [], [], null, [])
       });
       return;
     }
@@ -222,7 +218,7 @@ const handleStudySelectionChange = async ({ ack, body, client }: BlockActionCont
     const studies = await getStudiesByUser(body.user.id);
 
     // First update: show button immediately
-    let updatedModal = researchSynthesisModal(studies as any, studyId, [], [], currentAnalysisMethod, []);
+    let updatedModal = researchSynthesisModal(studies as Study[], studyId, [], [], currentAnalysisMethod, []);
     if (view.private_metadata) {
       updatedModal.private_metadata = view.private_metadata;
     }
@@ -367,7 +363,7 @@ const handleStudySelectionChange = async ({ ack, body, client }: BlockActionCont
     }
 
     // Update modal with loaded files
-    updatedModal = researchSynthesisModal(studies as any, studyId, sessionSummaries, transcripts, currentAnalysisMethod, stakeholderGuides, analysisFiles);
+    updatedModal = researchSynthesisModal(studies as Study[], studyId, sessionSummaries, transcripts, currentAnalysisMethod, stakeholderGuides, analysisFiles);
     if (view.private_metadata) {
       updatedModal.private_metadata = view.private_metadata;
     }
@@ -437,7 +433,7 @@ const handleFileCheckboxChange = async ({ ack, body, client }: BlockActionContex
     }
 
     const studies = await getStudiesByUser(body.user.id);
-    const updatedModal = researchSynthesisModal(studies as any, selectedFiles as any);
+    const updatedModal = researchSynthesisModal(studies as Study[], selectedFiles as unknown as string | number | null);
     updatedModal.private_metadata = JSON.stringify(metadata);
 
     await client.views.update({
@@ -542,7 +538,7 @@ const handleLoadSynthesisFiles = async ({ ack, body, client }: BlockActionContex
           const decodedPath = decodeURIComponent(study.path);
           const studyVars = await readStudyVariables(decodedPath);
           if (studyVars && Object.keys(studyVars.variables).length > 0) {
-            cascadeData = buildCascadeReadiness(studyVars, currentAnalysisMethod ?? '') as unknown as CascadeData;
+            cascadeData = buildCascadeReadiness(studyVars, currentAnalysisMethod ?? '');
             console.log(`✅ Cascade: ${cascadeData!.available.length} variables available, ${cascadeData!.missing.length} missing`);
           }
         }
@@ -552,7 +548,7 @@ const handleLoadSynthesisFiles = async ({ ack, body, client }: BlockActionContex
       console.warn('⚠️ Could not read cascade variables:', message);
     }
 
-    const updatedModal = researchSynthesisModal(studies as any, studyId, sessionSummaries, transcripts, currentAnalysisMethod, stakeholderGuides, analysisFiles, cascadeData as any);
+    const updatedModal = researchSynthesisModal(studies as Study[], studyId, sessionSummaries, transcripts, currentAnalysisMethod, stakeholderGuides, analysisFiles, cascadeData);
 
     if (view.private_metadata) {
       updatedModal.private_metadata = view.private_metadata;
@@ -641,7 +637,7 @@ const handleLoadStudyNotes = async ({ ack, body, client }: BlockActionContext): 
       console.error("Error fetching stakeholder guides:", error);
     }
 
-    const updatedModal = researchSynthesisModal(studies as any, studyId, sessionSummaries, transcripts, currentAnalysisMethod, stakeholderGuides, []);
+    const updatedModal = researchSynthesisModal(studies as Study[], studyId, sessionSummaries, transcripts, currentAnalysisMethod, stakeholderGuides, []);
 
     await client.views.update({
       view_id: view.id,

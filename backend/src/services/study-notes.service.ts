@@ -1,6 +1,6 @@
 import type { StudyNotes } from '../database/models/study_notes';
 import type { ResearchStudy } from '../database/models/research_study';
-import { Op } from 'sequelize';
+import { Op, type CreationAttributes } from 'sequelize';
 
 import sequelize from '../database';
 
@@ -64,7 +64,7 @@ class StudyNotesService {
       noteData.created_at = now;
       noteData.updated_at = now;
 
-      const note = await StudyNotesModel.create(noteData as any);
+      const note = await StudyNotesModel.create(noteData as CreationAttributes<StudyNotes>);
       return note;
     } catch (error) {
       console.error('Error creating study note:', error);

@@ -228,3 +228,4 @@ function buildCascadeBlocks(cascadeData: CascadeData | null) {
 }
 
 export { buildCascadeReadiness, buildCascadeBlocks, TEMPLATE_CONSUMES };
+export type { CascadeData };

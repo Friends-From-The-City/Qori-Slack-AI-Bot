@@ -40,11 +40,15 @@ See ADR 0013 for the decision and rationale. This file tracks actual progress ag
 - **12 additional helpers migrated:** yamlProcessor.ts, langchain.ts, documentParser.ts, pdfProcessor.ts, discoveryLoader.ts, observerYamlProcessor.ts, markChangesCompleteHandler.ts, requestChangesHandler.ts, utils.ts, slackApiClient.ts, mail.ts, generateFileCheckboxOptions.ts.
 - **Timing instrumentation:** 32 `⏱️`-prefixed timing points across 7 document-creation handlers.
 
+## Phase 6 scope (planned)
+
+- **Bolt handler middleware typing (~75 handlers + events.ts registrations):** Type every handler function's parameters with Bolt middleware args types (`SlackCommandMiddlewareArgs`, `SlackActionMiddlewareArgs<BlockAction>`, `SlackViewMiddlewareArgs<ViewSubmitAction>`, etc.). Eliminates 258 `as any` casts — 111 handler registration casts in events.ts plus ~147 downstream `(body as any).prop`, `(view.state as any).values`, `(ack as any)({...})` casts in handler bodies. Single root cause, one structural task.
+- **End-to-end tests + audit** per Phase 6 instruction scope.
+
 ## Pending v1.1
 
 - **9 remaining `.js` helper files:** index.js, prompts.js, queue/\*.js, rag.js, ragV2.js, slack/auth.js, token.js, yamlPrompt.js — all unused by `.ts` handlers (dead code, disabled features, or infrastructure barrels).
 - **47 `@ts-expect-error` suppressions:** Deep structural mismatches (null vs undefined in Sequelize model fields, Bolt body type gaps) that need proper interface alignment to resolve.
-- **`catch (error: any)` cleanup (~208 instances):** Convert to `catch (error: unknown)` with `instanceof Error` narrowing.
 - **YAML→TypeScript schema generation:** Generate `types/cascade.ts` from YAML schemas mechanically to close the drift gap.
 
 ## Key decisions made during migration
@@ -53,4 +57,5 @@ See ADR 0013 for the decision and rationale. This file tracks actual progress ag
 - **Option A (Phase 3):** Model classes at module scope with `export type` — enables typed return values in services
 - **DECIMAL handling:** Model getters coerce `string → number` at read boundary (Approach A)
 - **`associate()` parameter:** `Record<string, any>` — Sequelize limitation, accepted on all 13 models
-- **`catch (error: any)`:** Accepted pattern for accessing `.message` in catch blocks (~27 instances across services)
+- **`catch (error: any)` eliminated (Phase 5 close-out):** 133 instances across 32 files converted to `catch (error)` with `instanceof Error` narrowing. Zero remain.
+- **`as any` quick fixes (Phase 5 close-out):** 58 casts removed — Sequelize `CreationAttributes`, variable store row typing, modal builder returns, `generateStudyResultBlocks` param widening. 258 remain, all Bolt handler typing (Phase 6 scope).

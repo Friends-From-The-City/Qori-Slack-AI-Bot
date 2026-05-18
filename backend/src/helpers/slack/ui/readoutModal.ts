@@ -23,7 +23,7 @@ export interface ReadoutModalMetadata {
 interface Study {
   id: number | string;
   name: string;
-  path?: string;
+  path?: string | null;
 }
 
 interface ReadoutModalState {
@@ -31,7 +31,12 @@ interface ReadoutModalState {
   reportType?: string;
   hasReadout?: boolean;
   readoutStats?: string | null;
-  origin?: string;
+  origin?: {
+    team: string;
+    channel: string;
+    user: string;
+    ts: string;
+  };
   availableStudies?: Study[];
 }
 

@@ -107,12 +107,12 @@ async function handleAddTeamMember({ ack, body, client }: BlockActionContext) {
       view: {
         type: view.type as 'modal',
         callback_id: view.callback_id,
-        title: view.title as any,
-        submit: view.submit as any,
-        close: view.close as any,
+        title: view.title!,
+        submit: view.submit!,
+        close: view.close!,
         blocks,
         private_metadata: view.private_metadata,
-      } as unknown as View,
+      } as View,
     });
   } catch (error) {
     console.error('Error adding team member:', error);
