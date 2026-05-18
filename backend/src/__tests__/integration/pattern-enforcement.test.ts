@@ -142,18 +142,20 @@ describe('pattern: events.ts registration boundary is typed', () => {
 // ═══════════════════════════════════════════════════════════
 
 describe('pattern: as-any budget enforcement', () => {
-  it('total as-any count does not exceed baseline', () => {
+  it('total any count (as any + : any) does not exceed baseline', () => {
     const allFiles = findTsFiles(SRC_ROOT);
     let total = 0;
 
     for (const file of allFiles) {
       const content = readFile(file);
-      const matches = content.match(/as any/g) || [];
-      total += matches.length;
+      // Count both `as any` and `: any` patterns (the two forms of any usage)
+      const asAnyCasts = content.match(/as any/g) || [];
+      const colonAnyCasts = content.match(/: any/g) || [];
+      total += asAnyCasts.length + colonAnyCasts.length;
     }
 
     // Baseline after Stream 1: ~193 (measured). Allow 10% margin for natural growth.
-    // If this fails, new `as any` was introduced — categorize and justify or fix.
+    // If this fails, new `any` was introduced — categorize and justify or fix.
     expect(total).toBeLessThanOrEqual(215);
   });
 
@@ -176,7 +178,7 @@ describe('pattern: TemplateContractError contract', () => {
     expect(content).toContain('export class TemplateContractError');
   });
 
-  it('handlers that consume cascade variables import TemplateContractError', () => {
+  it('handlers that consume cascade variables import TemplateContractError from types/handlers', () => {
     const commandsDir = join(SRC_ROOT, 'helpers/slack/commands');
     const files = findTsFiles(commandsDir);
     const violations: string[] = [];
@@ -187,9 +189,13 @@ describe('pattern: TemplateContractError contract', () => {
 
       // If a handler reads upstream variables with required: true
       if (content.includes('required: true') && content.includes('readUpstreamVariables')) {
-        // It should import TemplateContractError
-        if (!content.includes('TemplateContractError')) {
-          violations.push(`${rel}: reads required cascade variables but doesn't import TemplateContractError`);
+        // It must have a real (non-commented) import of TemplateContractError from types/handlers
+        const codeLines = content.split('\n').filter(l => !l.trimStart().startsWith('//'));
+        const codeOnly = codeLines.join('\n');
+        const hasImport = codeOnly.includes('TemplateContractError') &&
+          codeOnly.includes('types/handlers');
+        if (!hasImport) {
+          violations.push(`${rel}: reads required cascade variables but doesn't import TemplateContractError from types/handlers`);
         }
       }
     }
