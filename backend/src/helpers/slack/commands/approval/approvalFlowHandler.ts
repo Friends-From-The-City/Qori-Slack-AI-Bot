@@ -5,7 +5,7 @@
  * generic approval functions in requestChangesHandler.
  */
 
-import type { BlockActionContext, ViewSubmissionContext } from '../../../../types/handlers';
+import type { AllMiddlewareArgs, SlackActionMiddlewareArgs, SlackViewMiddlewareArgs, BlockAction, ViewSubmitAction } from '@slack/bolt';
 
 import {
   handleApprove,
@@ -16,41 +16,41 @@ import {
 
 // ─── Plan approval ─────────────────────────────────────────────────
 
-async function handleApprovePlan({ ack, body, client }: BlockActionContext): Promise<void> {
+async function handleApprovePlan({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs): Promise<void> {
   await ack();
   await handleApprove(body, client, 'plan');
 }
 
-async function handleConfirmApprovePlan({ ack, view, body, client }: ViewSubmissionContext): Promise<void> {
+async function handleConfirmApprovePlan({ ack, view, body, client }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs): Promise<void> {
   await handleApproveSubmission(ack, view, body, client);
 }
 
-async function handleRequestChangesPlan({ ack, body, client }: BlockActionContext): Promise<void> {
+async function handleRequestChangesPlan({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs): Promise<void> {
   await ack();
   await handleRequestChanges(body, client, 'plan');
 }
 
-async function handleRequestChangesPlanModal({ ack, view, body, client }: ViewSubmissionContext): Promise<void> {
+async function handleRequestChangesPlanModal({ ack, view, body, client }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs): Promise<void> {
   await handleRequestChangesSubmission(ack, view, body, client);
 }
 
 // ─── Brief approval ───────────────────────────────────────────────
 
-async function handleApproveBrief({ ack, body, client }: BlockActionContext): Promise<void> {
+async function handleApproveBrief({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs): Promise<void> {
   await ack();
   await handleApprove(body, client, 'brief');
 }
 
-async function handleConfirmApproveBrief({ ack, view, body, client }: ViewSubmissionContext): Promise<void> {
+async function handleConfirmApproveBrief({ ack, view, body, client }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs): Promise<void> {
   await handleApproveSubmission(ack, view, body, client);
 }
 
-async function handleRequestChangesBrief({ ack, body, client }: BlockActionContext): Promise<void> {
+async function handleRequestChangesBrief({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs): Promise<void> {
   await ack();
   await handleRequestChanges(body, client, 'brief');
 }
 
-async function handleRequestChangesBriefModal({ ack, view, body, client }: ViewSubmissionContext): Promise<void> {
+async function handleRequestChangesBriefModal({ ack, view, body, client }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs): Promise<void> {
   await handleRequestChangesSubmission(ack, view, body, client);
 }
 

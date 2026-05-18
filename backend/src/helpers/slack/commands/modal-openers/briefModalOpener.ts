@@ -6,7 +6,7 @@
  * stakeholder (from request metadata), and cascade readiness auto-populated.
  */
 
-import type { BlockActionContext } from '../../../../types/handlers';
+import type { AllMiddlewareArgs, SlackActionMiddlewareArgs, BlockAction } from '@slack/bolt';
 import type { View } from '@slack/types';
 
 import { getResearchStudyWithRoles } from '../../../../services/research_study.service';
@@ -26,7 +26,7 @@ interface MutableBlock {
 
 // ─── Modal opener: create_research_brief ─────────────────────────
 
-async function openResearchBriefModal({ ack, body, client }: BlockActionContext) {
+async function openResearchBriefModal({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
   try {
     await ack();
 

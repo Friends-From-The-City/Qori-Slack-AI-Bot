@@ -5,7 +5,7 @@
  * Sonnet formats → DM response with show-more pagination.
  */
 
-import type { SlashCommandContext, ViewSubmissionContext, BlockActionContext } from '../../../types/handlers';
+import type { AllMiddlewareArgs, SlackCommandMiddlewareArgs, SlackActionMiddlewareArgs, SlackViewMiddlewareArgs, BlockAction, ViewSubmitAction } from '@slack/bolt';
 import type { View } from '@slack/types';
 
 import { ChatAnthropic } from '@langchain/anthropic';
@@ -270,7 +270,7 @@ function buildResultBlocks(rows: VariableRow[], total: number, question: string,
 
 // ─── Command handler ────────────────────────────────────────────────
 
-async function askHandler({ ack, body, client, command }: SlashCommandContext) {
+async function askHandler({ ack, body, client, command }: SlackCommandMiddlewareArgs & AllMiddlewareArgs) {
   try {
     await ack();
     const userId = command.user_id;
@@ -298,7 +298,7 @@ async function askHandler({ ack, body, client, command }: SlashCommandContext) {
 
 // ─── Submit handler ─────────────────────────────────────────────────
 
-async function handleAskSubmit({ ack, body, view, client }: ViewSubmissionContext) {
+async function handleAskSubmit({ ack, body, view, client }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs) {
   try {
     await ack();
 
@@ -378,7 +378,7 @@ async function handleAskSubmit({ ack, body, view, client }: ViewSubmissionContex
 
 // ─── Show more action handler ───────────────────────────────────────
 
-async function handleShowMore({ ack, body, client }: BlockActionContext) {
+async function handleShowMore({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
   await ack();
   try {
     const payload = JSON.parse((body.actions![0] as any).value);

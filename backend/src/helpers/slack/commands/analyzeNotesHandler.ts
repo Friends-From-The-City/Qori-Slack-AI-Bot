@@ -6,8 +6,7 @@
  * the session_summary YAML template.
  */
 
-import type { SlashCommandContext, ViewSubmissionContext, BlockActionContext } from '../../../types/handlers';
-import type { View } from '@slack/types';
+import type { AllMiddlewareArgs, SlackCommandMiddlewareArgs, SlackActionMiddlewareArgs, SlackViewMiddlewareArgs, BlockAction, ViewSubmitAction } from '@slack/bolt';
 import type { ResearchQuestion, TargetBarrier } from '../../../types/cascade';
 
 import { analyzeNotesModal } from "../ui/analyzeNotesModal";
@@ -105,7 +104,7 @@ interface NoteFile {
 
 // ─── Command handler ────────────────────────────────────────────
 
-const analyzeNotesHandler = async ({ ack, body, client }: SlashCommandContext): Promise<void> => {
+const analyzeNotesHandler = async ({ ack, body, client }: SlackCommandMiddlewareArgs & AllMiddlewareArgs): Promise<void> => {
   try {
     await ack();
 
@@ -136,7 +135,7 @@ const analyzeNotesHandler = async ({ ack, body, client }: SlashCommandContext): 
 
 // ─── View submission handler ────────────────────────────────────
 
-const handleAnalyzeNotesSubmission = async ({ ack, body, view, client }: ViewSubmissionContext): Promise<void> => {
+const handleAnalyzeNotesSubmission = async ({ ack, body, view, client }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs): Promise<void> => {
   const values = view.state.values;
 
   const studyId = values.study_select_block?.study_select_test?.selected_option?.value as string | undefined;
@@ -351,7 +350,7 @@ const handleAnalyzeNotesSubmission = async ({ ack, body, view, client }: ViewSub
 
 // ─── Study selection change handler ─────────────────────────────
 
-const handleStudySelectionChange = async ({ ack, body, client }: BlockActionContext): Promise<void> => {
+const handleStudySelectionChange = async ({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs): Promise<void> => {
   try {
     await ack();
     console.log("🎯 Study selection change handler triggered!");
@@ -423,7 +422,7 @@ const handleStudySelectionChange = async ({ ack, body, client }: BlockActionCont
 
 // ─── Session selection change handler ───────────────────────────
 
-const handleSessionSelectionChange = async ({ ack, body, client }: BlockActionContext): Promise<void> => {
+const handleSessionSelectionChange = async ({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs): Promise<void> => {
   try {
     await ack();
     console.log("🎯 Session selection change handler triggered!");

@@ -11,6 +11,7 @@
 
 import express from 'express';
 import { App } from '@slack/bolt';
+import type { View } from '@slack/types';
 // ── Extracted handlers (TypeScript) ─────────────────────────────
 
 // Main /qori command
@@ -47,8 +48,8 @@ import { discoverHandler, handleDiscoverSubmission } from './commands/discoverHa
 
 // Fieldwork
 import { fieldworkHandler, handleFieldworkStudyPickerSubmit, handleFieldworkAddParticipant, handleFieldworkUpdateStatus, handleFieldworkObserve, handleFieldworkOutreach, handleFieldworkUploadNotes } from './commands/fieldworkHandler';
-import { handleAddParticipantSubmit, handleUpdateParticipantSubmission, handleLoadParticipantsButton } from './commands/participantHandler';
-import { handleParticipantOutreachSubmit, handleInitialRecruitmentSubmit, handleReschedulingRequestSubmit, handleSessionConfirmationSubmit, handleThankYouSubmit, handleFollowUpSubmit, handleSessionReminderSubmit, handleObserverModalButton } from './commands/participantOutreachHandler';
+import { handleUpdateParticipantSubmission, handleLoadParticipantsButton } from './commands/participantHandler';
+import { handleParticipantOutreachSubmit, handleInitialRecruitmentSubmit, handleReschedulingRequestSubmit, handleSessionConfirmationSubmit, handleThankYouSubmit, handleFollowUpSubmit, handleSessionReminderSubmit, handleAddParticipantSubmit, handleObserverModalButton } from './commands/participantOutreachHandler';
 import { handleAddObserverSubmission, handleSelfJoinObserver, handleSelfJoinSubmission } from './commands/addObserverHandler';
 
 // Session notes
@@ -170,23 +171,16 @@ slackExpressRouter.post('/commands', (req: any, res: any) => {
 // ═════════════════════════════════════════════════════════════════
 // REGISTRATIONS — grouped by feature area
 //
-// Handler functions use simplified context types (SlashCommandContext,
-// ActionContext, ViewContext, etc.) that don't exactly match Bolt's
-// Middleware<> generics. The handlers are functionally correct — they
-// destructure the same properties Bolt provides — but TypeScript
-// can't prove the structural compatibility through Bolt's complex
-// overloads. We cast handlers `as any` at the registration boundary
-// rather than forcing every handler to import and satisfy Bolt's
-// internal generic types.
+// All handlers use Bolt's native middleware types
+// (SlackCommandMiddlewareArgs, SlackViewMiddlewareArgs, etc.)
+// so no `as any` casts are needed at registration boundaries.
 // ═════════════════════════════════════════════════════════════════
-
-/* eslint-disable @typescript-eslint/no-explicit-any */
 
 // ─── Slash commands (entry points) ──────────────────────────────
 
-slackApp.command('/qori', qoriMainCommand as any);
-slackApp.command('/qori-start', startResearchHandler as any);
-slackApp.command('/qori-brief', async ({ ack, body, client, command }: any) => {
+slackApp.command('/qori', qoriMainCommand);
+slackApp.command('/qori-start', startResearchHandler);
+slackApp.command('/qori-brief', async ({ ack, client, command }) => {
   await ack();
   let leadResearcher = '';
   try {
@@ -197,179 +191,178 @@ slackApp.command('/qori-brief', async ({ ack, body, client, command }: any) => {
     console.warn('Could not fetch Slack profile for brief modal:', errMessage);
   }
   const modal = await buildBriefEntryModal(leadResearcher, command.channel_id);
+  // @ts-expect-error — modal blocks are Record<string,unknown>[] from JSON.parse; structurally valid at runtime
   await client.views.open({ trigger_id: command.trigger_id, view: modal });
 });
-slackApp.command('/qori-plan', async ({ ack, body, client, command }: any) => {
+slackApp.command('/qori-plan', async ({ ack, client, command }) => {
   await ack();
   const studies = await getStudiesByUser(command.user_id);
   const modal = studySetupModalPlanStudy(studies, command.channel_id);
-  await client.views.open({ trigger_id: command.trigger_id, view: modal });
+  await client.views.open({ trigger_id: command.trigger_id, view: modal as View });
 });
-slackApp.command('/qori-discover', discoverHandler as any);
-slackApp.command('/qori-fieldwork', fieldworkHandler as any);
-slackApp.command('/qori-analyze', analyzeNotesHandler as any);
-slackApp.command('/qori-synthesis', researchSynthesisHandler as any);
-slackApp.command('/qori-report', openReadoutModal as any);
-slackApp.command('/qori-tickets', ticketHandler as any);
-slackApp.command('/qori-ask', askHandler as any);
-slackApp.command('/qori-learn', learnCommand as any);
-slackApp.command('/qori-repo', repoCommand as any);
-slackApp.command('/qori-sync', syncCommand as any);
-slackApp.command('/qori-delete', deleteStudyCommand as any);
-slackApp.command('/ask-study', askStudyCommand as any);
-slackApp.command('/run-template', runTemplateCommand as any);
+slackApp.command('/qori-discover', discoverHandler);
+slackApp.command('/qori-fieldwork', fieldworkHandler);
+slackApp.command('/qori-analyze', analyzeNotesHandler);
+slackApp.command('/qori-synthesis', researchSynthesisHandler);
+slackApp.command('/qori-report', openReadoutModal);
+slackApp.command('/qori-tickets', ticketHandler);
+slackApp.command('/qori-ask', askHandler);
+slackApp.command('/qori-learn', learnCommand);
+slackApp.command('/qori-repo', repoCommand);
+slackApp.command('/qori-sync', syncCommand);
+slackApp.command('/qori-delete', deleteStudyCommand);
+slackApp.command('/ask-study', askStudyCommand);
+slackApp.command('/run-template', runTemplateCommand);
 
 // ─── Study creation & lifecycle ─────────────────────────────────
 
-slackApp.action('add_user', handleAddTeamMember as any);
-slackApp.options('user_select', handleUserSelectOptions as any);
-slackApp.view('create_study_modal', handleCreateStudySubmission as any);
-slackApp.view('plan_study_modal', handlePlanStudyNoop as any);
-slackApp.view('study-setup-modal-start-research', handleStudySetupSkip as any);
-slackApp.view('delete-study-modal', handleDeleteStudySubmission as any);
+slackApp.action('add_user', handleAddTeamMember);
+slackApp.options('user_select', handleUserSelectOptions);
+slackApp.view('create_study_modal', handleCreateStudySubmission);
+slackApp.view('plan_study_modal', handlePlanStudyNoop);
+slackApp.view('study-setup-modal-start-research', handleStudySetupSkip);
+slackApp.view('delete-study-modal', handleDeleteStudySubmission);
 slackApp.event('view_closed', handleViewClosed as any);
 
 // ─── Research brief ─────────────────────────────────────────────
 
-slackApp.action('create_research_brief', openResearchBriefModal as any);
-slackApp.view('research_brief_modal', handleBriefSubmission as any);
+slackApp.action('create_research_brief', openResearchBriefModal);
+slackApp.view('research_brief_modal', handleBriefSubmission);
 
 // ─── Research plan ──────────────────────────────────────────────
 
-slackApp.action('study_select', handleStudySelect as any);
-slackApp.action('create_research_plan', openResearchPlanModal as any);
-slackApp.view('research_plan_modal', handlePlanSubmission as any);
+slackApp.action('study_select', handleStudySelect);
+slackApp.action('create_research_plan', openResearchPlanModal);
+slackApp.view('research_plan_modal', handlePlanSubmission);
 
 // ─── Brief → plan/study transitions ────────────────────────────
 
-slackApp.action('create_research_plan_from_brief', openPlanFromBrief as any);
-slackApp.action('create_study_from_brief', openStudyFromBrief as any);
+slackApp.action('create_research_plan_from_brief', openPlanFromBrief);
+slackApp.action('create_study_from_brief', openStudyFromBrief);
 
 // ─── Approval flows ────────────────────────────────────────────
 
-slackApp.action('approve_plan', approvePlan as any);
-slackApp.view('confirm_approve_plan', confirmApprovePlan as any);
-slackApp.action('request_changes_plan', requestChangesPlan as any);
-slackApp.view('request_changes_plan_modal', requestChangesPlanSubmission as any);
-slackApp.action('approve_brief', approveBrief as any);
-slackApp.view('confirm_approve_brief', confirmApproveBrief as any);
-slackApp.action('request_changes_brief', requestChangesBrief as any);
-slackApp.view('request_changes_brief_modal', requestChangesBriefSubmission as any);
-slackApp.action('mark_changes_complete', handleMarkChangesCompleteAction as any);
-slackApp.view('mark_changes_complete_modal', handleMarkChangesCompleteModal as any);
-slackApp.action('approve_changes', handleApproveChanges as any);
+slackApp.action('approve_plan', approvePlan);
+slackApp.view('confirm_approve_plan', confirmApprovePlan);
+slackApp.action('request_changes_plan', requestChangesPlan);
+slackApp.view('request_changes_plan_modal', requestChangesPlanSubmission);
+slackApp.action('approve_brief', approveBrief);
+slackApp.view('confirm_approve_brief', confirmApproveBrief);
+slackApp.action('request_changes_brief', requestChangesBrief);
+slackApp.view('request_changes_brief_modal', requestChangesBriefSubmission);
+slackApp.action('mark_changes_complete', handleMarkChangesCompleteAction);
+slackApp.view('mark_changes_complete_modal', handleMarkChangesCompleteModal);
+slackApp.action('approve_changes', handleApproveChanges);
 
 // ─── Discussion guide ───────────────────────────────────────────
 
-slackApp.action('create_discussion_guide', openDiscussionGuideModal as any);
-slackApp.view('discussion_guide_modal', handleDiscussionGuideSubmission as any);
+slackApp.action('create_discussion_guide', openDiscussionGuideModal);
+slackApp.view('discussion_guide_modal', handleDiscussionGuideSubmission);
 
 // ─── Discovery uploads ──────────────────────────────────────────
 
-slackApp.action('upload_desk_research', openDeskResearchModal as any);
-slackApp.view('upload_desk_research_modal', handleDeskResearchSubmission as any);
-slackApp.action('create_stakeholder_guide', openStakeholderGuideModal as any);
-slackApp.action('create_stakeholder_interview_guide', openStakeholderInterviewGuideModal as any);
-slackApp.view('stakeholder_interview_guide_modal', handleStakeholderGuideSubmission as any);
-slackApp.action('upload_stakeholder_notes', openUploadStakeholderNotesModal as any);
-slackApp.view('upload_stakeholder_notes_modal', handleStakeholderNotesSubmission as any);
-slackApp.action('upload_survey_data', openUploadSurveyDataModal as any);
-slackApp.view('upload_survey_data_modal', handleSurveyDataSubmission as any);
-slackApp.view('discover_modal', handleDiscoverSubmission as any);
+slackApp.action('upload_desk_research', openDeskResearchModal);
+slackApp.view('upload_desk_research_modal', handleDeskResearchSubmission);
+slackApp.action('create_stakeholder_guide', openStakeholderGuideModal);
+slackApp.action('create_stakeholder_interview_guide', openStakeholderInterviewGuideModal);
+slackApp.view('stakeholder_interview_guide_modal', handleStakeholderGuideSubmission);
+slackApp.action('upload_stakeholder_notes', openUploadStakeholderNotesModal);
+slackApp.view('upload_stakeholder_notes_modal', handleStakeholderNotesSubmission);
+slackApp.action('upload_survey_data', openUploadSurveyDataModal);
+slackApp.view('upload_survey_data_modal', handleSurveyDataSubmission);
+slackApp.view('discover_modal', handleDiscoverSubmission);
 
 // ─── Fieldwork & participants ───────────────────────────────────
 
-slackApp.view('fieldwork_study_picker', handleFieldworkStudyPickerSubmit as any);
-slackApp.action('fieldwork_add_participant', handleFieldworkAddParticipant as any);
-slackApp.action('fieldwork_update_status', handleFieldworkUpdateStatus as any);
-slackApp.action('fieldwork_observe', handleFieldworkObserve as any);
-slackApp.action('fieldwork_outreach', handleFieldworkOutreach as any);
-slackApp.action('fieldwork_upload_notes', handleFieldworkUploadNotes as any);
-slackApp.action('load_participants_button', handleLoadParticipantsButton as any);
-slackApp.view('add-participant-modal', handleAddParticipantSubmit as any);
-slackApp.view('update-participant-status', handleUpdateParticipantSubmission as any);
+slackApp.view('fieldwork_study_picker', handleFieldworkStudyPickerSubmit);
+slackApp.action('fieldwork_add_participant', handleFieldworkAddParticipant);
+slackApp.action('fieldwork_update_status', handleFieldworkUpdateStatus);
+slackApp.action('fieldwork_observe', handleFieldworkObserve);
+slackApp.action('fieldwork_outreach', handleFieldworkOutreach);
+slackApp.action('fieldwork_upload_notes', handleFieldworkUploadNotes);
+slackApp.action('load_participants_button', handleLoadParticipantsButton);
+slackApp.view('add-participant-modal', handleAddParticipantSubmit);
+slackApp.view('update-participant-status', handleUpdateParticipantSubmission);
 
 // ─── Participant outreach ───────────────────────────────────────
 
-slackApp.view('participant-outreach-modal', handleParticipantOutreachSubmit as any);
-slackApp.view('outreach_initial_recruitment_modal', handleInitialRecruitmentSubmit as any);
-slackApp.view('outreach_rescheduling_modal', handleReschedulingRequestSubmit as any);
-slackApp.view('outreach_session_confirmation_modal', handleSessionConfirmationSubmit as any);
-slackApp.view('outreach_thank_you_modal', handleThankYouSubmit as any);
-slackApp.view('outreach_follow_up_modal', handleFollowUpSubmit as any);
-slackApp.view('outreach_session_reminder_modal', handleSessionReminderSubmit as any);
-slackApp.action('generate_other_message_type', generateOtherMessageType as any);
-slackApp.action('copy_email_formatted', copyEmailFormatted as any);
+slackApp.view('participant-outreach-modal', handleParticipantOutreachSubmit);
+slackApp.view('outreach_initial_recruitment_modal', handleInitialRecruitmentSubmit);
+slackApp.view('outreach_rescheduling_modal', handleReschedulingRequestSubmit);
+slackApp.view('outreach_session_confirmation_modal', handleSessionConfirmationSubmit);
+slackApp.view('outreach_thank_you_modal', handleThankYouSubmit);
+slackApp.view('outreach_follow_up_modal', handleFollowUpSubmit);
+slackApp.view('outreach_session_reminder_modal', handleSessionReminderSubmit);
+slackApp.action('generate_other_message_type', generateOtherMessageType);
+slackApp.action('copy_email_formatted', copyEmailFormatted);
 
 // ─── Observers ──────────────────────────────────────────────────
 
-slackApp.view('add_observer_modal', handleAddObserverSubmission as any);
-slackApp.view('self_join_session_picker_modal', handleSelfJoinSubmission as any);
-slackApp.action('open_observer_modal', handleObserverModalButton as any);
-slackApp.action('self_join_observer', handleSelfJoinObserver as any);
+slackApp.view('add_observer_modal', handleAddObserverSubmission);
+slackApp.view('self_join_session_picker_modal', handleSelfJoinSubmission);
+slackApp.action('open_observer_modal', handleObserverModalButton);
+slackApp.action('self_join_observer', handleSelfJoinObserver);
 
 // ─── Session notes ──────────────────────────────────────────────
 
-slackApp.action('tab_manual', handleTabManual as any);
-slackApp.action('tab_upload', handleTabUpload as any);
-slackApp.action('session_select_change', handleSessionSelectionChange as any);
-slackApp.view('session_notes_submit', handleSessionNotesSubmission as any);
+slackApp.action('tab_manual', handleTabManual);
+slackApp.action('tab_upload', handleTabUpload);
+slackApp.action('session_select_change', handleSessionSelectionChange);
+slackApp.view('session_notes_submit', handleSessionNotesSubmission);
 
 // ─── Analysis ───────────────────────────────────────────────────
 
-slackApp.view('analyze_notes_submit', handleAnalyzeNotesSubmission as any);
-slackApp.action('study_select_test', handleAnalyzeNotesStudyChange as any);
-slackApp.action('analyze_notes_session_select', handleAnalyzeNotesSessionChange as any);
+slackApp.view('analyze_notes_submit', handleAnalyzeNotesSubmission);
+slackApp.action('study_select_test', handleAnalyzeNotesStudyChange);
+slackApp.action('analyze_notes_session_select', handleAnalyzeNotesSessionChange);
 
 // ─── Research synthesis ─────────────────────────────────────────
 
-slackApp.view('research-synthesis-modal', handleResearchSynthesisSubmission as any);
-slackApp.action('study_select_synthesize', handleStudySelectionChange as any);
-slackApp.action('load_synthesis_files', handleLoadSynthesisFiles as any);
-slackApp.action(/^file_checkbox_/, handleFileCheckboxChange as any);
+slackApp.view('research-synthesis-modal', handleResearchSynthesisSubmission);
+slackApp.action('study_select_synthesize', handleStudySelectionChange);
+slackApp.action('load_synthesis_files', handleLoadSynthesisFiles);
+slackApp.action(/^file_checkbox_/, handleFileCheckboxChange);
 
 // ─── Readouts & tickets ─────────────────────────────────────────
 
-slackApp.view('readout_modal_submit', handleReadoutModalSubmission as any);
-slackApp.action(/^(select_research_readout|select_targeted_readouts|study_selection_change|audience_checkboxes)$/, handleReadoutModalInteraction as any);
-slackApp.view('tickets_step1_submit', handleStep1Submit as any);
-slackApp.view('tickets_step2_submit', handleStep2Submit as any);
+slackApp.view('readout_modal_submit', handleReadoutModalSubmission);
+slackApp.action(/^(select_research_readout|select_targeted_readouts|study_selection_change|audience_checkboxes)$/, handleReadoutModalInteraction);
+slackApp.view('tickets_step1_submit', handleStep1Submit);
+slackApp.view('tickets_step2_submit', handleStep2Submit);
 
 // ─── Q&A ────────────────────────────────────────────────────────
 
-slackApp.view('ask-study-modal', handleAskStudySubmission as any);
-slackApp.view('ask_qori_submit', handleAskSubmit as any);
-slackApp.action('ask_show_more', handleShowMore as any);
-slackApp.action('type_select', handleTypeSelect as any);
-slackApp.view('research-shareout-submit', handleShareoutSubmission as any);
+slackApp.view('ask-study-modal', handleAskStudySubmission);
+slackApp.view('ask_qori_submit', handleAskSubmit);
+slackApp.action('ask_show_more', handleShowMore);
+slackApp.action('type_select', handleTypeSelect);
+slackApp.view('research-shareout-submit', handleShareoutSubmission);
 
 // ─── Learn / onboarding ─────────────────────────────────────────
 
-slackApp.action('learn_next', learnNext as any);
-slackApp.action('learn_prev', learnPrev as any);
-slackApp.action('learn_restart_tour', learnRestartTour as any);
-slackApp.view('learn_ceremony_submit', handleLearnCeremonySubmit as any);
-slackApp.view('learn_ceremony_noop', handleLearnCeremonyNoop as any);
+slackApp.action('learn_next', learnNext);
+slackApp.action('learn_prev', learnPrev);
+slackApp.action('learn_restart_tour', learnRestartTour);
+slackApp.view('learn_ceremony_submit', handleLearnCeremonySubmit);
+slackApp.view('learn_ceremony_noop', handleLearnCeremonyNoop);
 
 // ─── Repo config & sync ─────────────────────────────────────────
 
-slackApp.action('repo_selected', repoSelected as any);
-slackApp.action('folder_selected', folderSelected as any);
-slackApp.options('folder_selected', folderOptions as any);
-slackApp.options('subfolder_selected', subfolderOptions as any);
-slackApp.view('repo-folder-subfolder-modal', handleRepoSubmission as any);
-slackApp.action('sync_folder_selected', syncFolderSelected as any);
-slackApp.options('sync_folder_selected', syncFolderOptions as any);
-slackApp.action('sync_subfolder_selected', syncSubfolderSelected as any);
-slackApp.options('sync_subfolder_selected', syncSubfolderOptions as any);
-slackApp.options('sync_research_selected', syncResearchOptions as any);
-slackApp.view('sync-folder-modal', handleSyncSubmission as any);
+slackApp.action('repo_selected', repoSelected);
+slackApp.action('folder_selected', folderSelected);
+slackApp.options('folder_selected', folderOptions);
+slackApp.options('subfolder_selected', subfolderOptions);
+slackApp.view('repo-folder-subfolder-modal', handleRepoSubmission);
+slackApp.action('sync_folder_selected', syncFolderSelected);
+slackApp.options('sync_folder_selected', syncFolderOptions);
+slackApp.action('sync_subfolder_selected', syncSubfolderSelected);
+slackApp.options('sync_subfolder_selected', syncSubfolderOptions);
+slackApp.options('sync_research_selected', syncResearchOptions);
+slackApp.view('sync-folder-modal', handleSyncSubmission);
 
 // ─── Events ─────────────────────────────────────────────────────
 
-slackApp.event('message', handleMessageEvent as any);
-
-/* eslint-enable @typescript-eslint/no-explicit-any */
+slackApp.event('message', handleMessageEvent);
 
 // ─── Export ─────────────────────────────────────────────────────
 

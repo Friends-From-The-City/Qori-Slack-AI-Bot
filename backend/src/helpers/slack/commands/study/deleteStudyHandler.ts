@@ -5,7 +5,7 @@
  * and processing the deletion (GitHub folder + database records).
  */
 
-import type { SlashCommandContext, ViewSubmissionContext } from '../../../../types/handlers';
+import type { AllMiddlewareArgs, SlackCommandMiddlewareArgs, SlackViewMiddlewareArgs, ViewSubmitAction } from '@slack/bolt';
 
 import { deleteStudyFolderFromGitHub } from '../../../github';
 import { getResearchStudyWithRoles, getStudiesByUser, deleteResearchStudy } from '../../../../services/research_study.service';
@@ -13,7 +13,7 @@ import { getActiveStudy as getActiveStudyState } from '../../../../services/slac
 
 // ─── /qori-delete command ─────────────────────────────────────────
 
-async function deleteStudyCommandHandler({ ack, command, client }: SlashCommandContext): Promise<void> {
+async function deleteStudyCommandHandler({ ack, command, client }: SlackCommandMiddlewareArgs & AllMiddlewareArgs): Promise<void> {
   await ack();
 
   const userId = command.user_id;
@@ -94,7 +94,7 @@ async function deleteStudyCommandHandler({ ack, command, client }: SlashCommandC
 
 // ─── Delete study modal submission ────────────────────────────────
 
-async function handleDeleteStudySubmission({ ack, body, view, client }: ViewSubmissionContext): Promise<void> {
+async function handleDeleteStudySubmission({ ack, body, view, client }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs): Promise<void> {
   await ack();
 
   const { channelId, userId } = JSON.parse(view.private_metadata || '{}');

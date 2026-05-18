@@ -8,11 +8,11 @@
  * - user_select options handler (typeahead for adding team members)
  */
 
-import type { ViewSubmissionContext, EventContext } from '../../../../types/handlers';
+import type { AllMiddlewareArgs, SlackViewMiddlewareArgs, SlackOptionsMiddlewareArgs, ViewSubmitAction } from '@slack/bolt';
 
 // ─── view_closed event ─────────────────────────────────────────────
 
-async function handleViewClosed({ event, client }: EventContext<{ view: { callback_id: string } }>): Promise<void> {
+async function handleViewClosed({ event, client }: { event: { view: { callback_id: string } }; client: any } & Record<string, unknown>): Promise<void> {
   if (event.view.callback_id !== 'plan_study_modal' &&
     event.view.callback_id !== 'study-setup-modal-start-research') return;
 
@@ -22,7 +22,7 @@ async function handleViewClosed({ event, client }: EventContext<{ view: { callba
 
 // ─── plan_study_modal submission (no-op) ──────────────────────────
 
-async function handlePlanStudyModalSubmission({ ack }: ViewSubmissionContext): Promise<void> {
+async function handlePlanStudyModalSubmission({ ack }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs): Promise<void> {
   await ack();
   // Just acknowledge - the modal can be closed, no action needed
   // Users can still click buttons to create documents/upload files
@@ -30,7 +30,7 @@ async function handlePlanStudyModalSubmission({ ack }: ViewSubmissionContext): P
 
 // ─── study-setup-modal-start-research submission (Skip for Now) ───
 
-async function handleStudySetupSkipForNow({ ack, body, view, client }: ViewSubmissionContext): Promise<void> {
+async function handleStudySetupSkipForNow({ ack, body, view, client }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs): Promise<void> {
   await ack();
 
   // Parse metadata to get channelId and studyName
@@ -43,25 +43,20 @@ async function handleStudySetupSkipForNow({ ack, body, view, client }: ViewSubmi
 
 // ─── user_select options handler (typeahead) ──────────────────────
 
-async function handleUserSelectOptions({ ack, body, view, client }: {
-  ack: (opts: any) => Promise<void>;
-  body: any;
-  view: any;
-  client: any;
-}): Promise<void> {
+async function handleUserSelectOptions({ ack, body, client }: SlackOptionsMiddlewareArgs<'block_suggestion'> & AllMiddlewareArgs): Promise<void> {
   // Parse out the channelId we stored
-  const { channelId } = JSON.parse(body.view.private_metadata);
+  const { channelId } = JSON.parse(body.view?.private_metadata || '{}');
 
   // 1. Get channel members
   const conv = await client.conversations.members({ channel: channelId });
   const memberSet = new Set(conv.members);
 
   // 2. List all users and filter
-  const usersList = await client.users.list();
-  const options = usersList.members
+  const usersList = await client.users.list({});
+  const options = (usersList.members ?? [])
     .filter((u: any) => memberSet.has(u.id) && !u.is_bot && u.id !== 'USLACKBOT')
     .map((u: any) => ({
-      text: { type: 'plain_text', text: u.profile.real_name || u.name },
+      text: { type: 'plain_text' as const, text: u.profile.real_name || u.name },
       value: u.id,
     }));
 

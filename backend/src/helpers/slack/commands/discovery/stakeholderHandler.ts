@@ -8,7 +8,7 @@
  * - upload_stakeholder_notes_modal: processes files, runs YAML template
  */
 
-import type { BlockActionContext, ViewSubmissionContext } from '../../../../types/handlers';
+import type { AllMiddlewareArgs, SlackActionMiddlewareArgs, SlackViewMiddlewareArgs, BlockAction, ViewSubmitAction } from '@slack/bolt';
 import type { View } from '@slack/types';
 
 import { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo } from '../../../github';
@@ -57,7 +57,7 @@ interface StakeholderNotesTemplateInput {
 
 // ─── Modal opener: create_stakeholder_guide ──────────────────────
 
-async function openStakeholderGuideModal({ ack, body, client }: BlockActionContext) {
+async function openStakeholderGuideModal({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
   await ack();
 
   if (!('view' in body) || !body.view) {
@@ -145,7 +145,7 @@ async function openStakeholderGuideModal({ ack, body, client }: BlockActionConte
 
 // ─── Modal opener: create_stakeholder_interview_guide ────────────
 
-async function openStakeholderInterviewGuideModal({ ack, body, client }: BlockActionContext) {
+async function openStakeholderInterviewGuideModal({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
   await ack();
 
   if (!('view' in body) || !body.view) {
@@ -213,7 +213,7 @@ async function openStakeholderInterviewGuideModal({ ack, body, client }: BlockAc
 
 // ─── Submission handler: stakeholder_interview_guide_modal ───────
 
-async function handleStakeholderGuideSubmission({ ack, body, view, client }: ViewSubmissionContext) {
+async function handleStakeholderGuideSubmission({ ack, body, view, client }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs) {
   // Close the modal immediately to prevent going back to previous modal
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Bolt ack() types don't include response_action variants
   await ack({ response_action: 'clear' } as any);
@@ -317,7 +317,7 @@ async function handleStakeholderGuideSubmission({ ack, body, view, client }: Vie
 
 // ─── Modal opener: upload_stakeholder_notes ──────────────────────
 
-async function openUploadStakeholderNotesModal({ ack, body, client }: BlockActionContext) {
+async function openUploadStakeholderNotesModal({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
   await ack();
 
   if (!('view' in body) || !body.view) {
@@ -384,7 +384,7 @@ async function openUploadStakeholderNotesModal({ ack, body, client }: BlockActio
 
 // ─── Submission handler: upload_stakeholder_notes_modal ──────────
 
-async function handleStakeholderNotesSubmission({ ack, body, view, client }: ViewSubmissionContext) {
+async function handleStakeholderNotesSubmission({ ack, body, view, client }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs) {
   await ack();
 
   const values = view.state.values;

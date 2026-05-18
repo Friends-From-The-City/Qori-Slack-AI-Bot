@@ -1,4 +1,4 @@
-import type { SlashCommandContext, BlockActionContext, ViewSubmissionContext } from '../../../types/handlers';
+import type { AllMiddlewareArgs, SlackCommandMiddlewareArgs, SlackActionMiddlewareArgs, SlackViewMiddlewareArgs, BlockAction, ViewSubmitAction } from '@slack/bolt';
 
 import { requestResearchModal } from '../ui/requestResearchModal';
 import { createStudyFromRequestModal } from '../ui/createStudyFromRequestModal';
@@ -41,7 +41,7 @@ interface RequestData {
  * Handler for /request-research command.
  * Opens the research request modal with pre-filled user information.
  */
-async function requestResearchHandler({ ack, command, client }: SlashCommandContext) {
+async function requestResearchHandler({ ack, command, client }: SlackCommandMiddlewareArgs & AllMiddlewareArgs) {
   await ack();
 
   try {
@@ -80,7 +80,7 @@ async function requestResearchHandler({ ack, command, client }: SlashCommandCont
  * Handler for research request modal submission.
  * Processes the request and sends notifications to relevant parties.
  */
-async function handleRequestResearchSubmission({ ack, body, view, client }: ViewSubmissionContext) {
+async function handleRequestResearchSubmission({ ack, body, view, client }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs) {
   await ack();
 
   const values = view.state.values;
@@ -226,7 +226,7 @@ async function handleRequestResearchSubmission({ ack, body, view, client }: View
  * Handler for "Create Brief from Request" button click.
  * Opens the research brief modal with pre-filled data from the request.
  */
-async function handleCreateBriefFromRequest({ ack, body, client }: BlockActionContext) {
+async function handleCreateBriefFromRequest({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
   await ack();
 
   try {
@@ -285,7 +285,7 @@ async function handleCreateBriefFromRequest({ ack, body, client }: BlockActionCo
  * Handler for "Create Study from Request" button click.
  * Opens the create study modal with pre-filled data from the request.
  */
-async function handleCreateStudyFromRequest({ ack, body, client }: BlockActionContext) {
+async function handleCreateStudyFromRequest({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
   await ack();
 
   try {

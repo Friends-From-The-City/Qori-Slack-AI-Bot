@@ -6,8 +6,7 @@
  * YAML processing, and result messaging.
  */
 
-import type { ViewSubmissionContext } from '../../../types/handlers';
-import type { View } from '@slack/types';
+import type { AllMiddlewareArgs, SlackViewMiddlewareArgs, ViewSubmitAction } from '@slack/bolt';
 
 import { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo, readFolders, copyFilesToFolder } from '../../github';
 import { getResearchStudyWithRoles, addResearchStudyWithRoles } from '../../../services/research_study.service';
@@ -63,7 +62,7 @@ interface BriefTemplateInput {
 /**
  * Handle research_brief_modal submission.
  */
-async function handleBriefSubmission({ ack, body, view, client }: ViewSubmissionContext): Promise<void> {
+async function handleBriefSubmission({ ack, body, view, client }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs): Promise<void> {
   await ack();
 
   const values = view.state.values;

@@ -7,7 +7,7 @@
  * in the qori-studies repo (not study-scoped).
  */
 
-import type { SlashCommandContext, ViewSubmissionContext } from '../../../types/handlers';
+import type { AllMiddlewareArgs, SlackCommandMiddlewareArgs, SlackViewMiddlewareArgs, ViewSubmitAction } from '@slack/bolt';
 import type { View } from '@slack/types';
 
 import { discoverModal } from '../ui/discoverModal';
@@ -173,7 +173,7 @@ async function scaffoldDiscoveryFolders(team: string): Promise<void> {
 
 // ─── Command handler ────────────────────────────────────────────
 
-async function discoverHandler({ ack, body, client, command }: SlashCommandContext): Promise<void> {
+async function discoverHandler({ ack, body, client, command }: SlackCommandMiddlewareArgs & AllMiddlewareArgs): Promise<void> {
   await ack();
 
   const channelId = command.channel_id;
@@ -199,7 +199,7 @@ async function discoverHandler({ ack, body, client, command }: SlashCommandConte
 
 // ─── Submission handler ─────────────────────────────────────────
 
-async function handleDiscoverSubmission({ ack, view, body, client }: ViewSubmissionContext): Promise<void> {
+async function handleDiscoverSubmission({ ack, view, body, client }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs): Promise<void> {
   await ack();
 
   const values = view.state.values;

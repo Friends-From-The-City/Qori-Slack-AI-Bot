@@ -6,8 +6,7 @@
  * Manual notes go through session_notes.yaml; uploads save raw to GitHub.
  */
 
-import type { SlashCommandContext, ViewSubmissionContext, BlockActionContext } from '../../../types/handlers';
-import type { View } from '@slack/types';
+import type { AllMiddlewareArgs, SlackCommandMiddlewareArgs, SlackActionMiddlewareArgs, SlackViewMiddlewareArgs, BlockAction, ViewSubmitAction } from '@slack/bolt';
 
 import { buildSessionNotesView } from "../ui/sessionNotesModal";
 import sessionObserverService from "../../../services/session_observer.service";
@@ -104,7 +103,7 @@ function buildSessionDisplayName(session: SessionInfo): string {
 
 // ─── Command handler ────────────────────────────────────────────
 
-const uploadNotesHandler = async ({ ack, body, client, command }: SlashCommandContext): Promise<void> => {
+const uploadNotesHandler = async ({ ack, body, client, command }: SlackCommandMiddlewareArgs & AllMiddlewareArgs): Promise<void> => {
   console.log("🚀 ~ uploadNotesHandler ~ body:", body);
 
   try {
@@ -171,7 +170,7 @@ const uploadNotesHandler = async ({ ack, body, client, command }: SlashCommandCo
 
 // ─── Tab handlers ───────────────────────────────────────────────
 
-const handleTabManual = async ({ ack, body, client }: BlockActionContext): Promise<void> => {
+const handleTabManual = async ({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs): Promise<void> => {
   await ack();
   const metadata = JSON.parse(body.view?.private_metadata || '{}') as ViewMetadata;
 
@@ -208,7 +207,7 @@ const handleTabManual = async ({ ack, body, client }: BlockActionContext): Promi
   });
 };
 
-const handleTabUpload = async ({ ack, body, client }: BlockActionContext): Promise<void> => {
+const handleTabUpload = async ({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs): Promise<void> => {
   await ack();
   const metadata = JSON.parse(body.view?.private_metadata || '{}') as ViewMetadata;
 
@@ -247,7 +246,7 @@ const handleTabUpload = async ({ ack, body, client }: BlockActionContext): Promi
 
 // ─── Session selection change ───────────────────────────────────
 
-const handleSessionSelectionChange = async ({ ack, body, client }: BlockActionContext): Promise<void> => {
+const handleSessionSelectionChange = async ({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs): Promise<void> => {
   await ack();
 
   try {
@@ -291,7 +290,7 @@ const handleSessionSelectionChange = async ({ ack, body, client }: BlockActionCo
 
 // ─── Submission handler ─────────────────────────────────────────
 
-const handleSessionNotesSubmission = async ({ ack, body, view, client }: ViewSubmissionContext): Promise<void> => {
+const handleSessionNotesSubmission = async ({ ack, body, view, client }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs): Promise<void> => {
   try {
     await ack();
 

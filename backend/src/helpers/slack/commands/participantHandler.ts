@@ -1,4 +1,4 @@
-import type { SlashCommandContext, BlockActionContext, ViewSubmissionContext } from '../../../types/handlers';
+import type { AllMiddlewareArgs, SlackCommandMiddlewareArgs, SlackActionMiddlewareArgs, SlackViewMiddlewareArgs, BlockAction, ViewSubmitAction } from '@slack/bolt';
 
 import { addParticipantModal } from "../ui/addParticipantModal";
 import { updateParticipantStatusModal } from "../ui/outreach/updateParticipantStatusModal";
@@ -8,7 +8,7 @@ import { processParticipantYamlTemplate } from "../../../helpers/participantYaml
 import { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo } from "../../github";
 import type { View } from '@slack/types';
 
-async function participantHandler({ ack, body, client, command }: SlashCommandContext): Promise<void> {
+async function participantHandler({ ack, body, client, command }: SlackCommandMiddlewareArgs & AllMiddlewareArgs): Promise<void> {
   try {
     console.log("🚀 ~ participantHandler ~ body:", body);
     await ack();
@@ -43,7 +43,7 @@ async function participantHandler({ ack, body, client, command }: SlashCommandCo
       // Store first study ID in metadata for default
       const studyId = studies[0].id;
       await client.views.open({
-        trigger_id: (body as any).trigger_id,
+        trigger_id: body.trigger_id,
         view: {
           ...addParticipantModal,
           blocks,
@@ -53,7 +53,7 @@ async function participantHandler({ ack, body, client, command }: SlashCommandCo
     } else {
       // No studies found - still open modal but without studies
       await client.views.open({
-        trigger_id: (body as any).trigger_id,
+        trigger_id: body.trigger_id,
         view: {
           ...addParticipantModal,
           blocks,
@@ -68,7 +68,7 @@ async function participantHandler({ ack, body, client, command }: SlashCommandCo
   }
 }
 
-async function updateParticipantHandler({ ack, body, client, command }: SlashCommandContext): Promise<void> {
+async function updateParticipantHandler({ ack, body, client, command }: SlackCommandMiddlewareArgs & AllMiddlewareArgs): Promise<void> {
   try {
     console.log("🚀 ~ updateParticipantHandler ~ body:", body);
     await ack();
@@ -115,7 +115,7 @@ async function updateParticipantHandler({ ack, body, client, command }: SlashCom
     }
 
     await client.views.open({
-      trigger_id: (body as any).trigger_id,
+      trigger_id: body.trigger_id,
       view: {
         ...updateParticipantStatusModal,
         blocks,
@@ -129,12 +129,12 @@ async function updateParticipantHandler({ ack, body, client, command }: SlashCom
   }
 }
 
-async function handleLoadParticipantsButton({ ack, body, client }: BlockActionContext): Promise<void> {
+async function handleLoadParticipantsButton({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs): Promise<void> {
   try {
     await ack();
 
     // For button actions, view data is in body.view
-    const view = (body as any).view;
+    const view = body.view;
     if (!view) {
       console.error("No view data available in button action");
       return;
@@ -144,8 +144,8 @@ async function handleLoadParticipantsButton({ ack, body, client }: BlockActionCo
     if (!view.state || !view.state.values || !view.state.values.study_selection_block) {
       console.error("View state structure is not as expected:", view.state);
       await client.chat.postEphemeral({
-        channel: (body as any).user.id,
-        user: (body as any).user.id,
+        channel: body.user.id,
+        user: body.user.id,
         text: `❌ Error: Unable to read study selection. Please try again.`,
       });
       return;
@@ -156,8 +156,8 @@ async function handleLoadParticipantsButton({ ack, body, client }: BlockActionCo
     if (!selectedStudyOption || selectedStudyOption.value === "loading") {
       // No study selected, show error
       await client.chat.postEphemeral({
-        channel: (body as any).user.id,
-        user: (body as any).user.id,
+        channel: body.user.id,
+        user: body.user.id,
         text: `❌ Please select a study first before loading participants.`,
       });
       return;
@@ -171,7 +171,7 @@ async function handleLoadParticipantsButton({ ack, body, client }: BlockActionCo
     // Fetch participants for the selected study
     let participants: any[] = [];
     try {
-      participants = await studyParticipantService.getParticipantsByStudy(studyId);
+      participants = await studyParticipantService.getParticipantsByStudy(parseInt(studyId, 10));
       console.log("🚀 ~ Participants found:", participants.length);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -186,7 +186,7 @@ async function handleLoadParticipantsButton({ ack, body, client }: BlockActionCo
     }));
 
     // Get the studies list to pass back to the modal
-    const studies = await getStudiesByUser((body as any).user.id);
+    const studies = await getStudiesByUser(body.user.id);
 
     // Build study dropdown options
     const studyOptions = studies.map((study: any) => ({
@@ -238,7 +238,7 @@ async function handleLoadParticipantsButton({ ack, body, client }: BlockActionCo
 
     // Update the modal with the new participants
     await client.views.update({
-      view_id: (body as any).view.id,
+      view_id: view.id,
       view: {
         ...updateParticipantStatusModal,
         blocks,
@@ -252,24 +252,24 @@ async function handleLoadParticipantsButton({ ack, body, client }: BlockActionCo
 
     // Send error message to user
     await client.chat.postEphemeral({
-      channel: (body as any).user.id,
-      user: (body as any).user.id,
+      channel: body.user.id,
+      user: body.user.id,
       text: `❌ Error loading participants for selected study: ${message}`,
     });
   }
 }
 
-async function handleUpdateParticipantSubmission({ ack, body, view, client }: ViewSubmissionContext): Promise<void> {
+async function handleUpdateParticipantSubmission({ ack, body, view, client }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs): Promise<void> {
   try {
     await ack();
 
     console.log("🚀 ~ handleUpdateParticipantSubmission ~ view:", view);
 
     // Extract form data
-    const studyId = (view as any).state.values.study_selection_block.update_participant_study_selection.selected_option?.value;
-    const participantId = (view as any).state.values.participant_selection_block.participant_selection.selected_option?.value;
-    const newStatus = (view as any).state.values.status_update_block.status_update.selected_option?.value;
-    const updateNotes = (view as any).state.values.update_notes_block?.update_notes?.value || '';
+    const studyId = view.state.values.study_selection_block.update_participant_study_selection.selected_option?.value;
+    const participantId = view.state.values.participant_selection_block.participant_selection.selected_option?.value;
+    const newStatus = view.state.values.status_update_block.status_update.selected_option?.value;
+    const updateNotes = view.state.values.update_notes_block?.update_notes?.value || '';
 
     console.log("🚀 ~ Extracted data:", { studyId, participantId, newStatus, updateNotes });
 
@@ -287,8 +287,8 @@ async function handleUpdateParticipantSubmission({ ack, body, view, client }: Vi
     }
 
     // Get the selected study and participant names for display
-    const studyName = (view as any).state.values.study_selection_block.update_participant_study_selection.selected_option?.text?.text || "Unknown Study";
-    const participantName = (view as any).state.values.participant_selection_block.participant_selection.selected_option?.text?.text || "Unknown Participant";
+    const studyName = view.state.values.study_selection_block.update_participant_study_selection.selected_option?.text?.text || "Unknown Study";
+    const participantName = view.state.values.participant_selection_block.participant_selection.selected_option?.text?.text || "Unknown Participant";
 
     console.log("🚀 ~ Updating participant:", { studyName, participantName, newStatus });
 
@@ -317,13 +317,13 @@ async function handleUpdateParticipantSubmission({ ack, body, view, client }: Vi
     // Optionally update the participant tracker file
     try {
       // Get the study details
-      const study = await getStudiesByUser((body as any).user.id).then((studies: any[]) =>
+      const study = await getStudiesByUser(body.user.id).then((studies: any[]) =>
         studies.find((s: any) => s.id.toString() === studyId)
       );
 
       if (study) {
         // Get all participants for the study to update the tracker
-        const allParticipants = await studyParticipantService.getParticipantsByStudy(studyId);
+        const allParticipants = await studyParticipantService.getParticipantsByStudy(parseInt(studyId, 10));
 
         // Process the YAML template to update the tracker
         const yamlTemplateFile = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, "participant_tracker.yaml");
@@ -336,7 +336,7 @@ async function handleUpdateParticipantSubmission({ ack, body, view, client }: Vi
             status_select: newStatus,
             notes_field: updateNotes,
             current_date: new Date().toISOString().split('T')[0],
-            added_by: (body as any).user.username || (body as any).user.name || (body as any).user.id
+            added_by: body.user.name || body.user.id
           };
 
           // @ts-expect-error — pre-existing type mismatch from require() → import migration
@@ -352,8 +352,8 @@ async function handleUpdateParticipantSubmission({ ack, body, view, client }: Vi
 
     // Send success message
     await client.chat.postEphemeral({
-      channel: (body as any).user.id,
-      user: (body as any).user.id,
+      channel: body.user.id,
+      user: body.user.id,
       text: `✅ *Participant Status Updated Successfully!*\n\n*Study:* ${studyName}\n*Participant:* ${participantName}\n*New Status:* ${newStatus}${updateNotes ? `\n*Notes:* ${updateNotes}` : ''}\n\nThe participant's status has been updated in the database and participant tracker.`,
     });
 
@@ -363,8 +363,8 @@ async function handleUpdateParticipantSubmission({ ack, body, view, client }: Vi
 
     // Send error message to user
     await client.chat.postEphemeral({
-      channel: (body as any).user.id,
-      user: (body as any).user.id,
+      channel: body.user.id,
+      user: body.user.id,
       text: `❌ Error updating participant status: ${message}`,
     });
   }

@@ -10,8 +10,7 @@
  * (compensation, dates, counts) are calculated here, not by the LLM.
  */
 
-import type { ViewSubmissionContext } from '../../../types/handlers';
-import type { View } from '@slack/types';
+import type { AllMiddlewareArgs, SlackViewMiddlewareArgs, ViewSubmitAction } from '@slack/bolt';
 import { TemplateContractError } from '../../../types/handlers';
 import type { ResearchQuestion, TargetBarrier } from '../../../types/cascade';
 
@@ -139,7 +138,7 @@ interface PlanTemplateInput {
 
 // ─── Handler ────────────────────────────────────────────────────────
 
-async function handlePlanSubmission({ ack, body, view, client }: ViewSubmissionContext) {
+async function handlePlanSubmission({ ack, body, view, client }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs) {
   await ack();
 
   const values = view.state.values;
@@ -163,7 +162,7 @@ async function handlePlanSubmission({ ack, body, view, client }: ViewSubmissionC
     if (action.value !== undefined) return action.value?.trim() || null;
     if (action.selected_option !== undefined) return action.selected_option?.value || null;
     if (action.selected_date !== undefined) return action.selected_date;
-    if (action.selected_options !== undefined) return action.selected_options.map((opt: any) => opt.value);
+    if (action.selected_options !== undefined) return action.selected_options.map(opt => opt.value);
     return null;
   };
 

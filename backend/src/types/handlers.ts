@@ -1,69 +1,13 @@
 /**
- * Shared handler context types for Slack interactions.
+ * Shared handler types for Slack interactions.
  *
- * Individual handler-specific types (what each handler passes to templates,
- * what each handler returns) will be co-located with the handler files when
- * they migrate to .ts in Phase 4. This file defines only the shared base
- * shapes that multiple handlers use.
+ * Handler-specific context types (ViewSubmissionContext, SlashCommandContext,
+ * etc.) were removed in Phase 6 — handlers now use Bolt's native middleware
+ * types directly (SlackViewMiddlewareArgs, SlackCommandMiddlewareArgs, etc.).
  *
- * These types wrap the Slack Bolt SDK types to provide a consistent contract
- * for handler functions.
+ * This file retains Qori-specific types: handler results and the
+ * TemplateContractError class used for cascade contract violations.
  */
-
-import type {
-  AckFn,
-  ViewSubmitAction,
-  SlashCommand,
-  BlockAction,
-  BlockElementAction,
-} from '@slack/bolt';
-import type { WebClient } from '@slack/web-api';
-
-// ---------------------------------------------------------------------------
-// Slack interaction contexts
-// ---------------------------------------------------------------------------
-
-/**
- * Common shape every Slack view submission handler receives.
- * Handlers for modal submissions (e.g., /qori-plan, /qori-brief) get this.
- */
-export interface ViewSubmissionContext {
-  ack: AckFn<ViewSubmitAction>;
-  body: ViewSubmitAction;
-  view: ViewSubmitAction['view'];
-  client: WebClient;
-}
-
-/**
- * Common shape every slash command handler receives.
- * Bolt passes both `body` and `command` — they're the same object.
- */
-export interface SlashCommandContext {
-  ack: AckFn<void>;
-  command: SlashCommand;
-  body: SlashCommand;
-  client: WebClient;
-}
-
-/**
- * Common shape for block action handlers (button clicks, menu selections
- * within messages or modals).
- */
-export interface BlockActionContext {
-  ack: AckFn<void>;
-  body: BlockAction;
-  action: BlockElementAction;
-  client: WebClient;
-}
-
-/**
- * Common shape for Slack event handlers (message, reaction, etc.).
- */
-export interface EventContext<E = Record<string, unknown>> {
-  event: E;
-  client: WebClient;
-  say: (message: string | Record<string, unknown>) => Promise<unknown>;
-}
 
 // ---------------------------------------------------------------------------
 // Handler result types

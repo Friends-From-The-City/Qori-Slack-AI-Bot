@@ -1,6 +1,4 @@
-import type { BlockActionContext, ViewSubmissionContext } from '../../types/handlers';
-import type { WebClient } from '@slack/web-api';
-import type { BlockAction, ViewSubmitAction } from '@slack/bolt';
+import type { AllMiddlewareArgs, SlackActionMiddlewareArgs, SlackViewMiddlewareArgs, BlockAction, ViewSubmitAction } from '@slack/bolt';
 import type { View } from '@slack/types';
 
 import { getStudyStatusById, addStudyStatus } from '../../services/study-status.service';
@@ -33,7 +31,7 @@ export async function handleMarkChangesCompleteAction({
   ack,
   body,
   client,
-}: BlockActionContext): Promise<void> {
+}: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs): Promise<void> {
   await ack();
   const action = (body as BlockAction).actions[0];
   const { fileName, statusId } = JSON.parse((action as { value: string }).value) as ActionPayload;
@@ -60,7 +58,7 @@ export async function handleMarkChangesCompleteModal({
   body,
   view,
   client,
-}: ViewSubmissionContext): Promise<void> {
+}: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs): Promise<void> {
   await ack();
   const { fileName, statusId } = JSON.parse(view.private_metadata) as ActionPayload;
   const values = view.state.values;
@@ -187,7 +185,7 @@ export async function handleApproveChanges({
   body,
   action,
   client,
-}: BlockActionContext): Promise<void> {
+}: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs): Promise<void> {
   await ack();
   let payload: ApprovePayload;
   try {

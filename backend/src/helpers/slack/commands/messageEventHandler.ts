@@ -6,7 +6,7 @@
  * and echoes back.
  */
 
-import type { EventContext } from '../../../types/handlers';
+import type { AllMiddlewareArgs, SlackEventMiddlewareArgs } from '@slack/bolt';
 
 // NOTE: punchService does not exist in the services barrel — this is legacy dead code.
 // The punchMessage() call below will be a no-op.
@@ -14,17 +14,10 @@ const punchService: Record<string, (...args: unknown[]) => void> = {};
 
 // ─── message event handler ────────────────────────────────────────
 
-interface MessageEvent {
-  subtype?: string;
-  text: string;
-  user?: string;
-  channel?: string;
-  ts?: string;
-}
-
-async function handleMessageEvent({ event, say }: EventContext<MessageEvent>): Promise<void> {
+async function handleMessageEvent({ event, say }: SlackEventMiddlewareArgs<'message'> & AllMiddlewareArgs): Promise<void> {
   console.log('message event:', event);
   if (event.subtype && event.subtype === 'bot_message') return; // Ignore bot messages
+  if (!('text' in event)) return; // Not all message subtypes have text
 
   punchService.punchMessage(event);
 

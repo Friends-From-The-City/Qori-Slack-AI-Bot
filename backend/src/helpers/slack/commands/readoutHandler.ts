@@ -6,8 +6,7 @@
  * YAML template based on report type and audience selection.
  */
 
-import type { SlashCommandContext, ViewSubmissionContext, BlockActionContext } from '../../../types/handlers';
-import type { View } from '@slack/types';
+import type { AllMiddlewareArgs, SlackCommandMiddlewareArgs, SlackActionMiddlewareArgs, SlackViewMiddlewareArgs, BlockAction, ViewSubmitAction } from '@slack/bolt';
 
 import { buildReadoutModal } from '../ui/readoutModal';
 import { getResearchStudyWithRoles, getStudiesByUser } from '../../../services/research_study.service';
@@ -123,7 +122,7 @@ const ANALYSIS_SCANS: AnalysisScan[] = [
 
 // ─── Open modal handler ─────────────────────────────────────────
 
-const openReadoutModal = async ({ ack, body, client, command }: SlashCommandContext): Promise<void> => {
+const openReadoutModal = async ({ ack, body, client, command }: SlackCommandMiddlewareArgs & AllMiddlewareArgs): Promise<void> => {
   try {
     await ack();
 
@@ -169,7 +168,7 @@ const openReadoutModal = async ({ ack, body, client, command }: SlashCommandCont
 
 // ─── Modal interaction handler ──────────────────────────────────
 
-const handleReadoutModalInteraction = async ({ ack, body, client, action }: BlockActionContext): Promise<void> => {
+const handleReadoutModalInteraction = async ({ ack, body, client, action }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs): Promise<void> => {
   try {
     await ack();
 
@@ -242,7 +241,7 @@ const handleReadoutModalInteraction = async ({ ack, body, client, action }: Bloc
 
 // ─── Modal submission handler ───────────────────────────────────
 
-const handleReadoutModalSubmission = async ({ ack, body, view, client }: ViewSubmissionContext): Promise<void> => {
+const handleReadoutModalSubmission = async ({ ack, body, view, client }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs): Promise<void> => {
   try {
     await ack();
 

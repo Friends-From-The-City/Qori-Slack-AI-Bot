@@ -1,4 +1,4 @@
-import type { SlashCommandContext, BlockActionContext, ViewSubmissionContext } from '../../../types/handlers';
+import type { AllMiddlewareArgs, SlackCommandMiddlewareArgs, SlackActionMiddlewareArgs, SlackViewMiddlewareArgs, BlockAction, ViewSubmitAction } from '@slack/bolt';
 
 import { createStudyModal } from '../ui/createStudyModal';
 import { getChannelConfigByChannelId } from '../../../services/channel-config.service';
@@ -30,7 +30,7 @@ interface CreateStudyMetadata {
  * Handler for /qori-start command.
  * Opens the create study modal for creating a new study from scratch.
  */
-async function startResearchHandler({ ack, command, client, body }: SlashCommandContext) {
+async function startResearchHandler({ ack, command, client, body }: SlackCommandMiddlewareArgs & AllMiddlewareArgs) {
   await ack();
 
   try {
@@ -59,7 +59,7 @@ async function startResearchHandler({ ack, command, client, body }: SlashCommand
  * Handler for "Add Another Team Member" button.
  * Dynamically adds a new user-role pair to the modal.
  */
-async function handleAddTeamMember({ ack, body, client }: BlockActionContext) {
+async function handleAddTeamMember({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
   await ack();
 
   try {
@@ -123,7 +123,7 @@ async function handleAddTeamMember({ ack, body, client }: BlockActionContext) {
  * Handler for create study modal submission.
  * Creates GitHub folder scaffold and stores study in database.
  */
-async function handleCreateStudySubmission({ ack, body, view, client }: ViewSubmissionContext) {
+async function handleCreateStudySubmission({ ack, body, view, client }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs) {
   console.log('📝 Study submission received');
   await ack();
   console.log('✅ Submission acknowledged');

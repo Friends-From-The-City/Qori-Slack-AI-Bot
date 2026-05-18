@@ -6,7 +6,7 @@
  * template (affinity mapping, journey mapping, personas, etc.).
  */
 
-import type { SlashCommandContext, ViewSubmissionContext, BlockActionContext } from '../../../types/handlers';
+import type { AllMiddlewareArgs, SlackCommandMiddlewareArgs, SlackActionMiddlewareArgs, SlackViewMiddlewareArgs, BlockAction, ViewSubmitAction } from '@slack/bolt';
 import { TemplateContractError } from '../../../types/handlers';
 
 import { researchSynthesisModal } from "../ui/researchSynthesisModal";
@@ -159,7 +159,7 @@ async function scanAnalysisFolders(studyPath: string): Promise<AnalysisFile[]> {
 
 // ─── Command handler ────────────────────────────────────────────
 
-const researchSynthesisHandler = async ({ ack, body, client }: SlashCommandContext): Promise<void> => {
+const researchSynthesisHandler = async ({ ack, body, client }: SlackCommandMiddlewareArgs & AllMiddlewareArgs): Promise<void> => {
   try {
     await ack();
 
@@ -186,7 +186,7 @@ const researchSynthesisHandler = async ({ ack, body, client }: SlashCommandConte
 
 // ─── Study selection change handler ─────────────────────────────
 
-const handleStudySelectionChange = async ({ ack, body, client }: BlockActionContext): Promise<void> => {
+const handleStudySelectionChange = async ({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs): Promise<void> => {
   try {
     console.log("🚀 ~ handleStudySelectionChange called");
     await ack();
@@ -405,7 +405,7 @@ const handleStudySelectionChange = async ({ ack, body, client }: BlockActionCont
 
 // ─── File checkbox change handler ───────────────────────────────
 
-const handleFileCheckboxChange = async ({ ack, body, client }: BlockActionContext): Promise<void> => {
+const handleFileCheckboxChange = async ({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs): Promise<void> => {
   try {
     await ack();
 
@@ -448,7 +448,7 @@ const handleFileCheckboxChange = async ({ ack, body, client }: BlockActionContex
 
 // ─── Load Files button handler ──────────────────────────────────
 
-const handleLoadSynthesisFiles = async ({ ack, body, client }: BlockActionContext): Promise<void> => {
+const handleLoadSynthesisFiles = async ({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs): Promise<void> => {
   try {
     await ack();
 
@@ -581,7 +581,7 @@ const handleLoadSynthesisFiles = async ({ ack, body, client }: BlockActionContex
 
 // ─── Load Study Notes button handler ────────────────────────────
 
-const handleLoadStudyNotes = async ({ ack, body, client }: BlockActionContext): Promise<void> => {
+const handleLoadStudyNotes = async ({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs): Promise<void> => {
   try {
     await ack();
 
@@ -651,7 +651,7 @@ const handleLoadStudyNotes = async ({ ack, body, client }: BlockActionContext): 
 
 // ─── Submission handler ─────────────────────────────────────────
 
-const handleResearchSynthesisSubmission = async ({ ack, body, view, client }: ViewSubmissionContext): Promise<void> => {
+const handleResearchSynthesisSubmission = async ({ ack, body, view, client }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs): Promise<void> => {
   try {
     await ack();
 

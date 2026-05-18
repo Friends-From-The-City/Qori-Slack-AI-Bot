@@ -6,7 +6,7 @@
  * (processes uploaded files, runs YAML template).
  */
 
-import type { BlockActionContext, ViewSubmissionContext } from '../../../../types/handlers';
+import type { AllMiddlewareArgs, SlackActionMiddlewareArgs, SlackViewMiddlewareArgs, BlockAction, ViewSubmitAction } from '@slack/bolt';
 import type { View } from '@slack/types';
 
 import { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo } from '../../../github';
@@ -40,7 +40,7 @@ interface SurveyTemplateInput {
 
 // ─── Modal opener: upload_survey_data ────────────────────────────
 
-async function openUploadSurveyDataModal({ ack, body, client }: BlockActionContext) {
+async function openUploadSurveyDataModal({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
   await ack();
 
   if (!('view' in body) || !body.view) {
@@ -107,7 +107,7 @@ async function openUploadSurveyDataModal({ ack, body, client }: BlockActionConte
 
 // ─── Submission handler: upload_survey_data_modal ────────────────
 
-async function handleSurveyDataSubmission({ ack, body, view, client }: ViewSubmissionContext) {
+async function handleSurveyDataSubmission({ ack, body, view, client }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs) {
   await ack();
 
   const values = view.state.values;

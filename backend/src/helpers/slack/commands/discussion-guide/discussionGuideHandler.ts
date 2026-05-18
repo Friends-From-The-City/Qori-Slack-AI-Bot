@@ -6,7 +6,7 @@
  * and the discussion_guide_modal submission (renders YAML template, posts result).
  */
 
-import type { BlockActionContext, ViewSubmissionContext } from '../../../../types/handlers';
+import type { AllMiddlewareArgs, SlackActionMiddlewareArgs, SlackViewMiddlewareArgs, BlockAction, ViewSubmitAction } from '@slack/bolt';
 import type { View } from '@slack/types';
 
 import { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo } from '../../../github';
@@ -43,7 +43,7 @@ interface DiscussionGuideTemplateInput {
 
 // ─── Modal opener ─────────────────────────────────────────────────
 
-async function openDiscussionGuideModal({ ack, body, client }: BlockActionContext) {
+async function openDiscussionGuideModal({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
   await ack();
 
   // This handler only operates on actions triggered from a modal view.
@@ -152,7 +152,7 @@ async function openDiscussionGuideModal({ ack, body, client }: BlockActionContex
 
 // ─── Submission handler ───────────────────────────────────────────
 
-async function handleDiscussionGuideSubmission({ ack, body, view, client }: ViewSubmissionContext) {
+async function handleDiscussionGuideSubmission({ ack, body, view, client }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs) {
   await ack();
 
   const values = view.state.values;
