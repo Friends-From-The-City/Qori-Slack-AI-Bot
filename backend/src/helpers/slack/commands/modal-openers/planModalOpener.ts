@@ -122,10 +122,9 @@ async function openResearchPlanModal({ ack, body, client }: SlackActionMiddlewar
       const studyForCascade = await getResearchStudyWithRoles(preselectStudyName);
       if (studyForCascade?.path) {
         const studyVars = await readStudyVariables(decodeURIComponent(studyForCascade.path));
-        if (Object.keys(studyVars.variables).length > 0) {
-          const cascadeData = buildCascadeReadiness(studyVars, 'research_plan');
-          const cascadeBlocks = buildCascadeBlocks(cascadeData);
-          // Insert cascade blocks after the first divider
+        const cascadeData = buildCascadeReadiness(studyVars, 'research_plan');
+        const cascadeBlocks = buildCascadeBlocks(cascadeData);
+        if (cascadeBlocks.length > 0) {
           const firstDivider = blocks.findIndex(b => b.type === 'divider');
           if (firstDivider !== -1) {
             // @ts-expect-error — pre-existing type mismatch from require() → import migration

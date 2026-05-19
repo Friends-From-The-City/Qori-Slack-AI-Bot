@@ -67,9 +67,9 @@ async function openPlanFromBrief({ ack, body, client }: SlackActionMiddlewareArg
     try {
       if (study?.path) {
         const studyVars = await readStudyVariables(decodeURIComponent(study.path));
-        if (Object.keys(studyVars.variables).length > 0) {
-          const cascadeData = buildCascadeReadiness(studyVars, 'research_plan');
-          const cascadeBlocks = buildCascadeBlocks(cascadeData);
+        const cascadeData = buildCascadeReadiness(studyVars, 'research_plan');
+        const cascadeBlocks = buildCascadeBlocks(cascadeData);
+        if (cascadeBlocks.length > 0) {
           const firstDivider = blocks.findIndex(b => b.type === 'divider');
           if (firstDivider !== -1) {
             // @ts-expect-error — pre-existing type mismatch from require() → import migration

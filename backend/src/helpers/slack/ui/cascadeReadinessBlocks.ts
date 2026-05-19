@@ -164,69 +164,57 @@ function buildCascadeReadiness(studyVars: StudyVars, templateKey: string): Casca
 
 /**
  * Build Slack Block Kit blocks for cascade readiness display.
- * Returns an array of blocks to insert into any modal.
- * Returns empty array if no cascade data.
+ *
+ * Problem-surfacing, not status recap:
+ * - All required + all optional present → return [] (hide block entirely)
+ * - All required present, optional missing → return [] (handler fallbacks cover this)
+ * - Required missing → show actionable warning listing what's missing and how to fix
+ *
+ * TemplateContractError at handler submission time is the second line of defense.
+ * This block is the first — it warns before the researcher wastes time filling out the form.
  */
 function buildCascadeBlocks(cascadeData: CascadeData | null) {
   if (!cascadeData) return [];
 
+  const requiredMissing = cascadeData.missing.filter(v => v.required);
+
+  // Happy path: all required variables present → hide block entirely.
+  // Optional missing is fine — handler fallbacks cover it.
+  if (requiredMissing.length === 0) return [];
+
+  // Problem state: required variables missing → actionable warning
   const blocks: Record<string, unknown>[] = [
     { type: "divider" },
-    { type: "section", text: { type: "mrkdwn", text: "*Cascade Context*" } },
-    { type: "context", block_id: "cascade_legend", elements: [
-      { type: "mrkdwn", text: ":white_check_mark: Required (present)  :large_blue_circle: Optional (present)  :warning: Required (missing)  :white_circle: Optional (missing)" },
-    ] },
-  ];
-
-  // Available variables
-  if (cascadeData.available.length > 0) {
-    blocks.push({
-      type: "context",
-      block_id: "cascade_available",
-      elements: [
-        {
-          type: "mrkdwn",
-          text: cascadeData.available.map(v => {
-            const countStr = v.count === 1 ? '1 item' : `${v.count} items`;
-            const sessionStr = v.sessions > 1 ? ` from ${v.sessions} sessions` : '';
-            return `${v.required ? ':white_check_mark:' : ':large_blue_circle:'} *${v.label}* — ${countStr}${sessionStr}`;
-          }).join('\n'),
-        },
-      ],
-    });
-  }
-
-  // Missing variables
-  if (cascadeData.missing.length > 0) {
-    blocks.push({
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `:warning: *Cannot generate — ${requiredMissing.length} required input${requiredMissing.length > 1 ? 's' : ''} missing*`,
+      },
+    },
+    {
       type: "context",
       block_id: "cascade_missing",
       elements: [
         {
           type: "mrkdwn",
-          text: cascadeData.missing.map(v => {
-            const icon = v.required ? ':warning:' : ':white_circle:';
-            return `${icon} *${v.label}* — ${v.hint}`;
-          }).join('\n'),
+          text: requiredMissing.map(v =>
+            `:warning: *${v.label}* — ${v.hint}`
+          ).join('\n'),
         },
       ],
-    });
-  }
-
-  // Summary
-  const requiredMissing = cascadeData.missing.filter(v => v.required).length;
-  blocks.push({
-    type: "context",
-    block_id: "cascade_summary",
-    elements: [
-      {
-        type: "mrkdwn",
-        text: requiredMissing === 0
-          ? '_All required cascade variables are present. Synthesis will use structured upstream context._'
-          : `_${requiredMissing} required variable(s) missing. Synthesis will use raw file content as fallback._`,
-      },
-    ],
-  });
+    },
+    {
+      type: "context",
+      block_id: "cascade_action",
+      elements: [
+        {
+          type: "mrkdwn",
+          text: '_Complete the upstream steps above, then re-open this modal._',
+        },
+      ],
+    },
+  ];
 
   return blocks;
 }
