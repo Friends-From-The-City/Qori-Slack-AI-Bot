@@ -173,6 +173,9 @@ function buildCascadeBlocks(cascadeData: CascadeData | null) {
   const blocks: Record<string, unknown>[] = [
     { type: "divider" },
     { type: "section", text: { type: "mrkdwn", text: "*Cascade Context*" } },
+    { type: "context", block_id: "cascade_legend", elements: [
+      { type: "mrkdwn", text: ":white_check_mark: Required (present)  :large_blue_circle: Optional (present)  :warning: Required (missing)  :white_circle: Optional (missing)" },
+    ] },
   ];
 
   // Available variables
