@@ -11,7 +11,7 @@
  * knowledge_gaps, and source_artifacts.
  */
 
-import type { BlockActionContext, ViewSubmissionContext } from '../../../../types/handlers';
+import type { AllMiddlewareArgs, SlackActionMiddlewareArgs, SlackViewMiddlewareArgs, BlockAction, ViewSubmitAction } from '@slack/bolt';
 import type { View } from '@slack/types';
 
 import { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo } from '../../../github';
@@ -42,7 +42,7 @@ interface DeskResearchTemplateInput {
 
 // ─── Modal opener ─────────────────────────────────────────────────
 
-async function openDeskResearchModal({ ack, body, client }: BlockActionContext) {
+async function openDeskResearchModal({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
   await ack();
 
   if (!('view' in body) || !body.view) {
@@ -117,7 +117,7 @@ async function openDeskResearchModal({ ack, body, client }: BlockActionContext) 
 
 // ─── Submission handler ───────────────────────────────────────────
 
-async function handleDeskResearchSubmission({ ack, body, view, client }: ViewSubmissionContext) {
+async function handleDeskResearchSubmission({ ack, body, view, client }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs) {
   await ack();
 
   const values = view.state.values;

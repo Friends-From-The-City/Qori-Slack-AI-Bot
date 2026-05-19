@@ -6,7 +6,7 @@
  * - copy_email_formatted action (opens copy-to-clipboard email modal)
  */
 
-import type { BlockActionContext } from '../../../../types/handlers';
+import type { AllMiddlewareArgs, SlackActionMiddlewareArgs, BlockAction } from '@slack/bolt';
 import type { View } from '@slack/types';
 
 import { copyEmailModal } from '../../ui/outreach/copyEmailModal';
@@ -18,7 +18,7 @@ import { thankyouModal } from '../../ui/outreach/thankyouModal';
 
 // ─── generate_other_message_type action ───────────────────────────
 
-async function handleGenerateOtherMessageType({ ack, body, client, action }: BlockActionContext): Promise<void> {
+async function handleGenerateOtherMessageType({ ack, body, client, action }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs): Promise<void> {
   await ack();
 
   try {
@@ -56,9 +56,10 @@ async function handleGenerateOtherMessageType({ ack, body, client, action }: Blo
         return;
     }
 
-    // Open the selected modal with the existing participant data
-    await client.views.push({
-      trigger_id: (body as any).trigger_id,
+    // Update the current modal in place — overflow menu actions don't
+    // provide a trigger_id, so views.push would fail.
+    await client.views.update({
+      view_id: body.view.id,
       view: {
         ...nextModal,
         private_metadata: JSON.stringify({
@@ -76,7 +77,7 @@ async function handleGenerateOtherMessageType({ ack, body, client, action }: Blo
 
 // ─── copy_email_formatted action ──────────────────────────────────
 
-async function handleCopyEmailFormatted({ ack, body, client }: BlockActionContext): Promise<void> {
+async function handleCopyEmailFormatted({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs): Promise<void> {
   console.log('copy_email_formatted ~ body:', body);
   await ack();
 
@@ -100,7 +101,7 @@ async function handleCopyEmailFormatted({ ack, body, client }: BlockActionContex
 
     // Open the copy email modal with the message body
     await client.views.push({
-      trigger_id: (body as any).trigger_id,
+      trigger_id: body.trigger_id,
       // @ts-expect-error — pre-existing type mismatch from require() → import migration
       view: copyEmailModal({
         messageBody,

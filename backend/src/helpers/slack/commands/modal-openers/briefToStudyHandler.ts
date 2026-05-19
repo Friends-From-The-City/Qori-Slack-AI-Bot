@@ -7,7 +7,7 @@
  * - create_study_from_brief: resolves user, opens create study modal with brief data
  */
 
-import type { BlockActionContext } from '../../../../types/handlers';
+import type { AllMiddlewareArgs, SlackActionMiddlewareArgs, BlockAction } from '@slack/bolt';
 import type { View } from '@slack/types';
 
 import { getResearchStudyWithRoles } from '../../../../services/research_study.service';
@@ -28,7 +28,7 @@ interface MutableBlock {
 
 // ─── create_research_plan_from_brief ─────────────────────────────
 
-async function openPlanFromBrief({ ack, body, client }: BlockActionContext) {
+async function openPlanFromBrief({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
   await ack();
 
   try {
@@ -99,7 +99,7 @@ async function openPlanFromBrief({ ack, body, client }: BlockActionContext) {
 
 // ─── create_study_from_brief ─────────────────────────────────────
 
-async function openStudyFromBrief({ ack, body, client }: BlockActionContext) {
+async function openStudyFromBrief({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
   await ack();
 
   try {

@@ -8,14 +8,14 @@
  * IMPORTANT: views.update does NOT take trigger_id — only view_id and hash.
  */
 
-import type { SlashCommandContext, BlockActionContext, ViewSubmissionContext } from '../../../../types/handlers';
+import type { AllMiddlewareArgs, SlackCommandMiddlewareArgs, SlackActionMiddlewareArgs, SlackViewMiddlewareArgs, BlockAction, ViewSubmitAction } from '@slack/bolt';
+import type { View } from '@slack/types';
 
 import { researchShareoutModal } from '../../ui/researchShareoutModal';
-import type { View } from '@slack/types';
 
 // ─── /run-template command ────────────────────────────────────────
 
-async function runTemplateCommandHandler({ ack, command, client }: SlashCommandContext): Promise<void> {
+async function runTemplateCommandHandler({ ack, command, client }: SlackCommandMiddlewareArgs & AllMiddlewareArgs): Promise<void> {
   try {
     await ack();
 
@@ -34,7 +34,7 @@ async function runTemplateCommandHandler({ ack, command, client }: SlashCommandC
 
 // ─── type_select action (update submit label) ─────────────────────
 
-async function handleTypeSelect({ ack, body, client, action }: BlockActionContext): Promise<void> {
+async function handleTypeSelect({ ack, body, client, action }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs): Promise<void> {
   try {
     await ack();
     if (!('view' in body) || !body.view) { console.warn('type_select: no view in body'); return; }
@@ -71,7 +71,7 @@ async function handleTypeSelect({ ack, body, client, action }: BlockActionContex
 
 // ─── research-shareout-submit ─────────────────────────────────────
 
-async function handleResearchShareoutSubmission({ ack, body, view, client }: ViewSubmissionContext): Promise<void> {
+async function handleResearchShareoutSubmission({ ack, body, view, client }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs): Promise<void> {
   await ack();
 
   const values = (view as any).state.values;

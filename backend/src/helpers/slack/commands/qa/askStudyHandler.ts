@@ -6,13 +6,13 @@
  * "not available yet" message (RAG is disabled for alpha).
  */
 
-import type { SlashCommandContext, ViewSubmissionContext } from '../../../../types/handlers';
+import type { AllMiddlewareArgs, SlackCommandMiddlewareArgs, SlackViewMiddlewareArgs, ViewSubmitAction } from '@slack/bolt';
 
 import { readFolderContents } from '../../../github';
 
 // ─── /ask-study command ───────────────────────────────────────────
 
-async function askStudyCommandHandler({ ack, command, client }: SlashCommandContext): Promise<void> {
+async function askStudyCommandHandler({ ack, command, client }: SlackCommandMiddlewareArgs & AllMiddlewareArgs): Promise<void> {
   await ack();
   const channelId = command.channel_id;
 
@@ -70,7 +70,7 @@ async function askStudyCommandHandler({ ack, command, client }: SlashCommandCont
 
 // ─── ask-study-modal submission ───────────────────────────────────
 
-async function handleAskStudySubmission({ ack, view, client }: ViewSubmissionContext): Promise<void> {
+async function handleAskStudySubmission({ ack, view, client }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs): Promise<void> {
   await ack();
 
   const { channelId } = JSON.parse(view.private_metadata);

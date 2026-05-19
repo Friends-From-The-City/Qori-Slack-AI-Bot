@@ -277,5 +277,6 @@ A running record of completed audits. Each row links to the full audit report in
 | Quarter | Date | Major findings | ADRs prompted |
 |---------|------|----------------|---------------|
 | 2026 Q2 | 2026-05-13 | LLM authority over computed data; participant status casing chaos (15 strings for 9 concepts); missing FKs across 6 tables; zero meaningful template tests; attribute whitelist excluding new columns; comma-formatted budget parser bug | 0002, 0005, 0006, 0007, 0008, L001, L002, L003 |
+| 2026 Q2 (post-migration) | 2026-05-18 | [Report](2026-Q2-audit-post-migration.md). Status chaos resolved (canonical enum). 110 tests (from 0). All 5 known bug classes have regression coverage. Cascade contracts enforced. Remaining: 1/27 templates has unit tests; 3 tables use study_name without FK; participant_tracker YAML status labels don't match enum. | None prompted (all ADRs conform; Bolt typing migration may warrant lightweight ADR) |
 
 When a new audit completes, add a row here and link the report. Comparing successive audits over time reveals patterns of improvement or recurring drift.

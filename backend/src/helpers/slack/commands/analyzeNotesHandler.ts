@@ -6,8 +6,7 @@
  * the session_summary YAML template.
  */
 
-import type { SlashCommandContext, ViewSubmissionContext, BlockActionContext } from '../../../types/handlers';
-import type { View } from '@slack/types';
+import type { AllMiddlewareArgs, SlackCommandMiddlewareArgs, SlackActionMiddlewareArgs, SlackViewMiddlewareArgs, BlockAction, ViewSubmitAction } from '@slack/bolt';
 import type { ResearchQuestion, TargetBarrier } from '../../../types/cascade';
 
 import { analyzeNotesModal } from "../ui/analyzeNotesModal";
@@ -105,7 +104,7 @@ interface NoteFile {
 
 // ─── Command handler ────────────────────────────────────────────
 
-const analyzeNotesHandler = async ({ ack, body, client }: SlashCommandContext): Promise<void> => {
+const analyzeNotesHandler = async ({ ack, body, client }: SlackCommandMiddlewareArgs & AllMiddlewareArgs): Promise<void> => {
   try {
     await ack();
 
@@ -136,7 +135,7 @@ const analyzeNotesHandler = async ({ ack, body, client }: SlashCommandContext): 
 
 // ─── View submission handler ────────────────────────────────────
 
-const handleAnalyzeNotesSubmission = async ({ ack, body, view, client }: ViewSubmissionContext): Promise<void> => {
+const handleAnalyzeNotesSubmission = async ({ ack, body, view, client }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs): Promise<void> => {
   const values = view.state.values;
 
   const studyId = values.study_select_block?.study_select_test?.selected_option?.value as string | undefined;
@@ -351,7 +350,7 @@ const handleAnalyzeNotesSubmission = async ({ ack, body, view, client }: ViewSub
 
 // ─── Study selection change handler ─────────────────────────────
 
-const handleStudySelectionChange = async ({ ack, body, client }: BlockActionContext): Promise<void> => {
+const handleStudySelectionChange = async ({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs): Promise<void> => {
   try {
     await ack();
     console.log("🎯 Study selection change handler triggered!");
@@ -423,7 +422,7 @@ const handleStudySelectionChange = async ({ ack, body, client }: BlockActionCont
 
 // ─── Session selection change handler ───────────────────────────
 
-const handleSessionSelectionChange = async ({ ack, body, client }: BlockActionContext): Promise<void> => {
+const handleSessionSelectionChange = async ({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs): Promise<void> => {
   try {
     await ack();
     console.log("🎯 Session selection change handler triggered!");
@@ -495,15 +494,9 @@ const handleSessionSelectionChange = async ({ ack, body, client }: BlockActionCo
         studyNotes = await studyNotesService.getStudyNotesByParticipantName(sessionObject.session_id);
         console.log(`✅ Loaded ${studyNotes.length} notes for session_id "${sessionObject.session_id}" (session: "${sessionName}")`);
       } else {
-        console.warn("No session_id found in session object, falling back to all study notes");
-        const transcriptNotes = await studyNotesService.getStudyNotesByStudyName(studyName, true);
-        const nonTranscriptNotes = await studyNotesService.getStudyNotesByStudyName(studyName, false);
-
-        const allNotes = [...transcriptNotes, ...nonTranscriptNotes];
-        studyNotes = allNotes.filter((note: NoteDetail, index: number, self: NoteDetail[]) =>
-          index === self.findIndex((n: NoteDetail) => n.id === note.id)
-        );
-        console.log(`✅ Loaded ${studyNotes.length} notes for study "${studyName}" (fallback)`);
+        // No session_id means notes can't be scoped — show empty list rather than
+        // silently returning all study notes (which would display wrong items).
+        console.warn(`No session_id found for session "${sessionName}" — notes dropdown will be empty`);
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

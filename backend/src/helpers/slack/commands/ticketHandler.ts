@@ -6,9 +6,7 @@
  * Supports designer, engineering, and accessibility audiences.
  */
 
-import type { SlashCommandContext, ViewSubmissionContext } from '../../../types/handlers';
-import type { View } from '@slack/types';
-import type { SlashCommand } from '@slack/bolt';
+import type { AllMiddlewareArgs, SlackCommandMiddlewareArgs, SlackViewMiddlewareArgs, ViewSubmitAction, SlashCommand } from '@slack/bolt';
 
 import { getStudiesByUser, getResearchStudyWithRoles } from '../../../services/research_study.service';
 import { getActiveStudy, setActiveStudy } from '../../../services/slack-user-state.service';
@@ -126,7 +124,7 @@ const AUDIENCE_CONFIG: Record<AudienceKey, AudienceConfigItem> = {
 // STEP 1: Open modal with study + audience selection
 // ═══════════════════════════════════════════════════════════
 
-const ticketHandler = async ({ ack, body, client, command }: SlashCommandContext): Promise<void> => {
+const ticketHandler = async ({ ack, body, client, command }: SlackCommandMiddlewareArgs & AllMiddlewareArgs): Promise<void> => {
   try {
     await ack();
 
@@ -222,7 +220,7 @@ function buildStep1Modal(
 // STEP 1 SUBMIT: Load tickets and show Step 2
 // ═══════════════════════════════════════════════════════════
 
-const handleStep1Submit = async ({ ack, body, view, client }: ViewSubmissionContext): Promise<void> => {
+const handleStep1Submit = async ({ ack, body, view, client }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs): Promise<void> => {
   const values = view.state.values;
   const studyId: string | undefined = values.study_select?.study_select_action?.selected_option?.value;
   const audience: string | undefined = values.audience_select?.audience_select_action?.selected_option?.value;
@@ -367,7 +365,7 @@ const handleStep1Submit = async ({ ack, body, view, client }: ViewSubmissionCont
 // STEP 2 SUBMIT: Create GitHub Issues
 // ═══════════════════════════════════════════════════════════
 
-const handleStep2Submit = async ({ ack, body, view, client }: ViewSubmissionContext): Promise<void> => {
+const handleStep2Submit = async ({ ack, body, view, client }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs): Promise<void> => {
   await ack();
 
   const values = view.state.values;

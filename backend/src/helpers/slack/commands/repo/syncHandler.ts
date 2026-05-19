@@ -11,13 +11,13 @@
  * for when RAG is re-enabled.
  */
 
-import type { SlashCommandContext, BlockActionContext } from '../../../../types/handlers';
+import type { AllMiddlewareArgs, SlackCommandMiddlewareArgs, SlackActionMiddlewareArgs, SlackOptionsMiddlewareArgs, SlackViewMiddlewareArgs, BlockAction, ViewSubmitAction } from '@slack/bolt';
 
 import { listAllTopLevelFolders, readFolderContents, readFolders } from '../../../github';
 
 // ─── /qori-sync command ───────────────────────────────────────────
 
-async function syncCommandHandler({ ack, command, client }: SlashCommandContext): Promise<void> {
+async function syncCommandHandler({ ack, command, client }: SlackCommandMiddlewareArgs & AllMiddlewareArgs): Promise<void> {
   await ack();
 
   const channelId = command.channel_id;
@@ -52,12 +52,12 @@ async function syncCommandHandler({ ack, command, client }: SlashCommandContext)
 
 // ─── Folder options lookup (typeahead) ─────────────────────────────
 
-async function handleSyncFolderOptions({ ack, body }: { ack: (opts: any) => Promise<void>; body: any }): Promise<void> {
-  const { repoName } = JSON.parse(body.view.private_metadata);
+async function handleSyncFolderOptions({ ack, body }: SlackOptionsMiddlewareArgs<'block_suggestion'> & AllMiddlewareArgs): Promise<void> {
+  const { repoName } = JSON.parse(body.view?.private_metadata ?? '{}');
   const folders = await listAllTopLevelFolders(repoName);
 
   const options = folders.map((f: any) => ({
-    text: { type: 'plain_text', text: f.name },
+    text: { type: 'plain_text' as const, text: f.name },
     value: f.path,
   }));
   await ack({ options });
@@ -65,7 +65,7 @@ async function handleSyncFolderOptions({ ack, body }: { ack: (opts: any) => Prom
 
 // ─── Folder selected → inject Sub-folder picker ──────────────────
 
-async function handleSyncFolderSelected({ ack, body, client }: BlockActionContext): Promise<void> {
+async function handleSyncFolderSelected({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs): Promise<void> {
   await ack();
   if (!('view' in body) || !body.view) { console.warn('sync_folder_selected: no view in body'); return; }
 
@@ -124,12 +124,12 @@ async function handleSyncFolderSelected({ ack, body, client }: BlockActionContex
 
 // ─── Sub-folder options lookup (typeahead) ─────────────────────────
 
-async function handleSyncSubfolderOptions({ ack, body }: { ack: (opts: any) => Promise<void>; body: any }): Promise<void> {
-  const { repoName, folderPath } = JSON.parse(body.view.private_metadata);
+async function handleSyncSubfolderOptions({ ack, body }: SlackOptionsMiddlewareArgs<'block_suggestion'> & AllMiddlewareArgs): Promise<void> {
+  const { repoName, folderPath } = JSON.parse(body.view?.private_metadata ?? '{}');
   const subs = await readFolderContents(folderPath, repoName);
 
   const options = subs.map((s: any) => ({
-    text: { type: 'plain_text', text: s.name },
+    text: { type: 'plain_text' as const, text: s.name },
     value: s.path,
   }));
 
@@ -138,7 +138,7 @@ async function handleSyncSubfolderOptions({ ack, body }: { ack: (opts: any) => P
 
 // ─── Sub-folder selected → inject Research folder picker ──────────
 
-async function handleSyncSubfolderSelected({ ack, body, client }: BlockActionContext): Promise<void> {
+async function handleSyncSubfolderSelected({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs): Promise<void> {
   await ack();
   if (!('view' in body) || !body.view) { console.warn('sync_subfolder_selected: no view in body'); return; }
 
@@ -196,13 +196,13 @@ async function handleSyncSubfolderSelected({ ack, body, client }: BlockActionCon
 
 // ─── Research folder options lookup (typeahead) ───────────────────
 
-async function handleSyncResearchOptions({ ack, body }: { ack: (opts: any) => Promise<void>; body: any }): Promise<void> {
-  const { repoName, subfolderPath } = JSON.parse(body.view.private_metadata);
+async function handleSyncResearchOptions({ ack, body }: SlackOptionsMiddlewareArgs<'block_suggestion'> & AllMiddlewareArgs): Promise<void> {
+  const { repoName, subfolderPath } = JSON.parse(body.view?.private_metadata ?? '{}');
   const researchPath = `${subfolderPath}/research`;
   const res = await readFolderContents(researchPath, repoName);
 
   const options = res.map((r: any) => ({
-    text: { type: 'plain_text', text: r.name },
+    text: { type: 'plain_text' as const, text: r.name },
     value: r.path,
   }));
 
@@ -211,13 +211,13 @@ async function handleSyncResearchOptions({ ack, body }: { ack: (opts: any) => Pr
 
 // ─── Sync modal submission ────────────────────────────────────────
 
-async function handleSyncFolderSubmission({ ack, body, view, client }: any): Promise<void> {
+async function handleSyncFolderSubmission({ ack, body, view, client }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs): Promise<void> {
   await ack();
 
   const { channelId, folderPath, subfolderPath } = JSON.parse(view.private_metadata);
-  const folderSel = view.state.values.sync_folder_block.sync_folder_selected.selected_option;
-  const subfolderSel = view.state.values.sync_subfolder_block.sync_subfolder_selected.selected_option;
-  const researchSel = view.state.values.sync_research_block.sync_research_selected.selected_option;
+  const folderSel = view.state.values.sync_folder_block.sync_folder_selected.selected_option!;
+  const subfolderSel = view.state.values.sync_subfolder_block.sync_subfolder_selected.selected_option!;
+  const researchSel = view.state.values.sync_research_block.sync_research_selected.selected_option!;
 
   // Immediately let them know we're working on it
   const placeholder = await client.chat.postMessage({
@@ -239,8 +239,8 @@ async function handleSyncFolderSubmission({ ack, body, view, client }: any): Pro
 
   // once done, update that placeholder
   await client.chat.update({
-    channel: placeholder.channel,
-    ts: placeholder.ts,
+    channel: placeholder.channel!,
+    ts: placeholder.ts!,
     text: `\u2705 Synced:\n\u2022 research-folder: *${researchSel.text.text}*`,
   });
 }

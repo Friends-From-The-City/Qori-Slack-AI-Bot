@@ -4,7 +4,7 @@
  * 2. Opportunistic — channel CTA button, self-join via session picker
  */
 
-import type { ViewSubmissionContext, BlockActionContext } from '../../../types/handlers';
+import type { AllMiddlewareArgs, SlackActionMiddlewareArgs, SlackViewMiddlewareArgs, BlockAction, ViewSubmitAction, ButtonAction } from '@slack/bolt';
 import type { View } from '@slack/types';
 
 import sessionObserverService from '../../../services/session_observer.service';
@@ -76,8 +76,8 @@ function formatDateRange(participants: Array<{ scheduled_date?: string }>): stri
 
 // ── Handler: Add observer modal submission ─────────────────
 
-async function handleAddObserverSubmission({ ack, body, client, view }: ViewSubmissionContext): Promise<void> {
-  const values = (view.state as any).values;
+async function handleAddObserverSubmission({ ack, body, client, view }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs): Promise<void> {
+  const values = view.state.values;
   const meta = JSON.parse(view.private_metadata || '{}');
   const { studyId, studyName, channelId, userId, rootViewId } = meta;
 
@@ -260,11 +260,11 @@ async function handleAddObserverSubmission({ ack, body, client, view }: ViewSubm
 
 // ── Handler: Self-join CTA button click ────────────────────
 
-async function handleSelfJoinObserver({ ack, body, client }: BlockActionContext): Promise<void> {
+async function handleSelfJoinObserver({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs): Promise<void> {
   await ack();
 
   try {
-    const { studyId, studyName, sessionIds } = JSON.parse((body as any).actions[0].value);
+    const { studyId, studyName, sessionIds } = JSON.parse((body.actions[0] as ButtonAction).value!);
 
     // Build session list with current counts for the picker
     const allSessions = await sessionObserverService.buildSessionsWithCounts(studyId);
@@ -274,7 +274,7 @@ async function handleSelfJoinObserver({ ack, body, client }: BlockActionContext)
 
     if (ctaSessions.length === 0) {
       await client.chat.postEphemeral({
-        channel: (body as any).channel.id,
+        channel: body.channel!.id,
         user: body.user.id,
         text: 'No sessions available for this study.',
       });
@@ -287,11 +287,11 @@ async function handleSelfJoinObserver({ ack, body, client }: BlockActionContext)
       studyId,
       studyName,
       userId: body.user.id,
-      channelId: (body as any).channel.id,
+      channelId: body.channel!.id,
     });
 
     await client.views.open({
-      trigger_id: (body as any).trigger_id,
+      trigger_id: body.trigger_id,
       view: modal as unknown as View,
     });
   } catch (error) {
@@ -302,8 +302,8 @@ async function handleSelfJoinObserver({ ack, body, client }: BlockActionContext)
 
 // ── Handler: Self-join session picker submission ───────────
 
-async function handleSelfJoinSubmission({ ack, body, client, view }: ViewSubmissionContext): Promise<void> {
-  const values = (view.state as any).values;
+async function handleSelfJoinSubmission({ ack, body, client, view }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs): Promise<void> {
+  const values = view.state.values;
   const meta = JSON.parse(view.private_metadata || '{}');
   const { studyId, studyName, userId: joinerUserId, channelId } = meta;
 

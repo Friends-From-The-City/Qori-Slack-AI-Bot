@@ -10,7 +10,7 @@
  * lead researcher, and cascade readiness status before showing the form.
  */
 
-import type { BlockActionContext } from '../../../../types/handlers';
+import type { AllMiddlewareArgs, SlackActionMiddlewareArgs, BlockAction } from '@slack/bolt';
 import type { View } from '@slack/types';
 
 import { getResearchStudyWithRoles, getStudiesByUser } from '../../../../services/research_study.service';
@@ -30,7 +30,7 @@ interface MutableBlock {
 
 // ─── Modal opener: create_research_plan ──────────────────────────
 
-async function openResearchPlanModal({ ack, body, client }: BlockActionContext) {
+async function openResearchPlanModal({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
   try {
     await ack();
 

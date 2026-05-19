@@ -5,7 +5,7 @@
  *               /qori-observe, /qori-outreach, /qori-notes
  */
 
-import type { SlashCommandContext, BlockActionContext, ViewSubmissionContext } from '../../../types/handlers';
+import type { AllMiddlewareArgs, SlackCommandMiddlewareArgs, SlackActionMiddlewareArgs, SlackViewMiddlewareArgs, BlockAction, ViewSubmitAction, ButtonAction } from '@slack/bolt';
 
 import { getStudiesByUser, getResearchStudyWithRoles } from '../../../services/research_study.service';
 import studyParticipantService from '../../../services/study_participant.service';
@@ -84,7 +84,7 @@ async function fetchAndRenderDashboard(client: any, viewId: string, study: any, 
 
 // ── Command handler ────────────────────────────────────────
 
-async function fieldworkHandler({ ack, body, client, command }: SlashCommandContext) {
+async function fieldworkHandler({ ack, body, client, command }: SlackCommandMiddlewareArgs & AllMiddlewareArgs) {
   try {
     await ack();
 
@@ -114,7 +114,7 @@ async function fieldworkHandler({ ack, body, client, command }: SlashCommandCont
       const { outreachStats, context } = buildDashboardContext(allParticipants, study);
 
       const dashboard = buildFieldworkDashboard(study, participantStats, observerStats, outreachStats, context);
-      (dashboard as any).private_metadata = JSON.stringify({ channelId, userId, studyId: study.id, studyName: study.name });
+      dashboard.private_metadata = JSON.stringify({ channelId, userId, studyId: study.id, studyName: study.name });
 
       await client.views.open({ trigger_id: body.trigger_id, view: dashboard });
       return;
@@ -139,9 +139,9 @@ async function fieldworkHandler({ ack, body, client, command }: SlashCommandCont
 
 // ── Study picker submission ────────────────────────────────
 
-async function handleFieldworkStudyPickerSubmit({ ack, body, view, client }: ViewSubmissionContext) {
+async function handleFieldworkStudyPickerSubmit({ ack, body, view, client }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs) {
   try {
-    const selectedStudyId = (view.state as any).values.fieldwork_study_select.fieldwork_study_choice.selected_option.value;
+    const selectedStudyId = view.state.values.fieldwork_study_select.fieldwork_study_choice.selected_option!.value;
     const meta = JSON.parse(view.private_metadata || '{}');
     const userId = meta.userId || body.user.id;
 
@@ -160,7 +160,7 @@ async function handleFieldworkStudyPickerSubmit({ ack, body, view, client }: Vie
 
     const dashboardMeta = { ...meta, studyId: study.id, studyName: study.name };
     const dashboard = buildFieldworkDashboard(study, participantStats, observerStats, outreachStats, context);
-    (dashboard as any).private_metadata = JSON.stringify(dashboardMeta);
+    dashboard.private_metadata = JSON.stringify(dashboardMeta);
 
     await ack({ response_action: 'update', view: dashboard } as any);
   } catch (error) {
@@ -197,11 +197,11 @@ async function refreshDashboardAfterAction(client: any, rootViewId: string, stud
 
 // ── Sub-modal action handlers ──────────────────────────────
 
-async function handleFieldworkAddParticipant({ ack, body, client }: BlockActionContext) {
+async function handleFieldworkAddParticipant({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
   await ack();
   try {
-    const { studyId, studyName } = JSON.parse((body as any).actions[0].value);
-    const dashboardMeta = JSON.parse((body as any).view.private_metadata || '{}');
+    const { studyId, studyName } = JSON.parse((body.actions[0] as ButtonAction).value!);
+    const dashboardMeta = JSON.parse(body.view?.private_metadata || '{}');
     const studies = await getStudiesByUser(body.user.id);
 
     // Build study options and pre-select the current study
@@ -221,11 +221,11 @@ async function handleFieldworkAddParticipant({ ack, body, client }: BlockActionC
     }
 
     await client.views.push({
-      trigger_id: (body as any).trigger_id,
+      trigger_id: body.trigger_id,
       view: {
         ...addParticipantModal,
         blocks,
-        private_metadata: JSON.stringify({ ...dashboardMeta, studyId, studyName, rootViewId: (body as any).view.id }),
+        private_metadata: JSON.stringify({ ...dashboardMeta, studyId, studyName, rootViewId: body.view?.id }),
       } as View,
     });
   } catch (error) {
@@ -234,11 +234,11 @@ async function handleFieldworkAddParticipant({ ack, body, client }: BlockActionC
   }
 }
 
-async function handleFieldworkUpdateStatus({ ack, body, client }: BlockActionContext) {
+async function handleFieldworkUpdateStatus({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
   await ack();
   try {
-    const { studyId, studyName } = JSON.parse((body as any).actions[0].value);
-    const dashboardMeta = JSON.parse((body as any).view.private_metadata || '{}');
+    const { studyId, studyName } = JSON.parse((body.actions[0] as ButtonAction).value!);
+    const dashboardMeta = JSON.parse(body.view?.private_metadata || '{}');
     const studies = await getStudiesByUser(body.user.id);
 
     const studyOptions = studies.map((s: any) => ({
@@ -266,11 +266,11 @@ async function handleFieldworkUpdateStatus({ ack, body, client }: BlockActionCon
     }
 
     await client.views.push({
-      trigger_id: (body as any).trigger_id,
+      trigger_id: body.trigger_id,
       view: {
         ...updateParticipantStatusModal,
         blocks,
-        private_metadata: JSON.stringify({ ...dashboardMeta, studyId, studyName, rootViewId: (body as any).view.id }),
+        private_metadata: JSON.stringify({ ...dashboardMeta, studyId, studyName, rootViewId: body.view?.id }),
       } as View,
     });
   } catch (error) {
@@ -279,11 +279,11 @@ async function handleFieldworkUpdateStatus({ ack, body, client }: BlockActionCon
   }
 }
 
-async function handleFieldworkObserve({ ack, body, client }: BlockActionContext) {
+async function handleFieldworkObserve({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
   await ack();
   try {
-    const { studyId, studyName } = JSON.parse((body as any).actions[0].value);
-    const dashboardMeta = JSON.parse((body as any).view.private_metadata || '{}');
+    const { studyId, studyName } = JSON.parse((body.actions[0] as ButtonAction).value!);
+    const dashboardMeta = JSON.parse(body.view?.private_metadata || '{}');
     const channelId = dashboardMeta.channelId || body.user.id;
 
     // Build sessions with current observer counts
@@ -309,7 +309,7 @@ async function handleFieldworkObserve({ ack, body, client }: BlockActionContext)
 
     const observeView = buildAddObserverModal(sessions, channelName);
     await client.views.push({
-      trigger_id: (body as any).trigger_id,
+      trigger_id: body.trigger_id,
       view: {
         ...observeView,
         private_metadata: JSON.stringify({
@@ -318,7 +318,7 @@ async function handleFieldworkObserve({ ack, body, client }: BlockActionContext)
           studyName,
           channelId,
           userId: body.user.id,
-          rootViewId: (body as any).view.id,
+          rootViewId: body.view?.id,
         }),
       } as View,
     });
@@ -328,11 +328,11 @@ async function handleFieldworkObserve({ ack, body, client }: BlockActionContext)
   }
 }
 
-async function handleFieldworkOutreach({ ack, body, client }: BlockActionContext) {
+async function handleFieldworkOutreach({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
   await ack();
   try {
-    const { studyId, studyName } = JSON.parse((body as any).actions[0].value);
-    const dashboardMeta = JSON.parse((body as any).view.private_metadata || '{}');
+    const { studyId, studyName } = JSON.parse((body.actions[0] as ButtonAction).value!);
+    const dashboardMeta = JSON.parse(body.view?.private_metadata || '{}');
     const studies = await getStudiesByUser(body.user.id);
 
     const studyOptions = studies.map((s: any) => ({
@@ -358,11 +358,11 @@ async function handleFieldworkOutreach({ ack, body, client }: BlockActionContext
     });
 
     await client.views.push({
-      trigger_id: (body as any).trigger_id,
+      trigger_id: body.trigger_id,
       view: {
         ...participantOutreachModal,
         blocks,
-        private_metadata: JSON.stringify({ ...dashboardMeta, studyId, studyName, rootViewId: (body as any).view.id }),
+        private_metadata: JSON.stringify({ ...dashboardMeta, studyId, studyName, rootViewId: body.view?.id }),
       } as View,
     });
   } catch (error) {
@@ -371,11 +371,11 @@ async function handleFieldworkOutreach({ ack, body, client }: BlockActionContext
   }
 }
 
-async function handleFieldworkUploadNotes({ ack, body, client }: BlockActionContext) {
+async function handleFieldworkUploadNotes({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
   await ack();
   try {
-    const { studyId, studyName } = JSON.parse((body as any).actions[0].value);
-    const dashboardMeta = JSON.parse((body as any).view.private_metadata || '{}');
+    const { studyId, studyName } = JSON.parse((body.actions[0] as ButtonAction).value!);
+    const dashboardMeta = JSON.parse(body.view?.private_metadata || '{}');
     const userId = body.user.id;
 
     // Try observer sessions first
@@ -433,7 +433,7 @@ async function handleFieldworkUploadNotes({ ack, body, client }: BlockActionCont
     };
 
     await client.views.push({
-      trigger_id: (body as any).trigger_id,
+      trigger_id: body.trigger_id,
       view: buildSessionNotesView(initialState as any) as View,
     });
   } catch (error) {

@@ -6,11 +6,11 @@
  * for the study dropdown in the plan modal.
  */
 
-import type { SlashCommandContext, BlockActionContext } from '../../../types/handlers';
+import type { AllMiddlewareArgs, SlackCommandMiddlewareArgs, SlackActionMiddlewareArgs, BlockAction } from '@slack/bolt';
 
 // ─── /qori command ─────────────────────────────────────────────────
 
-async function qoriMainHandler({ ack, command, client }: SlashCommandContext): Promise<void> {
+async function qoriMainHandler({ ack, command, client }: SlackCommandMiddlewareArgs & AllMiddlewareArgs): Promise<void> {
   await ack();
   const channelId = command.channel_id;
 
@@ -132,7 +132,7 @@ async function qoriMainHandler({ ack, command, client }: SlashCommandContext): P
 
 // ─── study_select action ───────────────────────────────────────────
 
-async function handleStudySelect({ ack, body, client }: BlockActionContext): Promise<void> {
+async function handleStudySelect({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs): Promise<void> {
   await ack();
   if (!('view' in body) || !body.view) { console.warn('study_select: no view in body'); return; }
 

@@ -171,6 +171,10 @@ const discussionGuideModal = {
             value: "60",
           },
           {
+            text: { type: "plain_text", text: "75 minutes" },
+            value: "75",
+          },
+          {
             text: { type: "plain_text", text: "90 minutes" },
             value: "90",
           },

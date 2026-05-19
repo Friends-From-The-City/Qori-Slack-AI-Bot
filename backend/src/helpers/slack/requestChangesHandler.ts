@@ -1,5 +1,5 @@
 import type { WebClient } from '@slack/web-api';
-import type { BlockAction, ViewSubmitAction, AckFn } from '@slack/bolt';
+import type { BlockAction, ViewSubmitAction, ViewResponseAction, AckFn } from '@slack/bolt';
 import type { View } from '@slack/types';
 import { requestStudyChangesModal } from './ui/requestStudyChangesModal';
 import { getResearchStudyWithRoles } from '../../services/research_study.service';
@@ -79,7 +79,7 @@ export async function handleApprove(
 
 // Generic function to handle approve modal submission
 export async function handleApproveSubmission(
-  ack: AckFn<ViewSubmitAction>,
+  ack: AckFn<ViewResponseAction>,
   view: ViewSubmitAction['view'],
   body: ViewSubmitAction,
   client: WebClient,
@@ -258,7 +258,7 @@ export async function handleRequestChanges(
 
 // Generic function to handle request changes modal submission
 export async function handleRequestChangesSubmission(
-  ack: AckFn<ViewSubmitAction>,
+  ack: AckFn<ViewResponseAction>,
   view: ViewSubmitAction['view'],
   body: ViewSubmitAction,
   client: WebClient,

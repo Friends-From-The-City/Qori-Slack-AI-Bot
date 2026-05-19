@@ -1,5 +1,6 @@
 module.exports = {
   testMatch: ['<rootDir>/src/__tests__/**/*.test.{js,ts}'],
+  testPathIgnorePatterns: ['/node_modules/', '<rootDir>/src/__tests__/integration/'],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
   },

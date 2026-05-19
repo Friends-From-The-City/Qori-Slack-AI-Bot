@@ -5,7 +5,7 @@
  * and first-run ceremony submission handler.
  */
 
-import type { SlashCommandContext, BlockActionContext, ViewSubmissionContext } from '../../../../types/handlers';
+import type { AllMiddlewareArgs, SlackCommandMiddlewareArgs, SlackActionMiddlewareArgs, SlackViewMiddlewareArgs, BlockAction, ViewSubmitAction } from '@slack/bolt';
 
 import { isFirstRun, markOnboarded } from '../../../../services/slack-user-state.service';
 import { buildLearnModal, buildCondensedModal } from '../../ui/qoriLearnModal';
@@ -13,7 +13,7 @@ import type { View } from '@slack/types';
 
 // ─── /qori-learn command ───────────────────────────────────────────
 
-async function learnCommandHandler({ ack, body, client, command }: SlashCommandContext): Promise<void> {
+async function learnCommandHandler({ ack, body, client, command }: SlackCommandMiddlewareArgs & AllMiddlewareArgs): Promise<void> {
   await ack();
   const userId = command.user_id;
   const channelId = command.channel_id;
@@ -30,7 +30,7 @@ async function learnCommandHandler({ ack, body, client, command }: SlashCommandC
 
 // ─── Navigation actions ────────────────────────────────────────────
 
-async function handleLearnNext({ ack, body, client }: BlockActionContext): Promise<void> {
+async function handleLearnNext({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs): Promise<void> {
   await ack();
   if (!('view' in body) || !body.view) { console.warn('learn_next: no view in body'); return; }
   const targetScreen = parseInt((body.actions[0] as any).value, 10);
@@ -38,7 +38,7 @@ async function handleLearnNext({ ack, body, client }: BlockActionContext): Promi
   await client.views.update({ view_id: body.view.id, view: buildLearnModal(targetScreen, meta) as unknown as View });
 }
 
-async function handleLearnPrev({ ack, body, client }: BlockActionContext): Promise<void> {
+async function handleLearnPrev({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs): Promise<void> {
   await ack();
   if (!('view' in body) || !body.view) { console.warn('learn_prev: no view in body'); return; }
   const targetScreen = parseInt((body.actions[0] as any).value, 10);
@@ -46,7 +46,7 @@ async function handleLearnPrev({ ack, body, client }: BlockActionContext): Promi
   await client.views.update({ view_id: body.view.id, view: buildLearnModal(targetScreen, meta) as unknown as View });
 }
 
-async function handleLearnRestartTour({ ack, body, client }: BlockActionContext): Promise<void> {
+async function handleLearnRestartTour({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs): Promise<void> {
   await ack();
   if (!('view' in body) || !body.view) { console.warn('learn_restart_tour: no view in body'); return; }
   const meta = JSON.parse(body.view.private_metadata || '{}');
@@ -55,7 +55,7 @@ async function handleLearnRestartTour({ ack, body, client }: BlockActionContext)
 
 // ─── Ceremony submission ───────────────────────────────────────────
 
-async function handleLearnCeremonySubmit({ ack, body, view, client }: ViewSubmissionContext): Promise<void> {
+async function handleLearnCeremonySubmit({ ack, body, view, client }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs): Promise<void> {
   const meta = JSON.parse(view.private_metadata || '{}');
   const userId = meta.userId || body.user.id;
   const channelId = meta.channelId;

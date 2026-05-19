@@ -1,4 +1,4 @@
-import type { SlashCommandContext, ViewSubmissionContext, BlockActionContext } from '../../../types/handlers';
+import type { AllMiddlewareArgs, SlackCommandMiddlewareArgs, SlackActionMiddlewareArgs, SlackViewMiddlewareArgs, BlockAction, ViewSubmitAction, ButtonAction } from '@slack/bolt';
 import type { View } from '@slack/types';
 
 import { emailModal } from "../ui/outreach/emailModal";
@@ -17,9 +17,10 @@ import studyParticipantService from "../../../services/study_participant.service
 import { buildAddObserverModal } from "../ui/addObserverModal";
 import sessionObserverService from "../../../services/session_observer.service";
 import { calculatePerPersonCompensation } from '../../../utils/compensationCalculator';
+import { refreshDashboardAfterAction } from './fieldworkHandler';
 
 
-async function participantOutreachHandler({ ack, body, client, command }: SlashCommandContext): Promise<void> {
+async function participantOutreachHandler({ ack, body, client, command }: SlackCommandMiddlewareArgs & AllMiddlewareArgs): Promise<void> {
   try {
     console.log("🚀 ~ participantOutreachHandler ~ body:", body);
     await ack();
@@ -67,7 +68,7 @@ async function participantOutreachHandler({ ack, body, client, command }: SlashC
   }
 }
 
-async function handleParticipantOutreachSubmit({ ack, body, view, client }: ViewSubmissionContext): Promise<void> {
+async function handleParticipantOutreachSubmit({ ack, body, view, client }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs): Promise<void> {
   // Don't acknowledge yet - we'll return a response with the next view
 
   console.log("🚀 ~ handleParticipantOutreachSubmit called");
@@ -201,7 +202,7 @@ async function handleParticipantOutreachSubmit({ ack, body, view, client }: View
   }
 }
 
-async function handleInitialRecruitmentSubmit({ ack, body, view, client }: ViewSubmissionContext): Promise<void> {
+async function handleInitialRecruitmentSubmit({ ack, body, view, client }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs): Promise<void> {
   console.log("🚀 ~ handleInitialRecruitmentSubmit called");
   console.log("🚀 ~ view.state.values:", Object.keys(view.state.values).length, "blocks");
 
@@ -343,7 +344,7 @@ async function handleInitialRecruitmentSubmit({ ack, body, view, client }: ViewS
   }
 }
 
-async function handleReschedulingRequestSubmit({ ack, body, view, client }: ViewSubmissionContext): Promise<void> {
+async function handleReschedulingRequestSubmit({ ack, body, view, client }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs): Promise<void> {
   console.log("🚀 ~ handleReschedulingRequestSubmit called");
   console.log("🚀 ~ view.state.values:", Object.keys(view.state.values).length, "blocks");
 
@@ -473,7 +474,7 @@ async function handleReschedulingRequestSubmit({ ack, body, view, client }: View
   }
 }
 
-async function handleSessionConfirmationSubmit({ ack, body, view, client }: ViewSubmissionContext): Promise<void> {
+async function handleSessionConfirmationSubmit({ ack, body, view, client }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs): Promise<void> {
   console.log("🚀 ~ handleSessionConfirmationSubmit called");
   console.log("🚀 ~ view.state.values:", Object.keys(view.state.values).length, "blocks");
 
@@ -605,7 +606,7 @@ async function handleSessionConfirmationSubmit({ ack, body, view, client }: View
   }
 }
 
-async function handleThankYouSubmit({ ack, body, view, client }: ViewSubmissionContext): Promise<void> {
+async function handleThankYouSubmit({ ack, body, view, client }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs): Promise<void> {
   console.log("🚀 ~ handleThankYouSubmit called");
   console.log("🚀 ~ view.state.values:", Object.keys(view.state.values).length, "blocks");
 
@@ -731,7 +732,7 @@ async function handleThankYouSubmit({ ack, body, view, client }: ViewSubmissionC
   }
 }
 
-async function handleFollowUpSubmit({ ack, body, view, client }: ViewSubmissionContext): Promise<void> {
+async function handleFollowUpSubmit({ ack, body, view, client }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs): Promise<void> {
   console.log("🚀 ~ handleFollowUpSubmit called");
   console.log("🚀 ~ view.state.values:", Object.keys(view.state.values).length, "blocks");
 
@@ -853,7 +854,7 @@ async function handleFollowUpSubmit({ ack, body, view, client }: ViewSubmissionC
   }
 }
 
-async function handleSessionReminderSubmit({ ack, body, view, client }: ViewSubmissionContext): Promise<void> {
+async function handleSessionReminderSubmit({ ack, body, view, client }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs): Promise<void> {
   console.log("🚀 ~ handleSessionReminderSubmit called");
   console.log("🚀 ~ view.state.values:", Object.keys(view.state.values).length, "blocks");
 
@@ -985,7 +986,7 @@ async function handleSessionReminderSubmit({ ack, body, view, client }: ViewSubm
   }
 }
 
-async function handleAddParticipantSubmit({ ack, body, view, client }: ViewSubmissionContext): Promise<void> {
+async function handleAddParticipantSubmit({ ack, body, view, client }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs): Promise<void> {
   await ack();
 
   try {
@@ -1144,24 +1145,10 @@ async function handleAddParticipantSubmit({ ack, body, view, client }: ViewSubmi
       ]
     });
 
-    // Close the modal with a simple success message
-    // await client.views.update({
-    //   view_id: body.view.id,
-    //   view: {
-    //     type: "modal",
-    //     title: { type: "plain_text", text: "Success" },
-    //     close: { type: "plain_text", text: "Close" },
-    //     blocks: [
-    //       {
-    //         type: "section",
-    //         text: {
-    //           type: "mrkdwn",
-    //           text: `:white_check_mark: *Participant Added Successfully!*\n\nThe participant has been added and a notification has been sent to the channel.`
-    //         }
-    //       }
-    //     ]
-    //   }
-    // });
+    // Refresh fieldwork dashboard if this modal was opened from it
+    if (meta.rootViewId) {
+      await refreshDashboardAfterAction(client, meta.rootViewId, study.id, userId, channelId, study_name);
+    }
 
   } catch (error) {
     console.error("🚨 Error handling add participant modal submission:", error);
@@ -1185,13 +1172,13 @@ async function handleAddParticipantSubmit({ ack, body, view, client }: ViewSubmi
 }
 
 // Handler for the observer modal button click (from outreach flow)
-async function handleObserverModalButton({ ack, body, client }: BlockActionContext): Promise<void> {
+async function handleObserverModalButton({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs): Promise<void> {
   try {
     await ack();
 
-    const { value } = (body as any).actions[0];
-    const { studyId, studyName } = JSON.parse(value);
-    const channelId = (body as any).channel?.id || body.user.id;
+    const action = body.actions[0] as ButtonAction;
+    const { studyId, studyName } = JSON.parse(action.value!);
+    const channelId = body.channel?.id || body.user.id;
 
     // Build sessions with current observer counts
     const sessions = await sessionObserverService.buildSessionsWithCounts(studyId);
@@ -1214,7 +1201,7 @@ async function handleObserverModalButton({ ack, body, client }: BlockActionConte
 
     const observeView = buildAddObserverModal(sessions, channelName);
     await client.views.open({
-      trigger_id: (body as any).trigger_id,
+      trigger_id: body.trigger_id,
       view: {
         ...observeView,
         private_metadata: JSON.stringify({
@@ -1229,7 +1216,7 @@ async function handleObserverModalButton({ ack, body, client }: BlockActionConte
   } catch (error) {
     console.error("Error handling observer modal button:", error);
     await client.chat.postEphemeral({
-      channel: (body as any).channel?.id || body.user.id,
+      channel: body.channel?.id || body.user.id,
       user: body.user.id,
       text: "Sorry, there was an error opening the observer modal. Please try again.",
     });

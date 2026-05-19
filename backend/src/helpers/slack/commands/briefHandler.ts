@@ -1,22 +1,34 @@
 /**
  * briefHandler.ts — /qori-brief submission handler
  *
- * Extracted from events.js for maintainability. Handles the research_brief_modal
- * submission: study creation, form extraction, discovery variable injection,
- * YAML processing, and result messaging.
+ * DATA ASSEMBLY POINT for the research brief template (ADR 0005).
+ * The handler computes all mechanical values (display date, timeline phases,
+ * timeline display label, cascade counts). It also runs two structured LLM
+ * tasks (target barriers, research questions) directly so it can assign
+ * stable IDs before passing the complete data to yamlProcessor for prose
+ * tasks + rendering.
+ *
+ * v7.0 restructure: interleaved Handlebars/AI architecture.
  */
 
-import type { ViewSubmissionContext } from '../../../types/handlers';
-import type { View } from '@slack/types';
+import type { AllMiddlewareArgs, SlackViewMiddlewareArgs, ViewSubmitAction } from '@slack/bolt';
 
+import { format } from 'date-fns';
 import { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo, readFolders, copyFilesToFolder } from '../../github';
 import { getResearchStudyWithRoles, addResearchStudyWithRoles } from '../../../services/research_study.service';
 import { getChannelConfigByChannelId } from '../../../services/channel-config.service';
 import { processYamlTemplate } from '../../yamlProcessor';
+import { executeAiGenerationTasks } from '../../langchain';
 import { addStudyStatus } from '../../../services/study-status.service';
 import { sendStudyResultMessage, generateStudyResultBlocks } from '../ui/studyResultBlocks';
 import { loadDiscoveryArtifacts, aggregateDiscoveryVariables, type DiscoveryArtifact } from '../../discoveryLoader';
 import { parseBudget, parseParticipantTarget } from '../../../utils/budgetParser';
+import {
+  buildTimelinePhases,
+  TIMELINE_DISPLAY_LABELS,
+  type TimelinePhase,
+  type TimelinePreference,
+} from '../../../utils/timelineComputation';
 
 // ─── Discovery type maps ────────────────────────────────────────
 
@@ -33,6 +45,30 @@ const markerPrefixes: Record<DiscoveryType, string> = {
   'stakeholder-interviews': 'S',
   'survey-synthesis': 'V',
 };
+
+// ─── Structured LLM output types ────────────────────────────────
+
+interface RawBarrier {
+  barrier: string;
+  source?: string | null;
+}
+
+interface RawQuestion {
+  question: string;
+  priority?: string | null;
+}
+
+interface BriefBarrier {
+  id: string;
+  barrier: string;
+  source: string;
+}
+
+interface BriefQuestion {
+  id: string;
+  question: string;
+  priority: string;
+}
 
 // ─── Template input contract ────────────────────────────────────
 
@@ -51,6 +87,18 @@ interface BriefTemplateInput {
   start_date: string;
   decision_deadline: string;
   budget: string;
+  // Mechanical computations (handler-assembled, not LLM-generated)
+  display_date: string;
+  timeline_display: string;
+  timeline_phases: TimelinePhase[];
+  // Handler-assigned structured data (from pre-render LLM JSON tasks + ID assignment)
+  target_barriers: BriefBarrier[];
+  research_questions: BriefQuestion[];
+  research_objectives: string[];
+  // Cascade summary counts
+  objectives_count: number;
+  research_questions_count: number;
+  target_barriers_count: number;
   // Discovery enrichment (optional, injected conditionally)
   discovery_count?: number;
   discovery_sources?: string;
@@ -58,12 +106,83 @@ interface BriefTemplateInput {
   [key: string]: unknown; // upstream discovery variables merged via Object.assign
 }
 
+// ─── Pre-render LLM tasks ───────────────────────────────────────
+
+/**
+ * Build the two structured JSON tasks that the handler runs directly
+ * (Option C from the delta document). These produce barrier/question
+ * arrays without IDs. The handler assigns IDs mechanically after parsing.
+ */
+function buildStructuredTasks(data: Record<string, unknown>) {
+  return [
+    {
+      task_id: 'target_barriers_raw',
+      output_format: 'json',
+      prompt: `Identify the target barriers for validation in this research study.
+
+Problem statement: ${data.problem_statement}
+Learning objectives: ${data.learning_objectives}
+Methodology: ${data.methodology}
+
+${data.upstream_discovered_barriers ? `DISCOVERY BARRIERS: ${data.upstream_discovered_barriers}` : ''}
+${data.upstream_stakeholder_constraints ? `STAKEHOLDER CONSTRAINTS: ${data.upstream_stakeholder_constraints}` : ''}
+${data.upstream_survey_findings ? `SURVEY FINDINGS: ${data.upstream_survey_findings}` : ''}
+
+Rules:
+1. Each barrier is a specific, testable hypothesis about what prevents users from succeeding.
+2. If discovery data exists, ground barriers in that evidence. Include the source.
+3. If no discovery data, derive barriers from the problem statement and learning objectives.
+4. 3-6 barriers. Fewer is better if they are precise.
+5. Do NOT invent statistics, metrics, or numbers. Use ONLY data from the inputs provided.
+
+Output ONLY valid JSON. No prose, no code fences.
+Schema: [{"barrier": "string", "source": "string or null"}]`,
+    },
+    {
+      task_id: 'research_questions_raw',
+      output_format: 'json',
+      prompt: `Generate research questions for this study.
+
+Learning objectives: ${data.learning_objectives}
+Problem statement: ${data.problem_statement}
+Methodology: ${data.methodology}
+
+${data.upstream_stakeholder_questions_for_users ? `STAKEHOLDER QUESTIONS FOR USERS: ${data.upstream_stakeholder_questions_for_users}` : ''}
+
+Rules:
+1. If stakeholder questions exist, use them as research questions (they come pre-prioritized).
+2. Otherwise, reframe learning objectives as answerable research questions.
+3. Mark priority: Primary (must-answer), Secondary (valuable), or Exploratory (nice-to-have).
+4. 3-7 questions. Primary questions first.
+5. Do NOT invent statistics, metrics, or numbers. Use ONLY data from the inputs provided.
+
+Output ONLY valid JSON. No prose, no code fences.
+Schema: [{"question": "string", "priority": "Primary|Secondary|Exploratory"}]`,
+    },
+  ];
+}
+
+/**
+ * Parse a JSON AI response, stripping code fences if present.
+ */
+function parseJsonResponse<T>(raw: string, taskId: string): T {
+  let cleaned = raw;
+  const fenceMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fenceMatch) cleaned = fenceMatch[1];
+  try {
+    return JSON.parse(cleaned.trim()) as T;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Error(`Handler pre-render task '${taskId}' returned invalid JSON: ${message}`);
+  }
+}
+
 // ─── Handler ────────────────────────────────────────────────────
 
 /**
  * Handle research_brief_modal submission.
  */
-async function handleBriefSubmission({ ack, body, view, client }: ViewSubmissionContext): Promise<void> {
+async function handleBriefSubmission({ ack, body, view, client }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs): Promise<void> {
   await ack();
 
   const values = view.state.values;
@@ -71,7 +190,6 @@ async function handleBriefSubmission({ ack, body, view, client }: ViewSubmission
   const { channelId } = meta as { channelId: string };
 
   // Helper function to extract values from different input types.
-  // Returns mixed shapes depending on the element type — callers cast as needed.
   const extract = (blockId: string, actionId: string): unknown => {
     const block = values[blockId];
     if (!block) return null;
@@ -97,7 +215,7 @@ async function handleBriefSubmission({ ack, body, view, client }: ViewSubmission
 
   console.log("🚀 ~ Research Brief ~ studyName:", studyName);
 
-  // Fetch the full study — or create it if it doesn't exist yet
+  // ── Study creation (unchanged from v6.0) ──
   let study = await getResearchStudyWithRoles(studyName!);
 
   if (!study || !study.path) {
@@ -151,7 +269,7 @@ async function handleBriefSubmission({ ack, body, view, client }: ViewSubmission
     }
   }
 
-  // Methodology label mapping
+  // ── Methodology (unchanged from v6.0) ──
   const methodologyLabels: Record<string, string> = {
     usability_testing: 'Moderated usability testing',
     user_interviews: 'User interviews',
@@ -163,32 +281,25 @@ async function handleBriefSubmission({ ack, body, view, client }: ViewSubmission
     mixed_methods: 'Mixed methods',
   };
 
-  // Method: prioritize override text if filled, otherwise use radio selection
   const methodOverride = extract('method_override_block', 'method_override_input') as string | null;
   const methodRadio = extract('research_method_block', 'research_method_select') as { value: string } | null;
   const methodValue: string = methodOverride ? 'custom' : (methodRadio?.value || 'usability_testing');
   const methodLabel: string = methodOverride || methodologyLabels[methodRadio?.value || 'usability_testing'] || (methodRadio?.value || 'usability_testing');
   const leadResearcher: string = meta.leadResearcher || body.user.name || '';
 
-  const data: BriefTemplateInput = {
-    selected_study: studyName,
-    lead_researcher: leadResearcher,
-    requestor_name: (extract('stakeholder_block', 'stakeholder_input') as string) || '',
-    problem_statement: (extract('problem_statement_block', 'problem_statement_input') as string) || '',
-    learning_objectives: (extract('learning_objectives_block', 'learning_objectives_input') as string) || '',
-    out_of_scope: (extract('out_of_scope_block', 'out_of_scope_input') as string) || '',
-    methodology: methodLabel,
-    methodology_value: methodValue,
-    participant_approach: (extract('participant_approach_block', 'participant_approach_input') as string) || '',
-    timeline_preference: ((extract('timeline_block', 'timeline_radio') as { value: string } | null)?.value) || 'standard',
-    start_date: (extract('start_date_block', 'start_date_picker') as string) || '',
-    decision_deadline: (extract('decision_deadline_block', 'decision_deadline_picker') as string) || '',
-    budget: (extract('budget_block', 'budget_input') as string) || '',
-  };
+  // ── Form values ──
+  const problemStatement = (extract('problem_statement_block', 'problem_statement_input') as string) || '';
+  const learningObjectives = (extract('learning_objectives_block', 'learning_objectives_input') as string) || '';
+  const outOfScope = (extract('out_of_scope_block', 'out_of_scope_input') as string) || '';
+  const participantApproach = (extract('participant_approach_block', 'participant_approach_input') as string) || '';
+  const timelinePref = ((extract('timeline_block', 'timeline_radio') as { value: string } | null)?.value) || 'standard';
+  const startDate = (extract('start_date_block', 'start_date_picker') as string) || '';
+  const decisionDeadline = (extract('decision_deadline_block', 'decision_deadline_picker') as string) || '';
+  const budgetStr = (extract('budget_block', 'budget_input') as string) || '';
 
-  // Parse budget and target participants, save to study row
-  const parsedBudget: number | null = parseBudget(data.budget);
-  const targetParticipants: number | null = parseParticipantTarget(data.participant_approach);
+  // ── Parse budget and target participants, save to study row ──
+  const parsedBudget: number | null = parseBudget(budgetStr);
+  const targetParticipants: number | null = parseParticipantTarget(participantApproach);
   const studyUpdates: Record<string, unknown> = {};
   if (parsedBudget !== null) studyUpdates.parsed_budget_amount = parsedBudget;
   if (targetParticipants !== null) studyUpdates.target_participants = targetParticipants;
@@ -202,8 +313,17 @@ async function handleBriefSubmission({ ack, body, view, client }: ViewSubmission
     }
   }
 
-  // Discovery injection — brief handler does manual loading (not YAML consumes).
-  // Researcher selects which artifacts to include via modal checkboxes.
+  // ── Mechanical computations (ADR 0005: handler computes, not LLM) ──
+  const displayDate = format(new Date(), 'MMMM d, yyyy');
+  const timelineDisplay = TIMELINE_DISPLAY_LABELS[timelinePref as TimelinePreference] || TIMELINE_DISPLAY_LABELS.standard;
+  const timelinePhases = buildTimelinePhases(startDate, timelinePref);
+
+  // ── Discovery injection (unchanged from v6.0) ──
+  const discoveryContext: Record<string, unknown> = {};
+  let discoveryCount: number | undefined;
+  let discoverySources: string | undefined;
+  let citationConvention: string | undefined;
+
   const discoverySelections = (extract('discovery_selection_block', 'discovery_selection') as string[] | null) || [];
   if (discoverySelections.length > 0) {
     const team: string = meta.team || process.env.QORI_TEAM_SLUG || 'friends-lab';
@@ -214,18 +334,16 @@ async function handleBriefSubmission({ ack, body, view, client }: ViewSubmission
 
       if (selectedArtifacts.length > 0) {
         const upstreamVars: Record<string, unknown> = aggregateDiscoveryVariables(selectedArtifacts);
-        Object.assign(data, upstreamVars);
+        Object.assign(discoveryContext, upstreamVars);
 
-        // Template variables for Discovery sources appendix
-        data.discovery_count = selectedArtifacts.length;
-        data.discovery_sources = selectedArtifacts
+        discoveryCount = selectedArtifacts.length;
+        discoverySources = selectedArtifacts
           .map((a: DiscoveryArtifact) => {
             const prefix = markerPrefixes[a.type as DiscoveryType] || '?';
             return `| **${prefix}**1-${prefix}7 | ${a.slug} | ${typeLabels[a.type as DiscoveryType] || a.type} | ${a.date} | ${a.variableCount} variables |`;
           })
           .join('\n  ');
-        // Pass marker convention to prompts for citation generation
-        data.citation_convention = selectedArtifacts
+        citationConvention = selectedArtifacts
           .map((a: DiscoveryArtifact) => `[${markerPrefixes[a.type as DiscoveryType] || '?'}N] = ${typeLabels[a.type as DiscoveryType] || a.type} (${a.slug})`)
           .join('; ');
 
@@ -237,8 +355,85 @@ async function handleBriefSubmission({ ack, body, view, client }: ViewSubmission
     }
   }
 
-  console.log(`📋 Extracted research brief data: ${Object.keys(data).length} fields, study: ${data.selected_study || 'unknown'}`);
+  // ── Pre-render LLM tasks: barriers + questions (Option C) ──
+  // The handler runs these directly so it can assign IDs before yamlProcessor
+  // runs the prose tasks. The prose tasks receive the ID'd data as context.
+  const structuredTaskData: Record<string, unknown> = {
+    problem_statement: problemStatement,
+    learning_objectives: learningObjectives,
+    methodology: methodLabel,
+    ...discoveryContext,
+  };
+  const structuredTasks = buildStructuredTasks(structuredTaskData);
 
+  console.log('📋 Running pre-render structured LLM tasks (barriers + questions)...');
+  const structuredResponses = await executeAiGenerationTasks(structuredTasks, structuredTaskData);
+
+  // Parse and assign IDs
+  const rawBarriers = parseJsonResponse<RawBarrier[]>(structuredResponses.target_barriers_raw, 'target_barriers_raw');
+  const rawQuestions = parseJsonResponse<RawQuestion[]>(structuredResponses.research_questions_raw, 'research_questions_raw');
+
+  const targetBarriers: BriefBarrier[] = rawBarriers.map((b, i) => ({
+    id: `TB-${String(i + 1).padStart(3, '0')}`,
+    barrier: b.barrier,
+    source: b.source || 'Researcher hypothesis',
+  }));
+
+  const researchQuestions: BriefQuestion[] = rawQuestions.map((q, i) => ({
+    id: `RQ-${String(i + 1).padStart(3, '0')}`,
+    question: q.question,
+    priority: q.priority || 'Primary',
+  }));
+
+  // Research objectives: split learning objectives into individual items
+  const researchObjectives: string[] = learningObjectives
+    .split(/\n/)
+    .map(line => line.replace(/^[-•*]\s*/, '').trim())
+    .filter(Boolean);
+
+  console.log(`📋 Structured data assembled: ${targetBarriers.length} barriers, ${researchQuestions.length} questions, ${researchObjectives.length} objectives`);
+
+  // ── Assemble complete data object ──
+  const data: BriefTemplateInput = {
+    selected_study: studyName,
+    lead_researcher: leadResearcher,
+    requestor_name: (extract('stakeholder_block', 'stakeholder_input') as string) || '',
+    problem_statement: problemStatement,
+    learning_objectives: learningObjectives,
+    out_of_scope: outOfScope,
+    methodology: methodLabel,
+    methodology_value: methodValue,
+    participant_approach: participantApproach,
+    timeline_preference: timelinePref,
+    start_date: startDate,
+    decision_deadline: decisionDeadline,
+    budget: budgetStr,
+
+    // Mechanical computations
+    display_date: displayDate,
+    timeline_display: timelineDisplay,
+    timeline_phases: timelinePhases,
+
+    // Handler-assigned structured data
+    target_barriers: targetBarriers,
+    research_questions: researchQuestions,
+    research_objectives: researchObjectives,
+
+    // Cascade summary counts
+    objectives_count: researchObjectives.length,
+    research_questions_count: researchQuestions.length,
+    target_barriers_count: targetBarriers.length,
+
+    // Discovery enrichment
+    ...(discoveryCount !== undefined ? { discovery_count: discoveryCount } : {}),
+    ...(discoverySources !== undefined ? { discovery_sources: discoverySources } : {}),
+    ...(citationConvention !== undefined ? { citation_convention: citationConvention } : {}),
+    ...discoveryContext,
+  };
+
+  console.log(`📋 Assembled brief data: ${Object.keys(data).length} fields, ${data.objectives_count} objectives, ${data.research_questions_count} RQs, ${data.target_barriers_count} TBs, study: ${studyName}`);
+
+  // ── Process YAML template (prose tasks + rendering + extraction) ──
   const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, "research_brief.yaml");
   const renderedYaml = await processYamlTemplate(file.content, data, study!.path ?? '');
 

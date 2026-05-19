@@ -87,6 +87,8 @@ Start with `0001` and read forward. The history is itself useful — it shows ho
 - [0011 — Hardcoded Qori-style timeline durations](./0011-hardcoded-timeline-durations.md) — Alpha-only; revisit when we have signal
 - [0012 — LLM emits structured JSON when output is a table or list](./0012-structured-json-for-llm-outputs.md) — Constrained shape can't drift through paraphrasing
 - [0014 — Sequelize v6 built-in TypeScript generics for model typing](./0014-sequelize-typescript-pattern.md) — Lowest disruption with real type safety; no new dependencies
+- [0015 — Bolt native middleware types for handler signatures](./0015-bolt-native-middleware-types.md) — Framework-aligned typing; eliminates registration boundary casts
+- [0016 — Brief template restructured to v7.0 interleaved Handlebars/AI](./0016-brief-template-v7-restructure.md) — First template restructure; sets the pattern for the remaining 10
 
 ### Lessons (informal ADRs from failure modes)
 
