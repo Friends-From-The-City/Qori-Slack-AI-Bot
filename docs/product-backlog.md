@@ -18,7 +18,19 @@ Per the post-migration audit, 26 of 27 templates have no unit tests, and 12 use 
 
 ### Brief restructure (complete — ADR 0016)
 
-Restructured to v7.0 interleaved Handlebars/AI architecture. Handler is the data assembly point; LLM writes bounded prose only. See ADR 0016 for the decision record.
+Restructured to v7.0 interleaved Handlebars/AI architecture. Handler is the data assembly point; LLM writes bounded prose only. See `docs/architecture-decisions/0016-brief-template-v7-restructure.md` for the decision record and `docs/brief-restructure-delta.md` for the planning document.
+
+Completed work includes:
+- Interleaved Handlebars + bounded AI tasks (7 focused tasks replacing monolithic `brief_body`)
+- Handler-assigned stable IDs for barriers (TB-001) and questions (RQ-001) via pre-render JSON tasks
+- Mechanical rendering of display date, timeline phases, timeline display label, metadata table
+- Anti-fabrication guards on all prose tasks
+- Per-section citation numbering with OUTPUT BOUNDARIES rule
+- Cascade summary section
+- Recruitment sources as dedicated field and cascade variable
+- Timeline preference computed from decision_deadline gap (modal radio removed)
+- Plan handler reads timeline_preference, start_date, recruitment_sources from cascade
+- Dead plan modal fields removed (recruitment, note-taker, observer)
 
 **Known finding: cascade variable count non-determinism.** The pre-render LLM tasks for research questions and target barriers produce variable-length arrays (e.g., 5 questions on one run, 6 on another with the same inputs). The prompts specify ranges ("3-7 questions") and the LLM picks within that range non-deterministically. This means brief outputs aren't fully reproducible — same study, same inputs, different question/barrier counts. The plan template inherits this property since it consumes the brief's emissions. Not blocking but worth knowing for any future reproducibility requirements.
 
@@ -46,6 +58,29 @@ Whatever's left after the above. Likely smaller, less consequential templates.
 
 ---
 
+## Cascade UI redesign
+
+The cascade context block and cascade summary section were redesigned during the brief restructure. This workstream tracks the remaining cascade UI work.
+
+### Cascade context block (complete)
+
+The cascade context block in modals was changed from a status recap (always shown, listing all variables with green/blue checks) to a problem-surfacing block:
+- All required present → block hidden entirely (no redundant recap)
+- Required missing → actionable warning with what's missing and what command to run
+- Applied consistently across all 6 modals (plan, brief, discussion guide, synthesis, stakeholder, brief-to-study)
+
+`TemplateContractError` at handler submission time remains as second line of defense (ADR 0007).
+
+### TEMPLATE_CONSUMES drift surface (v1.1 followup)
+
+The cascade context display is hardcoded against `TEMPLATE_CONSUMES` in `cascadeReadinessBlocks.ts`. Every new cascade variable requires manual update to this table in addition to YAML `emits`/`consumes` — three places to keep in sync. Should generate dynamically from YAML cascade contracts. Tracked in `docs/v1.1-followups.md`.
+
+### Cascade summary section in rendered documents
+
+Both brief and plan now include a cascade summary section at the bottom of rendered output, documenting what the document emits/consumes for downstream templates. This pattern should propagate to all restructured templates.
+
+---
+
 ## Modal & UX polish
 
 Items accumulated during pre-migration work and during migration debugging. None are blocking but each affects researcher experience.
@@ -63,13 +98,15 @@ Items accumulated during pre-migration work and during migration debugging. None
 
 ### /qori-plan
 
-- Remove desk research, stakeholder notes, and survey data sections from the plan modal — those now live in /qori-discover
-- Recruitment sources should be optional, not required
-- Remove the execution risks section (consolidated elsewhere or no longer relevant)
+~~- Remove desk research, stakeholder notes, and survey data sections from the plan modal — those now live in /qori-discover~~
+~~- Recruitment sources should be optional, not required~~
+~~- Remove the execution risks section (consolidated elsewhere or no longer relevant)~~
+
+Plan modal was cleaned up during brief restructure Stream B: recruitment sources now flow from cascade, dead fields (note-taker, observer) removed, timeline preference computed from dates. Remaining plan modal fields (study, lead researcher, operational risks) are all legitimate plan-time inputs.
 
 ### Notes modal
 
-- Dropdown filter bug (specific behavior not documented in earlier notes — needs investigation)
+- Dropdown filter bug — fixed: empty list shown when session_id absent instead of silent fallback to all study notes
 
 ### Participant tracker
 
@@ -78,7 +115,7 @@ Items accumulated during pre-migration work and during migration debugging. None
 
 ### Outreach
 
-- "Generate another message type" feature is broken
+- "Generate another message type" feature — fixed: uses `views.update` instead of `views.push` (overflow actions lack trigger_id)
 - Manual compensation override per participant doesn't exist yet (currently compensation is calculated per study, not per participant)
 
 ### Observer
@@ -97,7 +134,9 @@ Brief approval and plan approval currently post CTAs to the product channel. The
 
 ### Status update notifications
 
-The fieldwork dashboard doesn't refresh automatically after a participant status update. Researchers have to manually re-run the command to see updated counts.
+~~The fieldwork dashboard doesn't refresh automatically after a participant status update. Researchers have to manually re-run the command to see updated counts.~~
+
+Fixed: `refreshDashboardAfterAction` now called from `participantHandler` (status update) and `participantOutreachHandler` (add participant), matching the existing observer handler pattern.
 
 ### Generic error notifications
 
@@ -149,7 +188,7 @@ The design exists; implementation hasn't started. This is significant UX work be
 
 ## v1.1 codebase hygiene
 
-The technical debt items from the TypeScript migration. See `docs/v1.1-followups.md` for the full list of 14 items, which include:
+The technical debt items from the TypeScript migration. See `docs/v1.1-followups.md` for the full list of 15 items, which include:
 
 - User auth boilerplate cleanup
 - `study_name` denormalization across 3 tables (move to study_id FK)
@@ -161,6 +200,7 @@ The technical debt items from the TypeScript migration. See `docs/v1.1-followups
 - Lint rules for pattern enforcement (stricter than current test-suite assertions)
 - 208 `catch (error: any)` -> `unknown` with narrowing (partially done; some legacy code remains)
 - Template unit tests (26 of 27 templates untested at rendering level)
+- TEMPLATE_CONSUMES hardcoding drift surface (new — from brief restructure)
 
 These items don't block product work or federal go-to-market. They make the codebase more robust over time. Worth picking up opportunistically when touching related code.
 
