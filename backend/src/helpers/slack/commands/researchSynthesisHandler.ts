@@ -537,9 +537,11 @@ const handleLoadSynthesisFiles = async ({ ack, body, client }: SlackActionMiddle
         if (study?.path) {
           const decodedPath = decodeURIComponent(study.path);
           const studyVars = await readStudyVariables(decodedPath);
-          if (studyVars && Object.keys(studyVars.variables).length > 0) {
+          if (studyVars) {
             cascadeData = buildCascadeReadiness(studyVars, currentAnalysisMethod ?? '');
-            console.log(`✅ Cascade: ${cascadeData!.available.length} variables available, ${cascadeData!.missing.length} missing`);
+            if (cascadeData) {
+              console.log(`✅ Cascade: ${cascadeData.available.length} variables available, ${cascadeData.missing.length} missing`);
+            }
           }
         }
       }

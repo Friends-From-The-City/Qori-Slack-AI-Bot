@@ -101,9 +101,9 @@ async function openResearchBriefModal({ ack, body, client }: SlackActionMiddlewa
         const studyForCascade = await getResearchStudyWithRoles(preselectStudyName);
         if (studyForCascade?.path) {
           const studyVars = await readStudyVariables(decodeURIComponent(studyForCascade.path));
-          if (Object.keys(studyVars.variables).length > 0) {
-            const cascadeData = buildCascadeReadiness(studyVars, 'research_brief');
-            const cascadeBlocks = buildCascadeBlocks(cascadeData);
+          const cascadeData = buildCascadeReadiness(studyVars, 'research_brief');
+          const cascadeBlocks = buildCascadeBlocks(cascadeData);
+          if (cascadeBlocks.length > 0) {
             const firstDivider = modalBlocks.findIndex(b => b.type === 'divider');
             if (firstDivider !== -1) {
               // @ts-expect-error — pre-existing type mismatch from require() → import migration
