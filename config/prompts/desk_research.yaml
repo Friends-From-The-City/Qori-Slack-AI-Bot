@@ -8,7 +8,7 @@ version: v7.0
 
 description: |
   Analyze uploaded research documents and generate a synthesis with key
-  themes, findings, and actionable recommendations.
+  themes, findings, and knowledge gaps.
   v7.0: Interleaved Handlebars/AI architecture — document inventory
   rendered mechanically from handler data, LLM writes analytical prose.
   Per ADR 0005/0016 pattern.
@@ -144,13 +144,16 @@ ai_generation_tasks:
 
       **Strategic Implications:** 2-3 sentences on what these findings mean for decision-making. Only draw from actual findings.
 
-      **Confidence Assessment:**
+      <details>
+      <summary><strong>Confidence Assessment</strong></summary>
 
       | Aspect | Confidence | Rationale |
       |:-------|:-----------|:----------|
       | Evidence quality | [High/Medium/Low] | [Brief explanation] |
       | Coverage of topic | [High/Medium/Low] | [How well documents address questions] |
       | Actionability | [High/Medium/Low] | [Whether findings translate to actions] |
+
+      </details>
 
       OUTPUT BOUNDARIES: Do not generate section headings, sub-headings,
       citation appendices, reference lists, horizontal rules, or markdown
@@ -188,7 +191,7 @@ ai_generation_tasks:
       > "[Direct quote from document 2]"
       > — *[Document name/source]*
 
-      *Implications for {{effective_topic}}:* 1-2 sentences on why this matters.
+      *Why this matters:* 1-2 sentences on implications for research and design decisions.
 
       *Confidence:* `[HIGH]` / `[MEDIUM]` / `[LOW]` — one sentence explaining.
 
@@ -205,10 +208,10 @@ ai_generation_tasks:
       section dividers beyond the per-theme separators above. The template
       handles all document structure.
 
-  # Recommendations
-  - task_id: "recommendations"
+  # Knowledge gaps and research implications (renamed from Recommendations)
+  - task_id: "knowledge_gaps_prose"
     prompt: |
-      Generate actionable recommendations based on the desk research findings.
+      Identify knowledge gaps and research implications from the desk research.
 
       **Research Topic:** {{effective_topic}}
 
@@ -218,36 +221,23 @@ ai_generation_tasks:
       ---END CONTENT---
 
       CRITICAL ANTI-HALLUCINATION RULES:
-      1. If content is empty, respond: "> **No documents provided.** Unable to generate recommendations."
-      2. EVERY recommendation must trace directly to a finding in the documents
-      3. Do NOT recommend things not supported by the content
-      4. Quote or paraphrase the evidence base for each recommendation
+      1. If content is empty, respond: "> **No documents provided.** Unable to identify knowledge gaps."
+      2. EVERY gap must trace to a specific limitation or unanswered question in the documents
+      3. Do NOT suggest product actions, feature changes, or design implementations —
+         those belong in the research brief, not desk research
+      4. Focus on: what the literature couldn't answer, and what research methods
+         the findings suggest for investigation
 
       Structure as:
 
-      **Immediate Actions (This Week)**
+      | Gap Identified | Why It Matters | Suggested Research Approach |
+      |:---------------|:---------------|:---------------------------|
+      | [Unanswered question from the documents] | [Why this gap matters for decisions] | [Research method to investigate — e.g., card sorting, usability testing, interviews] |
 
-      | Priority | Action | Evidence Base |
-      |:--------:|:-------|:--------------|
-      | 1 | **[Specific action]** | Based on: "[brief quote or paraphrase]" |
-      | 2 | **[Specific action]** | Based on: "[brief quote or paraphrase]" |
-      | 3 | **[Specific action]** | Based on: "[brief quote or paraphrase]" |
+      3-5 gaps. Each must reference specific limitations in the source documents.
 
-      **Short-Term Priorities (This Month)**
-
-      | Priority | Action | Evidence Base |
-      |:--------:|:-------|:--------------|
-      | 1 | **[Specific action]** | Based on: "[brief quote or paraphrase]" |
-      | 2 | **[Specific action]** | Based on: "[brief quote or paraphrase]" |
-
-      **Further Research Needed**
-
-      | Gap Identified | Why It Matters | Suggested Approach |
-      |:---------------|:---------------|:-------------------|
-      | [Gap from documents] | [Impact] | [How to investigate] |
-
-      If insufficient evidence for a section:
-      > The documents do not provide sufficient evidence for [section name] recommendations.
+      If the documents are comprehensive with few gaps:
+      > The documents provide strong coverage. One area for further investigation: [specific gap].
 
       OUTPUT BOUNDARIES: Do not generate section headings, sub-headings,
       citation appendices, reference lists, horizontal rules, or markdown
@@ -299,32 +289,18 @@ ai_generation_tasks:
 output_template: |
   # Desk Research Report: {{effective_topic}}
 
-  **Study:** {{selected_study}} &nbsp; | &nbsp; **Prepared by:** Qori Research Assistant &nbsp; | &nbsp; **Date:** {{current_date}}
-
-  ---
-
-  ## Research Overview
-
-  | | |
-  |:--|:--|
-  | **Study** | {{selected_study}} |
-  | **Topic** | {{effective_topic}} |
-  | **Date Conducted** | {{current_date}} |
-  | **Documents Analyzed** | {{document_count}} |
-  | **Analysis Type** | Secondary Research / Literature Review |
+  **Study:** {{selected_study}} &nbsp; | &nbsp; **Topic:** {{effective_topic}} &nbsp; | &nbsp; **Documents:** {{document_count}} &nbsp; | &nbsp; **Date:** {{current_date}}
 
   {{#if description}}
   > **Document Context:** {{description}}
   {{/if}}
 
   > [!NOTE]
-  > This analysis is based solely on the documents provided. All findings, themes, and recommendations are derived from the uploaded content. No external sources or training knowledge were used to generate findings.
+  > This analysis is based solely on the documents provided. All findings, themes, and knowledge gaps are derived from the uploaded content.
 
   ---
 
   ## Documents Analyzed
-
-  {{document_count}} document(s) uploaded for analysis:
 
   | # | Filename | Type |
   |:-:|:---------|:-----|
@@ -332,7 +308,12 @@ output_template: |
   | {{@index}} | {{this}} | {{lookup ../document_types @index}} |
   {{/each}}
 
+  <details>
+  <summary><strong>Document details</strong> — source, relevance, and summaries</summary>
+
   {{ai_generated.document_analysis}}
+
+  </details>
 
   ---
 
@@ -348,9 +329,9 @@ output_template: |
 
   ---
 
-  ## Recommendations
+  ## Knowledge Gaps and Research Implications
 
-  {{ai_generated.recommendations}}
+  {{ai_generated.knowledge_gaps_prose}}
 
   ---
 
@@ -360,7 +341,8 @@ output_template: |
 
   ---
 
-  ## Methodology Note
+  <details>
+  <summary><strong>Methodology Note</strong></summary>
 
   | Practice | Implementation |
   |:---------|:---------------|
@@ -368,6 +350,8 @@ output_template: |
   | Evidence grounding | All claims tied to specific document content |
   | Confidence assessment | Strength of evidence explicitly rated |
   | Limitation acknowledgment | Gaps and constraints clearly noted |
+
+  </details>
 
   ---
 
@@ -407,7 +391,7 @@ output_options:
         **Topic:** {{effective_topic}}
         **Documents Analyzed:** {{document_count}}
 
-        View the full analysis for findings, evidence, and actionable recommendations.
+        View the full analysis for findings, evidence, and knowledge gaps.
 
       actions:
         - text: "View Full Report"
@@ -415,7 +399,7 @@ output_options:
           url: "{{github_file_url}}"
         - text: "View Recommendations"
           style: "secondary"
-          url: "{{github_file_url}}#-recommendations"
+          url: "{{github_file_url}}#-knowledge-gaps-and-research-implications"
 
 # ═══════════════════════════════════════════════════════════
 # METADATA
@@ -455,7 +439,7 @@ emits:
       type: array
       items:
         $ref: schemas/methodology_recommendation.yaml
-    extract_from: "Recommendations section, Further Research Needed — any suggested research methods. Assign sequential IDs (method-001). Capture what the method addresses and why it's recommended."
+    extract_from: "Knowledge Gaps and Research Implications section — any suggested research methods. Assign sequential IDs (method-001). Capture what the method addresses and why it's recommended."
 
   - key: knowledge_gaps
     pool: true
@@ -477,7 +461,7 @@ emits:
             nullable: true
           source_document:
             type: string
-    extract_from: "Further Research Needed section, Confidence Assessment low-confidence areas. Assign sequential IDs (gap-001). Include why the gap matters and suggested resolution method."
+    extract_from: "Knowledge Gaps and Research Implications section, Confidence Assessment low-confidence areas. Assign sequential IDs (gap-001). Include why the gap matters and suggested resolution method."
 
   - key: source_artifacts
     pool: true

@@ -196,8 +196,15 @@ async function handleDeskResearchSubmission({ ack, body, view, client }: SlackVi
     const formattedDocumentContent: string = parsedDocuments.structured_format;
 
     // ── Mechanical document inventory (handler-assembled, not LLM) ──
+    const MIME_LABELS: Record<string, string> = {
+      'application/pdf': 'PDF',
+      'text/plain': 'Text',
+      'text/markdown': 'Markdown',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'Word',
+      'application/msword': 'Word',
+    };
     const documentNames = processedFiles.map((f: any) => f.name as string);
-    const documentTypes = processedFiles.map((f: any) => f.type as string);
+    const documentTypes = processedFiles.map((f: any) => MIME_LABELS[f.type as string] || f.type as string);
 
     // derived_variables in YAML is documentation-only (not processed by yamlProcessor),
     // so the handler must compute these for Handlebars rendering and discovery scoping.
