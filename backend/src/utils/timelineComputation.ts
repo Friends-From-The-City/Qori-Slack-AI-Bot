@@ -28,13 +28,30 @@ export interface TimelinePhase {
 
 // ─── Constants ──────────────────────────────────────────────────
 
+/**
+ * Qori-compressed phase durations (ADR 0011). Analysis and reporting are
+ * 1 day each because the cascade does the heavy lifting — the day is for
+ * researcher review, not manual analysis.
+ *
+ * Phase totals: standard = 17 days, accelerated = 11 days, extended = 36 days.
+ * These are shorter than TIMELINE_DISPLAY_LABELS because the labels represent
+ * total calendar time INCLUDING review buffer between the last phase ending
+ * and the decision deadline. The gap (e.g., standard: 6 weeks minus 17 days
+ * = ~25 days buffer) is stakeholder review, iteration cycles, and scheduling
+ * slack. This is intentional — not a bug. See ADR 0011.
+ */
 export const PHASE_DURATIONS: Record<TimelinePreference, PhaseDurations> = {
   standard:    { planning: 3, recruitment: 7, fieldwork: 5, analysis: 1, reporting: 1 },
   accelerated: { planning: 2, recruitment: 4, fieldwork: 3, analysis: 1, reporting: 1 },
   extended:    { planning: 7, recruitment: 14, fieldwork: 10, analysis: 3, reporting: 2 },
 };
 
-/** Human-readable duration labels for each timeline preference. */
+/**
+ * Human-readable total calendar time labels for each timeline preference.
+ * These represent the full researcher timeline from start to decision deadline,
+ * including review buffer after phases complete. They are intentionally longer
+ * than the sum of PHASE_DURATIONS — see comment above.
+ */
 export const TIMELINE_DISPLAY_LABELS: Record<TimelinePreference, string> = {
   standard: '6 weeks',
   accelerated: '4 weeks',
