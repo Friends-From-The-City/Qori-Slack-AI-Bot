@@ -245,6 +245,28 @@ export const researchBriefModal = {
         multiline: true,
       },
     },
+    // Recruitment sources
+    {
+      type: "input",
+      block_id: "recruitment_sources_block",
+      optional: true,
+      label: {
+        type: "plain_text",
+        text: "Recruitment sources",
+      },
+      hint: {
+        type: "plain_text",
+        text: "Where will participants be recruited from?",
+      },
+      element: {
+        type: "plain_text_input",
+        action_id: "recruitment_sources_input",
+        placeholder: {
+          type: "plain_text",
+          text: "e.g., Perigean Recruiting, VA Section 508 Office, MHV coordinators",
+        },
+      },
+    },
     {
       type: "divider",
     },

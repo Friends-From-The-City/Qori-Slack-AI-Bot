@@ -83,6 +83,7 @@ interface BriefTemplateInput {
   methodology: string;
   methodology_value: string;
   participant_approach: string;
+  recruitment_sources: string;
   timeline_preference: string;
   start_date: string;
   decision_deadline: string;
@@ -292,6 +293,7 @@ async function handleBriefSubmission({ ack, body, view, client }: SlackViewMiddl
   const learningObjectives = (extract('learning_objectives_block', 'learning_objectives_input') as string) || '';
   const outOfScope = (extract('out_of_scope_block', 'out_of_scope_input') as string) || '';
   const participantApproach = (extract('participant_approach_block', 'participant_approach_input') as string) || '';
+  const recruitmentSources = (extract('recruitment_sources_block', 'recruitment_sources_input') as string) || '';
   const timelinePref = ((extract('timeline_block', 'timeline_radio') as { value: string } | null)?.value) || 'standard';
   const startDate = (extract('start_date_block', 'start_date_picker') as string) || '';
   const decisionDeadline = (extract('decision_deadline_block', 'decision_deadline_picker') as string) || '';
@@ -404,6 +406,7 @@ async function handleBriefSubmission({ ack, body, view, client }: SlackViewMiddl
     methodology: methodLabel,
     methodology_value: methodValue,
     participant_approach: participantApproach,
+    recruitment_sources: recruitmentSources,
     timeline_preference: timelinePref,
     start_date: startDate,
     decision_deadline: decisionDeadline,
