@@ -197,6 +197,7 @@ ai_generation_tasks:
       Requirements:
       - Only include themes with at least 2 pieces of direct evidence
       - Maximum 5 themes
+      - Number themes sequentially starting at 1 with no gaps (1, 2, 3... not 1, 2, 4)
       - Each theme must have clear implications stated
 
       OUTPUT BOUNDARIES: Do not generate section headings, sub-headings,
