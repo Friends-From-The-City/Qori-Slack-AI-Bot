@@ -1,12 +1,12 @@
 /**
  * deskResearchHandler.ts — Desk research upload modal opener + submission
  *
- * Extracted from events.js. Handles the upload_desk_research action (opens
- * modal with study picker) and the upload_desk_research_modal submission
- * (processes uploaded files, runs YAML template, emits cascade variables).
+ * DATA ASSEMBLY POINT for the desk research template (ADR 0005/0016 pattern).
+ * The handler extracts modal fields, processes uploaded files, builds
+ * mechanical document inventory data, and passes the complete data to
+ * yamlProcessor for AI analysis tasks + rendering.
  *
- * This is a CASCADE-EMITTING handler: it doesn't consume upstream variables,
- * it produces them. The desk_research.yaml template emits discovered_barriers,
+ * This is a CASCADE-EMITTING handler: it produces discovered_barriers,
  * discovered_metrics, discovered_journeys, methodology_recommendations,
  * knowledge_gaps, and source_artifacts.
  */
@@ -33,11 +33,17 @@ interface MutableBlock {
 
 // ─── Template input contract ──────────────────────────────────────
 
+/** Data shape passed to the desk_research YAML template. Co-located with handler. */
 interface DeskResearchTemplateInput {
-  research_topic: string;
   selected_study: string;
+  topic: string;
+  research_topic: string;
   description: string;
   document_content: string;
+  // Mechanical data from file processing (handler-assembled, not LLM-generated)
+  document_count: number;
+  document_names: string[];
+  document_types: string[];
 }
 
 // ─── Modal opener ─────────────────────────────────────────────────
@@ -145,6 +151,11 @@ async function handleDeskResearchSubmission({ ack, body, view, client }: SlackVi
     return;
   }
 
+  // ── Extract modal fields (previously ignored — Bug 1 from delta) ──
+  const description = (values.description_block?.description?.value || '').trim() || studyName;
+  const researchTopic = (values.research_focus_block?.research_topic?.value || '').trim() || studyName;
+  const topic = researchTopic;
+
   const uploadedFiles = values.file_upload_block?.file_upload?.files?.map((file: any) => ({
     id: file.id,
     name: file.name,
@@ -182,12 +193,22 @@ async function handleDeskResearchSubmission({ ack, body, view, client }: SlackVi
     const parsedDocuments = parseDocuments(documents);
     const formattedDocumentContent: string = parsedDocuments.structured_format;
 
+    // ── Mechanical document inventory (handler-assembled, not LLM) ──
+    const documentNames = processedFiles.map((f: any) => f.name as string);
+    const documentTypes = processedFiles.map((f: any) => f.type as string);
+
     const deskResearchData: DeskResearchTemplateInput = {
-      research_topic: studyName,
       selected_study: studyName,
-      description: studyName,
+      topic,
+      research_topic: researchTopic,
+      description,
       document_content: formattedDocumentContent,
+      document_count: processedFiles.length,
+      document_names: documentNames,
+      document_types: documentTypes,
     };
+
+    console.log(`📚 Assembled desk research data: ${deskResearchData.document_count} documents, topic: "${topic}", study: ${studyName}`);
 
     const study = await getResearchStudyWithRoles(studyName);
 

@@ -3,17 +3,19 @@
 # ═══════════════════════════════════════════════════════════
 id: desk_research_processor
 name: run_desk_research
-label: "📚 Desk Research"
-version: v5.1
+label: "Desk Research"
+version: v7.0
 
 description: |
-  Analyze uploaded research documents and generate a polished, professional synthesis
-  with key themes, findings, and actionable recommendations. Optimized for GitHub
-  rendering with industry-standard research documentation practices.
+  Analyze uploaded research documents and generate a synthesis with key
+  themes, findings, and actionable recommendations.
+  v7.0: Interleaved Handlebars/AI architecture — document inventory
+  rendered mechanically from handler data, LLM writes analytical prose.
+  Per ADR 0005/0016 pattern.
 
 author: Qori R&D
 created: 2025-08-27
-last_updated: 2026-04-29
+last_updated: 2026-05-19
 
 # ═══════════════════════════════════════════════════════════
 # CONFIGURATION
@@ -26,18 +28,30 @@ discovery_scope: true
 # INPUTS
 # ═══════════════════════════════════════════════════════════
 input_variables:
-  # Study context (from modal)
   - selected_study:
       type: "select"
       required: true
-      description: "Study folder name - provides context for analysis"
+      description: "Study folder name"
 
-  - study_name:
-      type: "string"
+  - topic:
+      type: "text"
       required: true
-      description: "Human-readable study name"
+      placeholder: "e.g., Veteran telehealth adoption barriers"
+      description: "Researcher-provided topic — slugified for filename and variable store path"
 
-  # Document upload
+  - research_topic:
+      type: "text"
+      required: false
+      placeholder: "e.g., Veteran telehealth adoption barriers"
+      description: "Optional focus area. Defaults to topic if not provided."
+      default: "{{topic}}"
+
+  - description:
+      type: "textarea"
+      required: false
+      placeholder: "e.g., Competitive analysis from Q3, industry reports on telehealth"
+      description: "Optional context about the uploaded documents"
+
   - document_content:
       type: "textarea"
       required: true
@@ -46,40 +60,23 @@ input_variables:
         min_length: 100
         error_message: "Document content is required. Please upload documents."
 
-  - description:
-      type: "textarea"
-      required: false
-      placeholder: "e.g., Competitive analysis from Q3, industry reports on telehealth"
-      description: "Optional context about the uploaded documents"
-
-  # Discovery topic (required for /qori-discover; added to modal in Step 2)
-  - topic:
-      type: "text"
-      required: true
-      placeholder: "e.g., Veteran telehealth adoption barriers"
-      description: "Researcher-provided topic — slugified for filename and variable store path"
-
-  # Optional refinement
-  - research_topic:
-      type: "text"
-      required: false
-      placeholder: "e.g., Veteran telehealth adoption barriers"
-      description: "Optional focus area. Defaults to topic if not provided."
-      default: "{{topic}}"
-
 # ═══════════════════════════════════════════════════════════
-# AI GENERATION
+# AI GENERATION — focused, bounded tasks
 # ═══════════════════════════════════════════════════════════
 ai_generation_tasks:
 
-  # Task 1: Document inventory with richer metadata
-  - task_id: "document_inventory"
+  # Document analysis: per-document summaries and relevance (analytical, not inventory)
+  # File names, types, and count are rendered mechanically by Handlebars.
+  # This task adds the analytical layer: what each document contributes.
+  - task_id: "document_analysis"
     prompt: |
-      Review the following document content and create a detailed source inventory.
+      Review the following document content and provide analytical summaries.
 
       **Study:** {{selected_study}}
       **Research Topic:** {{effective_topic}}
-      **Document Description:** {{description}}
+
+      **Documents uploaded:** {{document_count}} files
+      **File names:** {{document_names}}
 
       **Document Content:**
       ---BEGIN CONTENT---
@@ -89,13 +86,13 @@ ai_generation_tasks:
       CRITICAL RULES:
       - If the content between BEGIN/END markers is empty, respond ONLY with:
         "> **No documents provided.** Please upload research documents and try again."
-      - ONLY list documents explicitly identifiable in the provided content
+      - ONLY analyze documents explicitly present in the provided content
       - Do NOT invent document titles, authors, dates, or sources
       - If a field is not stated in the content, write "Not specified"
 
-      If documents ARE present, create this format for EACH document:
+      For EACH document, output:
 
-      ### [Document Title]
+      **[Document Title or Filename]**
 
       | Attribute | Value |
       |:----------|:------|
@@ -104,13 +101,16 @@ ai_generation_tasks:
       | **Type** | [Report / Study / Survey / Brief / Article / Guide] |
       | **Relevance** | [High / Medium / Low] to {{effective_topic}} |
 
-      **Summary:** [2-3 sentence description of what this document covers and its key contribution to the research topic]
+      [2-3 sentence description of what this document covers and its key contribution]
 
       ---
 
-      Repeat for each distinct document. If you cannot identify distinct documents, describe the content as a single source.
+      OUTPUT BOUNDARIES: Do not generate section headings, sub-headings,
+      citation appendices, reference lists, horizontal rules, or markdown
+      section dividers beyond the per-document separators above. The template
+      handles all document structure.
 
-  # Task 2: Executive summary
+  # Executive summary
   - task_id: "executive_summary"
     prompt: |
       Create a publication-quality executive summary of the desk research.
@@ -130,37 +130,34 @@ ai_generation_tasks:
       4. Do NOT cite authors or studies not mentioned in the content
       5. If content doesn't address research questions, state this explicitly
 
-      If documents ARE present, structure as:
+      Structure as:
 
-      ### Overview
+      **Overview:** 2-3 sentences on what this research covers and its significance for {{effective_topic}}. Ground in actual document content.
 
-      [2-3 sentences on what this research covers and its significance for {{effective_topic}}. Ground in actual document content.]
+      **Key Findings:** Present 3-5 major findings. For each:
 
-      ### Key Findings
-
-      Present 3-5 major findings. For each finding:
-
-      > **Finding 1: [Descriptive title]**
+      > **Finding N: [Descriptive title]**
       >
-      > [1-2 sentence explanation of the finding, with specific data if available]
+      > [1-2 sentence explanation with specific data if available]
       >
       > *Source: [Document name]*
 
-      Use this blockquote format for each finding. Include the specific document source.
+      **Strategic Implications:** 2-3 sentences on what these findings mean for decision-making. Only draw from actual findings.
 
-      ### Strategic Implications
-
-      [2-3 sentences on what these findings mean for decision-making related to {{effective_topic}}. Only draw from actual findings.]
-
-      ### Confidence Assessment
+      **Confidence Assessment:**
 
       | Aspect | Confidence | Rationale |
       |:-------|:-----------|:----------|
-      | Evidence quality | [High/Medium/Low] | [Brief explanation based on document types and rigor] |
-      | Coverage of topic | [High/Medium/Low] | [How well documents address the research questions] |
-      | Actionability | [High/Medium/Low] | [Whether findings translate to clear actions] |
+      | Evidence quality | [High/Medium/Low] | [Brief explanation] |
+      | Coverage of topic | [High/Medium/Low] | [How well documents address questions] |
+      | Actionability | [High/Medium/Low] | [Whether findings translate to actions] |
 
-  # Task 3: Key themes
+      OUTPUT BOUNDARIES: Do not generate section headings, sub-headings,
+      citation appendices, reference lists, horizontal rules, or markdown
+      section dividers. The template handles all document structure.
+      Output only the prose content for this section.
+
+  # Key themes
   - task_id: "themes"
     prompt: |
       Identify and analyze major themes across the research documents.
@@ -179,33 +176,21 @@ ai_generation_tasks:
       4. QUOTE directly from documents when providing evidence
       5. If you can only identify 1-2 themes, that's fine - do not pad
 
-      If documents ARE present, use this format for each theme:
+      For each theme:
 
-      ---
+      **Theme N: [Theme Title]**
 
-      ### Theme [N]: [Theme Title]
+      *What the Research Shows:* 2-3 sentences synthesizing findings. Be specific.
 
-      #### What the Research Shows
-
-      [2-3 sentences synthesizing findings related to this theme. Be specific.]
-
-      #### Supporting Evidence
-
-      > "[Direct quote from document 1]"
-      >
+      > "[Direct quote from document]"
       > — *[Document name/source]*
 
       > "[Direct quote from document 2]"
-      >
       > — *[Document name/source]*
 
-      #### Implications for {{effective_topic}}
+      *Implications for {{effective_topic}}:* 1-2 sentences on why this matters.
 
-      [1-2 sentences on why this theme matters and what it suggests for decisions/actions]
-
-      #### Confidence: `[HIGH]` / `[MEDIUM]` / `[LOW]`
-
-      [One sentence explaining confidence level based on evidence strength]
+      *Confidence:* `[HIGH]` / `[MEDIUM]` / `[LOW]` — one sentence explaining.
 
       ---
 
@@ -214,7 +199,12 @@ ai_generation_tasks:
       - Maximum 5 themes
       - Each theme must have clear implications stated
 
-  # Task 4: Recommendations
+      OUTPUT BOUNDARIES: Do not generate section headings, sub-headings,
+      citation appendices, reference lists, horizontal rules, or markdown
+      section dividers beyond the per-theme separators above. The template
+      handles all document structure.
+
+  # Recommendations
   - task_id: "recommendations"
     prompt: |
       Generate actionable recommendations based on the desk research findings.
@@ -232,35 +222,37 @@ ai_generation_tasks:
       3. Do NOT recommend things not supported by the content
       4. Quote or paraphrase the evidence base for each recommendation
 
-      If documents ARE present, structure as:
+      Structure as:
 
-      ### Immediate Actions (This Week)
-
-      | Priority | Action | Evidence Base |
-      |:--------:|:-------|:--------------|
-      | 1 | **[Specific action]** | Based on document finding: "[brief quote or paraphrase]" |
-      | 2 | **[Specific action]** | Based on document finding: "[brief quote or paraphrase]" |
-      | 3 | **[Specific action]** | Based on document finding: "[brief quote or paraphrase]" |
-
-      ### Short-Term Priorities (This Month)
+      **Immediate Actions (This Week)**
 
       | Priority | Action | Evidence Base |
       |:--------:|:-------|:--------------|
-      | 1 | **[Specific action]** | Based on document finding: "[brief quote or paraphrase]" |
-      | 2 | **[Specific action]** | Based on document finding: "[brief quote or paraphrase]" |
-      | 3 | **[Specific action]** | Based on document finding: "[brief quote or paraphrase]" |
+      | 1 | **[Specific action]** | Based on: "[brief quote or paraphrase]" |
+      | 2 | **[Specific action]** | Based on: "[brief quote or paraphrase]" |
+      | 3 | **[Specific action]** | Based on: "[brief quote or paraphrase]" |
 
-      ### Further Research Needed
+      **Short-Term Priorities (This Month)**
+
+      | Priority | Action | Evidence Base |
+      |:--------:|:-------|:--------------|
+      | 1 | **[Specific action]** | Based on: "[brief quote or paraphrase]" |
+      | 2 | **[Specific action]** | Based on: "[brief quote or paraphrase]" |
+
+      **Further Research Needed**
 
       | Gap Identified | Why It Matters | Suggested Approach |
       |:---------------|:---------------|:-------------------|
-      | [Gap from documents] | [Impact of not addressing] | [How to investigate] |
-      | [Gap from documents] | [Impact] | [Approach] |
+      | [Gap from documents] | [Impact] | [How to investigate] |
 
-      If the documents don't provide enough substance for a section, write:
+      If insufficient evidence for a section:
       > The documents do not provide sufficient evidence for [section name] recommendations.
 
-  # Task 5: Sources
+      OUTPUT BOUNDARIES: Do not generate section headings, sub-headings,
+      citation appendices, reference lists, horizontal rules, or markdown
+      section dividers. The template handles all document structure.
+
+  # Sources
   - task_id: "sources"
     prompt: |
       Create a professional reference list for the desk research.
@@ -276,49 +268,39 @@ ai_generation_tasks:
       3. Do NOT invent titles, authors, organizations, or dates
       4. If author/date not stated, write "Not specified"
 
-      If sources ARE identifiable, format as:
-
-      ### Primary Sources
+      Format as:
 
       | # | Document | Author/Org | Date | Contribution |
       |:-:|:---------|:-----------|:-----|:-------------|
-      | 1 | **[Title]** | [Author] | [Date] | [Key contribution in one phrase] |
-      | 2 | **[Title]** | [Author] | [Date] | [Key contribution] |
+      | 1 | **[Title]** | [Author] | [Date] | [Key contribution] |
 
-      ### Source Details
+      For each source, add a details block:
 
       <details>
-      <summary><strong>1. [Document Title]</strong></summary>
+      <summary><strong>N. [Document Title]</strong></summary>
 
       - **Full Citation:** [Author/Org]. ([Date]). *[Title]*. [Publisher if known].
       - **Document Type:** [Report / Study / Survey / etc.]
-      - **Key Contribution:** [2-3 sentences on what this source provided to the analysis]
-      - **Limitations:** [Any noted limitations or caveats about this source]
+      - **Key Contribution:** [2-3 sentences]
+      - **Limitations:** [Any noted limitations]
 
       </details>
 
-      Repeat the details block for each source.
-
-      If no distinct sources identifiable but content exists:
-
+      If no distinct sources identifiable:
       > **Source Attribution:** The analyzed content did not include clear source attribution. Findings are derived from the provided document text.
 
+      OUTPUT BOUNDARIES: Do not generate section headings or markdown
+      section dividers. The template handles all document structure.
+
 # ═══════════════════════════════════════════════════════════
-# OUTPUT
+# OUTPUT — interleaved Handlebars + AI prose
 # ═══════════════════════════════════════════════════════════
 output_template: |
-  <div align="center">
+  # Desk Research Report: {{effective_topic}}
 
-  # Desk Research Report
-  ## {{effective_topic}}
-
-  **Study:** {{selected_study}}
-  **Prepared by:** Qori Research Assistant
-  **Date:** {{current_date}}
+  **Study:** {{selected_study}} &nbsp; | &nbsp; **Prepared by:** Qori Research Assistant &nbsp; | &nbsp; **Date:** {{current_date}}
 
   ---
-
-  </div>
 
   ## Research Overview
 
@@ -327,6 +309,7 @@ output_template: |
   | **Study** | {{selected_study}} |
   | **Topic** | {{effective_topic}} |
   | **Date Conducted** | {{current_date}} |
+  | **Documents Analyzed** | {{document_count}} |
   | **Analysis Type** | Secondary Research / Literature Review |
 
   {{#if description}}
@@ -338,15 +321,23 @@ output_template: |
 
   ---
 
-  ## Executive Summary
+  ## Documents Analyzed
 
-  {{ai_generated.executive_summary}}
+  {{document_count}} document(s) uploaded for analysis:
+
+  | # | Filename | Type |
+  |:-:|:---------|:-----|
+  {{#each document_names}}
+  | {{@index}} | {{this}} | {{lookup ../document_types @index}} |
+  {{/each}}
+
+  {{ai_generated.document_analysis}}
 
   ---
 
-  ## Documents Analyzed
+  ## Executive Summary
 
-  {{ai_generated.document_inventory}}
+  {{ai_generated.executive_summary}}
 
   ---
 
@@ -368,11 +359,7 @@ output_template: |
 
   ---
 
-  <div align="center">
-
-  ### Methodology Note
-
-  This desk research synthesis follows industry-standard secondary research practices:
+  ## Methodology Note
 
   | Practice | Implementation |
   |:---------|:---------------|
@@ -383,18 +370,22 @@ output_template: |
 
   ---
 
-  **References**
-
-  This analysis methodology aligns with:
-  - Cooper, A. et al. — *About Face: The Essentials of Interaction Design*
-  - Goodman, E. et al. — *Observing the User Experience*
-  - Portigal, S. — *Interviewing Users*
-
   ---
 
-  *Generated by Qori • {{current_date}}*
+  ## Cascade summary
 
-  </div>
+  This desk research emits discovery variables for downstream templates.
+
+  | Variable | Description |
+  |----------|-------------|
+  | discovered_barriers | Barriers, challenges, pain points from the research |
+  | discovered_metrics | Quantitative findings — percentages, scores, rates |
+  | discovered_journeys | User task flow patterns — success and failure paths |
+  | methodology_recommendations | Suggested research methods from the literature |
+  | knowledge_gaps | Areas the research could not answer |
+  | source_artifacts | Document metadata for provenance tracking |
+
+  **Documents analyzed:** {{document_count}}
 
 output_options:
   filename: "{{topic_slug}}-desk-research-{{current_date_iso}}.md"
@@ -413,7 +404,7 @@ output_options:
 
         **Study:** {{selected_study}}
         **Topic:** {{effective_topic}}
-        **Documents Analyzed:** See full report
+        **Documents Analyzed:** {{document_count}}
 
         View the full analysis for findings, evidence, and actionable recommendations.
 
@@ -527,3 +518,17 @@ slack_ui:
   error_messages:
     no_documents: "Please upload at least one document before running desk research."
     processing_failed: "Analysis failed. Please check that your documents are readable text files (PDF, DOCX, TXT, MD)."
+
+notes: |
+  v7.0: Interleaved Handlebars/AI architecture (ADR 0005/0016 pattern).
+  - Document inventory (file names, types, count) rendered mechanically
+    via Handlebars. LLM document_analysis task adds per-document summaries
+    and relevance assessments on top of the mechanical list.
+  - Handler now extracts modal fields (description, research_topic, topic)
+    that were previously silently ignored.
+  - Masthead standardized to match brief/plan pattern (no centered div).
+  - Cascade summary section added at bottom.
+  - Anti-fabrication guards preserved (already strong from v5.1).
+  - OUTPUT BOUNDARIES rule added to all tasks.
+
+  v5.1: Per-section LLM tasks (superseded by v7.0).
