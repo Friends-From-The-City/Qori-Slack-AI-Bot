@@ -56,9 +56,10 @@ async function handleGenerateOtherMessageType({ ack, body, client, action }: Sla
         return;
     }
 
-    // Open the selected modal with the existing participant data
-    await client.views.push({
-      trigger_id: body.trigger_id,
+    // Update the current modal in place — overflow menu actions don't
+    // provide a trigger_id, so views.push would fail.
+    await client.views.update({
+      view_id: body.view.id,
       view: {
         ...nextModal,
         private_metadata: JSON.stringify({
