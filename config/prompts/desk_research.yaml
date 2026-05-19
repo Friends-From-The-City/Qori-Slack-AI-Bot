@@ -144,13 +144,16 @@ ai_generation_tasks:
 
       **Strategic Implications:** 2-3 sentences on what these findings mean for decision-making. Only draw from actual findings.
 
-      **Confidence Assessment:**
+      <details>
+      <summary><strong>Confidence Assessment</strong></summary>
 
       | Aspect | Confidence | Rationale |
       |:-------|:-----------|:----------|
       | Evidence quality | [High/Medium/Low] | [Brief explanation] |
       | Coverage of topic | [High/Medium/Low] | [How well documents address questions] |
       | Actionability | [High/Medium/Low] | [Whether findings translate to actions] |
+
+      </details>
 
       OUTPUT BOUNDARIES: Do not generate section headings, sub-headings,
       citation appendices, reference lists, horizontal rules, or markdown
@@ -305,7 +308,12 @@ output_template: |
   | {{@index}} | {{this}} | {{lookup ../document_types @index}} |
   {{/each}}
 
+  <details>
+  <summary><strong>Document details</strong> — source, relevance, and summaries</summary>
+
   {{ai_generated.document_analysis}}
+
+  </details>
 
   ---
 
@@ -333,7 +341,8 @@ output_template: |
 
   ---
 
-  ## Methodology Note
+  <details>
+  <summary><strong>Methodology Note</strong></summary>
 
   | Practice | Implementation |
   |:---------|:---------------|
@@ -341,6 +350,8 @@ output_template: |
   | Evidence grounding | All claims tied to specific document content |
   | Confidence assessment | Strength of evidence explicitly rated |
   | Limitation acknowledgment | Gaps and constraints clearly noted |
+
+  </details>
 
   ---
 
