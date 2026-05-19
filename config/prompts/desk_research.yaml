@@ -188,7 +188,7 @@ ai_generation_tasks:
       > "[Direct quote from document 2]"
       > — *[Document name/source]*
 
-      *Implications for {{effective_topic}}:* 1-2 sentences on why this matters.
+      *Why this matters:* 1-2 sentences on implications for research and design decisions.
 
       *Confidence:* `[HIGH]` / `[MEDIUM]` / `[LOW]` — one sentence explaining.
 

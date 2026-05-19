@@ -318,8 +318,15 @@ async function handleDiscoverSubmission({ ack, view, body, client }: SlackViewMi
     const formattedDocumentContent: string = parsedDocuments.structured_format;
 
     // Mechanical document inventory for Handlebars rendering
+    const MIME_LABELS: Record<string, string> = {
+      'application/pdf': 'PDF',
+      'text/plain': 'Text',
+      'text/markdown': 'Markdown',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'Word',
+      'application/msword': 'Word',
+    };
     const documentNames = processedFiles.map((f: ProcessedFile) => f.name);
-    const documentTypes = processedFiles.map((f: ProcessedFile) => f.type);
+    const documentTypes = processedFiles.map((f: ProcessedFile) => MIME_LABELS[f.type] || f.type);
 
     const data: DiscoveryTemplateInput = {
       topic,
