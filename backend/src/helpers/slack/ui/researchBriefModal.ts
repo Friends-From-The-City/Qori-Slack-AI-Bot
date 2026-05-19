@@ -277,24 +277,6 @@ export const researchBriefModal = {
         text: "*Timeline & Budget*",
       },
     },
-    // Timeline preference
-    {
-      type: "input",
-      block_id: "timeline_block",
-      label: {
-        type: "plain_text",
-        text: "Timeline *",
-      },
-      element: {
-        type: "radio_buttons",
-        action_id: "timeline_radio",
-        options: [
-          { text: { type: "plain_text", text: "Standard (5 weeks)" }, value: "standard" },
-          { text: { type: "plain_text", text: "Accelerated (2 weeks)" }, value: "accelerated" },
-          { text: { type: "plain_text", text: "Extended (8 weeks)" }, value: "extended" },
-        ],
-      },
-    },
     // Start date
     {
       type: "input",

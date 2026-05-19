@@ -110,6 +110,7 @@ const TEMPLATE_CONSUMES: Record<string, ConsumeSpec[]> = {
     { key: 'timeline_preference', required: false, label: 'Timeline', source_hint: 'Create research brief first' },
     { key: 'budget', required: false, label: 'Budget', source_hint: 'Create research brief first' },
     { key: 'decision_deadline', required: false, label: 'Decision deadline', source_hint: 'Create research brief first' },
+    { key: 'recruitment_sources', required: false, label: 'Recruitment sources', source_hint: 'Create research brief first' },
   ],
   discussion_guide: [
     { key: 'research_objectives', required: true, label: 'Research objectives', source_hint: 'Create research brief first' },
@@ -172,6 +173,9 @@ function buildCascadeBlocks(cascadeData: CascadeData | null) {
   const blocks: Record<string, unknown>[] = [
     { type: "divider" },
     { type: "section", text: { type: "mrkdwn", text: "*Cascade Context*" } },
+    { type: "context", block_id: "cascade_legend", elements: [
+      { type: "mrkdwn", text: ":white_check_mark: Required (present)  :large_blue_circle: Optional (present)  :warning: Required (missing)  :white_circle: Optional (missing)" },
+    ] },
   ];
 
   // Available variables

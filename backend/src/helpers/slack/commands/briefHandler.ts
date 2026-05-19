@@ -13,7 +13,7 @@
 
 import type { AllMiddlewareArgs, SlackViewMiddlewareArgs, ViewSubmitAction } from '@slack/bolt';
 
-import { format } from 'date-fns';
+import { format, parseISO, differenceInCalendarDays, isValid } from 'date-fns';
 import { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo, readFolders, copyFilesToFolder } from '../../github';
 import { getResearchStudyWithRoles, addResearchStudyWithRoles } from '../../../services/research_study.service';
 import { getChannelConfigByChannelId } from '../../../services/channel-config.service';
@@ -294,7 +294,6 @@ async function handleBriefSubmission({ ack, body, view, client }: SlackViewMiddl
   const outOfScope = (extract('out_of_scope_block', 'out_of_scope_input') as string) || '';
   const participantApproach = (extract('participant_approach_block', 'participant_approach_input') as string) || '';
   const recruitmentSources = (extract('recruitment_sources_block', 'recruitment_sources_input') as string) || '';
-  const timelinePref = ((extract('timeline_block', 'timeline_radio') as { value: string } | null)?.value) || 'standard';
   const startDate = (extract('start_date_block', 'start_date_picker') as string) || '';
   const decisionDeadline = (extract('decision_deadline_block', 'decision_deadline_picker') as string) || '';
   const budgetStr = (extract('budget_block', 'budget_input') as string) || '';
@@ -315,9 +314,23 @@ async function handleBriefSubmission({ ack, body, view, client }: SlackViewMiddl
     }
   }
 
+  // ── Compute timeline_preference from date gap (replaces modal radio) ──
+  // Researchers think in dates, not buckets. Handler infers the preference
+  // from (decision_deadline - start_date): <35 days = accelerated, 35-49 = standard, >49 = extended.
+  let timelinePref: TimelinePreference = 'standard';
+  if (startDate && decisionDeadline) {
+    const start = parseISO(startDate);
+    const deadline = parseISO(decisionDeadline);
+    if (isValid(start) && isValid(deadline)) {
+      const gap = differenceInCalendarDays(deadline, start);
+      if (gap < 35) timelinePref = 'accelerated';
+      else if (gap > 49) timelinePref = 'extended';
+    }
+  }
+
   // ── Mechanical computations (ADR 0005: handler computes, not LLM) ──
   const displayDate = format(new Date(), 'MMMM d, yyyy');
-  const timelineDisplay = TIMELINE_DISPLAY_LABELS[timelinePref as TimelinePreference] || TIMELINE_DISPLAY_LABELS.standard;
+  const timelineDisplay = TIMELINE_DISPLAY_LABELS[timelinePref] || TIMELINE_DISPLAY_LABELS.standard;
   const timelinePhases = buildTimelinePhases(startDate, timelinePref);
 
   // ── Discovery injection (unchanged from v6.0) ──
