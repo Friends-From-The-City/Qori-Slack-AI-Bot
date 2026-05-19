@@ -342,7 +342,7 @@ async function handleBriefSubmission({ ack, body, view, client }: SlackViewMiddl
             const prefix = markerPrefixes[a.type as DiscoveryType] || '?';
             return `| **${prefix}** | ${a.slug} | ${typeLabels[a.type as DiscoveryType] || a.type} | ${a.date} | ${a.variableCount} variables |`;
           })
-          .join('\n  ');
+          .join('\n');
         citationConvention = selectedArtifacts
           .map((a: DiscoveryArtifact) => `[${markerPrefixes[a.type as DiscoveryType] || '?'}N] = ${typeLabels[a.type as DiscoveryType] || a.type} (${a.slug})`)
           .join('; ');

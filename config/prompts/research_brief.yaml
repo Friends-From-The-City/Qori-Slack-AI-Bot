@@ -196,6 +196,12 @@ ai_generation_tasks:
       covers that). Example opening: "This card sorting study with 8
       veterans will reveal..." NOT "The mobile app faces critical..."
 
+      The summary describes what this study WILL DO during its execution.
+      Downstream impacts (informs redesign, supports decision) should be
+      framed as outcomes the study enables, not actions the study performs.
+      Example: "This study will reveal X, informing the Y redesign"
+      NOT "This study will reveal X to redesign Y"
+
       Output ONLY the summary paragraph. No heading, no preamble.
       Bold key metrics from discovery data if available.
 

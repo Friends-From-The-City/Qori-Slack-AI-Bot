@@ -16,11 +16,11 @@ The migration paused template standardization. The plan template (v7.0) is the c
 
 Per the post-migration audit, 26 of 27 templates have no unit tests, and 12 use the older "minimal static + single LLM" pattern instead of the canonical interleaved Handlebars + bounded LLM slots (ADR 0005).
 
-### Brief restructure (first priority)
+### Brief restructure (complete — ADR 0016)
 
-The brief template is upstream of plan. Restructuring brief improves the cascade variables plan consumes. Brief restructure also exposes any contract drift between what brief emits and what downstream templates expect.
+Restructured to v7.0 interleaved Handlebars/AI architecture. Handler is the data assembly point; LLM writes bounded prose only. See ADR 0016 for the decision record.
 
-Brief should emit `research_objectives` as a clean `string[]` (per ADR 0006), `research_questions` and `target_barriers` as fully typed object arrays. The current brief works but doesn't follow v7.0's discipline around factual vs. generative content separation.
+**Known finding: cascade variable count non-determinism.** The pre-render LLM tasks for research questions and target barriers produce variable-length arrays (e.g., 5 questions on one run, 6 on another with the same inputs). The prompts specify ranges ("3-7 questions") and the LLM picks within that range non-deterministically. This means brief outputs aren't fully reproducible — same study, same inputs, different question/barrier counts. The plan template inherits this property since it consumes the brief's emissions. Not blocking but worth knowing for any future reproducibility requirements.
 
 ### Discovery templates
 
