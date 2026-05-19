@@ -37,6 +37,8 @@ interface MutableBlock {
 interface DeskResearchTemplateInput {
   selected_study: string;
   topic: string;
+  effective_topic: string;
+  topic_slug: string;
   research_topic: string;
   description: string;
   document_content: string;
@@ -197,9 +199,16 @@ async function handleDeskResearchSubmission({ ack, body, view, client }: SlackVi
     const documentNames = processedFiles.map((f: any) => f.name as string);
     const documentTypes = processedFiles.map((f: any) => f.type as string);
 
+    // derived_variables in YAML is documentation-only (not processed by yamlProcessor),
+    // so the handler must compute these for Handlebars rendering and discovery scoping.
+    const effectiveTopic = researchTopic || topic;
+    const topicSlug = topic.toLowerCase().replace(/[\s_]+/g, '-').replace(/[^a-z0-9-]/g, '').replace(/-+/g, '-').replace(/^-|-$/g, '');
+
     const deskResearchData: DeskResearchTemplateInput = {
       selected_study: studyName,
       topic,
+      effective_topic: effectiveTopic,
+      topic_slug: topicSlug,
       research_topic: researchTopic,
       description,
       document_content: formattedDocumentContent,
@@ -208,7 +217,7 @@ async function handleDeskResearchSubmission({ ack, body, view, client }: SlackVi
       document_types: documentTypes,
     };
 
-    console.log(`📚 Assembled desk research data: ${deskResearchData.document_count} documents, topic: "${topic}", study: ${studyName}`);
+    console.log(`📚 Assembled desk research data: ${deskResearchData.document_count} documents, topic: "${effectiveTopic}", names: [${documentNames.join(', ')}], study: ${studyName}`);
 
     const study = await getResearchStudyWithRoles(studyName);
 
