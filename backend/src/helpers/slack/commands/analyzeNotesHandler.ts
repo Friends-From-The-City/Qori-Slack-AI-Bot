@@ -494,15 +494,9 @@ const handleSessionSelectionChange = async ({ ack, body, client }: SlackActionMi
         studyNotes = await studyNotesService.getStudyNotesByParticipantName(sessionObject.session_id);
         console.log(`✅ Loaded ${studyNotes.length} notes for session_id "${sessionObject.session_id}" (session: "${sessionName}")`);
       } else {
-        console.warn("No session_id found in session object, falling back to all study notes");
-        const transcriptNotes = await studyNotesService.getStudyNotesByStudyName(studyName, true);
-        const nonTranscriptNotes = await studyNotesService.getStudyNotesByStudyName(studyName, false);
-
-        const allNotes = [...transcriptNotes, ...nonTranscriptNotes];
-        studyNotes = allNotes.filter((note: NoteDetail, index: number, self: NoteDetail[]) =>
-          index === self.findIndex((n: NoteDetail) => n.id === note.id)
-        );
-        console.log(`✅ Loaded ${studyNotes.length} notes for study "${studyName}" (fallback)`);
+        // No session_id means notes can't be scoped — show empty list rather than
+        // silently returning all study notes (which would display wrong items).
+        console.warn(`No session_id found for session "${sessionName}" — notes dropdown will be empty`);
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
