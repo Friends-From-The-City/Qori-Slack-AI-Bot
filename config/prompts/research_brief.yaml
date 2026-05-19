@@ -190,8 +190,13 @@ ai_generation_tasks:
       DISCOVERY CONTEXT: {{upstream_discovered_barriers}}
       {% endif %}
 
+      The Summary is the elevator pitch for stakeholders deciding whether
+      to fund this study. Open with what this study will DO (the research
+      action and value), not with the problem (the Problem section
+      covers that). Example opening: "This card sorting study with 8
+      veterans will reveal..." NOT "The mobile app faces critical..."
+
       Output ONLY the summary paragraph. No heading, no preamble.
-      Focus: what problem, what method, what decision this research enables.
       Bold key metrics from discovery data if available.
 
       CITATION RULES: {% if citation_convention %}{{citation_convention}}
@@ -202,6 +207,13 @@ ai_generation_tasks:
       Do NOT invent statistics, metrics, or numbers. Use ONLY data from the
       inputs provided. If no supporting data exists, state the claim without
       a metric.
+
+      OUTPUT BOUNDARIES: Do not generate section headings, sub-headings,
+      citation appendices, reference lists, horizontal rules, or markdown
+      section dividers. The template handles all document structure.
+      Output only the prose content for this section. Inline citation
+      markers (e.g., [D1], [V2]) are required where data is referenced
+      but should not be summarized in a separate block.
 
   - task_id: "problem_narrative"
     prompt: |
@@ -244,10 +256,18 @@ ai_generation_tasks:
       inputs provided. If no supporting data exists, state the claim without
       a metric.
 
+      OUTPUT BOUNDARIES: Do not generate section headings, sub-headings,
+      citation appendices, reference lists, horizontal rules, or markdown
+      section dividers. The template handles all document structure.
+      Output only the prose content for this section. Inline citation
+      markers (e.g., [D1], [V2]) are required where data is referenced
+      but should not be summarized in a separate block.
+
   - task_id: "method_rationale"
     prompt: |
-      Write 2-3 sentences explaining why {{methodology}} is the right method.
+      Write a method section for a research brief covering three areas:
 
+      Method: {{methodology}}
       Problem: {{problem_statement}}
       Learning objectives: {{learning_objectives}}
 
@@ -255,10 +275,20 @@ ai_generation_tasks:
       METHODOLOGY RECOMMENDATIONS FROM DISCOVERY: {{upstream_methodology_recommendations}}
       {% endif %}
 
-      Output ONLY the sentences. No heading, no label.
-      If methodology recommendations exist from discovery, explain WHY with
-      "N discovery sources independently recommended..." and cite each source.
-      Note what this method answers and what follow-up would address remaining gaps.
+      Cover these three areas as continuous prose (no sub-headings):
+
+      1. APPROACH (1-2 sentences): Why {{methodology}} is the right method
+         for this study. If methodology recommendations exist from discovery,
+         explain WHY with "N discovery sources independently recommended..."
+         and cite each source. Note what this method answers and what
+         follow-up would address remaining gaps.
+
+      2. SESSION FORMAT (1-2 sentences): Remote/in-person, session structure,
+         accessibility accommodations, alternative formats if applicable.
+
+      3. DATA COLLECTION (1-2 sentences): Specific methods: think-aloud,
+         screen recording, observer notes, post-session interviews, etc.
+         Be specific to the methodology.
 
       CITATION RULES: {% if citation_convention %}{{citation_convention}}
       Number citations sequentially within this section, starting at [D1], [S1], or [V1].
@@ -267,9 +297,16 @@ ai_generation_tasks:
       Do NOT invent statistics, metrics, or numbers. Use ONLY data from the
       inputs provided.
 
+      OUTPUT BOUNDARIES: Do not generate section headings, sub-headings,
+      citation appendices, reference lists, horizontal rules, or markdown
+      section dividers. The template handles all document structure.
+      Output only the prose content for this section. Inline citation
+      markers (e.g., [D1], [V2]) are required where data is referenced
+      but should not be summarized in a separate block.
+
   - task_id: "participant_rationale"
     prompt: |
-      Write a participant composition section for a research brief.
+      Write the participant composition content for a research brief.
 
       Participant approach: {{participant_approach}}
       Methodology: {{methodology}}
@@ -279,7 +316,7 @@ ai_generation_tasks:
       {% endif %}
 
       Output a markdown table: Segment | Count | Rationale
-      Then a brief "Demographics" paragraph with recruitment approach.
+      Then a brief paragraph about demographics and recruitment approach.
       Justify segments with discovery evidence if available (e.g., AT users
       if accessibility barriers were found, older veterans if age patterns emerged).
 
@@ -290,27 +327,43 @@ ai_generation_tasks:
       Do NOT invent statistics, metrics, or numbers. Use ONLY data from the
       inputs provided.
 
+      OUTPUT BOUNDARIES: Do not generate section headings, sub-headings,
+      citation appendices, reference lists, horizontal rules, or markdown
+      section dividers. The template handles all document structure.
+      Output only the prose content for this section. Inline citation
+      markers (e.g., [D1], [V2]) are required where data is referenced
+      but should not be summarized in a separate block.
+
   - task_id: "out_of_scope_rationale"
     prompt: |
-      Format the out-of-scope items for a research brief.
+      Format the out-of-scope items as scope boundaries for a research brief.
 
-      Out of scope items: {{out_of_scope}}
+      Researcher's out-of-scope items: {{out_of_scope}}
 
-      {% if upstream_discovered_barriers %}
-      DISCOVERY CONTEXT: {{upstream_discovered_barriers}}
-      {% endif %}
+      Out of scope items describe what this study DELIBERATELY EXCLUDES
+      from its scope and why. These are scope boundaries, not findings.
 
-      Output as a bullet list. Bold title for each item, then brief rationale.
-      For discovery-established items, add citation and evidence.
-      Example: "**Whether navigation is broken** — Already demonstrated by evidence <sup>[D2]</sup>"
-      Researcher items included as-is with brief justification.
+      Examples of correct out-of-scope items:
+      - **Backend performance investigation** — Separate engineering workstream
+      - **Feature redesign itself** — This study informs the redesign, doesn't perform it
+      - **Generative concept exploration** — This study validates, not ideates
 
-      CITATION RULES: {% if citation_convention %}{{citation_convention}}
-      Number citations sequentially within this section, starting at [D1], [S1], or [V1].
-      {% else %}No discovery sources — do not use citation markers.{% endif %}
+      Do NOT list discovery findings as out-of-scope. Things already known
+      from discovery are inputs to this study, not boundaries around it.
+
+      Output as a bullet list. Bold title for each item, then a brief
+      rationale explaining why this is excluded from the study's scope.
+      Derive items from the researcher's input above.
 
       Do NOT invent statistics, metrics, or numbers. Use ONLY data from the
       inputs provided.
+
+      OUTPUT BOUNDARIES: Do not generate section headings, sub-headings,
+      citation appendices, reference lists, horizontal rules, or markdown
+      section dividers. The template handles all document structure.
+      Output only the prose content for this section. Inline citation
+      markers (e.g., [D1], [V2]) are required where data is referenced
+      but should not be summarized in a separate block.
 
   - task_id: "risks"
     output_format: json
@@ -459,9 +512,9 @@ output_template: |
   {{#if discovery_sources}}
   **Discovery sources**
 
-  This brief synthesized findings from {{discovery_count}} discovery sources. Citation markers throughout the document trace each claim to its source.
+  This brief synthesized findings from {{discovery_count}} discovery sources. Citation markers are numbered per-section starting from 1. The prefix letter indicates source type.
 
-  | Marker | Source | Type | Date | Findings used |
+  | Prefix | Source | Type | Date | Findings used |
   |--------|--------|------|------|---------------|
   {{discovery_sources}}
 
