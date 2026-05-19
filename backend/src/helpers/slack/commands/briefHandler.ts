@@ -340,7 +340,7 @@ async function handleBriefSubmission({ ack, body, view, client }: SlackViewMiddl
         discoverySources = selectedArtifacts
           .map((a: DiscoveryArtifact) => {
             const prefix = markerPrefixes[a.type as DiscoveryType] || '?';
-            return `| **${prefix}**1-${prefix}7 | ${a.slug} | ${typeLabels[a.type as DiscoveryType] || a.type} | ${a.date} | ${a.variableCount} variables |`;
+            return `| **${prefix}** | ${a.slug} | ${typeLabels[a.type as DiscoveryType] || a.type} | ${a.date} | ${a.variableCount} variables |`;
           })
           .join('\n  ');
         citationConvention = selectedArtifacts
@@ -388,7 +388,7 @@ async function handleBriefSubmission({ ack, body, view, client }: SlackViewMiddl
   // Research objectives: split learning objectives into individual items
   const researchObjectives: string[] = learningObjectives
     .split(/\n/)
-    .map(line => line.replace(/^[-•*]\s*/, '').trim())
+    .map(line => line.replace(/^[-•*\d.]+\s*/, '').trim())
     .filter(Boolean);
 
   console.log(`📋 Structured data assembled: ${targetBarriers.length} barriers, ${researchQuestions.length} questions, ${researchObjectives.length} objectives`);
