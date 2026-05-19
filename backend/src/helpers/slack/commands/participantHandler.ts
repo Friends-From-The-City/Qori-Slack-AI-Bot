@@ -6,6 +6,7 @@ import { getStudiesByUser } from "../../../services/research_study.service";
 import studyParticipantService from "../../../services/study_participant.service";
 import { processParticipantYamlTemplate } from "../../../helpers/participantYamlProcessor";
 import { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo } from "../../github";
+import { refreshDashboardAfterAction } from './fieldworkHandler';
 import type { View } from '@slack/types';
 
 async function participantHandler({ ack, body, client, command }: SlackCommandMiddlewareArgs & AllMiddlewareArgs): Promise<void> {
@@ -356,6 +357,12 @@ async function handleUpdateParticipantSubmission({ ack, body, view, client }: Sl
       user: body.user.id,
       text: `✅ *Participant Status Updated Successfully!*\n\n*Study:* ${studyName}\n*Participant:* ${participantName}\n*New Status:* ${newStatus}${updateNotes ? `\n*Notes:* ${updateNotes}` : ''}\n\nThe participant's status has been updated in the database and participant tracker.`,
     });
+
+    // Refresh fieldwork dashboard if this modal was opened from it
+    const meta = JSON.parse(view.private_metadata || '{}');
+    if (meta.rootViewId) {
+      await refreshDashboardAfterAction(client, meta.rootViewId, studyId!, body.user.id, meta.channelId || body.user.id, studyName);
+    }
 
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

@@ -17,6 +17,7 @@ import studyParticipantService from "../../../services/study_participant.service
 import { buildAddObserverModal } from "../ui/addObserverModal";
 import sessionObserverService from "../../../services/session_observer.service";
 import { calculatePerPersonCompensation } from '../../../utils/compensationCalculator';
+import { refreshDashboardAfterAction } from './fieldworkHandler';
 
 
 async function participantOutreachHandler({ ack, body, client, command }: SlackCommandMiddlewareArgs & AllMiddlewareArgs): Promise<void> {
@@ -1144,24 +1145,10 @@ async function handleAddParticipantSubmit({ ack, body, view, client }: SlackView
       ]
     });
 
-    // Close the modal with a simple success message
-    // await client.views.update({
-    //   view_id: body.view.id,
-    //   view: {
-    //     type: "modal",
-    //     title: { type: "plain_text", text: "Success" },
-    //     close: { type: "plain_text", text: "Close" },
-    //     blocks: [
-    //       {
-    //         type: "section",
-    //         text: {
-    //           type: "mrkdwn",
-    //           text: `:white_check_mark: *Participant Added Successfully!*\n\nThe participant has been added and a notification has been sent to the channel.`
-    //         }
-    //       }
-    //     ]
-    //   }
-    // });
+    // Refresh fieldwork dashboard if this modal was opened from it
+    if (meta.rootViewId) {
+      await refreshDashboardAfterAction(client, meta.rootViewId, study.id, userId, channelId, study_name);
+    }
 
   } catch (error) {
     console.error("🚨 Error handling add participant modal submission:", error);
