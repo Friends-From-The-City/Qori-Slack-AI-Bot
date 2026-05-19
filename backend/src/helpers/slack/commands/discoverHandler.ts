@@ -65,6 +65,7 @@ interface UploadedFile {
 /** Data shape passed to discovery YAML templates. */
 interface DiscoveryTemplateInput {
   topic: string;
+  effective_topic: string;
   topic_slug: string;
   team: string;
   description: string;
@@ -74,6 +75,10 @@ interface DiscoveryTemplateInput {
   _discovery_team: string;
   selected_study: string;
   study_name: string;
+  // Mechanical document inventory (handler-assembled for Handlebars)
+  document_count: number;
+  document_names: string[];
+  document_types: string[];
   // Survey-specific
   survey_name?: string;
   question_focus?: string;
@@ -312,8 +317,13 @@ async function handleDiscoverSubmission({ ack, view, body, client }: SlackViewMi
     const parsedDocuments: ParsedDocuments = parseDocuments(documents);
     const formattedDocumentContent: string = parsedDocuments.structured_format;
 
+    // Mechanical document inventory for Handlebars rendering
+    const documentNames = processedFiles.map((f: ProcessedFile) => f.name);
+    const documentTypes = processedFiles.map((f: ProcessedFile) => f.type);
+
     const data: DiscoveryTemplateInput = {
       topic,
+      effective_topic: topic,
       topic_slug: topicSlug,
       team,
       description: description || topic,
@@ -323,6 +333,9 @@ async function handleDiscoverSubmission({ ack, view, body, client }: SlackViewMi
       _discovery_team: team,
       selected_study: `discovery-${topicSlug}`,
       study_name: topic,
+      document_count: processedFiles.length,
+      document_names: documentNames,
+      document_types: documentTypes,
     };
 
     // Survey-specific fields
