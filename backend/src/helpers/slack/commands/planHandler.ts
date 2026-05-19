@@ -81,7 +81,6 @@ async function handlePlanSubmission({ ack, body, view, client }: SlackViewMiddle
 
   // ── Modal inputs ──
   const leadResearcher = (extract('lead_researcher_block', 'lead_researcher_input') as string) || '';
-  const recruitmentSources = (extract('recruitment_source_block', 'recruitment_source_input') as string) || '';
   const operationalRisks = (extract('operational_risks_block', 'operational_risks_input') as string) || '';
 
   // ── Compensation (mechanical) ──
@@ -95,11 +94,13 @@ async function handlePlanSubmission({ ack, body, view, client }: SlackViewMiddle
     { key: 'methodology_selection', required: false },
     { key: 'timeline_preference', required: false },
     { key: 'start_date', required: false },
+    { key: 'recruitment_sources', required: false },
   ]);
 
-  // ── Timeline from cascade (brief owns these — plan modal no longer has these fields) ──
+  // ── Cascade-owned fields (brief owns these — plan modal no longer has these fields) ──
   const timelinePref = (upstream.timeline_preference?.value as string) || 'standard';
   const startDate = (upstream.start_date?.value as string) || '';
+  const recruitmentSources = (upstream.recruitment_sources?.value as string) || '';
 
   // ── Timeline phases (mechanical) ──
   const timelinePhases = buildTimelinePhases(startDate, timelinePref);

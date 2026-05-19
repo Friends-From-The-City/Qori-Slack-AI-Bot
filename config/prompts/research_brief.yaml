@@ -154,6 +154,12 @@ emits:
     schema:
       type: string
     extract_from: "Participants section — composition and count"
+  - key: recruitment_sources
+    pool: false
+    pool_strategy: replace
+    schema:
+      type: string
+    extract_from: "Participants section — Recruitment line"
 
 # ═══════════════════════════════════════════════════════════
 # AI GENERATION — focused, bounded tasks
@@ -322,9 +328,11 @@ ai_generation_tasks:
       {% endif %}
 
       Output a markdown table: Segment | Count | Rationale
-      Then a brief paragraph about demographics and recruitment approach.
+      Then a brief paragraph about demographic composition rationale.
       Justify segments with discovery evidence if available (e.g., AT users
       if accessibility barriers were found, older veterans if age patterns emerged).
+      Do NOT mention recruitment sources — recruitment is rendered separately
+      by the template.
 
       CITATION RULES: {% if citation_convention %}{{citation_convention}}
       Number citations sequentially within this section, starting at [D1], [S1], or [V1].
@@ -462,6 +470,10 @@ output_template: |
   ## Participants
 
   {{ai_generated.participant_rationale}}
+
+  {{#if recruitment_sources}}
+  **Recruitment** — {{recruitment_sources}}
+  {{/if}}
 
   ---
 

@@ -1,8 +1,12 @@
 /**
- * Research Plan Modal v4.8
+ * Research Plan Modal v5.0
  *
  * Plan = execution doc. Consumes scope from brief via cascade.
  * Only asks for operational details the brief doesn't cover.
+ *
+ * v5.0: Removed recruitment_source_block (now cascade from brief),
+ * note_taker_block and observer_block (dead fields — plan v7.0
+ * doesn't render a team section; observers managed via /qori-fieldwork).
  */
 export const researchPlanGeneratorModal = {
   type: "modal",
@@ -25,7 +29,7 @@ export const researchPlanGeneratorModal = {
       elements: [
         {
           type: "mrkdwn",
-          text: "Execution plan for an approved brief. Scope, method, and objectives come from the cascade.",
+          text: "Execution plan for an approved brief. Scope, method, participants, recruitment, and timeline come from the cascade.",
         },
       ],
     },
@@ -53,13 +57,6 @@ export const researchPlanGeneratorModal = {
     {
       type: "divider",
     },
-    {
-      type: "section",
-      text: {
-        type: "mrkdwn",
-        text: "*Team*",
-      },
-    },
     // Lead researcher (auto-filled)
     {
       type: "input",
@@ -76,75 +73,6 @@ export const researchPlanGeneratorModal = {
         type: "plain_text_input",
         action_id: "lead_researcher_input",
         initial_value: "{{lead_researcher}}",
-      },
-    },
-    // Note-taker
-    {
-      type: "input",
-      block_id: "note_taker_block",
-      optional: true,
-      label: {
-        type: "plain_text",
-        text: "Note-taker",
-      },
-      element: {
-        type: "plain_text_input",
-        action_id: "note_taker_input",
-        placeholder: {
-          type: "plain_text",
-          text: "e.g., Alex Rodriguez",
-        },
-      },
-    },
-    // Observer
-    {
-      type: "input",
-      block_id: "observer_block",
-      optional: true,
-      label: {
-        type: "plain_text",
-        text: "Observer / stakeholder reviewer",
-      },
-      element: {
-        type: "plain_text_input",
-        action_id: "observer_input",
-        placeholder: {
-          type: "plain_text",
-          text: "e.g., Sarah Chen (Product)",
-        },
-      },
-    },
-    {
-      type: "divider",
-    },
-    {
-      type: "section",
-      text: {
-        type: "mrkdwn",
-        text: "*Recruitment*",
-      },
-    },
-    // Recruitment sources
-    {
-      type: "input",
-      block_id: "recruitment_source_block",
-      optional: true,
-      label: {
-        type: "plain_text",
-        text: "Recruitment sources",
-      },
-      hint: {
-        type: "plain_text",
-        text: "Where will you find participants?",
-      },
-      element: {
-        type: "plain_text_input",
-        action_id: "recruitment_source_input",
-        placeholder: {
-          type: "plain_text",
-          text: "e.g., VA disability services, VSOs, Perigean recruiting",
-        },
-        multiline: true,
       },
     },
     {
