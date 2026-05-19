@@ -299,32 +299,18 @@ ai_generation_tasks:
 output_template: |
   # Desk Research Report: {{effective_topic}}
 
-  **Study:** {{selected_study}} &nbsp; | &nbsp; **Prepared by:** Qori Research Assistant &nbsp; | &nbsp; **Date:** {{current_date}}
-
-  ---
-
-  ## Research Overview
-
-  | | |
-  |:--|:--|
-  | **Study** | {{selected_study}} |
-  | **Topic** | {{effective_topic}} |
-  | **Date Conducted** | {{current_date}} |
-  | **Documents Analyzed** | {{document_count}} |
-  | **Analysis Type** | Secondary Research / Literature Review |
+  **Study:** {{selected_study}} &nbsp; | &nbsp; **Topic:** {{effective_topic}} &nbsp; | &nbsp; **Documents:** {{document_count}} &nbsp; | &nbsp; **Date:** {{current_date}}
 
   {{#if description}}
   > **Document Context:** {{description}}
   {{/if}}
 
   > [!NOTE]
-  > This analysis is based solely on the documents provided. All findings, themes, and recommendations are derived from the uploaded content. No external sources or training knowledge were used to generate findings.
+  > This analysis is based solely on the documents provided. All findings, themes, and recommendations are derived from the uploaded content.
 
   ---
 
   ## Documents Analyzed
-
-  {{document_count}} document(s) uploaded for analysis:
 
   | # | Filename | Type |
   |:-:|:---------|:-----|
