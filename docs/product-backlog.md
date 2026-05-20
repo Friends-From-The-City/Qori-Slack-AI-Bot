@@ -25,6 +25,7 @@ The migration paused template standardization. The plan template (v7.0) and brie
 - **affinity_mapping** v7.0
 - **persona_generator** v7.0
 - **designer_readout** v7.0 (reference implementation for readout ticket quality)
+- **research_readout** v7.0 (upstream of all 4 audience readouts — emits prioritized_findings + prioritized_recommendations)
 
 ### Remaining
 
