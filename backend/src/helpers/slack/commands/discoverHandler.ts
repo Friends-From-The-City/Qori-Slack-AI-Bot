@@ -357,6 +357,7 @@ async function handleDiscoverSubmission({ ack, view, body, client }: SlackViewMi
       data.study_channel = replyChannel;
       data.researcher_contact = `<@${userId}>`;
       data.detected_files = documents.map(d => d.name).join('\n- ');
+      (data as any).file_list = documents.map(d => d.name);
     }
 
     const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, typeConfig.yaml);
