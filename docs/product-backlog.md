@@ -23,11 +23,12 @@ The migration paused template standardization. The plan template (v7.0) and brie
 - **stakeholder_synthesis** v7.0
 - **survey_synthesis** v7.0
 - **affinity_mapping** v7.0
-- **persona_generator** v7.0 (in progress at time of writing)
+- **persona_generator** v7.0
+- **designer_readout** v7.0 (reference implementation for readout ticket quality)
 
 ### Remaining
 
-- **Readout templates:** designer_readout, engineering_readout, accessibility_readout, leadership_readout. Audience-specific deliverables. Need ticket bodies iterated to production-grade.
+- **Readout templates:** engineering_readout, accessibility_readout, leadership_readout. Audience-specific deliverables. Ticket schemas and prompt instructions should align to designer_readout's reference (see v1.1-followups.md).
 - **Discussion guide, session_summary, participant_tracker.** Discussion guide has cascade gaps (75-minute partially addressed). Participant tracker has status label mismatch (audit finding).
 - **Other downstream templates:** journey_mapping, jobs_to_be_done, usability_issues, design_opportunities, service_blueprint. Each consumes specific cascade variables and produces specific outputs.
 
