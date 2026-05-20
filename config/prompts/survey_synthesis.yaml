@@ -3,17 +3,18 @@
 # ═══════════════════════════════════════════════════════════
 id: survey_synthesis
 name: survey_response_synthesizer
-label: "📊 Survey Synthesis"
-version: "v3.1"
+label: "Survey Synthesis"
+version: "v7.0"
 
-description: >
+description: |
   Analyze open-ended survey responses using thematic analysis.
-  Identifies patterns across responses, counts frequency, extracts
-  representative quotes, and generates actionable recommendations.
+  v7.0: Interleaved Handlebars/AI architecture — mechanical content
+  (masthead, methodology, references) rendered by template, LLM
+  writes bounded analytical sections. Per ADR 0005/0016.
 
 author: Qori R&D
 created: 2025-08-11
-last_updated: 2026-04-29
+last_updated: 2026-05-20
 
 # ═══════════════════════════════════════════════════════════
 # CONFIGURATION
@@ -29,265 +30,22 @@ input_variables:
   - name: topic
     type: text
     required: true
-    description: "Researcher-provided topic — slugified for filename and variable store path"
-
+    description: "Researcher-provided topic"
   - name: selected_study
     type: select
     required: true
-    description: "Study folder name"
-
   - name: survey_name
     type: text
     required: true
     placeholder: "e.g., Post-launch satisfaction survey"
-    description: "Name of the survey being analyzed"
-
   - name: question_focus
     type: textarea
     required: false
     placeholder: "e.g., Q5: What was most frustrating? Q8: Any other feedback?"
-    description: "Specific questions to prioritize. If blank, analyzes all text responses."
-
-  - name: survey_files
-    type: file_input
-    required: true
-    filetypes: ["csv", "xlsx", "xls"]
-    max_files: 5
-    description: "Survey export files"
-
   - name: combined_file_content
     type: textarea
     required: true
     description: "Extracted content from uploaded files (provided by backend)"
-
-# ═══════════════════════════════════════════════════════════
-# AI GENERATION
-# ═══════════════════════════════════════════════════════════
-ai_generation_tasks:
-  - task_id: "survey_synthesis_complete"
-    prompt: |
-      You are synthesizing open-ended survey responses using thematic analysis.
-
-      IMPORTANT: Generate the COMPLETE output following the format below. Do not stop early.
-
-      ============================================================
-      RULES — READ THEN GENERATE FULL OUTPUT
-      ============================================================
-
-      RULE 1: THEME-BY-THEME, NOT RESPONSE-BY-RESPONSE
-
-      ❌ WRONG:
-      "Response 1: User said X. Response 2: User said Y."
-
-      ✅ RIGHT:
-      "Theme: Loading Speed — 47 of 76 responses (62%) mentioned this."
-
-      Aggregate patterns across ALL responses. No one reads response-by-response.
-
-      RULE 2: EVERY THEME NEEDS FREQUENCY + QUOTES
-
-      For each theme:
-      - Count: How many responses mentioned it
-      - Percentage: What portion of total responses
-      - Quotes: 2-3 representative quotes with respondent IDs (R001, R012, etc.)
-
-      RULE 3: RESPONDENT CITATIONS
-
-      Assign IDs sequentially: R001, R002, R003...
-      Every quote must cite: "[Quote]" — R00X
-
-      RULE 4: SENTIMENT WITH MEANING
-
-      ❌ WRONG: "50% negative, 32% positive"
-      ✅ RIGHT: "50% negative — primarily about loading times and navigation"
-
-      Always explain WHAT is driving the sentiment.
-
-      RULE 5: NO HALLUCINATION
-
-      - Only report themes that actually appear in the data
-      - Counts must be accurate — if you're unsure, say "approximately"
-      - Quotes must be verbatim from responses
-      - Never invent responses or fabricate statistics
-
-      RULE 6: QUESTION FOCUS
-
-      {{#if question_focus}}
-      PRIORITIZE these questions in your analysis:
-      {{question_focus}}
-
-      Focus your thematic analysis primarily on responses to these questions.
-      You may note patterns from other questions if highly relevant.
-      {{else}}
-      Analyze ALL open-ended/text responses in the data.
-      Skip closed-ended questions (multiple choice, ratings, etc.) unless
-      they provide important context for open-ended responses.
-      {{/if}}
-
-      RULE 7: VA CONTEXT (if applicable)
-
-      If this is VA research:
-      - Users are Veterans
-      - Focus on benefits, healthcare, claims, prescriptions
-      - NEVER mention: Marketing, Sales, engagement metrics
-
-      RULE 8: VERIFY BEFORE SUBMITTING
-      - Theme counts add up correctly
-      - Every quote has a respondent ID
-      - Sentiment percentages total ~100%
-      - Recommendations tie to specific themes
-
-      ============================================================
-      INPUT DATA
-      ============================================================
-
-      **Study:** {{selected_study}}
-      **Survey:** {{survey_name}}
-      {{#if question_focus}}
-      **Questions to Focus On:** {{question_focus}}
-      {{/if}}
-      **Survey Data:**
-      ---BEGIN DATA---
-      {{combined_file_content}}
-      ---END DATA---
-
-      ============================================================
-      NOW GENERATE THE COMPLETE OUTPUT BELOW
-      ============================================================
-
-      # Survey Synthesis: {{survey_name}}
-
-      > **[X] themes** from **[Y] responses** | **Study:** {{selected_study}}
-
-      ---
-
-      ## Overview
-
-      | | |
-      |---|---|
-      | **Survey** | {{survey_name}} |
-      | **Responses Analyzed** | [X] |
-      | **Themes Identified** | [Y] |
-      {{#if question_focus}}
-      | **Focus Questions** | {{question_focus}} |
-      {{/if}}
-      | **Top Finding** | [1 sentence — the most important takeaway] |
-
-      ---
-
-      ## Theme Summary
-
-      | # | Theme | Frequency | Sentiment | Priority |
-      |---|-------|:---------:|:----------|:--------:|
-      | 1 | [Theme name] | [X] ([Y]%) | 😤 Negative | 🔴 |
-      | 2 | [Theme name] | [X] ([Y]%) | 😊 Positive | 🟢 |
-      | 3 | [Theme name] | [X] ([Y]%) | 🤔 Mixed | 🟡 |
-      | 4 | [Theme name] | [X] ([Y]%) | [Emoji] [Sentiment] | [Priority] |
-
-      > **Note:** Percentages may exceed 100% as responses can mention multiple themes.
-
-      ---
-
-      ## Theme 1: [Theme Name]
-
-      **Frequency:** [X] of [Total] responses ([Y]%)
-
-      **Sentiment:** [😤 Negative / 😊 Positive / 🤔 Mixed / 😐 Neutral]
-
-      **What respondents said:**
-
-      > "[Direct quote from response]" — R00X
-
-      > "[Direct quote from response]" — R00X
-
-      > "[Direct quote from response]" — R00X
-
-      **Pattern:** [1-2 sentences explaining what this theme means and why it matters]
-
-      ---
-
-      ## Theme 2: [Theme Name]
-
-      **Frequency:** [X] of [Total] responses ([Y]%)
-
-      **Sentiment:** [Emoji] [Sentiment]
-
-      **What respondents said:**
-
-      > "[Direct quote]" — R00X
-
-      > "[Direct quote]" — R00X
-
-      **Pattern:** [1-2 sentences]
-
-      ---
-
-      ## Theme 3: [Theme Name]
-
-      **Frequency:** [X] of [Total] responses ([Y]%)
-
-      **Sentiment:** [Emoji] [Sentiment]
-
-      **What respondents said:**
-
-      > "[Direct quote]" — R00X
-
-      > "[Direct quote]" — R00X
-
-      **Pattern:** [1-2 sentences]
-
-      ---
-
-      [Continue for additional themes as needed]
-
-      ---
-
-      ## Sentiment Overview
-
-      | Sentiment | Count | % | Key Driver |
-      |-----------|:-----:|:-:|------------|
-      | 😤 Negative | [X] | [Y]% | [What topics caused frustration] |
-      | 😊 Positive | [X] | [Y]% | [What topics caused satisfaction] |
-      | 🤔 Mixed | [X] | [Y]% | [What topics had split opinions] |
-      | 😐 Neutral | [X] | [Y]% | [Factual/descriptive responses] |
-
-      **Key Insight:** [1-2 sentences — what the overall sentiment pattern tells us]
-
-      ---
-
-      ## Recommendations
-
-      | Priority | Action | Based On | Owner |
-      |:--------:|--------|----------|-------|
-      | 🔴 | [Specific action to address issue] | Theme 1 | `[Team]` |
-      | 🔴 | [Specific action] | Theme 2 | `[Team]` |
-      | 🟡 | [Specific action] | Theme 3 | `[Team]` |
-
-      > **Legend:** 🔴 High | 🟡 Medium | 🟢 Low
-
-      ---
-
-      ## Methodology
-
-      **Framework:** Thematic Analysis
-
-      **Approach:** Open-ended responses were coded for recurring themes, counted for frequency, and analyzed for sentiment patterns. Representative quotes were extracted to illustrate each theme.
-
-      **Data Source:** {{survey_name}} — [X] responses
-
-      ---
-
-      ### References
-
-      This analysis follows established survey analysis methods:
-
-      - **Virginia Braun & Victoria Clarke** — Thematic analysis methodology
-      - **Nielsen Norman Group** — Survey data analysis best practices
-      - **Qualtrics** — Open-ended response coding guidelines
-
-      ---
-
-      *Generated by Qori • {{current_date}}*
 
 # ═══════════════════════════════════════════════════════════
 # CASCADE CONTRACT
@@ -300,7 +58,7 @@ emits:
       type: array
       items:
         $ref: schemas/survey_theme.yaml
-    extract_from: "Each Theme section (Theme 1, Theme 2, etc). Assign sequential IDs (theme-001). Include theme_name, frequency_count and frequency_percentage from Frequency line, sentiment from Sentiment line, priority from Theme Summary table, full pattern text, and verbatim_quotes array with quote text and respondent R-ID."
+    extract_from: "Each Theme section (Theme 1, Theme 2, etc). Assign sequential IDs (theme-001). Include theme_name, frequency_count and frequency_percentage, sentiment, priority, full pattern text, and verbatim_quotes array."
 
   - key: survey_findings
     pool: true
@@ -309,16 +67,7 @@ emits:
       type: array
       items:
         $ref: schemas/survey_finding.yaml
-    extract_from: "Quantitative findings across all themes. Assign sequential IDs (finding-001). Include metric_name, sample_size as integer, affected_segment if mentioned, supporting_quotes as array of strings, source_question if identifiable."
-
-  - key: survey_recommendations
-    pool: true
-    pool_strategy: append
-    schema:
-      type: array
-      items:
-        $ref: schemas/survey_recommendation.yaml
-    extract_from: "Recommendations table. Assign sequential IDs (rec-001). Include action, based_on_theme referencing theme_name, priority from emoji (High/Medium/Low), suggested_owner from Owner column."
+    extract_from: "Quantitative findings across all themes. Assign sequential IDs (finding-001). Include metric_name, sample_size, affected_segment, supporting_quotes, source_question."
 
   - key: discovered_barriers
     pool: true
@@ -374,46 +123,231 @@ emits:
             nullable: true
           source_document:
             type: string
-    extract_from: "Questions the survey couldn't answer, themes needing qualitative follow-up. Assign sequential IDs (gap-001). Include why the gap matters and suggested resolution."
+    extract_from: "Knowledge Gaps section — questions the survey couldn't answer. Assign sequential IDs (gap-001). Include why the gap matters and suggested resolution."
 
 # ═══════════════════════════════════════════════════════════
-# OUTPUT
+# AI GENERATION — focused, bounded tasks
+# ═══════════════════════════════════════════════════════════
+ai_generation_tasks:
+
+  # Main analytical body — theme summary, per-theme sections, sentiment overview.
+  # Kept as one task to preserve theme numbering consistency.
+  - task_id: "analysis_body"
+    prompt: |
+      You are synthesizing open-ended survey responses using thematic analysis.
+
+      ============================================================
+      RULES
+      ============================================================
+
+      RULE 1: THEME-BY-THEME, NOT RESPONSE-BY-RESPONSE
+      Aggregate patterns across ALL responses. No one reads response-by-response.
+
+      RULE 2: EVERY THEME NEEDS FREQUENCY + QUOTES
+      For each theme: count, percentage, 2-3 representative quotes with R-IDs.
+
+      RULE 3: RESPONDENT CITATIONS
+      Assign IDs sequentially: R001, R002, R003...
+      Every quote: "[Quote]" — R00X
+
+      RULE 4: SENTIMENT WITH MEANING
+      Always explain WHAT is driving the sentiment, not just the percentage.
+
+      RULE 5: NO HALLUCINATION
+      Only report themes from the data. Counts must be accurate. Quotes verbatim.
+      If unsure about a count, say "approximately."
+
+      RULE 6: QUESTION FOCUS
+      {% if question_focus %}
+      PRIORITIZE these questions: {{question_focus}}
+      {% else %}
+      Analyze ALL open-ended/text responses. Skip closed-ended questions.
+      {% endif %}
+
+      RULE 7: EMPTY CONTENT
+      If the survey data between BEGIN/END markers is empty or contains no
+      text responses, respond ONLY with:
+      "> **No survey responses provided.** Please upload survey data and try again."
+
+      ============================================================
+      INPUT DATA
+      ============================================================
+
+      **Survey:** {{survey_name}}
+      **Study:** {{selected_study}}
+      {% if question_focus %}
+      **Focus Questions:** {{question_focus}}
+      {% endif %}
+
+      **Survey Data:**
+      ---BEGIN DATA---
+      {{combined_file_content}}
+      ---END DATA---
+
+      ============================================================
+      GENERATE THESE SECTIONS
+      ============================================================
+
+      **OVERVIEW:** A summary blockquote and metadata table:
+
+      > **[X] themes** from **[Y] responses**
+
+      | | |
+      |---|---|
+      | **Responses Analyzed** | [X] |
+      | **Themes Identified** | [Y] |
+      {% if question_focus %}
+      | **Focus Questions** | {{question_focus}} |
+      {% endif %}
+      | **Top Finding** | [1 sentence — most important takeaway] |
+
+      ---
+
+      **THEME SUMMARY TABLE:**
+
+      | # | Theme | Frequency | Sentiment | Priority |
+      |---|-------|:---------:|:----------|:--------:|
+      | 1 | [Name] | [X] ([Y]%) | [Sentiment] | [Priority] |
+      [continue for each theme]
+
+      > **Note:** Percentages may exceed 100% as responses can mention multiple themes.
+
+      ---
+
+      **PER-THEME SECTIONS:** For each theme:
+
+      **Theme N: [Name]**
+
+      **Frequency:** [X] of [Total] responses ([Y]%)
+
+      **Sentiment:** [Sentiment]
+
+      **What respondents said:**
+
+      > "[Direct quote]" — R00X
+      > "[Direct quote]" — R00X
+      > "[Direct quote]" — R00X
+
+      **Pattern:** [1-2 sentences explaining what this theme means]
+
+      ---
+
+      [Repeat for each theme]
+
+      **SENTIMENT OVERVIEW:**
+
+      | Sentiment | Count | % | Key Driver |
+      |-----------|:-----:|:-:|------------|
+      | Negative | [X] | [Y]% | [What topics caused frustration] |
+      | Positive | [X] | [Y]% | [What topics caused satisfaction] |
+      | Mixed | [X] | [Y]% | [What topics had split opinions] |
+      | Neutral | [X] | [Y]% | [Factual/descriptive responses] |
+
+      **Key Insight:** [1-2 sentences on what the sentiment pattern tells us]
+
+      OUTPUT BOUNDARIES: Do not generate the document title, masthead,
+      methodology section, references, knowledge gaps section, or any
+      footer. The template handles all document structure. Output only
+      the analytical content for overview, themes, and sentiment.
+
+  # Knowledge gaps — what the survey couldn't answer
+  - task_id: "knowledge_gaps_prose"
+    prompt: |
+      Identify 3-5 knowledge gaps from this survey data — questions the
+      survey couldn't answer or themes needing qualitative follow-up.
+
+      **Survey:** {{survey_name}}
+
+      **Survey Data:**
+      ---BEGIN DATA---
+      {{combined_file_content}}
+      ---END DATA---
+
+      RULES:
+      - Each gap must trace to a specific limitation in the survey data
+      - Do NOT suggest product actions — those belong in the research brief
+      - Focus on: what the survey couldn't answer, what follow-up research
+        would investigate
+
+      Output as a table:
+
+      | Gap Identified | Why It Matters | Suggested Research Approach |
+      |:---------------|:---------------|:---------------------------|
+      | [Unanswered question] | [Why this gap matters] | [Research method] |
+
+      If the survey data is comprehensive:
+      > The survey provides strong coverage. One area for further investigation: [specific gap].
+
+      OUTPUT BOUNDARIES: Do not generate section headings or structural
+      elements. The template handles all document structure.
+
+# ═══════════════════════════════════════════════════════════
+# OUTPUT — interleaved Handlebars + AI prose
 # ═══════════════════════════════════════════════════════════
 output_template: |
-  {{ai_generated.survey_synthesis_complete}}
+  # Survey Synthesis: {{survey_name}}
+
+  **Study:** {{selected_study}} &nbsp; | &nbsp; **Survey:** {{survey_name}} &nbsp; | &nbsp; **Documents:** {{document_count}} &nbsp; | &nbsp; **Date:** {{current_date}}
+
+  ---
+
+  {{ai_generated.analysis_body}}
+
+  ---
+
+  ## Knowledge Gaps
+
+  {{ai_generated.knowledge_gaps_prose}}
+
+  ---
+
+  <details>
+  <summary><strong>Methodology</strong></summary>
+
+  **Framework:** Thematic Analysis
+
+  **Approach:** Open-ended responses were coded for recurring themes, counted for frequency, and analyzed for sentiment patterns. Representative quotes were extracted to illustrate each theme.
+
+  **Data Source:** {{survey_name}}
+
+  ### References
+
+  - **Virginia Braun & Victoria Clarke** — Thematic analysis methodology
+  - **Nielsen Norman Group** — Survey data analysis best practices
+  - **Qualtrics** — Open-ended response coding guidelines
+
+  </details>
+
+  ---
+
+  ---
+
+  ## Cascade summary
+
+  This survey synthesis emits discovery variables for downstream templates.
+
+  | Variable | Description |
+  |----------|-------------|
+  | survey_themes | Thematic patterns with frequency, sentiment, and quotes |
+  | survey_findings | Quantitative findings across themes |
+  | discovered_barriers | Negative-sentiment themes as barriers for research brief |
+  | discovered_metrics | Theme frequencies, sentiment percentages, response counts |
+  | sample_demographics | Respondent composition and response count |
+  | knowledge_gaps | Questions the survey couldn't answer |
+
+  **Files analyzed:** {{document_count}}
 
 output_options:
   path: "{{team}}/_discovery/survey-synthesis/"
   filename: "{{topic_slug}}-survey-synthesis-{{current_date_iso}}.md"
 
-derived_variables:
-  - topic_slug: "{{topic | slugify}}"
-
 # ═══════════════════════════════════════════════════════════
-# METADATA (documentation only — not read by backend)
+# METADATA
 # ═══════════════════════════════════════════════════════════
-processing_workflow:
-  - validate_slack_modal_inputs
-  - discover_files_from_study_selection
-  - parse_survey_data
-  - combine_selected_files_with_truncation
-  - execute_survey_synthesis_complete
-  - format_slack_output
-  - format_github_output
-  - save_to_analysis_folder
-
-auto_variables:
-  theme_count: "extract_theme_count(ai_generated.survey_synthesis_complete) || 4"
-  response_count: "extract_response_count(ai_generated.survey_synthesis_complete) || 0"
-  current_date: "new Date().toISOString().split('T')[0]"
-  analysis_version: "v3.1"
-  github_file_link: "generate_github_link(selected_study, current_date)"
-
-notify:
-  - role: team
-    action: "Survey synthesis completed"
-    channel: "{{study_channel}}"
-    message: "Survey synthesis complete for {{selected_study}}. {{theme_count}} themes identified from {{response_count}} responses!"
+# NOTE: derived_variables removed — handler (discoverHandler.ts) computes
+# topic_slug explicitly. yamlProcessor does not process derived_variables.
+# NOTE: survey_recommendations emit removed — orphaned variable with no
+# downstream consumer. Knowledge Gaps section replaces Recommendations.
 
 slack_ui:
   modal:
@@ -427,22 +361,18 @@ slack_ui:
     processing_failed: "Analysis failed. Please check that your files are valid CSV or Excel format."
 
 notes: |
-  v3.1 Changes (Standards Polish):
-  - Applied canonical key ordering (IDENTITY → CONFIGURATION → INPUTS → AI GENERATION → OUTPUT → METADATA)
-  - Removed dead config: llm_config, system_limits, auto_file_discovery
-  - Removed github_file_template (passthrough, redundant with output_template)
-  - Removed dead output_options keys: default_delivery, slack_format, file_format
-  - Changed input_processing from auto_file_discovery to form_based (actual behavior)
-  - Summary blockquote: changed to metrics-only format (date in footer)
-  - Removed decorative emoji from H1 heading in prompt
-  - Kept structured input_variables format
-  - Moved slack_ui to METADATA
+  v7.0: Interleaved Handlebars/AI architecture (ADR 0005/0016 pattern).
+  - Monolithic survey_synthesis_complete task split into 2 tasks:
+    analysis_body (overview + themes + sentiment) and knowledge_gaps_prose.
+  - Handlebars renders: masthead, methodology (toggle), references (toggle),
+    cascade summary (always present).
+  - Recommendations removed → Knowledge Gaps (same treatment as desk_research).
+  - survey_recommendations emit removed (orphaned — no downstream consumer).
+  - sample_demographics emit kept (orphaned but potentially useful).
+  - Anti-fabrication: added empty-content detection (Rule 7) and
+    OUTPUT BOUNDARIES rule to both tasks.
+  - Duplicate footer removed (yamlProcessor handles it).
+  - derived_variables block removed (handler computes topic_slug).
 
-  v3.0: Switched to Claude Sonnet, improved question_focus handling,
-  removed unused variables for cleaner modal alignment.
-
-output_use: |
-  Analyze open-ended survey responses using thematic analysis.
-  Identifies patterns across all responses, counts theme frequency,
-  extracts representative quotes with respondent citations, and
-  generates prioritized recommendations based on findings.
+  v3.1: Standards polish (superseded by v7.0).
+  v3.0: Claude Sonnet, improved question_focus.
