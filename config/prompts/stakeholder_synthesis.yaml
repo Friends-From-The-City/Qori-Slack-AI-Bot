@@ -271,10 +271,11 @@ ai_generation_tasks:
       **SECTION 07 — RECOMMENDATIONS:** Three sub-sections: Immediate (table), Near-term (table), Strategic (table). Each: Action | Constraint addressed | Owner
 
       OUTPUT BOUNDARIES: Do not generate the document title, masthead,
-      section heading markers (## 01, etc.), methodology section, appendix,
-      validity checklist, references, or cascade summary. The template
-      handles all document structure. Output only the analytical content
-      for each section, separated by --- dividers between sections.
+      methodology section, appendix, validity checklist, references, or
+      cascade summary. The template handles those sections.
+      USE ## headings for each section (e.g., ## 01 &nbsp;&nbsp; Constraints).
+      Output the analytical content with proper markdown heading hierarchy,
+      separated by --- dividers between sections.
 
   # Appendix observations — raw system/process observations for downstream
   # service blueprint. Preservation, not synthesis.

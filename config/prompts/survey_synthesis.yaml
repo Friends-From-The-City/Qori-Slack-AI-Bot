@@ -247,8 +247,9 @@ ai_generation_tasks:
 
       OUTPUT BOUNDARIES: Do not generate the document title, masthead,
       methodology section, references, knowledge gaps section, or any
-      footer. The template handles all document structure. Output only
-      the analytical content for overview, themes, and sentiment.
+      footer. The template handles those sections.
+      USE ## headings for each section (e.g., ## Overview, ## Theme 1: [Name]).
+      Output the analytical content with proper markdown heading hierarchy.
 
   # Knowledge gaps — what the survey couldn't answer
   - task_id: "knowledge_gaps_prose"
