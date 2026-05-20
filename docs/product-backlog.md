@@ -28,10 +28,11 @@ The migration paused template standardization. The plan template (v7.0) and brie
 - **research_readout** v7.0 (upstream of all 4 audience readouts — emits prioritized_findings + prioritized_recommendations)
 - **engineering_readout** v7.0 (21-field ticket schema, already production-ready)
 - **accessibility_readout** v7.0 (18-field compliance/AT schema, P0_legal/P0_severe priority)
+- **leadership_readout** v7.0 (document-only, BLUF-style, exec_summary_points)
 
 ### Remaining
 
-- **Readout templates:** leadership_readout. Emits exec_summary_points (different pattern from ticket-generating readouts).
+- All readout templates complete.
 - **Discussion guide, session_summary, participant_tracker.** Discussion guide has cascade gaps (75-minute partially addressed). Participant tracker has status label mismatch (audit finding).
 - **Other downstream templates:** journey_mapping, jobs_to_be_done, usability_issues, design_opportunities, service_blueprint. Each consumes specific cascade variables and produces specific outputs.
 

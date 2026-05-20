@@ -4,16 +4,17 @@
 id: leadership_readout
 name: run_leadership_readout
 label: "👔 Leadership Brief"
-version: "v1.0"
+version: "v7.0"
 
 description: |
   Executive brief translating research findings into leadership-level decisions.
   BLUF-style, 2-3 pages max. Document only — no tickets. Emits exec_summary_points.
-  Consumes from research_readout v6.0.
+  v7.0: Interleaved Handlebars/AI — mechanical content rendered by template,
+  LLM writes bounded analytical sections. Per ADR 0005/0016.
 
 author: Qori R&D
 created: 2026-05-07
-last_updated: 2026-05-07
+last_updated: 2026-05-20
 
 # ═══════════════════════════════════════════════════════════
 # CONFIGURATION
@@ -79,24 +80,54 @@ emits:
     extract_from: "Key findings, recommended actions, decision points, and risks sections"
 
 # ═══════════════════════════════════════════════════════════
-# AI GENERATION
+# AI GENERATION — focused, bounded tasks
 # ═══════════════════════════════════════════════════════════
 ai_generation_tasks:
-  - task_id: "leadership_readout_complete"
-    prompt: |
-      You are creating an executive brief for senior leadership. Audience: product
-      owners, directors, stakeholders who funded the study. They have 5-10 minutes
-      to read this.
 
-      IMPORTANT: This document is SHORT — 2-3 pages maximum. Brevity over
-      completeness. Detail goes in appendix.
+  # Main analytical body — bottom line, key findings, recommended actions,
+  # decisions required, business impact, risks if inaction, methodology
+  # summary, detailed findings for appendix.
+  # Document-only — no tickets. BLUF-style, 2-3 pages max.
+  # exec_summary_points (7 fields) extracted from output — no downstream
+  # consumers, document-only variable.
+  - task_id: "analysis_body"
+    prompt: |
+      You are creating an executive brief for senior leadership. Audience:
+      product owners, directors, stakeholders who funded the study.
+      They have 5-10 minutes to read this.
+
+      THIS DOCUMENT IS SHORT — 2-3 pages maximum. Brevity over completeness.
+
+      ============================================================
+      CRITICAL RULES
+      ============================================================
+
+      RULE 1: BOTTOM LINE UP FRONT. First sentence states what they need
+      to know. No methodology preamble.
+
+      RULE 2: DECISIONS, NOT DATA. Leadership wants to know what to decide,
+      not how findings were extracted.
+
+      RULE 3: BUSINESS IMPACT IN THEIR LANGUAGE. Tie findings to strategy,
+      user metrics, compliance risk, budget. Not "users abandon tasks" but
+      connect to business outcomes from upstream business_context.
+
+      RULE 4: BREVITY OVER COMPLETENESS. Top 3-5 findings only. Detail
+      goes in appendix.
+
+      RULE 5: ANTI-FABRICATION. Don't invent business metrics, financial
+      implications, or strategic priorities not in upstream variables.
+      If business_context mentions specific pressures, reference them.
+      Otherwise stay descriptive.
+
+      RULE 6: PRIVACY. PT-XXX only, but aggregate where possible.
+      Leadership rarely needs individual participant citations.
+
+      RULE 7: NO RAW JSON. Format all upstream data as readable text.
 
       ============================================================
       UPSTREAM DATA (from research readout)
       ============================================================
-
-      NOTE: The data below may be in JSON format. Extract human-readable content
-      and format as clean markdown. NEVER copy JSON syntax into the output.
 
       PRIORITIZED FINDINGS:
       {{upstream_prioritized_findings}}
@@ -115,35 +146,6 @@ ai_generation_tasks:
       {% endif %}
 
       ============================================================
-      CASCADE-AWARE LEADERSHIP READOUT GENERATION
-      ============================================================
-
-      1. **Bottom Line Up Front.** First sentence states what they need to know.
-         No methodology preamble.
-
-      2. **Decisions, not data.** Leadership wants to know what to decide, not how
-         findings were extracted. Findings are evidence; decisions are the artifact.
-
-      3. **Business impact in their language.** Tie findings to strategy, user metrics,
-         compliance risk, budget. Not "users abandon tasks" but connect to business
-         outcomes mentioned in upstream business_context.
-
-      4. **Brevity over completeness.** If there are 5+ findings, surface the top 3-5.
-         Detail goes in appendix.
-
-      5. **Decision points explicit.** When a decision is required, state it:
-         "Leadership decision required: [Question]. Recommendation: [Path]."
-
-      6. **Anti-fabrication.** Don't invent business metrics, financial implications, or
-         strategic priorities not in upstream variables. If business_context from brief
-         mentions specific business pressures, reference them. Otherwise stay descriptive.
-
-      7. **Privacy preserved.** PT-XXX codes only, but leadership doc rarely needs to
-         cite individual participants. Aggregate where possible.
-
-      8. **No raw JSON in output.** Format all upstream data as readable text.
-
-      ============================================================
       INPUT
       ============================================================
 
@@ -151,36 +153,19 @@ ai_generation_tasks:
       **Researcher:** {{researcher_contact}}
 
       ============================================================
-      OUTPUT FORMAT — FOLLOW EXACTLY
+      GENERATE THESE SECTIONS
       ============================================================
 
-      # Leadership Brief: {{study_name}}
-
-      **Study:** {{selected_study}} &nbsp; | &nbsp; **Audience:** Leadership &nbsp; | &nbsp; **Date:** {{current_date}} &nbsp; | &nbsp; **Status:** Draft
-
-      ---
-
-      ## Cascade summary
-
-      | Source | Count |
-      |--------|-------|
-      | Research findings | [count] |
-      | Recommendations | [count] |
-      | Decision inputs | [count or "Not available"] |
-
-      ---
+      Output ALL sections below. Use ## headings. Do not stop early.
 
       ## Bottom line
 
-      [2-3 sentences maximum. What leadership needs to know. Lead with the most
-      consequential finding. Frame in business terms.]
+      [2-3 sentences maximum. What leadership needs to know. Lead with the
+      most consequential finding. Frame in business terms.]
 
       ---
 
       ## Key findings
-
-      [Top 3-5 findings, bulleted. Each finding is 1-2 sentences in leadership
-      language. Reference finding IDs for traceability but don't dwell on methodology.]
 
       - **[Finding title]** — [Business-level impact statement] _(finding-XX)_
       - **[Finding title]** — [Business-level impact statement] _(finding-XX)_
@@ -190,44 +175,31 @@ ai_generation_tasks:
 
       ## Recommended actions
 
-      [Top 3-5 actions, prioritized. Each action includes owner and effort level.
-      Frame as decisions, not research recommendations.]
-
       | Priority | Action | Owner | Effort |
       |:--------:|--------|-------|:------:|
       | 1 | [Action in leadership language] | [Team] | [H/M/L] |
       | 2 | [Action] | [Team] | [H/M/L] |
-      | 3 | [Action] | [Team] | [H/M/L] |
 
       ---
 
-      [If any decisions require leadership input, include this section.
-      If no decisions required, omit it.]
-
+      {% if upstream_decision_inputs %}
       ## Decisions required
-
-      [State each decision clearly with recommended path.]
 
       **Decision:** [Question that needs leadership input]
       **Recommendation:** [Recommended path with rationale]
       **Impact of delay:** [What happens if decision is deferred]
+      {% endif %}
 
       ---
 
       ## Business impact
 
       [Connect findings to business outcomes. Use upstream business_context
-      if available. Frame in terms leadership tracks: user metrics, compliance
-      risk, operational costs, strategic alignment.]
-
-      [2-3 paragraphs maximum. No methodology details.]
+      if available. 2-3 paragraphs maximum. No methodology details.]
 
       ---
 
       ## Risks if inaction
-
-      [What happens if these findings are not addressed. Frame as business risk,
-      compliance risk, or user impact at scale. 3-4 bullet points.]
 
       - [Risk statement with consequence]
       - [Risk statement with consequence]
@@ -238,59 +210,72 @@ ai_generation_tasks:
       ## Methodology summary
 
       [1 paragraph. Just enough for leadership to understand how conclusions
-      were reached. No academic detail.]
+      were reached.]
 
       ---
-
-      ## Appendix
 
       <details>
       <summary><strong>Detailed findings</strong></summary>
 
       [For each finding, provide the full detail: evidence quotes, severity,
-      participant count affected. This is for leadership who want to dig deeper.]
-
-      [Format each as a brief paragraph with the finding title, evidence summary,
-      and severity. Reference finding IDs.]
+      participant count affected. Reference finding IDs.]
 
       </details>
 
-      <details>
-      <summary><strong>Upstream context</strong></summary>
-
-      This leadership brief was generated from:
-
-      | Variable | Source | Status |
-      |----------|--------|--------|
-      | prioritized_findings | research_readout | [Available/Missing] |
-      | prioritized_recommendations | research_readout | [Available/Missing] |
-      | decision_inputs | research_readout | [Available/Missing] |
-      | business_context | research_brief | [Available/Missing] |
-
-      </details>
-
-      ============================================================
-      QUALITY CHECKS (do not include in output)
-      ============================================================
-
-      Before outputting, verify:
-      - Document is 2-3 pages maximum (brevity is critical)
-      - Bottom line leads with most consequential finding
-      - Findings framed in business language, not research language
-      - Recommended actions have clear owners
-      - No raw JSON anywhere in output
-      - Decision points are explicit when present
-      - No methodology detail in main body (appendix only)
-      - Privacy: no real names, aggregate where possible
-      - Finding IDs traceable to upstream prioritized_findings
-
-      Do NOT output a footer or "Generated by Qori" line — that is added automatically.
+      OUTPUT BOUNDARIES: Do not generate the document title, masthead,
+      cascade summary, upstream context, or any footer. The template
+      handles those. USE ## headings for each section.
 
 # ═══════════════════════════════════════════════════════════
-# OUTPUT
+# OUTPUT — interleaved Handlebars + AI prose
 # ═══════════════════════════════════════════════════════════
 output_template: |
-  {{ai_generated.leadership_readout_complete}}
+  # Leadership Brief: {{selected_study}}
+
+  **Study:** {{selected_study}} &nbsp; | &nbsp; **Audience:** Leadership &nbsp; | &nbsp; **Researcher:** {{researcher_contact}} &nbsp; | &nbsp; **Date:** {{current_date}}
+
+  ---
+
+  {{ai_generated.analysis_body}}
+
+  ---
+
+  <details>
+  <summary><strong>Upstream context</strong></summary>
+
+  This leadership brief was generated from:
+
+  | Variable | Source | Role |
+  |----------|--------|------|
+  | prioritized_findings | research_readout | Top-level impact |
+  | prioritized_recommendations | research_readout | Resource allocation decisions |
+  {{#if upstream_decision_inputs}}| decision_inputs | research_readout | Decision frame |
+  {{/if}}{{#if upstream_business_context}}| business_context | research_brief | Business pressures |
+  {{/if}}
+
+  </details>
+
+  ---
+
+  ---
+
+  ## Cascade summary
+
+  This leadership brief emits variables for potential downstream consumption.
+
+  | Variable | Description |
+  |----------|-------------|
+  | exec_summary_points | Executive-level statements with business implications and recommended actions |
+
+  **Consumed from upstream:**
+
+  | Variable | Source | Role |
+  |----------|--------|------|
+  | prioritized_findings | research_readout | Top-level impact |
+  | prioritized_recommendations | research_readout | Resource allocation |
+  | decision_inputs | research_readout | Decision frame |
+  | business_context | research_brief | Business pressures |
+  | methodology_selection | research_brief | Study methodology context |
 
 output_options:
   path: "05-reports/"
@@ -302,7 +287,7 @@ output_options:
 processing_workflow:
   1. validate_inputs
   2. read_upstream_variables
-  3. execute_leadership_readout_complete_task
+  3. execute_analysis_body_task
   4. render_output_template
   5. save_to_reports_folder
 
@@ -313,15 +298,22 @@ notify:
     message: "Leadership brief for {{study_name}} is ready for review."
 
 notes: |
+  v7.0: Interleaved Handlebars/AI architecture (ADR 0005/0016 pattern).
+  - Monolithic leadership_readout_complete task replaced by analysis_body task.
+  - Handlebars renders: masthead, upstream context (toggle), cascade summary
+    (always present).
+  - No validity checklist (intentional — document too short for checklist
+    to add value; anti-fabrication guards serve same purpose).
+  - Cascade summary changed from LLM-generated count table to standard v7.0
+    emits/consumes format.
+  - OUTPUT BOUNDARIES with ## heading instruction added.
+  - Internal quality checklist removed.
+  - Document-only: no tickets, no ticketHandler integration.
+    exec_summary_points (7 fields) has no downstream consumers.
+  - Detailed findings appendix toggle content generated by AI task
+    (leadership wants depth available but not in main body).
+
   v1.0: Initial leadership readout template.
-  - Single-task architecture (leadership_readout_complete)
-  - Consumes: prioritized_findings, prioritized_recommendations (required, grounding),
-    decision_inputs (optional, grounding), business_context (optional, context),
-    methodology_selection (optional, context)
-  - Emits: exec_summary_points (array of exec_summary_point schema) — document only, no tickets
-  - BLUF-style: 2-3 pages max, decisions over data, business language
-  - Shorter than other audience templates by design
-  - Detailed findings in collapsible appendix for leadership who want depth
 
 output_use: |
   Executive brief translating research findings into leadership-level decisions.
