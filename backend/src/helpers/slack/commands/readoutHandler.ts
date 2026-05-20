@@ -60,6 +60,7 @@ interface ModalState {
 
 /** Data shape passed to readout YAML templates. */
 interface ReadoutTemplateInput {
+  selected_study: string;
   research_folder_path: string;
   study_name: string;
   researcher_contact: string;
@@ -480,6 +481,7 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }: SlackVi
       : 'No files detected';
 
     const reportData: ReadoutTemplateInput = {
+      selected_study: selectedStudyName,
       research_folder_path: folderPath,
       study_name: selectedStudyName,
       researcher_contact: selectedStudy?.researcher_name || selectedStudy?.researcher_email || 'Unknown Researcher',
