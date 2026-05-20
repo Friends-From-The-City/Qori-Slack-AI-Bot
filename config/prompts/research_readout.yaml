@@ -4,17 +4,16 @@
 id: research_readout
 name: run_research_readout
 label: "📊 Research Report"
-version: "v6.0"
+version: "v7.0"
 
 description: |
   Generate comprehensive, stakeholder-ready research reports from session summaries
-  and synthesis artifacts. Pentagram-style design language with per-finding
-  traceability (confidence levels, source citations), editorial numbering,
-  and masthead pattern.
+  and synthesis artifacts. v7.0: Interleaved Handlebars/AI — mechanical content
+  rendered by template, LLM writes bounded analytical sections. Per ADR 0005/0016.
 
 author: Qori R&D
 created: 2025-06-26
-last_updated: 2026-05-06
+last_updated: 2026-05-20
 
 # ═══════════════════════════════════════════════════════════
 # CONFIGURATION
@@ -26,15 +25,16 @@ input_processing: summarize_if_long
 # INPUTS
 # ═══════════════════════════════════════════════════════════
 input_variables:
-  - research_folder_path        # Path to study folder in GitHub
-  - study_name                  # Human-readable study name
-  - researcher_contact          # Lead researcher name
-  - study_channel               # Slack channel for this study
-  - research_readout_data       # Aggregated research data from files
-  - input_text                  # Additional context or raw text input
-  - study_link                  # URL to full study documentation
-  - team_members                # Team members to notify
-  - detected_files              # List of detected source files
+  - selected_study               # Study name for Handlebars masthead
+  - research_folder_path         # Path to study folder in GitHub
+  - study_name                   # Human-readable study name
+  - researcher_contact           # Lead researcher name
+  - study_channel                # Slack channel for this study
+  - research_readout_data        # Aggregated research data from files
+  - input_text                   # Additional context or raw text input
+  - study_link                   # URL to full study documentation
+  - team_members                 # Team members to notify
+  - detected_files               # List of detected source files
 
 # ═══════════════════════════════════════════════════════════
 # CASCADE CONTRACT
@@ -89,7 +89,7 @@ consumes:
     inject_as: grounding
     description: "Which target barriers were confirmed/refuted by sessions"
 
-  # From analysis layer (Cycle 7 — enriches findings)
+  # From analysis layer (enriches findings)
   - key: validated_themes
     source: affinity_mapping
     required: false
@@ -164,26 +164,36 @@ emits:
     extract_from: "Methodology section"
 
 # ═══════════════════════════════════════════════════════════
-# AI GENERATION
+# AI GENERATION — focused, bounded tasks
 # ═══════════════════════════════════════════════════════════
 ai_generation_tasks:
-  - task_id: "research_readout_complete"
+
+  # Main analytical body — summary, why we conducted this research, findings
+  # (01-05 with evidence/confidence/sources/recommendations), brief commitments,
+  # what's working, recommended actions, participants, methodology approach.
+  # Kept as one task to preserve cross-referencing: finding numbering (## 01-05),
+  # evidence chain IDs, recommendation→finding tracing, brief commitment→finding
+  # mapping, and recommended actions→finding addressing.
+  #
+  # This is the most critical template in the cascade. prioritized_findings
+  # (17-field schema) is consumed as required/grounding by ALL 4 audience readouts.
+  # prioritized_recommendations (10-field schema) by 3 of 4. Extraction quality
+  # here determines the quality of every downstream readout.
+  - task_id: "analysis_body"
     prompt: |
       ============================================================
-      CRITICAL GROUNDING RULES - READ FIRST
+      CRITICAL GROUNDING RULES
       ============================================================
 
       You are creating a research readout from REAL research data.
 
-      ABSOLUTE REQUIREMENTS:
-      1. ONLY use findings, quotes, and insights from the source data below
-      2. NEVER invent quotes, participants, or findings
-      3. NEVER mention products, features, or issues not in the source data
-      4. If the source data is empty or insufficient, say so — do not fabricate
-      5. Use participant IDs in PT-### format (e.g., PT-001, PT-002)
-      6. Counts must be accurate (if 3 participants, say 3 — not 10 or 20)
-      7. NEVER use participant real names — use participant ID only. If the source
-         data contains real names, replace them with the participant ID in your output.
+      RULE 1: ONLY use findings, quotes, and insights from the source data below.
+      RULE 2: NEVER invent quotes, participants, or findings.
+      RULE 3: NEVER mention products, features, or issues not in the source data.
+      RULE 4: If the source data is empty or insufficient, say so — do not fabricate.
+      RULE 5: Use participant IDs in PT-### format (e.g., PT-001, PT-002).
+      RULE 6: Counts must be accurate (if 3 participants, say 3 — not 10 or 20).
+      RULE 7: NEVER use participant real names — use participant ID only.
 
       FORBIDDEN (hallucination indicators):
       - "checkout process" / "conversion rates" / "e-commerce" (unless in source)
@@ -193,8 +203,6 @@ ai_generation_tasks:
       - Generic findings not tied to specific evidence
 
       CONFIDENCE ASSESSMENT (required for each finding):
-      Assess evidence strength using three levels. Always include a parenthetical
-      explanation of WHY you assigned that level:
       - Strong: Multiple evidence types (quote + observed behavior), cross-participant
         Example: Strong (verbatim quotes + observed task failure + WCAG violation)
       - Moderate: Single participant but consistent with broader pattern
@@ -203,15 +211,18 @@ ai_generation_tasks:
         Example: Limited (observer interpretation, no direct quote)
 
       SOURCE CITATION (required for each finding):
-      For each finding, cite the specific source documents that support it.
+      Cite the specific source documents that support each finding.
 
-      AVAILABLE SOURCE FILES (use ONLY these — do not construct paths from patterns):
+      AVAILABLE SOURCE FILES (use ONLY these — do not construct paths):
       {{detected_files}}
 
-      Format: **Sources** — [Display name](../relative-path-from-list-above) · [Display name](../path)
+      Format: **Sources** — [Display name](../relative-path) · [Display name](../path)
       Prepend ../ to each path since the output file is in 05-findings/.
-      Use middle-dot (·) between sources. Cite only files that actually support
-      the finding. NEVER construct a path that isn't in the list above.
+      Use middle-dot (·) between sources. NEVER construct a path not in the list.
+
+      NO FABRICATION OF TEAMS: For suggested_owner references, use ONLY generic
+      role categories: Design, Engineering, Accessibility, Product, Content, Research.
+      Do NOT invent specific team names.
 
       {% if upstream_atomic_nugget_core %}
       ============================================================
@@ -291,11 +302,6 @@ ai_generation_tasks:
       {{upstream_alignment_gaps}}
       {% endif %}
 
-      Use upstream variables to ground findings in the full cascade context.
-      Research objectives and questions frame the "Why we conducted this research"
-      section. Barrier validations inform which findings confirm or refute
-      hypotheses. Stakeholder constraints inform recommendation feasibility.
-
       ============================================================
       CASCADE-AWARE GENERATION
       ============================================================
@@ -304,7 +310,7 @@ ai_generation_tasks:
          and supporting_nuggets IDs. Use [from theme-XX] and nugget-PT00X-XXX markers.
 
       2. **Address brief commitments explicitly.** Research objectives and questions are
-         commitments. Add a "Brief commitments addressed" section showing which objectives
+         commitments. The "Brief commitments addressed" section shows which objectives
          and questions each finding addresses. Flag any unaddressed commitments.
 
       3. **Mark barrier validation.** Use [validates TB-XXX] / [refutes TB-XXX] inline
@@ -318,13 +324,6 @@ ai_generation_tasks:
 
       6. **Use stable IDs throughout.** TB-XXX, RQ-XXX, theme-XX, persona-XX, nugget-PTXXX-XXX.
          These IDs must match the upstream variable IDs exactly.
-
-      7. **No fabrication of entities.** For suggested_owner and team references, use ONLY:
-         - Teams explicitly named in upstream variables (stakeholder_constraints, journey_stages)
-         - Generic role categories: Design, Engineering, Accessibility, Product, Content, Research
-         Do NOT invent specific team names like "Information Architecture Team", "Frontend
-         Development Team", or "UI/UX Design Team". Use "Design team" not "UI/UX Design Team".
-         Use "Engineering team" not "Frontend Development Team".
       {% endif %}
 
       ============================================================
@@ -332,9 +331,7 @@ ai_generation_tasks:
       ============================================================
 
       **Study Name:** {{study_name}}
-      **Research Folder:** {{research_folder_path}}
       **Lead Researcher:** {{researcher_contact}}
-      **Detected Files:** {{detected_files}}
 
       **Research Data:**
 
@@ -343,109 +340,58 @@ ai_generation_tasks:
       {{research_readout_data}}
 
       ============================================================
-      METADATA INFERENCE
+      GENERATE THESE SECTIONS
       ============================================================
 
-      Extract from source data:
-      - Participant count: Count unique PT-### IDs in source
-      - Session count: Same as participant count (1 session per participant)
-      - Methodology: Look for "usability testing," "interviews," etc.
-      - Product area: What product/app is being researched
-
-      Extract from research plan (for "Why we conducted this research"):
-      - Business context / why this research was conducted
-      - Research objectives (what we set out to learn)
-      - Research questions (specific questions we aimed to answer)
-
-      If {{study_name}} or date is blank, infer from content.
-
-      ============================================================
-      OUTPUT PRIORITIES - READ BEFORE WRITING
-      ============================================================
-
-      CRITICAL: You MUST complete ALL sections of this report. Do not stop early.
-
-      To ensure completion:
-      - Limit findings to the TOP 5 most critical/high severity
-      - Keep descriptions to 2-3 sentences per finding
-      - Use 1-2 quotes per finding, not 3+
-      - All sections after findings (What's Working, Recommended Actions,
-        Participants, Methodology, Appendix) are REQUIRED. Do not skip them.
-
-      ============================================================
-      OUTPUT FORMAT
-      ============================================================
-
-      # Research Report
-
-      **Study:** {{study_name}} &nbsp; | &nbsp; **Researcher:** {{researcher_contact}} &nbsp; | &nbsp; **Date:** [actual date inferred from data or use {{current_date}}]
-
-      ---
+      Output ALL sections below. Use ## headings. Do not stop early.
+      Limit findings to TOP 5. Keep descriptions to 2-3 sentences per finding.
+      Use 1-2 quotes per finding, not 3+.
 
       ## Summary
 
-      [2-3 sentence narrative summary that synthesizes the most important findings from THIS study. Reference specific findings, participant counts, and the core implication. Do not write generic UX observations — ground every sentence in this study's data.]
+      [2-3 sentence narrative summary grounded in this study's data. Reference specific
+      findings, participant counts, and the core implication.]
 
       > [!IMPORTANT]
-      > **Bottom line:** [Single sentence — the most critical insight and its implication for the product/service]
+      > **Bottom line:** [Single sentence — most critical insight and its implication]
 
       | Priority | Finding | Action required |
       |:--------:|---------|-----------------|
       | **Critical** | [Finding title] | [Action] |
-      | **Critical** | [Finding title] | [Action] |
-      | **High** | [Finding title] | [Action] |
-      | **Medium** | [Finding title] | [Action] |
-      | **Working well** | [Positive finding] | [Action to preserve/replicate] |
-
-      {% if upstream_atomic_nugget_core %}
-      #### Cascade summary
-
-      | Source | Count | Coverage |
-      |--------|:-----:|----------|
-      | Atomic nuggets | [N] | [nugget IDs used / total available] |
-      | Validated themes | [N or —] | [theme IDs referenced] |
-      | Target barriers | [N or —] | [validated / refuted / unaddressed] |
-      | Research questions | [N or —] | [addressed / total] |
-      | Personas referenced | [N or —] | [persona IDs used] |
-      {% endif %}
+      | [continue for each finding] | | |
 
       ---
 
       ## Why we conducted this research
 
-      [2-3 sentences: business context, what decision this research informs, key metrics if available. Extract from research plan.]
+      [2-3 sentences: business context, what decision this research informs.]
 
       ### Objectives
 
       - **Identify** [what barriers/issues we aimed to find]
       - **Understand** [what mental models/behaviors we aimed to learn]
       - **Evaluate** [what we aimed to assess]
-      - **Prioritize** [what we aimed to rank/compare]
 
       ### Research questions
 
-      1. [Question about user behavior or pain points]
-      2. [Question about mental models or expectations]
-      3. [Question about specific feature/flow effectiveness]
-      4. [Question about priorities or improvements]
+      1. [RQ-001] [Question text]
+      2. [RQ-002] [Question text]
+      3. [RQ-003] [Question text]
 
       ---
 
       ## 01 &nbsp;&nbsp; [Finding Title — Specific and Descriptive]
 
-      [2-3 sentence description of what was observed and why it matters. Be specific about the behavior, context, and consequence.]
+      [2-3 sentence description of what was observed and why it matters.]
 
       #### Evidence
 
       > "[Exact verbatim quote from source]"
-      > — PT-001, [brief context — what they were doing when they said this]
+      > — PT-001, [brief context]
 
-      > "[Another quote if applicable]"
-      > — PT-003, [brief context]
+      **Severity** — Critical &nbsp;|&nbsp; **Affected** — [X] of [Y] participants &nbsp;|&nbsp; **Confidence** — [Strong/Moderate/Limited] ([reasoning])
 
-      **Severity** — Critical &nbsp;|&nbsp; **Affected** — [X] of [Y] participants &nbsp;|&nbsp; **Confidence** — [Strong/Moderate/Limited] ([parenthetical reasoning])
-
-      **Sources** — [PT-001 session summary](../03-fieldwork/session-summaries/PT-001-session-summary.md) · [PT-003 session summary](../03-fieldwork/session-summaries/PT-003-session-summary.md)
+      **Sources** — [Display name](../path) · [Display name](../path)
 
       {% if upstream_atomic_nugget_core %}
       **Evidence chain** — nugget-PT001-003, nugget-PT003-007 [from theme-02] [validates TB-001] [for persona-01]
@@ -461,14 +407,7 @@ ai_generation_tasks:
 
       ---
 
-      ## 02 &nbsp;&nbsp; [Finding Title]
-
-      [Same format as Finding 01. Include description, evidence, metadata line with confidence, sources, and recommendation.]
-
-      ---
-
-      [Continue through Finding 05. MAX 5 findings. Each follows the exact same format.
-      Include the Evidence chain line on each finding when upstream cascade data is available.]
+      [Continue through Finding 05. MAX 5 findings. Same format each.]
 
       {% if upstream_research_objectives or upstream_research_questions %}
       ---
@@ -476,17 +415,12 @@ ai_generation_tasks:
       ## Brief commitments addressed
 
       > [!NOTE]
-      > This section maps research brief commitments to findings. Unaddressed commitments are flagged for follow-up.
+      > Maps research brief commitments to findings. Unaddressed commitments flagged for follow-up.
 
       | Commitment | Type | Addressed by | Status |
       |------------|------|-------------|--------|
-      | RQ-001: [question text] | Research question | Finding 01, Finding 03 | Addressed |
-      | RQ-002: [question text] | Research question | — | **Gap** — recommend follow-up |
-      | [Objective text] | Objective | Finding 02, Finding 04 | Addressed |
-      | [Objective text] | Objective | Finding 01 | Partially addressed |
-
-      [If any commitments are unaddressed, add a brief note explaining why — insufficient data,
-      out of scope for this methodology, or deferred to follow-up research.]
+      | RQ-001: [text] | Research question | Finding 01, Finding 03 | Addressed |
+      | [Objective text] | Objective | Finding 02 | Addressed |
       {% endif %}
 
       ---
@@ -494,15 +428,13 @@ ai_generation_tasks:
       ## What's working
 
       > [!TIP]
-      > These elements should be preserved and used as patterns for future iterations.
+      > Preserve these and use as patterns for future iterations.
 
       | What works | Evidence | Participant |
       |:-----------|:---------|:-----------:|
-      | **[Positive finding]** | "[Supporting quote]" | PT-001 |
-      | **[Positive finding]** | "[Supporting quote or observation]" | PT-002 |
-      | **[Positive finding]** | [Observation] | All |
+      | **[Positive finding]** | "[Quote]" | PT-001 |
 
-      [1-2 sentence paragraph explaining what pattern these positive findings represent and how it could be replicated across the product.]
+      [1-2 sentence paragraph on what pattern these represent.]
 
       ---
 
@@ -512,31 +444,24 @@ ai_generation_tasks:
 
       | # | Action | Addresses | Owner | Effort |
       |:-:|--------|-----------|-------|:------:|
-      | 1 | [Specific action] | Finding 01 | [Team] | [H/M/L] |
-      | 2 | [Specific action] | Finding 03 | [Team] | [H/M/L] |
+      | 1 | [Action] | Finding 01 | [Team] | [H/M/L] |
 
       #### Short-term (1–2 months)
 
       | # | Action | Addresses | Owner | Effort |
       |:-:|--------|-----------|-------|:------:|
       | 1 | [Action] | Finding 02 | [Team] | [H/M/L] |
-      | 2 | [Action] | Finding 04 | [Team] | [H/M/L] |
 
       #### Future considerations
 
       | # | Action | Addresses | Notes |
       |:-:|--------|-----------|-------|
       | 1 | [Action] | Finding 05 | [Context] |
-      | 2 | [Action] | Working well | [Context] |
 
       #### Follow-up research
 
-      > [!NOTE]
-      > These gaps emerged during analysis and warrant further investigation before final design decisions.
-
-      - [ ] [Research gap or question that emerged]
+      - [ ] [Research gap that emerged]
       - [ ] [Another area needing investigation]
-      - [ ] [Third area if applicable]
 
       ---
 
@@ -544,173 +469,154 @@ ai_generation_tasks:
 
       | ID | Context | Key contribution |
       |:---|---------|------------------|
-      | **PT-001** | [Background, accessibility needs, usage context] | [What they uniquely highlighted] |
-      | **PT-002** | [Background] | [Contribution] |
-      | **PT-003** | [Background] | [Contribution] |
+      | **PT-001** | [Background, accessibility needs] | [What they uniquely highlighted] |
 
       #### Sample composition
 
-      [X] participants. [Key demographic detail — e.g., "2 of 3 use assistive technology"]. App usage frequency: [range]. Devices: [types].
+      [X] participants. [Key demographics]. Devices: [types].
 
       > [!NOTE]
-      > [Any caveats about sample size, recruitment limitations, or representativeness]
+      > [Caveats about sample size or representativeness]
 
       ---
 
       ## Methodology
 
-      **Research type** — [From research plan or inferred — e.g., "Moderated usability testing with mixed methods approach"]
+      **Research type** — [Inferred from source data]
 
-      **Approach** — [2-3 sentences: protocol used, what sessions explored, how data was collected]
+      **Approach** — [2-3 sentences: protocol, what sessions explored]
 
       **Sessions** — [Count] sessions, [duration] each
 
-      **Recruitment** — [Methods used, any prioritization criteria]
+      **Recruitment** — [Methods used]
 
-      **Data collection** — [Methods: think-aloud, screen recording, observer notes, etc.]
+      **Data collection** — [Methods: think-aloud, screen recording, etc.]
 
-      #### References
-
-      - [Methodology reference 1 — author, title or standard]
-      - [Methodology reference 2]
-      - [Methodology reference 3 if applicable]
-
-      ---
-
-      ## Appendix
-
-      <details>
-      <summary><strong>Related artifacts</strong></summary>
-
-      RELATED ARTIFACTS:
-      Populate this table with ALL artifacts from {{detected_files}}, organized by type.
-      Use exact paths from the detected files list. Prepend ../ to each path.
-
-      Categories to include (when files are present in the list):
-      - Planning: research plan, research brief, discussion guide
-      - Fieldwork: session summaries (one row per file), coded transcripts
-      - Analysis: affinity map, journey map, personas, usability issues, etc.
-      - Reference: participant tracker
-
-      If a category has no files in the list, omit those rows.
-      Do NOT invent files. Use ONLY paths from the detected files list.
-
-      | Artifact | Location | Status |
-      |----------|----------|--------|
-      | [Display name] | [path from detected_files](../path-from-detected-files) | Complete |
-      | ... | ... | ... |
-
-      </details>
-
-      <details>
-      <summary><strong>Research validity checklist</strong></summary>
-
-      | Criterion | Verified |
-      |-----------|:--------:|
-      | All quotes verbatim from source materials | ✓ |
-      | Participant IDs match source format (PT-###) | ✓ |
-      | Participant count accurate to source | ✓ |
-      | No fabricated findings | ✓ |
-      | Findings specific to this study, not generic | ✓ |
-      | Source documents linked for each finding | ✓ |
-      | Confidence levels declared per finding | ✓ |
-
-      </details>
-
-      {% if upstream_atomic_nugget_core %}
-      <details>
-      <summary><strong>Upstream context</strong></summary>
-
-      This readout was generated with cascade-aware upstream variables:
-
-      | Variable | Source | Status |
-      |----------|--------|--------|
-      | atomic_nugget_core | session_summary | [Available/Missing] |
-      | atomic_nugget_detail | session_summary | [Available/Missing] |
-      | research_objectives | research_brief | [Available/Missing] |
-      | research_questions | research_brief | [Available/Missing] |
-      | target_barriers | research_brief | [Available/Missing] |
-      | validated_themes | affinity_mapping | [Available/Missing] |
-      | prioritized_issues | usability_issues | [Available/Missing] |
-      | personas | persona_generator | [Available/Missing] |
-      | persona_design_implications | persona_generator | [Available/Missing] |
-      | journey_stages | journey_mapping | [Available/Missing] |
-      | stakeholder_constraints | stakeholder_synthesis | [Available/Missing] |
-      | alignment_gaps | stakeholder_synthesis | [Available/Missing] |
-
-      Mark each variable as Available or Missing based on what was actually
-      provided in the upstream context block above.
-
-      </details>
-      {% endif %}
-
-      ============================================================
-      QUALITY CHECKS (do not include in output)
-      ============================================================
-
-      Before outputting, verify:
-      - Every quote appears EXACTLY in source
-      - Participant IDs use PT-### format (hyphenated)
-      - Participant count matches unique IDs in source
-      - No mentions of products/features not in source
-      - Findings are specific to THIS study, not generic
-      - Tables have consistent column counts
-      - Every finding has a Confidence level with parenthetical reasoning
-      - Every finding has a Sources line with real document links
-      - Summary narrative references specific findings from THIS data
-      - Numbered findings use ## 01 &nbsp;&nbsp; format
-
-      Do NOT output a footer or "Generated by Qori" line — that is added automatically.
+      OUTPUT BOUNDARIES: Do not generate the document title, masthead,
+      references list, related artifacts, validity checklist, upstream context,
+      cascade summary, or any footer. The template handles those.
+      USE ## headings for each section (## Summary, ## 01, etc.).
 
 # ═══════════════════════════════════════════════════════════
-# OUTPUT
+# OUTPUT — interleaved Handlebars + AI prose
 # ═══════════════════════════════════════════════════════════
 output_template: |
-  {{ai_generated.research_readout_complete}}
+  # Research Report: {{selected_study}}
+
+  **Study:** {{selected_study}} &nbsp; | &nbsp; **Researcher:** {{researcher_contact}} &nbsp; | &nbsp; **Date:** {{current_date}}
+
+  ---
+
+  {{ai_generated.analysis_body}}
+
+  ---
+
+  <details>
+  <summary><strong>References</strong></summary>
+
+  - Nielsen Norman Group — Moderated usability testing methodology
+  - Krug, S. — *Rocket Surgery Made Easy* (2010)
+  - Hall, E. — *Just Enough Research* (2nd ed., 2019)
+  - W3C Web Content Accessibility Guidelines (WCAG) 2.2
+
+  </details>
+
+  <details>
+  <summary><strong>Related artifacts</strong></summary>
+
+  {{detected_files}}
+
+  </details>
+
+  <details>
+  <summary><strong>Upstream context</strong></summary>
+
+  This readout was generated with cascade-aware upstream variables:
+
+  | Variable | Source | Role |
+  |----------|--------|------|
+  | atomic_nugget_core | session_summary | Primary evidence for findings |
+  | atomic_nugget_detail | session_summary | Verbatim quotes, context |
+  | participant_metadata | session_summary | Participants section |
+  {{#if upstream_research_objectives}}| research_objectives | research_brief | Brief commitments |
+  {{/if}}{{#if upstream_research_questions}}| research_questions | research_brief | Brief commitments |
+  {{/if}}{{#if upstream_target_barriers}}| target_barriers | research_brief | Barrier validation |
+  {{/if}}{{#if upstream_business_context}}| business_context | research_brief | Decision context |
+  {{/if}}{{#if upstream_validated_themes}}| validated_themes | affinity_mapping | Theme grounding |
+  {{/if}}{{#if upstream_personas}}| personas | persona_generator | Persona impact |
+  {{/if}}{{#if upstream_persona_design_implications}}| persona_design_implications | persona_generator | Recommendation feasibility |
+  {{/if}}{{#if upstream_journey_stages}}| journey_stages | journey_mapping | Journey context |
+  {{/if}}{{#if upstream_stakeholder_constraints}}| stakeholder_constraints | stakeholder_synthesis | Constraint context |
+  {{/if}}{{#if upstream_alignment_gaps}}| alignment_gaps | stakeholder_synthesis | Priority gaps |
+  {{/if}}
+
+  Citation markers throughout:
+  - [validates TB-XXX] / [refutes TB-XXX] = barrier validation
+  - [from theme-XX] = theme grounding
+  - [for persona-XX] = persona impact
+  - nugget-PT00X-XXX = source nugget reference
+  - RQ-XXX = research question addressing
+
+  </details>
+
+  <details>
+  <summary><strong>Validity checklist</strong></summary>
+
+  | Criterion | Verified |
+  |-----------|:--------:|
+  | All quotes verbatim from source materials | |
+  | Participant IDs match source format (PT-###) | |
+  | Participant count accurate to source | |
+  | No fabricated findings | |
+  | Findings specific to this study, not generic | |
+  | Source documents linked for each finding | |
+  | Confidence levels declared per finding | |
+
+  </details>
+
+  ---
+
+  ---
+
+  ## Cascade summary
+
+  This research readout emits variables for downstream audience-specific readouts.
+
+  | Variable | Description |
+  |----------|-------------|
+  | prioritized_findings | Severity-rated findings with evidence chains, confidence levels, and recommendations |
+  | prioritized_recommendations | Actionable recommendations traced to specific findings |
+  | decision_inputs | Decision questions with recommended paths and evidence summaries |
+  | study_methodology | Research type, approach, sessions, sample composition |
+
+  **Consumed from upstream:**
+
+  | Variable | Source | Role |
+  |----------|--------|------|
+  | atomic_nugget_core | session_summary | Primary evidence for findings |
+  | atomic_nugget_detail | session_summary | Verbatim quotes, context enrichment |
+  | participant_metadata | session_summary | Participant demographics |
+  | task_completion_records | session_summary | Task success/failure data |
+  | barrier_validations | session_summary | Barrier confirmation/refutation |
+  | research_objectives | research_brief | Brief commitments (objectives) |
+  | research_questions | research_brief | Brief commitments (questions) |
+  | target_barriers | research_brief | Hypothesized barriers |
+  | business_context | research_brief | Problem framing |
+  | validated_themes | affinity_mapping | Cross-participant patterns |
+  | prioritized_issues | usability_issues | Severity-rated issues |
+  | personas | persona_generator | Behavioral archetypes |
+  | persona_design_implications | persona_generator | Design implications per persona |
+  | journey_stages | journey_mapping | User journey context |
+  | stakeholder_constraints | stakeholder_synthesis | Constraint context |
+  | alignment_gaps | stakeholder_synthesis | Priority gaps |
 
 output_options:
   path: "05-findings/"
   filename: "research-readout-{{study_name}}-{{current_date_iso}}.md"
 
 # ═══════════════════════════════════════════════════════════
-# METADATA (documentation only — not read by backend)
+# METADATA
 # ═══════════════════════════════════════════════════════════
-core_files:
-  research_plan:
-    file: "research_plan.md"
-    required: true
-    extract: ["objectives", "methods", "success_criteria", "timeline"]
-
-  session_summaries:
-    folder: "03-fieldwork/session-summaries/"
-    required: true
-    extract: ["pain_points", "opportunities", "insights", "quotes", "participant_context"]
-    file_pattern: "*session_summary*.md"
-
-  participant_tracker:
-    file: "participant_tracker.md"
-    required: false
-    extract: ["demographics", "sample_size", "completion_status"]
-
-optional_files:
-  affinity_mapping:
-    file: "04-analysis/affinity-mapping/*.md"
-    extract: ["themes", "evidence_counts", "recommendations"]
-
-  journey_mapping:
-    file: "04-analysis/journey-mapping/*.md"
-    extract: ["stages", "pain_points", "opportunities"]
-
-  personas:
-    file: "04-analysis/personas/*.md"
-    extract: ["user_types", "behaviors", "goals"]
-
-auto_variables:
-  - current_date: new Date().toISOString().split('T')[0]
-  - detected_files: scan_research_folder(research_folder_path, core_files, optional_files)
-  - participant_count: extract_from_md(participant_tracker, "participants") || "Unknown"
-  - session_count: count_completed_sessions(participant_tracker, "completed") || "Unknown"
-
 notify:
   - role: research_team
     action: "Research report completed"
@@ -718,60 +624,32 @@ notify:
     message: "Research report for {{study_name}} is ready for review."
 
 notes: |
-  v6.0 Changes (Cascade-Aware Retrofit):
-  - Cascade contract: atomic_nuggets split into atomic_nugget_core + atomic_nugget_detail
-  - research_objectives and research_questions changed from inject_as: context to
-    inject_as: commitment (these are promises the readout must account for)
-  - Added persona_design_implications and journey_stages to consumes block
-  - Emits updated: array wrappers on prioritized_findings, prioritized_recommendations,
-    decision_inputs; extraction_model: sonnet added to complex emits
-  - Prompt: CASCADE-AWARE GENERATION block with 6 rules (evidence tracing, brief
-    commitment addressing, barrier validation markers, persona references, recommendation
-    tracing, stable ID usage)
-  - Output: Cascade summary table after Summary, per-finding Evidence chain line with
-    nugget/theme/barrier/persona IDs, Brief commitments addressed section (maps RQ-XXX
-    and objectives to findings, flags gaps), Upstream context appendix
-  - All cascade additions are conditional on upstream_atomic_nugget_core — non-cascade
-    readouts render identically to v5.4.1
+  v7.0: Interleaved Handlebars/AI architecture (ADR 0005/0016 pattern).
+  - Monolithic research_readout_complete task replaced by analysis_body task.
+  - Handlebars renders: masthead, references (toggle), related artifacts (toggle,
+    raw detected_files list), upstream context (toggle, conditional on data),
+    validity checklist (toggle), cascade summary (always present).
+  - Related artifacts changed from LLM-categorized table to raw file list via
+    Handlebars (mechanical, no LLM judgment on cosmetic categorization).
+  - Internal quality checklist removed (redundant with anti-fabrication rules).
+  - Cascade summary changed from LLM-generated count table to standard v7.0
+    emits/consumes format.
+  - OUTPUT BOUNDARIES with ## heading instruction added.
+  - selected_study added to input_variables for Handlebars masthead.
+  - core_files, optional_files, auto_variables blocks removed (documentation-only,
+    never read by backend — see v5.4.1 notes for original documentation).
+  - Anti-fabrication guards preserved as-is (strongest of any template).
+  - CRITICAL: prioritized_findings (17 fields) consumed as required/grounding by
+    ALL 4 audience readouts. Extraction quality here is load-bearing.
 
-  v5.4.1 Changes (Source Path Grounding):
-  - Sources lines now use {{detected_files}} as source of truth instead of
-    LLM-constructed path patterns. Prevents 404s from filename mismatches
-    (e.g., trailing hyphens in session summary filenames).
-  - Backend (readoutHandler.js) now scans analysis-layer folders:
-    coded-transcript-analysis, affinity-mapping, journey-mapping, personas,
-    usability-issues, jobs-to-be-done, design-opportunities, service-blueprint
-  - detected_files now includes relative paths (not just bare filenames)
-  - Related Artifacts instruction updated to populate from {{detected_files}}
-    organized by category (Planning/Fieldwork/Analysis/Reference)
-
-  v5.4 Changes (Design Language Translation):
-  - Translated locked design from docs/design-references/research_readout_traceable.md
-  - Pentagram-style design: masthead, editorial numbered findings, editorial restraint
-  - Added per-finding traceability: Confidence levels (Strong/Moderate/Limited with
-    required parenthetical reasoning) and Sources lines (relative links to actual
-    source documents)
-  - Removed all HTML tables — GFM pipe tables and prose only
-  - Removed <details> from recommendations — now inline
-  - Removed <div align="center"> header/footer — masthead + backend footer
-  - Removed "Findings at a Glance" section (Summary table covers it)
-  - Removed emoji severity labels — text labels (Critical/High/Medium)
-  - Removed "Notable Quotes" column from Participants — quotes in findings
-  - Methodology: table → bold-em-dash paragraph format
-  - Participants: collapsible Sample Characteristics → inline prose paragraph
-  - Related Artifacts: populated with real paths, not placeholders
-  - Validity checklist: added source and confidence verification rows
-  - Footer removed from prompt — backend buildTraceabilityFooter handles it
-  - Filename: research-readout-{{study_name}}-{{current_date_iso}}.md (slugified)
-
-  Known issue: Source links in findings may 404 if actual filenames in the repo
-  don't match the standard naming pattern (e.g., trailing hyphens in filenames).
-  Will be fixed retroactively when existing files are audited.
-
-  v5.3: Standards Polish (canonical structure, dead config removal)
-  v5.2: Original template
+  v6.0: Cascade-aware retrofit.
+  v5.4.1: Source path grounding (detected_files as source of truth).
+  v5.4: Pentagram design language translation.
+  v5.3: Standards polish.
+  v5.2: Original template.
 
 output_use: |
   Generate comprehensive, stakeholder-ready research reports with per-finding
-  traceability. Pentagram-style design language: masthead, editorial numbering,
-  confidence levels, source citations, methodology references.
+  traceability. Emits prioritized_findings and prioritized_recommendations
+  consumed by all audience-specific readouts (designer, engineering,
+  accessibility, leadership).
