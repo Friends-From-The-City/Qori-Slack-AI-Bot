@@ -4,19 +4,18 @@
 id: stakeholder_synthesis
 name: synthesize_stakeholder_interviews
 label: "Stakeholder Synthesis"
-version: "v5.0"
+version: "v7.0"
 
 description: |
   Synthesize internal stakeholder interviews into findings-grade
-  documentation with role-only attribution. Pattern A modified:
-  confidence per section, inline SH-XXX citation, no per-finding
-  Sources lines. Produces maximum 2 sequence diagrams for system
-  dynamics. Raw system observations preserved in Appendix for
-  downstream service blueprint synthesis.
+  documentation with role-only attribution. v7.0: Interleaved
+  Handlebars/AI architecture — mechanical content (masthead,
+  headings, methodology, appendix structure) rendered by template,
+  LLM writes bounded analytical sections. Per ADR 0005/0016.
 
 author: Qori R&D
 created: 2026-01-08
-last_updated: 2026-05-06
+last_updated: 2026-05-20
 
 # ═══════════════════════════════════════════════════════════
 # CONFIGURATION
@@ -32,43 +31,23 @@ input_variables:
   - name: topic
     type: string
     required: true
-    description: "Researcher-provided topic — slugified for filename and variable store path"
+    description: "Researcher-provided topic"
   - name: selected_study
     type: string
     required: true
-    description: "Study folder name"
   - name: study_name
     type: string
     required: true
-    description: "Human-readable study name"
   - name: study_channel
     type: string
     required: true
-    description: "Slack channel for this study"
   - name: researcher_contact
     type: string
     required: true
-    description: "Lead researcher Slack handle"
-  - name: team_members
-    type: array
-    required: false
-    description: "Team members to notify"
-  - name: stakeholder_files
-    type: array
-    required: true
-    description: "Selected stakeholder interview transcripts/notes"
-  - name: discovered_files
-    type: array
-    required: false
-    description: "Auto-discovered files from study folder"
   - name: combined_file_content
     type: string
     required: true
     description: "Combined content of all selected stakeholder files"
-  - name: current_date
-    type: string
-    required: true
-    description: "Current date for filename and output"
 
 # ═══════════════════════════════════════════════════════════
 # CASCADE CONTRACT
@@ -78,7 +57,7 @@ consumes:
     source: desk_research
     required: false
     inject_as: reference
-    description: "Earlier discovery findings on this topic — stakeholder synthesis can build on desk research"
+    description: "Earlier discovery findings — stakeholder synthesis builds on desk research"
   - key: knowledge_gaps
     source: desk_research
     required: false
@@ -94,7 +73,7 @@ emits:
       type: array
       items:
         $ref: schemas/stakeholder_constraint.yaml
-    extract_from: "Constraints section (## 01) table and surrounding quotes. Assign sequential IDs (constraint-001). Include type (Technical/Policy/Resource/Organizational), full impact, source with SH-XXX, source_role and source_team from Stakeholders interviewed table, verbatim_quote from blockquotes, broader_pattern from related observations, research_implication, implementation_implication."
+    extract_from: "Constraints section (## 01) table and surrounding quotes. Assign sequential IDs (constraint-001). Include type, impact, source SH-XXX, source_role, source_team, verbatim_quote, broader_pattern, research_implication, implementation_implication."
 
   - key: stakeholder_priorities
     pool: false
@@ -103,7 +82,7 @@ emits:
       type: array
       items:
         $ref: schemas/stakeholder_priority.yaml
-    extract_from: "Strategic priorities and alignment section (## 02) table. Assign sequential IDs (priority-001). stated_by as array of SH-XXX. Map alignment marks: ✓→Yes, ⚠→Partial, ✗→No. Include driver and timeline when mentioned."
+    extract_from: "Strategic priorities and alignment section (## 02) table. Assign sequential IDs (priority-001). stated_by as array of SH-XXX. Map alignment marks."
 
   - key: alignment_gaps
     pool: false
@@ -112,7 +91,7 @@ emits:
       type: array
       items:
         $ref: schemas/alignment_gap.yaml
-    extract_from: "Alignment gap WARNING callout (## 02) and Believe/Reality table (## 04). Assign sequential IDs (gap-001). Include stated_position vs actual_behavior, verbatim_quote, consequence, and whether addressable_in_research."
+    extract_from: "Alignment gap WARNING callout (## 02) and Believe/Reality table (## 04). Assign sequential IDs (gap-001). Include stated_position vs actual_behavior, verbatim_quote, consequence, addressable_in_research."
 
   - key: stakeholder_questions_for_users
     pool: false
@@ -122,7 +101,7 @@ emits:
       type: array
       items:
         $ref: schemas/stakeholder_question.yaml
-    extract_from: "Questions for user research section (## 05) — Blocking, Important, and Validation tables. Assign sequential IDs (question-001). Map priority from section heading (Blocking/Important/Validation). Include asked_by (SH-XXX from insight column), stakeholder_insight, and suggested_method."
+    extract_from: "Questions for user research section (## 05) — Blocking, Important, and Validation tables. Assign sequential IDs (question-001). Map priority from section heading. Include asked_by, stakeholder_insight, suggested_method."
 
   - key: backstage_observations
     pool: false
@@ -149,7 +128,7 @@ emits:
             nullable: true
           source:
             type: string
-    extract_from: "System and process observations appendix. Assign sequential IDs (obs-001). Include full observation text, verbatim quote, flow description, and source SH-XXX."
+    extract_from: "System and process observations appendix. Assign sequential IDs (obs-001). Include full observation, verbatim quote, flow description, source SH-XXX."
 
   - key: system_failure_modes
     pool: false
@@ -175,130 +154,66 @@ emits:
           mermaid_diagram:
             type: string
             nullable: true
-    extract_from: "System dynamics section (## 03) — flow name, Where it breaks line, consequence. Assign sequential IDs (failure-001). Include source SH-XXX, verbatim quote, and Mermaid diagram code if present."
+    extract_from: "System dynamics section (## 03) — flow name, Where it breaks, consequence. Assign sequential IDs (failure-001). Include source SH-XXX, verbatim quote, Mermaid diagram code if present."
 
 # ═══════════════════════════════════════════════════════════
-# AI GENERATION
+# AI GENERATION — focused, bounded tasks
 # ═══════════════════════════════════════════════════════════
 ai_generation_tasks:
-  - task_id: "synthesis_complete"
+
+  # Main analytical body — sections 01-07 plus summary and stakeholder table.
+  # Kept as one task to preserve cross-section coherence (SH-XXX IDs flow
+  # across constraints → priorities → questions).
+  - task_id: "analysis_body"
     prompt: |
-      You are synthesizing internal stakeholder interviews into a findings-grade document.
+      You are synthesizing internal stakeholder interviews into analytical sections.
 
       ============================================================
-      CRITICAL RULES — READ BEFORE ANYTHING ELSE
+      CRITICAL RULES
       ============================================================
 
       RULE 1: ROLE-ONLY ATTRIBUTION (NON-NEGOTIABLE)
 
-      NEVER use real names from stakeholder transcripts. Map each stakeholder
-      to a role identifier:
+      NEVER use real names. Map each stakeholder to a role identifier:
       - SH-001 = Role/title (e.g., "Product Owner")
       - SH-002 = Role/title (e.g., "Engineering Lead")
-      - SH-003 = Role/title (e.g., "Accessibility Specialist")
 
-      Quote attribution format:
-      > "quote text"
-      > — SH-XXX
+      Quote format: > "quote" > — SH-XXX
+      Multiple sources: SH-001 · SH-003 (middle-dot separator)
 
-      If a stakeholder's role would identify them within their organization
-      (e.g., only one Director of X exists), use a more generic role label.
+      If a role would identify someone (only one Director of X), use a
+      more generic label.
 
-      The "Stakeholders interviewed" table is the ONLY place where role-to-ID
-      mapping appears. Never use real names ANYWHERE in the document.
+      RULE 2: NO HALLUCINATION — You are an EXTRACTOR, not a GENERATOR.
+      Every constraint, quote, priority must come from the interview data.
+      If you can't find evidence, DON'T INCLUDE IT.
 
-      When multiple stakeholders are cited as source, use middle-dot separator:
-      SH-001 · SH-003 (not comma-separated).
+      RULE 3: CONFIDENCE PER SECTION — Every numbered section ends with:
+      **Confidence** — [Strong/Moderate/Limited] ([reasoning])
 
-      RULE 2: NO HALLUCINATION
-
-      You are an EXTRACTOR, not a GENERATOR.
-      - Every constraint must come from the interview data
-      - Every quote must be verbatim from the data (with name replaced by SH-XXX)
-      - Every priority must be attributed to a specific stakeholder
-      - If you can't find evidence, DON'T INCLUDE IT
-
-      RULE 3: CONFIDENCE PER SECTION
-
-      Every numbered section (01-07) ends with a Confidence line. Use the
-      STAKEHOLDER INTERPRETATION rubric (not user-research evidence rubric):
-
+      Stakeholder interpretation rubric:
       - Strong: Multiple stakeholders independently surfaced the same claim
-        AND claim is verifiable against external evidence (codebase, metrics, policy)
-        Example: "Strong (multiple stakeholders independently surfaced constraints;
-        technical claims verifiable against codebase)"
-      - Moderate: Single stakeholder source OR partial triangulation OR claim
-        plausible but not independently verified
-        Example: "Moderate (process described by SH-003; SH-001 acknowledged
-        the pattern but offered no countervailing evidence)"
-      - Limited: Unverified stakeholder claim, single perspective, or inference
-        required from limited context
-        Example: "Limited (single stakeholder perspective, claim not verified
-        against other sources)"
+        AND verifiable against external evidence
+      - Moderate: Single source OR partial triangulation
+      - Limited: Unverified single perspective
 
-      This measures confidence in INTERPRETATION — how confident are we that
-      what stakeholders told us reflects reality? Not just that they said it.
+      RULE 4: MAXIMUM 2 SEQUENCE DIAGRAMS in section 03. Choose flows where
+      diagrams reveal failure modes text alone cannot convey. Every diagram
+      MUST end with closing ```, followed by "Where it breaks" line.
 
-      RULE 4: MAXIMUM 2 SEQUENCE DIAGRAMS
-
-      Generate AT MOST 2 Mermaid sequence diagrams. Choose flows where:
-      1. The diagram reveals failure modes that text description alone cannot
-         convey (invisible system hops, cascading failures, timing dependencies)
-      2. Multiple stakeholders described the same flow from different angles
-      3. The flow has quantifiable failure points (drop-off rates, latency,
-         error frequencies)
-
-      DO NOT diagram:
-      - Working flows that can be described in prose
-      - Flows mentioned by only one stakeholder with no failure points
-      - Organizational processes (those belong in the Appendix observations)
-
-      If only one flow meets the criteria, generate only one diagram.
-      If no flows meet the criteria, skip diagrams entirely and note why
-      in a single sentence.
-
-      Every diagram MUST:
-      - End with a closing ``` (triple backtick)
-      - Be followed by a "Where it breaks" line (single sentence)
-      - Use -->> (dashed arrows) for responses and failure paths
-      - Use Note blocks for drop-off rates, wait times, delays
-      - Keep to 8-12 steps maximum
-      - Be valid Mermaid syntax
-
-      RULE 5: COMPLETE ALL SECTIONS
-
-      You MUST complete ALL sections including Methodology and Appendix.
-      Do not stop early. If running low on space, compress content in
-      earlier sections rather than omitting later ones.
-
-      RULE 6: NO METADATA FABRICATION
-
-      For factual metadata fields (interview duration, dates, team size,
-      metric values), use ONLY data explicitly stated in the source transcripts.
-      When source data does not specify a value (e.g., interview duration not
-      recorded), write "Not specified" or omit the field. NEVER fabricate
-      uniform placeholder values (e.g., "~36 minutes" for all stakeholders)
-      to fill slots.
+      RULE 5: NO METADATA FABRICATION — For interview durations, dates, metrics,
+      use ONLY data explicitly stated. Write "Not specified" when unknown.
 
       {% if upstream_discovered_barriers %}
       ============================================================
       CASCADE-AWARE GENERATION
       ============================================================
 
-      You have access to prior discovery findings. Your job is to:
-
-      1. **Build on prior discovery.** When stakeholder observations align with or contradict
-         discovered_barriers, reference inline with [builds on DB-XXX] or [contradicts DB-XXX].
-
-      2. **Address knowledge gaps.** When a stakeholder provides information that fills a
-         knowledge_gap from desk research, note with [fills KG-XXX].
-
-      3. **Use stable IDs.** All emitted variables use sequential IDs (constraint-001, etc.).
-
-      4. **No fabrication of entities.** For team/role references, use ONLY what
-         stakeholders explicitly mentioned. Do NOT invent team names beyond those in
-         the interview data. Generic categories (Design, Engineering, Product) only
-         when no specific upstream attribution exists.
+      Prior discovery findings available. Your job:
+      1. Build on prior discovery: [builds on DB-XXX] or [contradicts DB-XXX]
+      2. Address knowledge gaps: [fills KG-XXX]
+      3. Use stable IDs (constraint-001, etc.)
+      4. No fabrication of entities — use ONLY what stakeholders mentioned
 
       DISCOVERED BARRIERS:
       {{upstream_discovered_barriers}}
@@ -307,7 +222,6 @@ ai_generation_tasks:
       KNOWLEDGE GAPS:
       {{upstream_knowledge_gaps}}
       {% endif %}
-
       {% endif %}
 
       ============================================================
@@ -321,314 +235,172 @@ ai_generation_tasks:
       {{combined_file_content}}
 
       ============================================================
-      OUTPUT FORMAT — FOLLOW EXACTLY
+      GENERATE THESE SECTIONS
       ============================================================
 
-      # Stakeholder Synthesis: {{study_name}}
+      Output ALL sections below as continuous markdown. Do not stop early.
 
-      **Study:** {{selected_study}} &nbsp; | &nbsp; **Researcher:** {{researcher_contact}} &nbsp; | &nbsp; **Date:** {{current_date}} &nbsp; | &nbsp; **Status:** Draft
-
-      ---
-
-      {% if upstream_discovered_barriers %}
-      ## Cascade summary
-
-      This stakeholder synthesis builds on prior discovery findings.
-
-      | Source data | Count |
-      |-------------|-------|
-      | Discovered barriers available | [n] |
-      | Knowledge gaps to address | [n or 0] |
-
-      ---
-      {% endif %}
-
-      ## Summary
-
-      [2-3 sentence narrative: how many stakeholders, what teams, what the synthesis reveals. Ground in THIS study's data. Identify the central tension or convergence.]
-
-      | | |
-      |---|---|
-      | **Stakeholders interviewed** | [count] |
-      | **Teams represented** | [list teams] |
-      | **Interview duration** | [if available, otherwise omit row] |
-      | **Key tension** | [single most important tension or alignment gap] |
-
-      > [!IMPORTANT]
-      > **Most actionable insight:** [Identify the most consequential cross-stakeholder pattern. Prioritize: (1) diagnostic disagreements — stakeholders agree on the problem but disagree on the cause; (2) alignment gaps — stated priorities vs. actual behavior; (3) invisible dependencies — where one team's decision blocks another team's work. If none apply, identify the finding with the highest organizational leverage. NEVER write a generic "stakeholders have different views" statement.]
-
-      ---
-
-      ## Stakeholders interviewed
+      **STAKEHOLDER TABLE:**
 
       | ID | Role | Team | Focus area |
       |----|------|------|------------|
-      | SH-001 | [Role from input — NOT real name] | [Team] | [Topics they covered] |
-      | SH-002 | [Role] | [Team] | [Topics] |
+      | SH-001 | [Role — NOT real name] | [Team] | [Topics] |
+      [continue for each stakeholder]
 
-      ---
+      **SUMMARY:** 2-3 sentence narrative + metadata table:
+      | | |
+      |---|---|
+      | **Stakeholders interviewed** | [count] |
+      | **Teams represented** | [list] |
+      | **Key tension** | [single most important tension] |
 
-      ## 01 &nbsp;&nbsp; Constraints
+      Then: > [!IMPORTANT] > **Most actionable insight:** [consequential cross-stakeholder pattern]
 
-      > "[Most impactful quote about a constraint]"
-      > — SH-XXX
+      **SECTION 01 — CONSTRAINTS:** Opening quote + constraint table (Type | Constraint | Impact | Source) + Confidence
 
-      | Type | Constraint | Impact | Source |
-      |------|------------|--------|--------|
-      | Technical | [Specific constraint] | [Quantified impact if possible] | SH-XXX |
-      | Technical | [Constraint] | [Impact] | SH-XXX · SH-XXX |
-      | Policy | [Constraint with regulation/directive name] | [What it requires] | SH-XXX |
-      | Resource | [Constraint with numbers] | [Quantified impact] | SH-XXX |
+      **SECTION 02 — STRATEGIC PRIORITIES AND ALIGNMENT:** Priority table (Priority | Stated by | Aligns with user need? | Notes) using ✓/⚠/✗ marks + WARNING callout for alignment gap + Confidence
 
-      **Confidence** — [Strong/Moderate/Limited] ([reasoning])
+      **SECTION 03 — SYSTEM DYNAMICS:** 1-2 sentence frame + max 2 Mermaid sequence diagrams with "Where it breaks" + Confidence
 
-      ---
+      **SECTION 04 — STAKEHOLDERS BELIEVE / REALITY / OPPORTUNITY:** Table (Believe | Reality | Opportunity) + Confidence
 
-      ## 02 &nbsp;&nbsp; Strategic priorities and alignment
+      **SECTION 05 — QUESTIONS FOR USER RESEARCH:** Three sub-sections: Blocking (table), Important (table), Validation (bullet list)
 
-      | Priority | Stated by | Aligns with user need? | Notes |
-      |----------|-----------|:---:|-------|
-      | [What gets prioritized] | SH-XXX | [mark] | [Context — driver, timeline] |
+      **SECTION 06 — OPEN QUESTIONS:** Table (Question | Who might know | Why it matters)
 
-      For the "Aligns with user need?" column:
-      - ✓ — Priority directly addresses a user-facing problem or improves user task completion
-      - ⚠ — Path from priority to user benefit requires assumptions
-      - ✗ — Evidence that priority diverts resources from user-facing work (rare)
-      Mark ✓ when the connection to user task completion is direct and obvious.
-      The column should produce a mix — if all priorities are ⚠, you haven't differentiated.
+      **SECTION 07 — RECOMMENDATIONS:** Three sub-sections: Immediate (table), Near-term (table), Strategic (table). Each: Action | Constraint addressed | Owner
 
-      > [!WARNING]
-      > **Alignment gap:** [Document the most significant conflict between stated priorities and actual behavior. If all stakeholders rate something as P1 but it gets deprioritized, say so. If no gap exists, omit this callout.]
+      OUTPUT BOUNDARIES: Do not generate the document title, masthead,
+      section heading markers (## 01, etc.), methodology section, appendix,
+      validity checklist, references, or cascade summary. The template
+      handles all document structure. Output only the analytical content
+      for each section, separated by --- dividers between sections.
 
-      **Confidence** — [Strong/Moderate/Limited] ([reasoning])
+  # Appendix observations — raw system/process observations for downstream
+  # service blueprint. Preservation, not synthesis.
+  - task_id: "appendix_observations"
+    prompt: |
+      Extract 3-5 system or process observations from stakeholder interviews.
+      These are RAW INPUTS for downstream service blueprint synthesis.
 
-      ---
+      RULES:
+      - Use SH-XXX attribution only (no real names)
+      - Do NOT synthesize or draw conclusions — preserve raw observations
+      - Each observation: descriptive title, stakeholder quote, system flow
+        in plain prose, pattern label
 
-      ## 03 &nbsp;&nbsp; System dynamics
+      **Interview Data:**
 
-      > [1-2 sentences framing what follows. Example: "Two flows where stakeholder input revealed invisible failure modes. Detailed system observations from all interviews are preserved in the Appendix as raw input for service blueprint synthesis."]
+      {{combined_file_content}}
 
-      ### [Flow Name]
-
-      > "[Quote explaining this flow]"
-      > — SH-XXX
-
-      ```mermaid
-      sequenceDiagram
-          actor User
-          participant Frontend as [Actual system name from interviews]
-          participant Backend as [Actual system name]
-          participant Legacy as [Actual system name]
-
-          User->>Frontend: [First user action]
-          Frontend->>Backend: [API call or system request]
-          Note over Frontend,Backend: [Drop-off rate or delay if available]
-          Backend->>Legacy: [Backend process step]
-          Legacy-->>Backend: [Response — note failures]
-          Backend-->>Frontend: [What gets returned]
-          Frontend-->>User: [What user sees]
-      ```
-
-      **Where it breaks** — [Single sentence: the core failure mechanism and its user-facing consequence.]
-
-      **Confidence** — [Strong/Moderate/Limited] ([reasoning])
-
-      ---
-
-      ### [Second Flow Name — only if it meets the criteria in Rule 4]
-
-      [Same format: quote, diagram, "Where it breaks", Confidence]
-
-      ---
-
-      ## 04 &nbsp;&nbsp; Stakeholders believe / Reality / Opportunity
-
-      | Stakeholders believe | Reality from research and data | Opportunity |
-      |---|---|---|
-      | [Mental model stated by stakeholders] | [What data or evidence shows] | [Design or research opportunity to bridge the gap] |
-
-      **Confidence** — [Mixed if needed. Example: "'IA mismatch' is Strong (data + stakeholder alignment). 'User feedback channel' is Moderate (single source)."]
-
-      ---
-
-      ## 05 &nbsp;&nbsp; Questions for user research
-
-      ### Blocking — must answer before design decisions
-
-      | Stakeholder insight | Research question | Suggested method |
-      |---|---|---|
-      | SH-XXX: [specific insight] | [Question to ask/observe] | [Method] |
-
-      ### Important — informs but doesn't block
-
-      | Stakeholder insight | Research question | Suggested method |
-      |---|---|---|
-      | SH-XXX: [insight] | [Question] | [Method] |
-
-      ### Validation — test stakeholder assumptions with users
-
-      - [Assumption] (SH-XXX) — [how to test]
-      - [Assumption] (SH-XXX) — [how to test]
-
-      ---
-
-      ## 06 &nbsp;&nbsp; Open questions
-
-      Questions stakeholders couldn't answer — flag for follow-up.
-
-      | Question | Who might know | Why it matters |
-      |----------|----------------|----------------|
-      | [Unanswered question] | [Role or team] | [Impact on research/design] |
-
-      ---
-
-      ## 07 &nbsp;&nbsp; Recommendations
-
-      ### Immediate
-
-      | Action | Constraint addressed | Owner |
-      |--------|---------------------|-------|
-      | [Specific action] | [Which constraint from §01] | [Team] |
-
-      ### Near-term
-
-      | Action | Constraint addressed | Owner |
-      |--------|---------------------|-------|
-      | [Action] | [Constraint] | [Team] |
-
-      ### Strategic
-
-      | Action | Constraint addressed | Owner |
-      |--------|---------------------|-------|
-      | [Action] | [Constraint] | [Team] |
-
-      ---
-
-      ## Methodology
-
-      **Framework** — Stakeholder research synthesis for service design
-
-      **Approach** — Aggregated [X] internal stakeholder interviews, organized by constraint type, priority alignment, and system dynamics. Cross-referenced insights across [list teams] perspectives to identify systemic patterns. Used role-only attribution to enable diplomatic surfacing of organizational tensions.
-
-      **Synthesis methods** — Constraint triangulation; alignment gap analysis; system dynamics mapping with failure-mode identification; stakeholder belief vs. reality framing.
-
-      **Sources analyzed** — [List each SH-XXX with Role. Include duration ONLY if explicitly stated in transcript. If duration not stated, omit it. Do NOT fabricate durations.]
-
-      **Limitations** — [Sample size, which perspectives are missing, what the model may underrepresent. Be specific: "Health team PM and Design System lead were not interviewed."]
-
-      ### References
-
-      - Sam Ladner — *Mixed Methods* (stakeholder research framework)
-      - Steve Portigal — *Interviewing Users* (stakeholder interview techniques)
-      - Kim Goodwin — *Designing for the Digital Age* (stakeholder alignment)
-      - Stickdorn & Schneider — *This Is Service Design Thinking* (systems mapping)
-
-      ---
-
-      ## Appendix
-
-      <details>
-      <summary><strong>System and process observations (raw input for service blueprint)</strong></summary>
-
-      These observations were captured for downstream service blueprint synthesis.
-      They are preserved here in raw form rather than synthesized.
-
-      Extract 3-5 system or process observations from the interviews. For each:
-      - Give it a descriptive sub-heading (e.g., "Prescription refill (working pattern)")
-      - Include the stakeholder's direct quote describing the system/process
-      - Describe the system flow in plain prose (e.g., "User → Frontend → Cache → API → Backend → Confirmation")
-      - Note whether it's a working pattern, broken pattern, organizational pattern, or resource pattern
-      - DO NOT synthesize or draw conclusions — these are raw inputs
+      For each observation output:
 
       #### [Observation title (pattern type)]
 
-      > "[Stakeholder quote about this system/process]" — SH-XXX
+      > "[Stakeholder quote]" — SH-XXX
 
       [System flow description in plain prose.]
 
       [Pattern label: Working pattern / Broken pattern / Organizational pattern / Resource pattern]
 
-      </details>
-
-      <details>
-      <summary><strong>Validity checklist</strong></summary>
-
-      | Criterion | Verified |
-      |-----------|:---:|
-      | Quotes verbatim from interview transcripts | ✓ |
-      | Role-only attribution preserved (no real names) | ✓ |
-      | Confidence declared per section | ✓ |
-      | Constraints triangulated across stakeholder perspectives where possible | ✓ |
-      | Alignment gaps explicitly surfaced | ✓ |
-      | Open questions documented for follow-up | ✓ |
-      | Recommendations connect to specific constraints | ✓ |
-
-      </details>
-
-      <details>
-      <summary><strong>Related artifacts</strong></summary>
-
-      Populate this table with artifacts from {{detected_files}} when available.
-      Use exact paths from the detected files list. Prepend ../ to each path.
-      If a file isn't in the list, omit the row. Do NOT invent files.
-
-      | Artifact | Location |
-      |----------|----------|
-      | [Stakeholder interview transcript] | [path from detected_files](../path) |
-
-      </details>
-
-      {% if upstream_discovered_barriers %}
-      <details>
-      <summary><strong>Upstream context (prior discovery)</strong></summary>
-
-      This synthesis consumed the following upstream discovery variables:
-
-      **Discovered barriers (from desk research):**
-      List each barrier ID and title that was referenced in this synthesis,
-      noting whether findings [builds on DB-XXX] or [contradicts DB-XXX].
-
-      {% if upstream_knowledge_gaps %}
-      **Knowledge gaps addressed:**
-      List each knowledge gap ID that was filled by stakeholder input,
-      noting the stakeholder source [fills KG-XXX].
-      {% endif %}
-
-      </details>
-      {% endif %}
-
-      ============================================================
-      QUALITY CHECK BEFORE OUTPUT (do not include in output)
-      ============================================================
-
-      1. NO real names appear anywhere in the document — only SH-XXX role IDs
-      2. All stakeholder quotes use SH-XXX attribution format
-      3. Confidence levels follow stakeholder rubric (interpretation
-         confidence, not evidence strength)
-      4. Maximum 2 sequence diagrams (or zero if no flows meet criteria)
-      5. System observations Appendix preserves raw observations only
-         (no synthesis, no conclusions)
-      6. "Aligns with user need?" column has a mix of marks, not all ⚠
-      7. All sections present including Methodology and Appendix
-      8. Tables have consistent column counts, no blank lines between rows
-      9. Every Mermaid code block is properly closed with ```
-      10. Numbered sections use ## 01 &nbsp;&nbsp; format
-      11. If upstream_discovered_barriers provided: cascade summary present,
-          inline [builds on DB-XXX] / [contradicts DB-XXX] references used,
-          upstream context appendix populated
-
-      Do NOT output a footer or "Generated by Qori" line — that is added automatically.
+      OUTPUT BOUNDARIES: Do not generate section headings, the details/summary
+      wrapper, or any structural HTML. The template handles structure.
+      Output only the observation entries.
 
 # ═══════════════════════════════════════════════════════════
-# OUTPUT
+# OUTPUT — interleaved Handlebars + AI prose
 # ═══════════════════════════════════════════════════════════
-processing_workflow:
-  - validate_inputs
-  - verify_all_files_loaded
-  - execute_ai_generation_tasks
-  - validate_all_stakeholders_represented
-  - populate_template
-  - save_to_outputs
+output_template: |
+  # Stakeholder Synthesis: {{study_name}}
+
+  **Study:** {{selected_study}} &nbsp; | &nbsp; **Researcher:** {{researcher_contact}} &nbsp; | &nbsp; **Date:** {{current_date}} &nbsp; | &nbsp; **Status:** Draft
+
+  ---
+
+  ## Stakeholders interviewed
+
+  {{ai_generated.analysis_body}}
+
+  ---
+
+  <details>
+  <summary><strong>Methodology</strong></summary>
+
+  **Framework** — Stakeholder research synthesis for service design
+
+  **Approach** — Aggregated {{document_count}} internal stakeholder interviews, organized by constraint type, priority alignment, and system dynamics. Cross-referenced insights across stakeholder perspectives to identify systemic patterns. Used role-only attribution to enable diplomatic surfacing of organizational tensions.
+
+  **Synthesis methods** — Constraint triangulation; alignment gap analysis; system dynamics mapping with failure-mode identification; stakeholder belief vs. reality framing.
+
+  ### References
+
+  - Sam Ladner — *Mixed Methods* (stakeholder research framework)
+  - Steve Portigal — *Interviewing Users* (stakeholder interview techniques)
+  - Kim Goodwin — *Designing for the Digital Age* (stakeholder alignment)
+  - Stickdorn & Schneider — *This Is Service Design Thinking* (systems mapping)
+
+  </details>
+
+  ---
+
+  ## Appendix
+
+  <details>
+  <summary><strong>System and process observations (raw input for service blueprint)</strong></summary>
+
+  These observations were captured for downstream service blueprint synthesis.
+  They are preserved here in raw form rather than synthesized.
+
+  {{ai_generated.appendix_observations}}
+
+  </details>
+
+  <details>
+  <summary><strong>Validity checklist</strong></summary>
+
+  | Criterion | Verified |
+  |-----------|:---:|
+  | Quotes verbatim from interview transcripts | ✓ |
+  | Role-only attribution preserved (no real names) | ✓ |
+  | Confidence declared per section | ✓ |
+  | Constraints triangulated across stakeholder perspectives where possible | ✓ |
+  | Alignment gaps explicitly surfaced | ✓ |
+  | Open questions documented for follow-up | ✓ |
+  | Recommendations connect to specific constraints | ✓ |
+
+  </details>
+
+  {{#if detected_files}}
+  <details>
+  <summary><strong>Related artifacts</strong></summary>
+
+  | Artifact | Location |
+  |----------|----------|
+  {{#each file_list}}
+  | {{this}} | ../{{this}} |
+  {{/each}}
+
+  </details>
+  {{/if}}
+
+  ---
+
+  ---
+
+  ## Cascade summary
+
+  This stakeholder synthesis emits variables for downstream templates.
+
+  | Variable | Description |
+  |----------|-------------|
+  | stakeholder_constraints | Technical, policy, resource, organizational limitations |
+  | stakeholder_priorities | Strategic priorities with user-need alignment |
+  | alignment_gaps | Stated priority vs. actual behavior mismatches |
+  | stakeholder_questions_for_users | Prioritized research questions from stakeholder insights |
+  | backstage_observations | Raw system/process observations for service blueprint |
+  | system_failure_modes | System dynamics with failure points |
+
+  **Stakeholders analyzed:** {{document_count}}
 
 output_options:
   path: "{{team}}/_discovery/stakeholder-interviews/"
@@ -644,104 +416,40 @@ output_options:
       channel: "{{study_channel}}"
       message: "{{researcher_contact}} completed stakeholder synthesis for {{study_name}}."
 
-output_template: |
-  {{ai_generated.synthesis_complete}}
-
 # ═══════════════════════════════════════════════════════════
 # METADATA
 # ═══════════════════════════════════════════════════════════
-derived_variables:
-  - topic_slug: "{{topic | slugify}}"
+# NOTE: derived_variables removed — handler (discoverHandler.ts) computes
+# topic_slug explicitly. yamlProcessor does not process derived_variables.
 
 validation_rules:
-  - rule: "all_stakeholders_represented"
-    description: "Output must include insights from every stakeholder in input"
-    check: "count stakeholders in output >= count stakeholders in input"
   - rule: "role_only_attribution"
-    description: "No real names appear anywhere — only SH-XXX role identifiers"
+    description: "No real names — only SH-XXX identifiers"
     check: "no real names from input transcripts appear in output"
-  - rule: "constraint_triangulation"
-    description: "Major constraints should show multiple stakeholder perspectives"
-    check: "constraints section includes multiple source attributions"
   - rule: "confidence_per_section"
     description: "Every numbered section has a Confidence line"
     check: "sections 01-07 each contain 'Confidence' indicator"
   - rule: "diagram_limit"
     description: "Maximum 2 sequence diagrams"
     check: "count of 'sequenceDiagram' <= 2"
-  - rule: "diagram_completeness"
-    description: "Every Mermaid code block must be properly closed"
-    check: "count of opening ``` equals count of closing ``` in system dynamics section"
   - rule: "all_sections_present"
     description: "All required sections present"
-    check: "output contains Constraints, Priorities, System dynamics, Believe/Reality, Questions, Open questions, Recommendations, Methodology, Appendix"
-
-notify:
-  - role: research_team
-    action: "Stakeholder synthesis complete"
-    channel: "{{study_channel}}"
-    message: "{{researcher_contact}} completed stakeholder synthesis for {{study_name}}. {{stakeholder_count}} stakeholders analyzed."
-
-auto_variables:
-  current_date: "new Date().toISOString().split('T')[0]"
-  stakeholder_count: "count_stakeholders_in_output()"
-  github_file_link: "generate_github_link(selected_study, current_date)"
+    check: "output contains Constraints, Priorities, System dynamics, Believe/Reality, Questions, Open questions, Recommendations"
 
 notes: |
-  v5.0.1 Fixes:
-  - Rule 6: anti-fabrication for metadata (interview durations, dates, metrics).
-    Sonnet was fabricating uniform "~36 minutes" for all stakeholders.
-  - Sources analyzed: duration only when explicitly stated in transcript.
-  - detected_files now populated from actual upload filenames (discoverHandler fix).
+  v7.0: Interleaved Handlebars/AI architecture (ADR 0005/0016 pattern).
+  - Monolithic synthesis_complete task split into 2 tasks:
+    analysis_body (stakeholder table + sections 01-07 in one pass for
+    cross-section coherence) and appendix_observations (raw preservation).
+  - Handlebars renders: masthead, methodology (in toggle), validity
+    checklist, references, appendix structure, related artifacts,
+    cascade summary (always present).
+  - Anti-fabrication guards preserved (6 rules from v5.0).
+  - OUTPUT BOUNDARIES rule added to both tasks.
+  - derived_variables block removed (handler computes topic_slug).
+  - Cascade summary always renders (was conditional on upstream data).
+  - Methodology section wrapped in details/summary toggle.
 
-  v5.0 Update — Cascade-aware retrofit:
-  - Cascade contract: consumes desk_research barriers + knowledge gaps (inject_as: reference)
-  - Emits 6 structured variables with array wrappers and schema refs
-  - extraction_model: sonnet on stakeholder_constraints (10+ fields) and
-    stakeholder_questions_for_users (6 fields with priority enum)
-  - CASCADE-AWARE GENERATION block: inline [builds on DB-XXX], [contradicts DB-XXX],
-    [fills KG-XXX] markers when upstream discovered_barriers are available
-  - Cascade summary section (conditional on upstream data) with source counts
-  - Upstream context appendix listing barrier/gap references used
-  - Quality check item 11: cascade completeness verification
-  - Discovery template positioning preserved — operates pre-brief, emits variables
-    that feed INTO the research brief via manual handler loading
-
-  v4.0 Update — Design Language Translation:
-  - Translated locked design from docs/design-references/stakeholder_synthesis_reference.md
-  - Pattern A modified: Confidence per section (interpretation confidence, not evidence
-    strength), no per-finding Sources lines, inline SH-XXX citation
-  - CRITICAL: Role-only attribution — NEVER use real names from transcripts
-  - 4 AI tasks → 1 comprehensive task (same pattern as persona v4.3, discussion guide v6.2)
-  - Added masthead with Status field (Draft)
-  - Added Summary section with narrative + metadata table + "Most actionable insight" callout
-  - Added editorial numbering (## 01 through ## 07)
-  - Removed: Service Blueprint Implications (belongs in service_blueprint template),
-    Recommended Next Interviews (researcher-only content), three separate constraint
-    tables (collapsed to single table with Type column), unlimited sequence diagrams
-    (capped at 2), overview flowchart, per-diagram breakdown tables, decorative emoji,
-    in-prompt footer
-  - Added: "Stakeholders believe / Reality / Opportunity" section (elevated from
-    removed Blueprint Implications), System observations Appendix (raw input for
-    downstream service blueprint), Validity checklist with stakeholder-specific rows,
-    Related artifacts from {{detected_files}}
-  - Stakeholder confidence rubric: Strong requires multi-stakeholder convergence +
-    external verifiability. Moderate = single source or partial triangulation.
-    Limited = unverified single perspective.
-  - Sequence diagram selection criteria: reveals invisible failure modes, multi-stakeholder
-    described, quantifiable failure points. Zero diagrams permitted if nothing meets criteria.
-  - Filename: {{selected_study}}-stakeholder-synthesis-{{current_date_iso}}.md
-  - Footer removed from prompt — backend buildTraceabilityFooter handles it
-
-  v3.3: Canonical structure alignment, dead config removal
-  v3.2: Overview diagrams, anti-truncation, pattern recognition
-  v3.1: Priority indicator alignment
-  v3.0: Initial 4-task architecture
-
-output_use: |
-  Synthesize internal stakeholder interviews with role-only attribution.
-  Pattern A modified: confidence per section, inline SH-XXX citation.
-  Maximum 2 sequence diagrams for system dynamics. Raw system observations
-  preserved in Appendix for downstream service blueprint synthesis.
-  Constraint triangulation, alignment gap analysis, stakeholder belief
-  vs. reality framing.
+  v5.0-v5.0.1: Single-task architecture (superseded by v7.0).
+  v4.0: Design language translation.
+  v3.0-v3.3: Multi-task architecture.
