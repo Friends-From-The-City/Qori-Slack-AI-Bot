@@ -1,89 +1,60 @@
 # Qori Product Backlog
 
-**Last updated:** 2026-05-19
+**Last updated:** 2026-05-20
 **Status:** Active work in progress. Federal go-to-market is the final workstream; all other workstreams should complete before triggering Phase 0 of the launch playbook.
 
 This document consolidates the work we've identified across conversations into a single backlog. Items are grouped by workstream rather than by sequence — workstreams can run in parallel or be interleaved as priorities shift.
 
 For codebase hygiene items (technical debt from the TypeScript migration), see `docs/v1.1-followups.md`.
 For federal go-to-market execution, see the federal go-to-market playbook.
+For modal-specific design guidance, see `docs/modal-design-principles.md`.
 
 ---
 
 ## Template restructure queue
 
-The migration paused template standardization. The plan template (v7.0) is the current reference for the canonical pattern: factual/computed data via Handlebars, LLM only writes prose, structured data emitted as JSON with schema validation, anti-fabrication guards, cascade summary section, cross-reference verification through Postgres.
+The migration paused template standardization. The plan template (v7.0) and brief template (v7.0) are the established references. Per the post-migration audit, 26 of 27 templates have no unit tests, and 12 use the older "minimal static + single LLM" pattern instead of the canonical interleaved Handlebars + bounded LLM slots (ADR 0005).
 
-Per the post-migration audit, 26 of 27 templates have no unit tests, and 12 use the older "minimal static + single LLM" pattern instead of the canonical interleaved Handlebars + bounded LLM slots (ADR 0005).
+### Completed (May 2026)
 
-### Brief restructure (complete — ADR 0016)
+- **research_plan** v7.0 (reference implementation)
+- **research_brief** v7.0 (ADR 0016)
+- **desk_research** v7.0
+- **stakeholder_synthesis** v7.0
+- **survey_synthesis** v7.0
+- **affinity_mapping** v7.0
+- **persona_generator** v7.0
+- **designer_readout** v7.0 (reference implementation for readout ticket quality)
 
-Restructured to v7.0 interleaved Handlebars/AI architecture. Handler is the data assembly point; LLM writes bounded prose only. See `docs/architecture-decisions/0016-brief-template-v7-restructure.md` for the decision record and `docs/brief-restructure-delta.md` for the planning document.
+### Remaining
 
-Completed work includes:
-- Interleaved Handlebars + bounded AI tasks (7 focused tasks replacing monolithic `brief_body`)
-- Handler-assigned stable IDs for barriers (TB-001) and questions (RQ-001) via pre-render JSON tasks
-- Mechanical rendering of display date, timeline phases, timeline display label, metadata table
-- Anti-fabrication guards on all prose tasks
-- Per-section citation numbering with OUTPUT BOUNDARIES rule
-- Cascade summary section
-- Recruitment sources as dedicated field and cascade variable
-- Timeline preference computed from decision_deadline gap (modal radio removed)
-- Plan handler reads timeline_preference, start_date, recruitment_sources from cascade
-- Dead plan modal fields removed (recruitment, note-taker, observer)
-
-**Known finding: cascade variable count non-determinism.** The pre-render LLM tasks for research questions and target barriers produce variable-length arrays (e.g., 5 questions on one run, 6 on another with the same inputs). The prompts specify ranges ("3-7 questions") and the LLM picks within that range non-deterministically. This means brief outputs aren't fully reproducible — same study, same inputs, different question/barrier counts. The plan template inherits this property since it consumes the brief's emissions. Not blocking but worth knowing for any future reproducibility requirements.
-
-### Discovery templates
-
-`desk_research`, `stakeholder_synthesis`, `survey_synthesis`. These emit foundational cascade variables that downstream synthesis and readout templates consume. Restructuring them strengthens the entire cascade chain's reliability.
-
-Stakeholder synthesis specifically had a truncation issue noted earlier; the restructure should resolve that and ensure all emitted variables (constraints, priorities, alignment gaps, etc.) flow cleanly to readouts.
-
-### Synthesis templates
-
-`affinity_mapping`, `persona_generator`. These consume per-session nuggets and produce study-level patterns. They're high-value because their outputs feed every readout and ticket-creation flow.
-
-### Readout templates
-
-`designer_readout`, `engineering_readout`, `accessibility_readout`, `leadership_readout`. These are the audience-specific deliverables researchers share with stakeholders. The current readouts work but need ticket bodies iterated to production-grade before they're declared complete.
-
-### Discussion guide, session_summary, participant_tracker
-
-`discussion_guide` has known cascade gaps (75-minute session length — see Modal & UX section). `session_summary` emits the atomic nuggets that synthesis depends on; its quality directly affects downstream quality. `participant_tracker` has the status label mismatch noted in the audit (it uses display labels that don't match the canonical enum).
-
-### Remaining templates
-
-Whatever's left after the above. Likely smaller, less consequential templates.
+- **Readout templates:** engineering_readout, accessibility_readout, leadership_readout. Audience-specific deliverables. Ticket schemas and prompt instructions should align to designer_readout's reference (see v1.1-followups.md).
+- **Discussion guide, session_summary, participant_tracker.** Discussion guide has cascade gaps (75-minute partially addressed). Participant tracker has status label mismatch (audit finding).
+- **Other downstream templates:** journey_mapping, jobs_to_be_done, usability_issues, design_opportunities, service_blueprint. Each consumes specific cascade variables and produces specific outputs.
 
 ---
 
 ## Cascade UI redesign
 
-The cascade context block and cascade summary section were redesigned during the brief restructure. This workstream tracks the remaining cascade UI work.
+The cascade architecture is load-bearing in the system, but the UI doesn't always need to display it.
 
-### Cascade context block (complete)
+### Cascade Context block in plan modal
 
-The cascade context block in modals was changed from a status recap (always shown, listing all variables with green/blue checks) to a problem-surfacing block:
-- All required present → block hidden entirely (no redundant recap)
-- Required missing → actionable warning with what's missing and what command to run
-- Applied consistently across all 6 modals (plan, brief, discussion guide, synthesis, stakeholder, brief-to-study)
+When researcher opens plan modal, they see a recap of brief commitments — all shown even when everything's fine. Change to problem-surfacing block: hide when complete, show actionable warning when required missing, show "run /qori-brief first" when no variables exist.
 
-`TemplateContractError` at handler submission time remains as second line of defense (ADR 0007).
-
-### TEMPLATE_CONSUMES drift surface (v1.1 followup)
-
-The cascade context display is hardcoded against `TEMPLATE_CONSUMES` in `cascadeReadinessBlocks.ts`. Every new cascade variable requires manual update to this table in addition to YAML `emits`/`consumes` — three places to keep in sync. Should generate dynamically from YAML cascade contracts. Tracked in `docs/v1.1-followups.md`.
+Implementation requires audit of how often the block is shown today, what problem states to surface, and whether there's an existing pattern for "modal opens with warning state."
 
 ### Cascade summary section in rendered documents
 
-Both brief and plan now include a cascade summary section at the bottom of rendered output, documenting what the document emits/consumes for downstream templates. This pattern should propagate to all restructured templates.
+The "Cascade summary" section at the bottom of brief and plan output serves two audiences with different needs (engineers and stakeholders). Possible directions: rename ("Audit trail"), move discovery sources out, or hide in rendered document and surface in operator/debug views.
+
+Worth deliberate audience-first design.
 
 ---
 
 ## Modal & UX polish
 
-Items accumulated during pre-migration work and during migration debugging. None are blocking but each affects researcher experience.
+Items accumulated during pre-migration work and during migration debugging. See `docs/modal-design-principles.md` for the design reference document.
 
 ### Discussion guide
 
@@ -98,15 +69,8 @@ Items accumulated during pre-migration work and during migration debugging. None
 
 ### /qori-plan
 
-~~- Remove desk research, stakeholder notes, and survey data sections from the plan modal — those now live in /qori-discover~~
-~~- Recruitment sources should be optional, not required~~
-~~- Remove the execution risks section (consolidated elsewhere or no longer relevant)~~
-
-Plan modal was cleaned up during brief restructure Stream B: recruitment sources now flow from cascade, dead fields (note-taker, observer) removed, timeline preference computed from dates. Remaining plan modal fields (study, lead researcher, operational risks) are all legitimate plan-time inputs.
-
-### Notes modal
-
-- Dropdown filter bug — fixed: empty list shown when session_id absent instead of silent fallback to all study notes
+- Remove desk research, stakeholder notes, and survey data sections from the plan modal — those now live in /qori-discover
+- Remove the execution risks section (consolidated elsewhere or no longer relevant)
 
 ### Participant tracker
 
@@ -115,12 +79,46 @@ Plan modal was cleaned up during brief restructure Stream B: recruitment sources
 
 ### Outreach
 
-- "Generate another message type" feature — fixed: uses `views.update` instead of `views.push` (overflow actions lack trigger_id)
 - Manual compensation override per participant doesn't exist yet (currently compensation is calculated per study, not per participant)
 
 ### Observer
 
 - Auto-post functionality needs to fire when an observer joins a session
+
+---
+
+## Slack surface area expansion
+
+These are larger product additions that change Qori's surface area meaningfully. Both are post-launch candidates — substantial enough to deserve dedicated design and implementation phases rather than being bundled with the current polish work.
+
+### Home tab
+
+The Slack app sidebar shows a Home tab when users click on Qori. Today it's likely default/empty. Built out, it becomes the researcher's command center:
+
+- Active studies with status and next expected step
+- Pending approvals (briefs awaiting sign-off, plans awaiting review)
+- Recent outputs with quick links
+- Cascade health indicators (studies with incomplete or stale data)
+- Quick action buttons for common starts (/qori-discover, /qori-brief, /qori-plan)
+
+Refreshes on view, always current. Different views for researcher vs. stakeholder roles based on user role.
+
+This takes Qori from "tool I use sometimes" to "place where my research work lives." Probably 3-5 days of CC time to build well. Substantial design work needed first — information density, role-specific views, performance with hundreds of studies.
+
+### Canvas integration
+
+Slack Canvas (released 2024) is long-form collaborative documents that live in channels. Current Qori outputs are markdown files in GitHub posted as Slack messages. A Canvas version could:
+
+- Live in the study channel as a persistent artifact (no scrolling back to find the brief)
+- Support inline comments from stakeholders on specific sections
+- Update in place when regenerated, with edit history preserved
+- Embed live data (participant counts, status snippets) that stays current
+
+Tradeoff: Canvas is Slack-native, less portable. GitHub markdown is exportable and archivable, which matters for federal customers who may want artifacts in their own systems.
+
+Hybrid approach worth considering: artifacts continue to live in GitHub (source of truth, portable), and Canvas versions get auto-generated for collaboration in Slack. Canvas as a view, GitHub as the data.
+
+This changes the artifact model meaningfully. Best done post-launch when real federal users can give feedback on what they need.
 
 ---
 
@@ -131,12 +129,6 @@ The federal-readiness work touched notification routing but didn't complete it. 
 ### Approval flow notifications
 
 Brief approval and plan approval currently post CTAs to the product channel. They should DM the stakeholder/researcher directly. The product channel notification can stay as a summary, but the actionable CTA belongs in DM.
-
-### Status update notifications
-
-~~The fieldwork dashboard doesn't refresh automatically after a participant status update. Researchers have to manually re-run the command to see updated counts.~~
-
-Fixed: `refreshDashboardAfterAction` now called from `participantHandler` (status update) and `participantOutreachHandler` (add participant), matching the existing observer handler pattern.
 
 ### Generic error notifications
 
@@ -159,10 +151,6 @@ A pre-recruitment screening flow. Researchers would define screening questions; 
 ### Bulk-add participants
 
 Adding participants one at a time is slow for studies with many participants. Bulk upload (CSV or paste-from-spreadsheet) would speed up large studies.
-
-### Manual compensation override per participant
-
-Currently compensation is calculated per study (budget / target participants). Some studies need participant-level overrides (e.g., participants who do additional sessions, accessibility consultants paid different rates).
 
 ### Per-study access control for /qori-ask
 
@@ -188,19 +176,24 @@ The design exists; implementation hasn't started. This is significant UX work be
 
 ## v1.1 codebase hygiene
 
-The technical debt items from the TypeScript migration. See `docs/v1.1-followups.md` for the full list of 15 items, which include:
+The technical debt items from the TypeScript migration. See `docs/v1.1-followups.md` for the full list, which includes:
 
 - User auth boilerplate cleanup
 - `study_name` denormalization across 3 tables (move to study_id FK)
 - Database CHECK constraints for application enums
-- STRING -> DATE/TIME column conversions
+- STRING → DATE/TIME column conversions
 - Cascade emission type generation from YAML schemas
 - Modal metadata audit
 - Cascade access pattern consolidation
 - Lint rules for pattern enforcement (stricter than current test-suite assertions)
-- 208 `catch (error: any)` -> `unknown` with narrowing (partially done; some legacy code remains)
 - Template unit tests (26 of 27 templates untested at rendering level)
-- TEMPLATE_CONSUMES hardcoding drift surface (new — from brief restructure)
+
+Plus newly filed during template restructure work:
+
+- Cascade context block hardcoded against TEMPLATE_CONSUMES table (should generate dynamically from cascade variable registry)
+- Cross-template audit step in template restructure workflow (catch dead extracts and redundant collections systematically)
+- `derived_variables` in YAML is documentation-only — handlers must compute these explicitly
+- Two desk research handlers (deskResearchHandler.ts and discoverHandler.ts) both live, both have consistent data assembly — consolidate to eliminate duplication risk
 
 These items don't block product work or federal go-to-market. They make the codebase more robust over time. Worth picking up opportunistically when touching related code.
 
@@ -225,6 +218,6 @@ This workstream begins after the other workstreams in this backlog reach a state
 
 ## Notes
 
-- This backlog doesn't prioritize. The current understanding is templates and modals/notifications come first because they're the visible product surface; deferred features come later; federal go-to-market is last.
+- This backlog doesn't prioritize. Decisions about what to work on get made in the moment.
 - Items move between sections as priorities shift. New findings get added.
 - For any item that becomes "in progress," consider whether it warrants an ADR per the architecture decisions workflow.
