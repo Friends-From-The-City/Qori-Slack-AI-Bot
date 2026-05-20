@@ -3,17 +3,19 @@
 # ═══════════════════════════════════════════════════════════
 id: affinity_mapping
 name: run_affinity_mapping
-label: 🧠 Affinity Mapping
-version: "v4.0"
+label: "Affinity Mapping"
+version: "v7.0"
 
-description: >
-  Group qualitative data into research-grounded themes using inductive clustering.
-  Based on the KJ Method (Jiro Kawakita) and Contextual Design (Holtzblatt & Beyer).
-  Themes emerge from data patterns, not predetermined categories.
+description: |
+  Group qualitative data into research-grounded themes using inductive
+  clustering. Based on the KJ Method (Jiro Kawakita) and Contextual
+  Design (Holtzblatt & Beyer). v7.0: Interleaved Handlebars/AI —
+  mechanical content rendered by template, LLM writes bounded
+  analytical sections. Per ADR 0005/0016.
 
 author: Qori R&D
 created: 2025-06-27
-last_updated: 2026-05-05
+last_updated: 2026-05-20
 
 # ═══════════════════════════════════════════════════════════
 # CONFIGURATION
@@ -25,13 +27,12 @@ input_processing: auto_file_discovery
 # INPUTS
 # ═══════════════════════════════════════════════════════════
 input_variables:
-  - selected_study              # Study name from synthesis modal dropdown
-  - include_research_plan       # Boolean from checkbox (OPTIONAL)
-  - include_participant_notes   # Boolean from checkbox (OPTIONAL)
-  - include_raw_transcripts     # Boolean from checkbox (OPTIONAL)
-  - discovered_files            # Files found by auto-discovery (GENERATED)
-  - combined_file_content       # Auto-combined content from selected files (GENERATED)
-  - quality_assessment          # Initial quality score (GENERATED)
+  - selected_study
+  - include_research_plan
+  - include_participant_notes
+  - include_raw_transcripts
+  - discovered_files
+  - combined_file_content
 
 # ═══════════════════════════════════════════════════════════
 # CASCADE CONTRACT
@@ -89,13 +90,25 @@ emits:
     extract_from: "ALL patterns that emerged outside of target_barriers — extract EVERY unexpected pattern as a separate array item"
 
 # ═══════════════════════════════════════════════════════════
-# AI GENERATION
+# AI GENERATION — focused, bounded tasks
 # ═══════════════════════════════════════════════════════════
 ai_generation_tasks:
-  - task_id: "affinity_complete"
+
+  # Main analytical body — At a Glance + per-theme sections + What's Working
+  # + cross-theme connections + recommended actions.
+  # Kept as one task to preserve theme numbering, nugget ID references,
+  # and barrier validation marker consistency across sections.
+  #
+  # Recommendations kept in synthesis (deviation from discovery template treatment).
+  # Rationale: synthesis recommendations are evidence-grounded (cite specific nuggets)
+  # and feed into audience-specific readout templates. Discovery recommendations were
+  # LLM-extrapolated beyond source content (literature, surveys) and were removed.
+  # Rule for future templates: keep recommendations only when grounded in concrete
+  # source evidence within the document. Remove when LLM-extrapolating beyond source.
+  - task_id: "analysis_body"
     prompt: |
       ============================================================
-      CRITICAL RULES - READ BEFORE ANYTHING ELSE
+      CRITICAL RULES
       ============================================================
 
       RULE 1: NO HALLUCINATION - EXTRACT ONLY
@@ -106,149 +119,101 @@ ai_generation_tasks:
 
       RULE 2: INDUCTIVE CLUSTERING (KJ Method)
       Themes EMERGE from data — you do NOT impose categories.
-      Process:
-      1. First, extract individual data points (quotes, observations, pain points)
-      2. Then, look for natural groupings based on similarity
-      3. Finally, name the clusters using PARTICIPANT LANGUAGE
+      1. Extract individual data points (quotes, observations, pain points)
+      2. Look for natural groupings based on similarity
+      3. Name clusters using PARTICIPANT LANGUAGE
 
-      RULE 3: VA GOVERNMENT CONTEXT ONLY
-      These are Veterans using VA services.
-      - Pain points relate to: app usability, navigation, accessibility, claims, healthcare
-      - NEVER mention unrelated concepts
+      RULE 3: CITE EVERYTHING
+      Every quote MUST have Participant ID (PT-001, PT-002) and timestamp if available.
 
-      RULE 4: CITE EVERYTHING
-      Every quote MUST have:
-      - Participant ID (PT-001, PT-002, etc.)
-      - Timestamp if available (00:01:56)
-
-      RULE 5: THEMES MUST BE DISTINCT
+      RULE 4: THEMES MUST BE DISTINCT
       If two themes sound similar, combine them into ONE.
-      - "Button visibility issues" and "Hidden edit button" = ONE theme
-      - "Navigation challenges" and "Getting lost in benefits" = ONE theme
 
-      RULE 6: SPECIFIC THEME NAMES
-      Theme names should be specific to THIS data, not generic UX jargon.
-
+      RULE 5: SPECIFIC THEME NAMES
       ❌ GENERIC: "Navigation Challenges"
-      ❌ GENERIC: "Enhance User Experience"
       ✅ SPECIFIC: "Unlabeled Buttons Block Screen Reader Navigation"
-      ✅ SPECIFIC: "Claim Status Shows 'None' Despite Active Filing"
 
       {% if upstream_atomic_nugget_core %}
       ============================================================
       CASCADE-AWARE GENERATION
       ============================================================
 
-      You have access to upstream nugget pool (atomic_nugget_core + atomic_nugget_detail)
-      and target context (target_barriers, research_questions). Your job is to:
+      You have upstream nugget pool and target context. Your job:
 
-      1. **Cluster nuggets into themes by semantic pattern.** Use nugget_type, severity,
-         observed_behavior, and inferred_meaning to group. Do NOT cluster by participant —
-         themes should cross participants.
+      1. **Cluster nuggets into themes by semantic pattern.** Use nugget_type,
+         severity, observed_behavior, inferred_meaning. Do NOT cluster by
+         participant — themes should cross participants.
 
-      2. **Cite supporting nuggets by ID.** Each theme's evidence section must reference
-         specific nugget IDs (e.g., nugget-PT001-003, nugget-PT002-007). The supporting_nuggets
-         array in the theme variable must list ALL contributing nugget IDs.
+      2. **Cite supporting nuggets by ID.** Reference nugget IDs (e.g.,
+         nugget-PT001-003) in evidence tables.
 
-      3. **Include representative verbatim quotes.** Pull the strongest verbatim_quote from
-         supporting nuggets and surface it in the theme. Attribute correctly with participant ID.
+      3. **Include representative verbatim quotes.** Pull the strongest
+         verbatim_quote from supporting nuggets. Attribute with PT ID.
 
       4. **Mark theme-barrier relationships.**
-         - When a theme validates a target_barrier from the brief, mark it inline with [validates TB-001] etc.
-         - When a theme refutes a target_barrier, mark with [refutes TB-001]
-         - When a theme is unexpected (no upstream barrier), mark with [unexpected]
+         - [validates TB-001] when theme confirms a target_barrier
+         - [refutes TB-001] when theme contradicts
+         - [unexpected] when no upstream barrier matches
 
-      5. **Address research questions explicitly.** When a theme addresses a research_question
-         from the brief, mark it inline with [addresses RQ-001] etc.
+      5. **Address research questions.** [addresses RQ-001] when relevant.
 
-      6. **Cross-cutting dimensions.** Surface when a theme correlates with specific demographics
-         or contexts (AT users, age 65+, iOS users, first-time vs experienced users). Include in
-         cross_cutting_dimensions field.
+      6. **Cross-cutting dimensions.** Surface correlations with demographics
+         (AT users, age 65+, iOS users, etc.).
 
       7. **Confidence calibration:**
-         - Strong: ≥3 participants, consistent severity, multiple verbatim quotes
-         - Moderate: 2 participants OR mixed severity OR limited verbatim evidence
-         - Limited: 1 participant OR weak evidence chain
+         - Strong: ≥3 participants, consistent severity, multiple quotes
+         - Moderate: 2 participants OR mixed severity
+         - Limited: 1 participant OR weak evidence
 
-      8. **Use ONLY observations from upstream nuggets.** Do not infer beyond what nuggets
-         contain. If a pattern requires evidence not present in the nugget pool, do not
-         include it as a theme.
+      8. **Use ONLY observations from upstream nuggets.** Do not infer beyond
+         what nuggets contain.
 
-      ATOMIC NUGGETS — CORE (typed observations from session summaries):
+      ATOMIC NUGGETS — CORE:
       {{upstream_atomic_nugget_core}}
 
-      ATOMIC NUGGETS — DETAIL (verbatim quotes, behaviors, emotional context):
+      ATOMIC NUGGETS — DETAIL:
       {{upstream_atomic_nugget_detail}}
 
       {% if upstream_target_barriers %}
-      TARGET BARRIERS (from research brief — validate these against themes):
+      TARGET BARRIERS:
       {{upstream_target_barriers}}
       {% endif %}
 
       {% if upstream_research_questions %}
-      RESEARCH QUESTIONS (from research brief — address through themes):
+      RESEARCH QUESTIONS:
       {{upstream_research_questions}}
       {% endif %}
 
       {% if upstream_participant_metadata %}
-      PARTICIPANT METADATA (demographics for cross-cutting analysis):
+      PARTICIPANT METADATA:
       {{upstream_participant_metadata}}
       {% endif %}
 
       {% endif %}
 
       ============================================================
-      YOUR TASK
+      INPUT DATA
       ============================================================
 
-      Perform affinity mapping on this research data:
-
       **Study:** {{selected_study}}
-      **Focus Area:** {{focus_area}}
       **Input Data:** {{combined_file_content}}
 
       ============================================================
-      OUTPUT FORMAT - FOLLOW EXACTLY
+      GENERATE THESE SECTIONS
       ============================================================
 
-      # Affinity Map
-
-      **Study:** {{selected_study}} &nbsp; | &nbsp; **Researcher:** {{researcher_contact}} &nbsp; | &nbsp; **Date:** {{current_date}}
-
-      ---
-
-      > **[X] themes** from **[Y] participants** | **[Z] evidence items**
-
-      ---
-
-      {% if upstream_atomic_nugget_core %}
-      ## Cascade Summary
-
-      This affinity analysis synthesizes nuggets from upstream session summaries.
-
-      | Source data | Count |
-      |-------------|-------|
-      | Sessions analyzed | [n] |
-      | Nugget pool size | [n] |
-      | Participants represented | [n] |
-      | Target barriers under validation | [n or 0 if none] |
-      | Research questions addressed | [n or 0 if none] |
-
-      ---
-
-      {% endif %}
+      Output ALL sections below. Use ## headings. Do not stop early.
 
       ## At a Glance
 
       | Theme | Evidence | Participants | Severity | Cascade |
       |:------|:---------|:-------------|:---------|:--------|
-      | [Specific theme name] | X items | PT-00X, PT-00X | 🔴 Critical | [validates TB-001] |
-      | [Specific theme name] | X items | PT-00X, PT-00X | 🟡 High | [addresses RQ-002] |
-      | [Specific theme name] | X items | PT-00X, PT-00X | 🟢 Medium | [unexpected] |
+      | [Specific name] | X items | PT-00X, PT-00X | [severity] | [validates TB-001] |
+      [continue for each theme]
 
       ---
 
-      ## Theme 01: [Specific Theme Name from Participant Language] [validates TB-001] [addresses RQ-001]
+      ## Theme 01: [Specific Name] [validates TB-001] [addresses RQ-001]
 
       **The Pattern:** [One sentence describing what connects these data points]
 
@@ -256,14 +221,13 @@ ai_generation_tasks:
 
       | Type | Evidence | Source |
       |:----:|----------|--------|
-      | 💬 | "[Verbatim quote from data]" | PT-00X via nugget-PT00X-003 |
-      | 💬 | "[Verbatim quote from data]" | PT-00X via nugget-PT00X-007 |
-      | 🔴 | [Pain point description] | PT-00X via nugget-PT00X-011 |
+      | 💬 | "[Verbatim quote]" | PT-00X via nugget-PT00X-003 |
+      | 🔴 | [Pain point] | PT-00X via nugget-PT00X-011 |
       | 👁️ | [Observed behavior] | PT-00X via nugget-PT00X-015 |
 
       **Coverage** — X of Y participants observed (PT-001, PT-002, PT-003)
 
-      **Confidence** — Strong (consistent severity 3-4 across participants, multiple verbatim quotes)
+      **Confidence** — Strong/Moderate/Limited ([reasoning])
 
       ### Implication
 
@@ -273,30 +237,21 @@ ai_generation_tasks:
 
       ---
 
-      ## Theme 02: [Specific Theme Name]
-
-      [Same format as Theme 01]
-
-      ---
-
       [REPEAT FOR EACH THEME - typically 3-7 themes]
 
       ---
 
       ## What's Working
 
-      Positive findings from the research:
-
       | What Works | Evidence | Source |
       |------------|----------|--------|
-      | [Positive finding] | "[Quote or observation]" | PT-00X |
-      | [Positive finding] | "[Quote or observation]" | PT-00X |
+      | [Positive finding] | "[Quote]" | PT-00X |
 
       ---
 
       ## Cross-Theme Connections
 
-      [How themes relate to each other — are they symptoms of the same root cause?]
+      [How themes relate — are they symptoms of the same root cause?]
 
       ---
 
@@ -304,157 +259,101 @@ ai_generation_tasks:
 
       | Priority | Action | Addresses Theme | Effort |
       |:--------:|--------|-----------------|:------:|
-      | 1 | [Specific action] | Theme 01 | 🔵⚪⚪ |
-      | 2 | [Specific action] | Theme 02 | 🔵🔵⚪ |
-      | 3 | [Specific action] | Theme 01, 03 | 🔵🔵⚪ |
+      | 1 | [Specific action] | Theme 01 | Low/Med/High |
 
-      ---
-
-      ## Methodology
-
-      **Framework:** Affinity Diagramming / KJ Method
-
-      **Approach:** Inductive clustering — themes emerged from natural patterns in the data rather than predetermined categories. Individual data points were extracted first, then grouped by similarity, then named using participant language.
-
-      **Data Sources:** [List ALL participant IDs]
-
-      **Evidence Utilization:** [X]% of extracted data points used in themes
-
-      ---
-
-      {% if upstream_atomic_nugget_core %}
-      ## Upstream Context
-
-      This affinity analysis was synthesized from:
-
-      | Source | Used for |
-      |--------|----------|
-      | session_summary outputs | Nuggets across participants |
-      {% if upstream_target_barriers %}| research_brief | Target barriers, research questions |{% endif %}
-
-      Citation markers throughout:
-      - [validates TB-XXX] / [refutes TB-XXX] = theme relationship to target barriers
-      - [addresses RQ-XXX] = theme addresses research question
-      - [unexpected] = theme not anticipated by upstream barriers
-      - nugget-PT00X-XXX = source nugget reference
-
-      ---
-
-      {% endif %}
-
-      ### References
-
-      This analysis follows established qualitative research methods:
-
-      - **KJ Method** (Affinity Diagramming) — Jiro Kawakita, 1960s
-      - **Contextual Design** — Karen Holtzblatt & Hugh Beyer
-      - **Inductive Thematic Analysis** — Braun & Clarke, 2006
-
-      ============================================================
-      QUALITY REQUIREMENTS (INTERNAL - DO NOT OUTPUT)
-      ============================================================
-
-      Before submitting, verify:
-      - [ ] Every quote is VERBATIM from source data
-      - [ ] Every participant ID exists in source
-      - [ ] Theme names are specific to THIS study (not generic)
-      - [ ] Themes are distinct (no overlap)
-      - [ ] At least 70% of evidence used in themes
-      - [ ] Each theme has 4+ evidence items
-      - [ ] Multiple participants cited across themes
-      - [ ] Timestamps included where available
-      {% if upstream_atomic_nugget_core %}
-      - [ ] Nugget IDs referenced in evidence tables match actual upstream IDs
-      - [ ] Each theme has supporting_nuggets array populated
-      - [ ] Cascade markers ([validates TB-XXX], [addresses RQ-XXX], [unexpected]) present
-      - [ ] Cascade Summary table has accurate counts
-      - [ ] Upstream Context appendix present
-      {% endif %}
-
-      Do NOT output a footer or "Generated by Qori" line — that is added automatically.
+      OUTPUT BOUNDARIES: Do not generate the document title, masthead,
+      methodology section, references, upstream context section, or any
+      footer. The template handles those sections.
+      USE ## headings for each section (## At a Glance, ## Theme 01, etc.).
 
 # ═══════════════════════════════════════════════════════════
-# OUTPUT
+# OUTPUT — interleaved Handlebars + AI prose
 # ═══════════════════════════════════════════════════════════
 output_template: |
-  {{ai_generated.affinity_complete}}
+  # Affinity Map
+
+  **Study:** {{selected_study}} &nbsp; | &nbsp; **Researcher:** {{researcher_contact}} &nbsp; | &nbsp; **Date:** {{current_date}}
+
+  ---
+
+  {{ai_generated.analysis_body}}
+
+  ---
+
+  <details>
+  <summary><strong>Methodology</strong></summary>
+
+  **Framework:** Affinity Diagramming / KJ Method
+
+  **Approach:** Inductive clustering — themes emerged from natural patterns in the data rather than predetermined categories. Individual data points were extracted first, then grouped by similarity, then named using participant language.
+
+  ### References
+
+  - **KJ Method** (Affinity Diagramming) — Jiro Kawakita, 1960s
+  - **Contextual Design** — Karen Holtzblatt & Hugh Beyer
+  - **Inductive Thematic Analysis** — Braun & Clarke, 2006
+
+  </details>
+
+  {{#if upstream_atomic_nugget_core}}
+  <details>
+  <summary><strong>Upstream context</strong></summary>
+
+  This affinity analysis was synthesized from:
+
+  | Source | Used for |
+  |--------|----------|
+  | session_summary outputs | Nuggets across participants |
+  {{#if upstream_target_barriers}}| research_brief | Target barriers, research questions |{{/if}}
+
+  Citation markers throughout:
+  - [validates TB-XXX] / [refutes TB-XXX] = theme relationship to target barriers
+  - [addresses RQ-XXX] = theme addresses research question
+  - [unexpected] = theme not anticipated by upstream barriers
+  - nugget-PT00X-XXX = source nugget reference
+
+  </details>
+  {{/if}}
+
+  ---
+
+  ---
+
+  ## Cascade summary
+
+  This affinity analysis emits variables for downstream templates.
+
+  | Variable | Description |
+  |----------|-------------|
+  | validated_themes | Cross-participant themes with evidence, confidence, and barrier validation |
+  | unexpected_patterns | Patterns not anticipated by upstream target barriers |
+
+  **Consumed from upstream:**
+
+  | Variable | Source | Role |
+  |----------|--------|------|
+  | atomic_nugget_core | session_summary | Primary input for clustering |
+  | atomic_nugget_detail | session_summary | Verbatim quotes, behaviors, context |
+  | target_barriers | research_brief | Barrier validation grounding |
+  | research_questions | research_brief | Research question addressing |
 
 output_options:
   path: "04-analysis/affinity-mapping/"
   filename: "{{selected_study}}-affinity-map-{{current_date_iso}}.md"
 
 # ═══════════════════════════════════════════════════════════
-# METADATA (documentation only — not read by backend)
+# METADATA
 # ═══════════════════════════════════════════════════════════
-processing_workflow:
-  1. validate_slack_modal_inputs
-  2. discover_files_from_study_selection
-  3. combine_selected_files_with_truncation
-  4. execute_affinity_complete
-  5. format_output
-  6. save_to_analysis_folder
-
-auto_variables:
-  - max_themes: extract_theme_count(ai_generated.affinity_complete) || 4
-  - current_date: new Date().toISOString().split('T')[0]
-  - analysis_version: generate_version_number() || "v1.0"
-
-notify:
-  - role: team
-    action: "Affinity mapping completed"
-    channel: "{{study_channel}}"
-    message: "Affinity mapping for {{selected_study}} complete. {{max_themes}} themes identified."
-
-quality_assurance:
-  require_verbatim_quotes: true
-  require_citations: true
-  require_specific_themes: true
-  prohibit_generic_names: true
-  require_inductive_process: true
-
 notes: |
-  v4.0 Changes (Cascade-Aware Retrofit):
-  - Consumes: atomic_nugget_core + atomic_nugget_detail (both required), target_barriers,
-    research_questions, participant_metadata (all optional)
-  - Emits: validated_themes (deepened schema, 17 fields, Sonnet extraction),
-    unexpected_patterns (new schema file, Sonnet extraction)
-  - Prompt: cascade-aware generation instructions (nugget clustering, barrier validation,
-    research question addressing, cross-cutting dimensions, confidence calibration)
-  - Output: Cascade Summary table, nugget ID references in evidence tables,
-    [validates TB-XXX]/[addresses RQ-XXX]/[unexpected] markers, Upstream Context appendix
-  - Theme numbering: zero-padded (Theme 01, Theme 02) for editorial consistency
-  - At a Glance table: added Cascade column for barrier/question markers
+  v7.0: Interleaved Handlebars/AI architecture (ADR 0005/0016 pattern).
+  - Monolithic affinity_complete task replaced by analysis_body task.
+  - Handlebars renders: masthead, methodology (toggle), references (toggle),
+    upstream context (toggle), cascade summary (always present).
+  - Recommendations kept (deviation from discovery template treatment —
+    see comment on analysis_body task for rationale).
+  - OUTPUT BOUNDARIES with ## heading instruction added.
+  - Dead variable focus_area removed from prompt.
+  - Cascade summary always renders (was conditional).
 
-  v3.2 Changes (Design Language Translation):
-  - Applied locked design from docs/design-references/affinity-map-reference.md
-  - H1: removed emoji, clean text "# Affinity Map"
-  - Added masthead line (Study/Researcher/Date) below H1
-  - Removed ✅ emoji from "What's Working" heading
-  - Removed 🚨 emoji from CRITICAL RULES header
-  - Removed footer from prompt (backend buildTraceabilityFooter handles it)
-  - Filename: ISO date + hyphens ({{selected_study}}-affinity-map-{{current_date_iso}}.md)
-  - Core prompt structure unchanged (6 rules, evidence tables, implication/design opportunity)
-
-  v3.1 Changes (Standards Polish):
-  - Applied canonical key ordering (IDENTITY → CONFIGURATION → INPUTS → AI GENERATION → OUTPUT → METADATA)
-  - Removed dead config: llm_config, system_limits, privacy_controls, study_metadata, auto_file_discovery
-  - Removed github_file_template (referenced variables never provided by handler)
-  - Updated prompt: summary blockquote uses metrics only (no date), removed decorative emoji from Cross-Theme Connections heading
-  - Standardized participant ID format to PT-001 (hyphenated)
-  - Changed filename from {{study_folder}} to {{selected_study}} (matches actual variable)
-  - Added inline comments on input_variables
-
-  v3.0 Changes (Complete Redesign):
-  - Consolidated 6 AI tasks into 1 comprehensive task
-  - New output structure: At a Glance summary table, evidence tables per theme,
-    What's Working section, cross-theme connections, methodology with references
-  - Theme names must be SPECIFIC (not generic UX jargon)
-  - Internal validation checklist (not shown in output)
-
-  v2.1: Original 6-task architecture
-
-output_use: |
-  Perform affinity mapping using the KJ Method and Contextual Design principles.
-  Themes emerge inductively from data patterns. Each theme includes verbatim
-  quotes, pain points, and observed behaviors with full citations. Output
-  includes expert methodology references for credibility.
+  v4.0: Cascade-aware retrofit (superseded by v7.0).
+  v3.0-v3.2: Design language, standards polish.
