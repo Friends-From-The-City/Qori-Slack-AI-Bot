@@ -4,17 +4,18 @@
 id: accessibility_readout
 name: run_accessibility_readout
 label: "♿ Accessibility Readout"
-version: "v1.1"
+version: "v7.0"
 
 description: |
   Translate research findings into accessibility compliance and AT user experience
   work. Produces audience-specific markdown summary + accessibility_ticket_candidates
-  variable for GitHub Issues integration. Consumes from research_readout v6.0 and
-  session_summary nuggets. Pentagram design language.
+  variable for GitHub Issues integration. v7.0: Interleaved Handlebars/AI —
+  mechanical content rendered by template, LLM writes bounded analytical sections.
+  Per ADR 0005/0016.
 
 author: Qori R&D
 created: 2026-05-07
-last_updated: 2026-05-07
+last_updated: 2026-05-20
 
 # ═══════════════════════════════════════════════════════════
 # CONFIGURATION
@@ -81,26 +82,53 @@ emits:
     extract_from: "ALL ticket candidate sections — extract EVERY ticket as a separate array item"
 
 # ═══════════════════════════════════════════════════════════
-# AI GENERATION
+# AI GENERATION — focused, bounded tasks
 # ═══════════════════════════════════════════════════════════
 ai_generation_tasks:
-  - task_id: "accessibility_readout_complete"
+
+  # Main analytical body — summary, accessibility findings, AT user populations,
+  # WCAG/Section 508 table, ticket candidates, AT testing matrix.
+  # Kept as one task to preserve cross-referencing: finding numbering ↔
+  # WCAG mapping ↔ ticket criterion references ↔ AT testing matrix ↔
+  # AT user populations.
+  #
+  # Ticket body quality: 18-field schema with 7 compliance/AT-specific fields.
+  # Appropriately specialized — no alignment to designer/engineering needed.
+  # P0_legal/P0_severe priority distinction is domain-specific.
+  - task_id: "analysis_body"
     prompt: |
       You are creating an accessibility-focused readout that translates research
       findings into compliance and AT user experience work. Audience: accessibility
       team, Section 508 coordinators.
 
-      IMPORTANT: Generate the COMPLETE document. Do not stop early. Every
-      section listed in the output format below is REQUIRED.
+      ============================================================
+      CRITICAL RULES
+      ============================================================
+
+      RULE 1: FILTER FOR AT IMPACT. Not all findings need accessibility tickets.
+      Surface findings that affect AT users, violate WCAG, or have Section 508
+      compliance implications.
+
+      RULE 2: WCAG CRITERION SPECIFICITY. When mapping a finding to WCAG, use
+      the specific criterion (e.g., "2.4.3 Focus Order"). If you cannot
+      confidently identify which criterion applies, leave wcag_criterion null.
+
+      RULE 3: PRIORITY DISTINCTION. P0_legal: compliance violations with legal
+      deadlines or active complaints. P0_severe: blocking AT users from core
+      tasks but no active legal pressure. Both urgent, different reasons.
+
+      RULE 4: ANTI-FABRICATION. Don't invent WCAG criteria, ATs not in upstream
+      evidence, or Section 508 deadlines not in upstream data. Better to mark
+      fields null than fabricate.
+
+      RULE 5: PRIVACY. PT-XXX codes only. AT users may be more identifiable
+      from their assistive technology setup — extra care with identifying details.
+
+      RULE 6: NO RAW JSON. Format all upstream data as readable text.
 
       ============================================================
       UPSTREAM DATA (from research readout + session summaries)
       ============================================================
-
-      NOTE: The data below may be in JSON format. This is the raw variable
-      store format. When you reference this data in the output, extract the
-      human-readable content and format as clean markdown. NEVER copy JSON
-      syntax into the output.
 
       PRIORITIZED FINDINGS:
       {{upstream_prioritized_findings}}
@@ -126,45 +154,22 @@ ai_generation_tasks:
       {% endif %}
 
       ============================================================
-      CASCADE-AWARE ACCESSIBILITY READOUT GENERATION
+      CASCADE-AWARE GENERATION
       ============================================================
 
-      1. **Filter findings for AT impact.** Not all findings need accessibility tickets.
-         Surface findings that affect AT users, violate WCAG, or have Section 508
-         compliance implications.
+      1. **Verbatim AT user quotes are evidence.** Pull from nugget_detail
+         where nugget_type = accessibility_issue. These quotes prove impact
+         in compliance language.
 
-      2. **Verbatim AT user quotes are evidence.** Pull from atomic_nugget_detail where
-         nugget_type = accessibility_issue. These quotes prove the impact in compliance
-         language.
+      2. **Personas with AT context.** Reference explicitly in affected_personas.
+         Describe AT setup details relevant to the ticket.
 
-      3. **WCAG criterion specificity.** When mapping a finding to WCAG, use the specific
-         criterion (e.g., "2.4.3 Focus Order"). If you cannot confidently identify which
-         criterion applies, leave wcag_criterion null rather than guessing.
-
-      4. **Priority distinguishes legal from severe.** P0_legal: compliance violations with
-         legal deadlines or active complaints. P0_severe: blocking AT users from completing
-         core tasks but no active legal pressure. Both are urgent but for different reasons.
-
-      5. **Personas with assistive_technology context.** Reference these explicitly in
-         affected_personas. Describe AT setup details relevant to the ticket.
-
-      6. **Anti-fabrication.** Don't invent WCAG criteria, ATs not in upstream evidence, or
-         Section 508 deadlines not in upstream data. Better to mark fields null than fabricate.
-
-      9. **Populate production fields per ticket:**
-         - regression_risk: Could fixing this break something else for AT users? If the fix
-           involves focus management or navigation changes, note potential regressions.
-           If no risk identified, write null.
-         - compliance_priority_rationale: One sentence explaining why this priority level
-           (e.g., "P0_severe because screen reader users cannot complete core tasks"
-           or "P1 because visual degradation doesn't block task completion").
-         - related_engineering_tickets: Leave as empty array [] for now (cross-template
-           linking is a future enhancement).
-
-      7. **Privacy preserved.** PT-XXX codes only. AT users may be more identifiable from
-         their assistive technology setup — extra care with identifying details.
-
-      8. **No raw JSON in output.** Format all upstream data as readable text.
+      3. **Populate production fields per ticket:**
+         - regression_risk: Could fixing this break something for AT users?
+           If focus management or navigation changes, note potential regressions.
+           If no risk, write "None identified."
+         - compliance_priority_rationale: One sentence explaining priority level.
+         - related_engineering_tickets: — None at this time
 
       ============================================================
       INPUT
@@ -174,40 +179,19 @@ ai_generation_tasks:
       **Researcher:** {{researcher_contact}}
 
       ============================================================
-      OUTPUT FORMAT — FOLLOW EXACTLY
+      GENERATE THESE SECTIONS
       ============================================================
 
-      # Accessibility Readout: {{study_name}}
-
-      **Study:** {{selected_study}} &nbsp; | &nbsp; **Audience:** Accessibility &nbsp; | &nbsp; **Date:** {{current_date}} &nbsp; | &nbsp; **Status:** Draft
-
-      ---
-
-      ## Cascade summary
-
-      | Source | Count |
-      |--------|-------|
-      | Findings from research readout | [count] |
-      | Findings with accessibility impact | [count — filtered subset] |
-      | Accessibility nuggets available | [count of nugget_type=accessibility_issue, or "Not available"] |
-      | Personas with AT context | [count or "Not available"] |
-      | Accessibility-flagged barriers | [count or "Not available"] |
-
-      ---
+      Output ALL sections below. Use ## headings. Do not stop early.
 
       ## Summary
 
-      [2-3 sentences: what this readout covers for the accessibility team. Frame in
-      terms of compliance gaps, AT user barriers, and WCAG implications. State how
-      many tickets are proposed and the legal/severe priority split.]
+      [2-3 sentences: what this readout covers for the accessibility team.
+      Frame in terms of compliance gaps, AT user barriers, and WCAG implications.
+      State how many findings have accessibility impact out of total findings.
+      State ticket count and legal/severe priority split.]
 
       ---
-
-      ## Accessibility findings
-
-      [For each finding with AT impact, translate into an accessibility challenge.
-      Each challenge gets editorial numbering (## 01, ## 02, etc.).
-      Skip findings that have no accessibility implications.]
 
       ## 01 &nbsp;&nbsp; [Accessibility challenge — what barrier AT users face]
 
@@ -216,58 +200,48 @@ ai_generation_tasks:
       **WCAG implication** — [Specific WCAG 2.2 criterion if identifiable, otherwise
       describe the accessibility principle violated]
 
-      **AT users affected** — [Which assistive technologies: screen reader, voice control,
-      large text, switch navigation, etc.]
+      **AT users affected** — [Which assistive technologies]
 
       **Persona impact** — [Which personas with AT context are affected]
 
       **Verbatim evidence:**
 
-      > [AT user quote from nugget_detail that documents this barrier]
+      > [AT user quote documenting this barrier]
       > — PT-XXX
-
-      [If additional AT user quotes exist for this finding, include them here.
-       Each quote on its own blockquote line with PT-XXX attribution.]
 
       ---
 
-      [Continue for each accessibility finding.]
+      [Continue for each accessibility finding. Skip findings with no AT impact.]
 
       ---
 
       ## Affected AT user populations
 
-      [From personas with AT context, describe the AT user populations affected
-      by these findings. Include AT setup details, usage patterns, and impact severity.]
-
       | Persona | AT setup | Primary barriers | Impact severity |
       |---------|----------|-----------------|:---------------:|
-      | [persona ID] | [AT: VoiceOver, large text, etc.] | [barriers in this study] | [Critical/High/Medium] |
+      | [persona ID] | [AT: VoiceOver, large text, etc.] | [barriers] | [Critical/High/Medium] |
 
       ---
 
       ## WCAG / Section 508 compliance implications
 
-      [Map findings to specific WCAG criteria and Section 508 requirements.
-      Only include mappings you are confident about — leave unmapped rather than guess.]
-
       | Finding | WCAG criterion | Principle | Level | Status |
       |---------|---------------|-----------|:-----:|--------|
       | [finding-XX] | [X.X.X Criterion Name] | [Perceivable/Operable/Understandable/Robust] | [A/AA/AAA] | [Violation/At risk] |
-      | [finding-XX] | Not mapped | — | — | [Describe the accessibility principle] |
+      | [finding-XX] | Not mapped | — | — | [Describe principle] |
 
       ---
 
       ## Ticket candidates
 
-      [Generate accessibility-scoped tickets. Priority uses P0_legal/P0_severe distinction.
-      Each ticket must reference WCAG criteria where identifiable.]
+      One ticket per finding with accessibility impact. Merge findings
+      mapping to the same WCAG criterion into a single ticket.
 
       ### a11y-ticket-001 &nbsp;·&nbsp; [P0_legal/P0_severe/P1/P2/P3] &nbsp;·&nbsp; [High/Medium/Low] effort
 
       **[Ticket title — compliance-focused, actionable]**
 
-      [Description: accessibility issue and required compliance action, in 2-3 sentences]
+      [Description: accessibility issue and required compliance action]
 
       **Addresses findings** — [finding-XX]
 
@@ -279,24 +253,19 @@ ai_generation_tasks:
 
       **Affected personas** — [persona IDs with AT context]
 
-      **Evidence nuggets** — [nugget-PT-XXX-XXX IDs documenting this issue]
+      **Evidence nuggets** — [nugget-PT-XXX-XXX IDs]
 
       **Recommended testing:**
       - [Specific AT setup: "VoiceOver on iOS 17+ with default settings"]
-      - [Another test: "NVDA on Windows with Chrome"]
       - [Automated: "axe-core accessibility audit"]
 
-      **Priority rationale** — [One sentence: why this priority level. E.g., "P0_severe
-      because screen reader users cannot complete core tasks without this fix."]
+      **Priority rationale** — [One sentence: why this priority level]
 
-      **Regression risk** — [Could fixing this break something else for AT users?
-      If yes, describe. If no risk identified, write "None identified."]
+      **Regression risk** — [Could fixing this break something for AT users?
+      If yes, describe. If no risk, "None identified."]
 
       **Dependencies:**
-      - Related engineering work: [Leave empty for now]
-
-      [If a compliance deadline exists in upstream data, include:
-       **Compliance deadline** — [date/context from upstream]]
+      - Related engineering work: — None at this time
 
       ---
 
@@ -306,99 +275,107 @@ ai_generation_tasks:
 
       ## Recommended AT testing matrix
 
-      [Based on the AT user types affected by findings, recommend a testing matrix
-      for validating all tickets.]
-
       | AT type | Platform | Tool/setup | Tickets to validate |
       |---------|----------|-----------|-------------------|
       | Screen reader | iOS | VoiceOver | [ticket IDs] |
-      | Screen reader | Windows | NVDA | [ticket IDs] |
       | Large text | iOS/Android | 180%+ text scaling | [ticket IDs] |
-      | [Other AT from evidence] | [Platform] | [Setup] | [ticket IDs] |
 
-      ---
-
-      ## Methodology
-
-      **Framework** — Research-to-accessibility-compliance translation
-
-      **Approach** — Filtered [X] research findings for accessibility impact, mapped
-      to WCAG 2.2 criteria where identifiable, and translated into compliance-scoped
-      tickets with AT user evidence from session observations.
-
-      **Upstream chain** — Session summaries (AT nuggets) → Research readout → Accessibility readout → Ticket candidates
-
-      ### References
-
-      - W3C — Web Content Accessibility Guidelines (WCAG) 2.2
-      - W3C — ARIA Authoring Practices Guide (APG)
-      - Section 508 Standards — U.S. Access Board
-      - Nielsen Norman Group — Accessibility usability testing methodology
-
-      ---
-
-      ## Appendix
-
-      <details>
-      <summary><strong>Validity checklist</strong></summary>
-
-      | Criterion | Verified |
-      |-----------|:---:|
-      | All findings referenced exist in upstream prioritized_findings | ✓ |
-      | WCAG criteria are accurate where mapped (null where uncertain) | ✓ |
-      | Evidence nuggets reference real nugget IDs from upstream | [✓ if nuggets available, N/A if missing] |
-      | Personas referenced have AT context in upstream | [✓ if personas available, N/A if missing] |
-      | No fabricated WCAG criteria or Section 508 deadlines | ✓ |
-      | Priority uses P0_legal/P0_severe distinction correctly | ✓ |
-      | Privacy preserved — PT-XXX codes only, AT details anonymized | ✓ |
-
-      </details>
-
-      <details>
-      <summary><strong>Upstream context</strong></summary>
-
-      This accessibility readout was generated from:
-
-      | Variable | Source | Status |
-      |----------|--------|--------|
-      | prioritized_findings | research_readout | [Available/Missing] |
-      | atomic_nugget_core | session_summary | [Available/Missing] |
-      | atomic_nugget_detail | session_summary | [Available/Missing] |
-      | personas | persona_generator | [Available/Missing] |
-      | target_barriers | research_brief | [Available/Missing] |
-
-      Citation markers throughout:
-      - finding-XX = research readout finding ID
-      - a11y-ticket-XXX = ticket candidate ID
-      - nugget-PT-XXX-XXX = source nugget ID
-      - persona-XX = persona ID
-      - TB-XXX = target barrier ID
-
-      </details>
-
-      ============================================================
-      QUALITY CHECKS (do not include in output)
-      ============================================================
-
-      Before outputting, verify:
-      - Only findings with accessibility impact included (not all findings)
-      - WCAG criteria are accurate or marked null (never guessed)
-      - Priority uses P0_legal vs P0_severe correctly
-      - Evidence nuggets reference real IDs from upstream
-      - AT user types grounded in upstream evidence
-      - No raw JSON anywhere in output
-      - All tables have consistent column counts
-      - Editorial numbering uses ## 01 &nbsp;&nbsp; format
-      - Ticket IDs use a11y-ticket-XXX format
-      - Privacy: no real names, PT-XXX only, AT details anonymized
-
-      Do NOT output a footer or "Generated by Qori" line — that is added automatically.
+      OUTPUT BOUNDARIES: Do not generate the document title, masthead,
+      methodology section, references, upstream context, appendix,
+      validity checklist, or any footer. The template handles those.
+      USE ## headings for each section (## Summary, ## 01, etc.).
 
 # ═══════════════════════════════════════════════════════════
-# OUTPUT
+# OUTPUT — interleaved Handlebars + AI prose
 # ═══════════════════════════════════════════════════════════
 output_template: |
-  {{ai_generated.accessibility_readout_complete}}
+  # Accessibility Readout: {{selected_study}}
+
+  **Study:** {{selected_study}} &nbsp; | &nbsp; **Audience:** Accessibility &nbsp; | &nbsp; **Researcher:** {{researcher_contact}} &nbsp; | &nbsp; **Date:** {{current_date}}
+
+  ---
+
+  {{ai_generated.analysis_body}}
+
+  ---
+
+  <details>
+  <summary><strong>Methodology</strong></summary>
+
+  **Framework** — Research-to-accessibility-compliance translation
+
+  **Approach** — Research findings filtered for accessibility impact, mapped to WCAG 2.2 criteria where identifiable, and translated into compliance-scoped tickets with AT user evidence from session observations.
+
+  **Upstream chain** — Session summaries (AT nuggets) → Research readout → Accessibility readout → Ticket candidates
+
+  ### References
+
+  - W3C — Web Content Accessibility Guidelines (WCAG) 2.2
+  - W3C — ARIA Authoring Practices Guide (APG)
+  - Section 508 Standards — U.S. Access Board
+  - Nielsen Norman Group — Accessibility usability testing methodology
+
+  </details>
+
+  <details>
+  <summary><strong>Upstream context</strong></summary>
+
+  This accessibility readout was generated from:
+
+  | Variable | Source | Role |
+  |----------|--------|------|
+  | prioritized_findings | research_readout | AT impact filtering |
+  {{#if upstream_atomic_nugget_core}}| atomic_nugget_core | session_summary | Accessibility issue nuggets |
+  {{/if}}{{#if upstream_atomic_nugget_detail}}| atomic_nugget_detail | session_summary | Verbatim AT user quotes |
+  {{/if}}{{#if upstream_personas}}| personas | persona_generator | AT user context |
+  {{/if}}{{#if upstream_target_barriers}}| target_barriers | research_brief | Accessibility-flagged barriers |
+  {{/if}}
+
+  Citation markers throughout:
+  - finding-XX = research readout finding ID
+  - a11y-ticket-XXX = ticket candidate ID
+  - nugget-PT-XXX-XXX = source nugget ID
+  - persona-XX = persona ID
+  - TB-XXX = target barrier ID
+
+  </details>
+
+  <details>
+  <summary><strong>Validity checklist</strong></summary>
+
+  | Criterion | Verified |
+  |-----------|:--------:|
+  | All findings referenced exist in upstream prioritized_findings | |
+  | WCAG criteria are accurate where mapped (null where uncertain) | |
+  | Evidence nuggets reference real nugget IDs from upstream | |
+  | Personas referenced have AT context in upstream | |
+  | No fabricated WCAG criteria or Section 508 deadlines | |
+  | Priority uses P0_legal/P0_severe distinction correctly | |
+  | Privacy preserved — PT-XXX codes only, AT details anonymized | |
+
+  </details>
+
+  ---
+
+  ---
+
+  ## Cascade summary
+
+  This accessibility readout emits variables for downstream templates.
+
+  | Variable | Description |
+  |----------|-------------|
+  | accessibility_ticket_candidates | Compliance-scoped tickets with WCAG mapping, AT testing recommendations, and regression risk assessment |
+
+  **Consumed from upstream:**
+
+  | Variable | Source | Role |
+  |----------|--------|------|
+  | prioritized_findings | research_readout | AT impact filtering |
+  | atomic_nugget_core | session_summary | Accessibility issue nuggets |
+  | atomic_nugget_detail | session_summary | Verbatim AT user quotes |
+  | personas | persona_generator | AT user context |
+  | target_barriers | research_brief | Accessibility-flagged barriers |
 
 output_options:
   path: "05-reports/"
@@ -410,7 +387,7 @@ output_options:
 processing_workflow:
   1. validate_inputs
   2. read_upstream_variables
-  3. execute_accessibility_readout_complete_task
+  3. execute_analysis_body_task
   4. render_output_template
   5. save_to_reports_folder
 
@@ -421,17 +398,22 @@ notify:
     message: "Accessibility readout for {{study_name}} is ready for review."
 
 notes: |
+  v7.0: Interleaved Handlebars/AI architecture (ADR 0005/0016 pattern).
+  - Monolithic accessibility_readout_complete task replaced by analysis_body task.
+  - Handlebars renders: masthead, methodology (toggle), references (toggle),
+    upstream context (toggle), validity checklist (toggle), cascade summary
+    (always present, documents both emits and consumes).
+  - Internal quality checklist removed (redundant with anti-fabrication rules).
+  - Cascade summary changed from LLM-generated count table to standard v7.0
+    emits/consumes format.
+  - Dependency placeholder fixed: "— None at this time".
+  - OUTPUT BOUNDARIES with ## heading instruction added.
+  - Ticket body quality: 18-field schema with 7 compliance/AT-specific fields.
+    Appropriately specialized — no alignment to designer/engineering needed.
+    P0_legal/P0_severe priority distinction is domain-specific.
+
+  v1.1: Production field additions (regression_risk, compliance_priority_rationale).
   v1.0: Initial accessibility readout template.
-  - Single-task architecture (accessibility_readout_complete)
-  - Consumes: prioritized_findings (required, grounding),
-    atomic_nugget_core + detail (optional, reference — filter for accessibility_issue),
-    personas (optional, reference — filter for AT context),
-    target_barriers (optional, context — filter for accessibility-flagged)
-  - Emits: accessibility_ticket_candidates (array of accessibility_ticket_candidate schema)
-  - Priority distinction: P0_legal (compliance violations) vs P0_severe (blocking AT users)
-  - WCAG 2.2 criterion mapping where confidently identifiable, null otherwise
-  - AT testing matrix for validation planning
-  - Validity checklist reflects actual cascade state (N/A when variables missing)
 
 output_use: |
   Translate research findings into accessibility compliance and AT user experience
