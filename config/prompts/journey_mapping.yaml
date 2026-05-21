@@ -191,7 +191,6 @@ ai_generation_tasks:
       ============================================================
 
       **Study:** {{selected_study}}
-      **Focus Area:** {{focus_area}}
       **Research Data:** {{combined_file_content}}
       **Quality Assessment:** {{ai_generated.file_discovery_summary}}
 

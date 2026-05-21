@@ -3,16 +3,20 @@
 # ═══════════════════════════════════════════════════════════
 id: jobs_to_be_done
 name: extract_jobs_to_be_done
-label: 🎯 Jobs to be Done
-version: "v3.5"
+label: "Jobs to be Done"
+version: "v7.0"
 
-description: >
-  Extract research-grounded Jobs-to-be-Done using the industry-standard
-  When/Want/So framework. Jobs focus on PROGRESS, not tasks.
+description: |
+  Extract research-grounded Jobs-to-be-Done using the Christensen
+  When/Want/So framework. Jobs focus on PROGRESS, not tasks. v7.0:
+  Interleaved Handlebars/AI — mechanical content rendered by template,
+  LLM writes bounded analytical sections. Emits validated_jobs for
+  downstream design_opportunity_generator consumption. Replace strategy
+  (study-level, not per-participant pool). Per ADR 0005/0016.
 
 author: Qori R&D
 created: 2025-06-26
-last_updated: 2026-04-29
+last_updated: 2026-05-21
 
 # ═══════════════════════════════════════════════════════════
 # CONFIGURATION
@@ -24,104 +28,180 @@ input_processing: auto_file_discovery
 # INPUTS
 # ═══════════════════════════════════════════════════════════
 input_variables:
-  - selected_study              # Study name from synthesis modal dropdown
-  - include_research_plan       # Boolean from checkbox (OPTIONAL)
-  - include_participant_notes   # Boolean from checkbox (OPTIONAL)
-  - include_raw_transcripts     # Boolean from checkbox (OPTIONAL)
-  - discovered_files            # Files found by auto-discovery (GENERATED)
-  - combined_file_content       # Auto-combined content from selected files (GENERATED)
-  - quality_assessment          # Initial quality score (GENERATED)
+  - selected_study
+  - include_research_plan
+  - include_participant_notes
+  - include_raw_transcripts
+  - discovered_files
+  - combined_file_content
 
 # ═══════════════════════════════════════════════════════════
 # CASCADE CONTRACT
 # ═══════════════════════════════════════════════════════════
 consumes:
-  - key: atomic_nuggets
+  - key: atomic_nugget_core
     source: session_summary
     required: true
-    inject_as: context
-    description: "Atomic observations — primary input for JTBD extraction"
+    inject_as: reference
+    description: "Pool of typed observations — primary input for JTBD extraction"
+
+  - key: atomic_nugget_detail
+    source: session_summary
+    required: true
+    inject_as: reference
+    description: "Rich context for nuggets — verbatim quotes, behaviors, emotional state"
+
   - key: validated_themes
     source: affinity_mapping
     required: false
+    inject_as: reference
+    description: "Cross-participant patterns — jobs may map to themes"
+
+  - key: target_barriers
+    source: research_brief
+    required: false
+    inject_as: grounding
+    description: "Hypothesized barriers — jobs can relate to these"
+
+  - key: research_questions
+    source: research_brief
+    required: false
     inject_as: context
-    description: "Validated themes to anchor job categories"
+    description: "Research questions to address through JTBD analysis"
+
+emits:
+  - key: validated_jobs
+    pool: false
+    pool_strategy: replace
+    extraction_model: sonnet
+    schema:
+      type: array
+      items:
+        $ref: schemas/validated_job.yaml
+    extract_from: "ALL numbered job sections — extract EVERY job as a separate array item with When/Want/So fields split"
 
 # ═══════════════════════════════════════════════════════════
-# AI GENERATION
+# AI GENERATION — focused, bounded task
 # ═══════════════════════════════════════════════════════════
 ai_generation_tasks:
-  - task_id: "jtbd_complete"
+
+  # Single analysis_body task — At a Glance + per-job sections
+  # (When/Want/So, dimensions, workarounds, pain points, design
+  # opportunity) + Priorities table.
+  # Kept as one task for cross-job coherence: priority rankings
+  # reference importance across jobs, connections identify root needs.
+  - task_id: "analysis_body"
     prompt: |
       You are extracting Jobs-to-be-Done from research data.
 
-      IMPORTANT: Generate the COMPLETE output following the format below. Do not stop early.
-
       ============================================================
-      RULES (read these, then generate the full output)
+      CRITICAL RULES
       ============================================================
 
       RULE 1: JOBS ARE PROGRESS, NOT TASKS
-
       A JOB is the PROGRESS someone wants to make in their life.
 
-      ❌ WRONG (tasks):
-      - "Update Profile Information"
-      - "Check Claim Status"
-      - "Find the Edit button"
-
-      ✅ RIGHT (jobs):
-      - "Feel confident the VA can reach me when my benefits status changes"
-      - "Know my claim is being processed without having to call anyone"
+      Bad (tasks): "Update Profile Information", "Check Claim Status"
+      Good (jobs): "Feel confident the VA can reach me when my benefits status changes",
+                   "Know my claim is being processed without having to call anyone"
 
       Test: Can you describe the job WITHOUT mentioning the app? If not, it's a task.
 
-      RULE 2: NO HALLUCINATION
+      RULE 2: NO HALLUCINATION - EXTRACT ONLY
       Every pain point must come from actual research data with citations.
+      Every quote must be VERBATIM from the data.
 
-      RULE 3: VA CONTEXT ONLY
+      RULE 3: VA GOVERNMENT CONTEXT ONLY
       Jobs relate to veterans accessing healthcare, benefits, claims, prescriptions.
 
-      RULE 4: JOBS MUST BE DISTINCT
-      If two jobs sound similar, combine them into one.
+      RULE 4: CITE EVERYTHING
+      Every quote MUST have Participant ID (PT-001, PT-002) and timestamp if available.
 
-      RULE 5: BEFORE SUBMITTING, VERIFY
-      - Job names focus on progress, not tasks
-      - Pain points have citations
-      - Jobs are distinct from each other
+      RULE 5: JOBS MUST BE DISTINCT
+      If two jobs sound similar, combine them into ONE.
+
+      RULE 6: CONFIDENCE ASSESSMENT (required per job)
+      - Strong: 3+ participants, consistent evidence, multiple quotes
+      - Moderate: 2 participants OR mixed evidence
+      - Limited: 1 participant OR weak evidence
+
+      {% if upstream_atomic_nugget_core %}
+      ============================================================
+      CASCADE-AWARE GENERATION
+      ============================================================
+
+      You have upstream nugget pool and analysis context. Your job:
+
+      1. **Extract jobs from behavioral patterns in nuggets.** Focus on
+         nugget_type: pain_point, workaround, behavioral_pattern, mental_model.
+         Jobs emerge from what users ARE TRYING TO ACCOMPLISH, not what
+         the interface does.
+
+      2. **Cite supporting nuggets by ID.** Reference nugget IDs (e.g.,
+         nugget-PT001-003) in pain point tables.
+
+      3. **Include representative verbatim quotes.** Pull the strongest
+         verbatim_quote from supporting nuggets. Attribute with PT ID.
+
+      {% if upstream_target_barriers %}
+      4. **Mark job-barrier relationships.**
+         - [relates to TB-001] when a job's pain points connect to a barrier
+         - [addresses RQ-001] when a job addresses a research question
+
+      TARGET BARRIERS:
+      {{upstream_target_barriers}}
+      {% endif %}
+
+      {% if upstream_research_questions %}
+      RESEARCH QUESTIONS:
+      {{upstream_research_questions}}
+      {% endif %}
+
+      {% if upstream_validated_themes %}
+      5. **Link jobs to themes.** Reference validated_theme IDs (theme-XX)
+         when a job maps to a broader pattern.
+
+      VALIDATED THEMES:
+      {{upstream_validated_themes}}
+      {% endif %}
+
+      ATOMIC NUGGETS — CORE:
+      {{upstream_atomic_nugget_core}}
+
+      ATOMIC NUGGETS — DETAIL:
+      {{upstream_atomic_nugget_detail}}
+
+      {% endif %}
 
       ============================================================
       INPUT DATA
       ============================================================
 
       **Study:** {{selected_study}}
-      **Focus Area:** {{focus_area}}
-      **Research Data:** {{combined_file_content}}
+      **Input Data:** {{combined_file_content}}
 
       ============================================================
-      NOW GENERATE THE COMPLETE OUTPUT BELOW
+      GENERATE THESE SECTIONS
       ============================================================
 
-      # 🎯 Jobs to be Done: {{selected_study}}
-
-      > **[X] jobs** identified from **[Y] participants**
-
-      ---
+      Output ALL sections below. Use ## headings. Do not stop early.
 
       ## At a Glance
 
       | Job | Core Need | When It Arises |
       |-----|-----------|----------------|
       | [Progress-focused name] | [Underlying need] | [Trigger situation] |
-      | [Progress-focused name] | [Underlying need] | [Trigger situation] |
+      [continue for each job]
 
       ---
 
-      ## Job 1: [Progress-Focused Job Name]
+      ## Job 01: [Progress-Focused Job Name]
 
       > **When** [specific situation from research],
       > **I want to** [desired progress — NOT a UI action],
       > **So I can** [life outcome — NOT app outcome].
+
+      **Confidence** — [Strong/Moderate/Limited] ([reasoning])
 
       **What this job is really about:**
 
@@ -131,26 +211,31 @@ ai_generation_tasks:
 
       **What they do today:**
 
-      > "[Quote about current approach]" — PT-001, 00:00:00
+      > "[Quote about current approach]"
+      > — PT-00X, [timestamp]
 
-      Current workarounds: [What they "hire" to do this job now]
+      Current workaround: [What they "hire" to do this job now]
 
       **Why current solutions fail:**
 
       | Pain Point | Evidence |
       |------------|----------|
-      | [Specific issue] | PT-001, 00:00:00 |
-      | [Specific issue] | PT-002, 00:00:00 |
+      | [Specific issue] | PT-00X via nugget-PT00X-003, [timestamp] |
+      | [Specific issue] | PT-00X via nugget-PT00X-011, [timestamp] |
 
-      **Success looks like:** [How user knows the job is done — measurable outcome]
+      **Success looks like:** [How user knows the job is done]
 
-      **Design opportunity:** [Specific, implementable fix that addresses pain points]
+      **Design opportunity:** [Specific, implementable fix]
 
       ---
 
-      ## Job 2: [Progress-Focused Job Name]
+      ## Job 02: [Progress-Focused Job Name]
 
-      [Same format as Job 1 — only include if truly distinct]
+      [Same complete format as Job 01]
+
+      ---
+
+      [REPEAT FOR EACH JOB — typically 3-6 jobs]
 
       ---
 
@@ -158,93 +243,147 @@ ai_generation_tasks:
 
       | # | Opportunity | Addresses Job | Effort |
       |---|-------------|---------------|:------:|
-      | 1 | [Specific fix] | Job 1 | 🔵⚪⚪ |
-      | 2 | [Specific fix] | Job 2 | 🔵🔵⚪ |
+      | 1 | [Specific fix] | Job 01 | Low |
+      | 2 | [Specific fix] | Job 02 | Medium |
 
-      ---
+      OUTPUT BOUNDARIES: Do not generate the document title, masthead,
+      methodology framework description, references, upstream context section,
+      validity checklist, or cascade summary. The template handles those sections.
+      USE ## headings for each section (## At a Glance, ## Job 01, etc.).
 
-      ## Methodology
-
-      **Framework:** Jobs-to-be-Done (JTBD)
-
-      **Core Principle:** Jobs describe the progress people want to make, not tasks they perform. Jobs are stable even as technology changes.
-
-      **Data Sources:** [Participant IDs]
-
-      ### References
-
-      - **Clayton Christensen** — "Competing Against Luck" (2016)
-      - **Bob Moesta** — Switch interviews, Forces of Progress
-      - **Tony Ulwick** — Outcome-Driven Innovation
-      - **Alan Klement** — "When Coffee and Kale Compete"
-
-      ---
-
-      *Generated by Qori • {{current_date}}*
+      Before outputting, verify:
+      - Job names focus on progress, not tasks
+      - Pain points have citations with nugget IDs where available
+      - Jobs are distinct from each other
+      - When/Want/So statements are complete and specific
+      - Confidence assessment present per job
+      Do NOT output a footer or "Generated by Qori" line — that is added automatically.
 
 # ═══════════════════════════════════════════════════════════
-# OUTPUT
+# OUTPUT — interleaved Handlebars + AI prose
 # ═══════════════════════════════════════════════════════════
 output_template: |
-  {{ai_generated.jtbd_complete}}
+  # Jobs to be Done
+
+  **Study:** {{selected_study}} &nbsp; | &nbsp; **Researcher:** {{researcher_contact}} &nbsp; | &nbsp; **Date:** {{current_date}}
+
+  ---
+
+  {{ai_generated.analysis_body}}
+
+  ---
+
+  <details>
+  <summary><strong>Methodology</strong></summary>
+
+  **Framework:** Jobs-to-be-Done (JTBD)
+
+  **Core Principle:** Jobs describe the progress people want to make, not tasks they perform. Jobs are stable even as technology changes. Each job uses the When/Want/So framework to separate situation, motivation, and outcome.
+
+  **Dimensions:** Each job is analyzed across three dimensions:
+  - **Functional** — what they're trying to accomplish
+  - **Emotional** — how they want to feel
+  - **Social** — how they want to be perceived
+
+  ### References
+
+  - **Clayton Christensen** -- "Competing Against Luck" (2016)
+  - **Bob Moesta** -- Switch interviews, Forces of Progress
+  - **Tony Ulwick** -- Outcome-Driven Innovation
+  - **Alan Klement** -- "When Coffee and Kale Compete"
+
+  </details>
+
+  {{#if upstream_atomic_nugget_core}}
+  <details>
+  <summary><strong>Upstream context</strong></summary>
+
+  This JTBD analysis was synthesized from:
+
+  | Source | Used for |
+  |--------|----------|
+  | session_summary outputs | Nuggets across participants |
+  {{#if upstream_validated_themes}}| affinity_mapping | Validated themes for job-theme linking |{{/if}}
+  {{#if upstream_target_barriers}}| research_brief | Target barriers, research questions |{{/if}}
+
+  Citation markers throughout:
+  - [relates to TB-XXX] = job connects to target barrier
+  - [addresses RQ-XXX] = job addresses research question
+  - nugget-PT00X-XXX = source nugget reference
+  - theme-XX = linked validated theme
+
+  </details>
+  {{/if}}
+
+  <details>
+  <summary><strong>Validity checklist</strong></summary>
+
+  | Criterion | Verified |
+  |-----------|:--------:|
+  | Job names focus on progress, not tasks | |
+  | When/Want/So statements are complete and specific | |
+  | All quotes verbatim with participant ID | |
+  | Jobs are distinct (no overlap) | |
+  | Pain points have evidence citations | |
+  | Confidence assessment present per job | |
+
+  </details>
+
+  ---
+
+  ## Cascade summary
+
+  This JTBD analysis emits variables for downstream templates. Replace strategy — one analysis per study, not per-participant pool.
+
+  | Variable | Pool | Strategy | Description |
+  |----------|:----:|----------|-------------|
+  | validated_jobs | No | replace | Progress-focused jobs with When/Want/So triad and dimensional needs (7 req + 10 nullable fields) |
+
+  **Consumed from upstream:**
+
+  | Variable | Source | Role |
+  |----------|--------|------|
+  | atomic_nugget_core | session_summary | Primary evidence for job extraction |
+  | atomic_nugget_detail | session_summary | Verbatim quotes, behaviors, context |
+  | validated_themes | affinity_mapping | Job-theme linking |
+  | target_barriers | research_brief | Barrier relationship marking |
+  | research_questions | research_brief | Question addressing |
 
 output_options:
   path: "04-analysis/jobs-to-be-done/"
-  filename: "{{selected_study}}_jobs_to_be_done_{{current_date}}.md"
+  filename: "{{selected_study}}-jobs-to-be-done-{{current_date_iso}}.md"
 
 # ═══════════════════════════════════════════════════════════
-# METADATA (documentation only — not read by backend)
+# METADATA
 # ═══════════════════════════════════════════════════════════
-processing_workflow:
-  1. validate_slack_modal_inputs
-  2. discover_files_from_study_selection
-  3. calculate_initial_quality_assessment
-  4. validate_discovered_files
-  5. combine_selected_files_with_truncation
-  6. execute_jtbd_complete
-  7. format_output
-  8. save_to_analysis_folder
-
-auto_variables:
-  - max_jobs: extract_job_count(ai_generated.jtbd_complete) || 3
-  - current_date: new Date().toISOString().split('T')[0]
-  - analysis_version: generate_version_number() || "v1.0"
-
-notify:
-  - role: team
-    action: "Jobs to be Done analysis completed"
-    channel: "{{study_channel}}"
-    message: "JTBD analysis for {{selected_study}} complete. {{max_jobs}} jobs identified."
-
-quality_assurance:
-  require_progress_not_tasks: true
-  require_citations: true
-  require_distinct_jobs: true
-  require_va_context: true
-
 notes: |
-  v3.5 Changes (Standards Polish):
-  - Applied canonical key ordering (IDENTITY → CONFIGURATION → INPUTS → AI GENERATION → OUTPUT → METADATA)
-  - Removed dead config: llm_config, system_limits, privacy_controls, study_metadata, auto_file_discovery
-  - Removed github_file_template (identical passthrough, redundant)
-  - Removed default_delivery, slack_format, file_format from output_options (dead config)
-  - Updated prompt: summary blockquote uses metrics only (no date), removed date from footer placeholder
-  - Standardized participant ID format to PT-001 (hyphenated)
-  - Changed filename from {{study_folder}} to {{selected_study}} (matches actual variable)
-  - Added inline comments on input_variables
-  - Note: {{focus_area}} in prompt (line ~81) is never provided by handler — latent bug, kept as-is
+  v7.0: Interleaved Handlebars/AI architecture (ADR 0005/0016 pattern).
+  - Monolithic jtbd_complete task replaced by analysis_body task.
+  - Handlebars renders: masthead, methodology (toggle with JTBD framework
+    description, dimension model, and Christensen/Moesta/Ulwick/Klement
+    references), upstream context (toggle, conditional), validity checklist
+    (toggle), cascade summary (always present).
+  - NEW: emits validated_jobs (replace strategy, Sonnet extraction).
+    When/Want/So triad split into three separate required fields for
+    cascade clarity — see schema comment in validated_job.yaml.
+  - Replace strategy is intentional: JTBD is a study-level synthesis
+    (one per study), not a per-participant pool like session_summary.
+  - Downstream consumer: design_opportunity_generator consumes validated_jobs
+    (optional, reference) for HMW opportunity framing. Research_readout
+    deferred — it already has 16+ upstream vars and would reference jobs
+    without doing analytical work on them. Design_opportunities translates
+    jobs into actionable HMW statements — direct analytical application.
+  - Consumes updated: atomic_nuggets split into atomic_nugget_core +
+    atomic_nugget_detail. Added target_barriers and research_questions
+    from research_brief for cascade-aware TB/RQ citation markers.
+  - {{focus_area}} removed (latent bug since v3.5 — never provided by handler).
+  - OUTPUT BOUNDARIES instruction added.
+  - Dead metadata removed (processing_workflow, auto_variables, notify,
+    quality_assurance).
+  - Anti-fabrication guards preserved and strengthened (6 rules, added
+    CITE EVERYTHING and CONFIDENCE ASSESSMENT).
+  - No handler changes needed (researchSynthesisHandler.ts, ANALYSIS_YAML_MAPPING).
 
-  v3.4 Changes:
-  - Single consolidated task architecture
-  - When/Want/So framework for all jobs
-  - Functional/emotional/social dimensions
-  - Internal validation checklist
-
-  v3.0: Original consolidated redesign
-  v2.1: Original multi-task architecture
-
-output_use: |
-  Extract Jobs-to-be-Done focusing on PROGRESS users want to make,
-  not tasks they perform. Each job includes When/Want/So statement,
-  functional/emotional/social dimensions, current workarounds, pain
-  points with citations, and design opportunities.
+  v3.5: Standards polish.
+  v3.4: When/Want/So framework, dimensional analysis.
+  v3.0: Task consolidation (multi-task -> single).
