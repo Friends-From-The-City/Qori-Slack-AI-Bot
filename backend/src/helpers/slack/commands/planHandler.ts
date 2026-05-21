@@ -55,11 +55,10 @@ async function handlePlanSubmission({ ack, body, view, client }: SlackViewMiddle
   await ack();
 
   const values = view.state.values;
-  const { channelId, studyName: metaStudyName, userId } = JSON.parse(view.private_metadata || '{}');
+  const { channelId, studyName, userId } = JSON.parse(view.private_metadata || '{}');
 
-  const studyName: string = values.study_folder_block?.study_folder_input?.value || metaStudyName;
   if (!studyName) {
-    throw new Error('No study selected or provided');
+    throw new Error('No study selected — private_metadata missing studyName');
   }
 
   console.log('🚀 ~ Research Plan Generator ~ studyName:', studyName);
@@ -80,7 +79,21 @@ async function handlePlanSubmission({ ack, body, view, client }: SlackViewMiddle
   };
 
   // ── Modal inputs ──
-  const leadResearcher = (extract('lead_researcher_block', 'lead_researcher_input') as string) || '';
+  // Lead researcher is a users_select — extract Slack user ID, resolve to display name
+  const leadResearcherUserId: string | null =
+    values.lead_researcher_block?.lead_researcher_select?.selected_user || null;
+  let leadResearcher = '';
+  if (leadResearcherUserId) {
+    try {
+      const userInfo = await client.users.info({ user: leadResearcherUserId });
+      const user = userInfo.user as Record<string, any> | undefined;
+      leadResearcher = user?.real_name || user?.profile?.display_name || user?.name || leadResearcherUserId;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn('Could not resolve lead researcher display name:', message);
+      leadResearcher = leadResearcherUserId; // fall back to raw user ID
+    }
+  }
   const operationalRisks = (extract('operational_risks_block', 'operational_risks_input') as string) || '';
 
   // ── Compensation (mechanical) ──
