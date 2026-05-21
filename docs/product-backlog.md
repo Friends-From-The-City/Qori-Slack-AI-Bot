@@ -73,8 +73,10 @@ Items accumulated during pre-migration work and during migration debugging. See 
 
 ### /qori-plan
 
-- Remove desk research, stakeholder notes, and survey data sections from the plan modal — those now live in /qori-discover
-- Remove the execution risks section (consolidated elsewhere or no longer relevant)
+- ~~Remove desk research, stakeholder notes, and survey data sections from the plan modal — those now live in /qori-discover~~ **Done** (2026-05-21, study setup modal v2.0)
+- ~~Remove the execution risks section (consolidated elsewhere or no longer relevant)~~ **Reversed** (2026-05-21) — field kept with conversational label. Cascade doesn't contain researcher-known operational risks; removing would force LLM to fabricate or omit. See `docs/qori-plan-modal-audit.md` §2.
+- ~~Study name editable text input~~ **Done** (2026-05-21) — replaced with non-editable context display, handler reads from private_metadata
+- ~~Cascade warning alongside form~~ **Done** (2026-05-21) — cascade warning now gates the form; when required vars missing, form is hidden entirely
 
 ### Participant tracker
 

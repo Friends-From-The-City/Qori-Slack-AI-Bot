@@ -13,7 +13,13 @@ interface StudyOption {
   name: string;
 }
 
-// Modal builder for /qori-plan command
+/**
+ * Study setup modal v2.0 — launcher for /qori-plan
+ *
+ * v2.0: Removed upload sections (desk research, stakeholder notes, survey data)
+ * — those live in /qori-discover now. Removed "Done" submit (modal is a launcher,
+ * not a form). Conversational copy per modal design principles.
+ */
 export function studySetupModalPlanStudy(studies: StudyOption[] | null, channelId: string) {
   const studyOptions = studies && studies.length > 0
     ? studies.map((s) => ({
@@ -30,10 +36,6 @@ export function studySetupModalPlanStudy(studies: StudyOption[] | null, channelI
       type: "plain_text",
       text: "Plan your study",
     },
-    submit: {
-      type: "plain_text",
-      text: "Done",
-    },
     close: {
       type: "plain_text",
       text: "Close",
@@ -44,7 +46,7 @@ export function studySetupModalPlanStudy(studies: StudyOption[] | null, channelI
         elements: [
           {
             type: "mrkdwn",
-            text: "Select a study, then create documents or upload files. Start a new study with `/qori-brief`.",
+            text: "Pick a study, then choose what to create. New study? Start with `/qori-brief`.",
           },
         ],
       },
@@ -56,7 +58,7 @@ export function studySetupModalPlanStudy(studies: StudyOption[] | null, channelI
         block_id: "study_selection",
         label: {
           type: "plain_text",
-          text: "Study",
+          text: "Which study?",
         },
         element: {
           type: "static_select",
@@ -75,14 +77,7 @@ export function studySetupModalPlanStudy(studies: StudyOption[] | null, channelI
         type: "section",
         text: {
           type: "mrkdwn",
-          text: "*Create Documents*",
-        },
-      },
-      {
-        type: "section",
-        text: {
-          type: "mrkdwn",
-          text: "*Research plan*\nTimeline, logistics, and session design",
+          text: ":clipboard: *Research plan*\nTurns your brief into a stakeholder-ready plan",
         },
         accessory: {
           type: "button",
@@ -98,7 +93,7 @@ export function studySetupModalPlanStudy(studies: StudyOption[] | null, channelI
         type: "section",
         text: {
           type: "mrkdwn",
-          text: "*Discussion guide*\nConversation guide for user research sessions",
+          text: ":speech_balloon: *Discussion guide*\nSession script grounded in your objectives",
         },
         accessory: {
           type: "button",
@@ -114,7 +109,7 @@ export function studySetupModalPlanStudy(studies: StudyOption[] | null, channelI
         type: "section",
         text: {
           type: "mrkdwn",
-          text: "*Stakeholder interview guide*\nQuestions for PMs, engineers, policy SMEs",
+          text: ":studio_microphone: *Stakeholder interview guide*\nQuestions for PMs, engineers, policy SMEs",
         },
         accessory: {
           type: "button",
@@ -125,76 +120,6 @@ export function studySetupModalPlanStudy(studies: StudyOption[] | null, channelI
           action_id: "create_stakeholder_guide",
           value: "stakeholder_guide",
         },
-      },
-      {
-        type: "divider",
-      },
-      {
-        type: "section",
-        text: {
-          type: "mrkdwn",
-          text: "*Upload Files*",
-        },
-      },
-      {
-        type: "section",
-        text: {
-          type: "mrkdwn",
-          text: "*Desk research*\nReports, competitive analysis, background docs",
-        },
-        accessory: {
-          type: "button",
-          text: {
-            type: "plain_text",
-            text: "Upload",
-          },
-          action_id: "upload_desk_research",
-          value: "desk_research",
-        },
-      },
-      {
-        type: "section",
-        text: {
-          type: "mrkdwn",
-          text: "*Stakeholder notes*\nTranscripts from internal interviews",
-        },
-        accessory: {
-          type: "button",
-          text: {
-            type: "plain_text",
-            text: "Upload",
-          },
-          action_id: "upload_stakeholder_notes",
-          value: "stakeholder_notes",
-        },
-      },
-      {
-        type: "section",
-        text: {
-          type: "mrkdwn",
-          text: "*Survey data*\nSurvey exports (CSV, Excel) for synthesis",
-        },
-        accessory: {
-          type: "button",
-          text: {
-            type: "plain_text",
-            text: "Upload",
-          },
-          action_id: "upload_survey_data",
-          value: "survey_data",
-        },
-      },
-      {
-        type: "divider",
-      },
-      {
-        type: "context",
-        elements: [
-          {
-            type: "mrkdwn",
-            text: "Upload stakeholder notes to unlock Service Blueprint analysis.",
-          },
-        ],
       },
     ],
   };
