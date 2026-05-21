@@ -216,6 +216,19 @@ async function handleBriefSubmission({ ack, body, view, client }: SlackViewMiddl
 
   console.log("🚀 ~ Research Brief ~ studyName:", studyName);
 
+  // Post "Generating..." progress message
+  let progressTs: string | undefined;
+  try {
+    const progressResult = await client.chat.postMessage({
+      channel: channelId,
+      text: `:hourglass_flowing_sand: Creating research brief for *${studyName}*...`,
+    });
+    progressTs = progressResult.ts;
+  } catch (err) {
+    const progressErr = err instanceof Error ? err.message : String(err);
+    console.warn('Could not post brief progress message:', progressErr);
+  }
+
   // ── Study creation (unchanged from v6.0) ──
   let study = await getResearchStudyWithRoles(studyName!);
 
@@ -470,6 +483,20 @@ async function handleBriefSubmission({ ack, body, view, client }: SlackViewMiddl
   const renderedYaml = await processYamlTemplate(file.content, data, study!.path ?? '');
 
   const url: string = renderedYaml.result.url;
+
+  // Update progress message → completion
+  if (progressTs) {
+    try {
+      await client.chat.update({
+        channel: channelId,
+        ts: progressTs,
+        text: `:memo: Research brief for *${studyName}* is ready — <${url}|view on GitHub>`,
+      });
+    } catch (err) {
+      const updateErr = err instanceof Error ? err.message : String(err);
+      console.warn('Could not update brief progress message:', updateErr);
+    }
+  }
 
   const blocks = generateStudyResultBlocks(studyName, study, url, channelId, 'brief');
   await sendStudyResultMessage(client, channelId, studyName, blocks, 'brief');

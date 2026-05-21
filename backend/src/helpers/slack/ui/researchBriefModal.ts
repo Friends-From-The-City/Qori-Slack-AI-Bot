@@ -1,8 +1,12 @@
 /**
- * Research Brief Modal v5.1
+ * Research Brief Modal v5.2
  *
  * Brief = approval gate. Collects everything stakeholders need to approve.
  * Plan consumes brief outputs via cascade — no overlap.
+ *
+ * v5.2: Conversational labels per modal design principles. Manual asterisks
+ * removed (Slack's required indicator handles this). Section headers stay formal.
+ * v5.1: Stakeholder field converted to users_select (PR #157).
  */
 export const researchBriefModal = {
   type: "modal",
@@ -38,7 +42,7 @@ export const researchBriefModal = {
       block_id: "study_name_block",
       label: {
         type: "plain_text",
-        text: "Study name *",
+        text: "What's the study called?",
       },
       hint: {
         type: "plain_text",
@@ -59,7 +63,7 @@ export const researchBriefModal = {
       block_id: "stakeholder_block",
       label: {
         type: "plain_text",
-        text: "Requested by *",
+        text: "Who's requesting this research?",
       },
       hint: {
         type: "plain_text",
@@ -112,11 +116,11 @@ export const researchBriefModal = {
       block_id: "problem_statement_block",
       label: {
         type: "plain_text",
-        text: "Problem statement *",
+        text: "What problem are you solving?",
       },
       hint: {
         type: "plain_text",
-        text: "What problem are we solving? Include metrics if available.",
+        text: "Include metrics if available.",
       },
       element: {
         type: "plain_text_input",
@@ -134,11 +138,11 @@ export const researchBriefModal = {
       block_id: "learning_objectives_block",
       label: {
         type: "plain_text",
-        text: "What we'll learn *",
+        text: "What will this research answer?",
       },
       hint: {
         type: "plain_text",
-        text: "3-5 bullets: what questions will this research answer?",
+        text: "3-5 bullets: the questions this study will resolve",
       },
       element: {
         type: "plain_text_input",
@@ -156,7 +160,7 @@ export const researchBriefModal = {
       block_id: "out_of_scope_block",
       label: {
         type: "plain_text",
-        text: "Out of scope *",
+        text: "What's out of scope?",
       },
       element: {
         type: "plain_text_input",
@@ -184,7 +188,7 @@ export const researchBriefModal = {
       block_id: "research_method_block",
       label: {
         type: "plain_text",
-        text: "Research method *",
+        text: "What method fits best?",
       },
       element: {
         type: "static_select",
@@ -223,17 +227,17 @@ export const researchBriefModal = {
         },
       },
     },
-    // Participants — composition + count (approval level, not recruitment specs)
+    // Participants
     {
       type: "input",
       block_id: "participant_approach_block",
       label: {
         type: "plain_text",
-        text: "Participant approach *",
+        text: "Who are you researching with?",
       },
       hint: {
         type: "plain_text",
-        text: "Who, how many, and key composition requirements",
+        text: "How many, and key composition requirements",
       },
       element: {
         type: "plain_text_input",
@@ -283,7 +287,7 @@ export const researchBriefModal = {
       block_id: "start_date_block",
       label: {
         type: "plain_text",
-        text: "Start date *",
+        text: "When does research start?",
       },
       element: {
         type: "datepicker",
@@ -299,10 +303,6 @@ export const researchBriefModal = {
       type: "input",
       block_id: "decision_deadline_block",
       label: {
-        type: "plain_text",
-        text: "Decision deadline *",
-      },
-      hint: {
         type: "plain_text",
         text: "When do stakeholders need findings?",
       },
