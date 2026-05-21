@@ -160,7 +160,55 @@ const LOCATION_TYPE_MAPPINGS: Record<string, string> = {
   'prefer_not_to_say': 'Prefer not to say',
 };
 
+const OBSERVER_ROLE_LABELS: Record<string, string> = {
+  'note_taker': '📝 Note-taker',
+  'silent_observer': '👁️ Silent Observer',
+  'pm_observer': '📊 PM Observer',
+  'stakeholder': '🏛️ Stakeholder',
+  'observer': '👁️ Observer',
+};
+
 // ─── Helper functions ────────────────────────────────────────────────
+
+/** Format a date+time pair into "Mon, May 27 · 10:00 AM". Omits year if current year. */
+function formatScheduleDisplay(dateStr: string | null, timeStr?: string | null): string {
+  if (!dateStr) return '';
+  try {
+    const datePart = dateStr.split('T')[0]; // handle ISO strings
+    const [year, month, day] = datePart.split('-').map(Number);
+    const date = new Date(year, month - 1, day);
+    const currentYear = new Date().getFullYear();
+    const dayOfWeek = format(date, 'EEE');
+    const monthDay = format(date, 'MMM d');
+    const yearSuffix = year !== currentYear ? `, ${year}` : '';
+    let timeDisplay = '';
+    if (timeStr) {
+      const [hours, minutes] = timeStr.split(':').map(Number);
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      const h = hours % 12 || 12;
+      timeDisplay = ` · ${h}:${String(minutes).padStart(2, '0')} ${ampm}`;
+    }
+    return `${dayOfWeek}, ${monthDay}${yearSuffix}${timeDisplay}`;
+  } catch {
+    return `${dateStr}${timeStr ? ' ' + timeStr : ''}`;
+  }
+}
+
+/** Normalize session ID to PT-XXX format with dash. */
+function normalizeSessionId(sessionId: string): string {
+  if (!sessionId) return sessionId;
+  // Already has dash in right place (PT-001)
+  if (/^PT-\d+$/i.test(sessionId)) return sessionId;
+  // Has letters then digits without dash (PT001, PT003)
+  const match = sessionId.match(/^(PT)(\d+)$/i);
+  if (match) return `${match[1]}-${match[2].padStart(3, '0')}`;
+  return sessionId;
+}
+
+/** Format observer role enum to display label with emoji. */
+function getObserverRoleDisplay(role: string): string {
+  return OBSERVER_ROLE_LABELS[role] || role;
+}
 
 function getRecruitmentSourceDisplay(source: string): string {
   return SOURCE_MAPPINGS[source] || source;
@@ -567,8 +615,8 @@ export async function processParticipantYamlTemplate(
         id: p.participant_name || `P${p.id}`,
         participant_name: p.participant_name,
         contact_details: p.contact_details,
-        recruitment_source: p.recruitment_source,
-        scheduled_date: p.scheduled_date,
+        recruitment_source: getRecruitmentSourceDisplay(p.recruitment_source || 'unknown'),
+        scheduled_date: formatScheduleDisplay(p.scheduled_date, p.scheduled_time),
         scheduled_time: p.scheduled_time,
         status_select: PARTICIPANT_STATUS_LABELS[p.status_select as ParticipantStatus] || p.status_select,
         notes_field: p.notes_field,
@@ -589,15 +637,45 @@ export async function processParticipantYamlTemplate(
         try {
           if (!inputValues.study_id) return [];
           const observers = await SessionObserverService.getObserverRequestsByStudy(inputValues.study_id);
-          return (observers as Array<{ session_id: string; requester_name: string | string[]; role?: string; status?: string }>).map(obs => {
-            const names = Array.isArray(obs.requester_name) ? obs.requester_name : [obs.requester_name];
-            return {
-              session_id: obs.session_id,
-              observer_names: names.join(', '),
-              observer_role: obs.role || 'observer',
-              status: obs.status || 'confirmed',
-            };
-          });
+          // Group observers by session_id to combine multiple observers per session
+          const observersBySession = new Map<string, { names: string[]; roles: string[]; participant?: { scheduled_date?: string; scheduled_time?: string } }>();
+          // Track role counts for Role Distribution table
+          const roleCounts: Record<string, { count: number; sessions: Set<string> }> = {
+            note_taker: { count: 0, sessions: new Set() },
+            silent_observer: { count: 0, sessions: new Set() },
+            pm_observer: { count: 0, sessions: new Set() },
+            stakeholder: { count: 0, sessions: new Set() },
+          };
+          for (const obs of observers as Array<{ session_id: string; requester_name: string | string[]; role?: string; status?: string; participant?: { scheduled_date?: string; scheduled_time?: string } }>) {
+            const sessionId = normalizeSessionId(obs.session_id);
+            const existing = observersBySession.get(sessionId) || { names: [], roles: [], participant: obs.participant };
+            const obsNames = Array.isArray(obs.requester_name) ? obs.requester_name : [obs.requester_name];
+            const role = obs.role || 'observer';
+            const roleLabel = getObserverRoleDisplay(role);
+            for (const name of obsNames) {
+              existing.names.push(`${name} (${roleLabel})`);
+            }
+            existing.roles.push(role);
+            observersBySession.set(sessionId, existing);
+            // Accumulate role distribution
+            if (roleCounts[role]) {
+              roleCounts[role].count += obsNames.length;
+              roleCounts[role].sessions.add(sessionId);
+            }
+          }
+          // Store roleCounts on the returned array for post-construction rollup
+          const sessionRows = Array.from(observersBySession.entries()).map(([sessionId, data]) => ({
+            session_id: sessionId,
+            date_time: formatScheduleDisplay(data.participant?.scheduled_date || null, data.participant?.scheduled_time),
+            observer_names: data.names.length > 0 ? data.names.join(', ') : 'None',
+            capacity: data.names.length,
+            pending_count: 0,
+            observer_role: data.roles[0] || 'observer',
+            status: 'confirmed',
+          }));
+          // Attach roleCounts for post-construction rollup
+          (sessionRows as any)._roleCounts = roleCounts;
+          return sessionRows;
         } catch (err: unknown) {
           const message = err instanceof Error ? err.message : String(err);
           console.warn('⚠️ Could not fetch observer data for tracker:', message);
@@ -613,6 +691,22 @@ export async function processParticipantYamlTemplate(
       recruitment_analysis: generateRecruitmentAnalysis(allParticipants),
       next_steps_recommendations: generateNextStepsRecommendations(allParticipants, totalParticipantsCount),
     };
+
+    // Compute role distribution from observer data (must happen after enhancedData is built)
+    const sessionObservers = enhancedData.session_observers as Array<Record<string, unknown>> & { _roleCounts?: Record<string, { count: number; sessions: Set<string> }> };
+    const roleCounts = sessionObservers?._roleCounts;
+    if (roleCounts) {
+      for (const [role, data] of Object.entries(roleCounts)) {
+        enhancedData[`${role}_count`] = data.count;
+        enhancedData[`${role}_sessions`] = data.sessions.size > 0 ? Array.from(data.sessions).join(', ') : '-';
+      }
+    } else {
+      // No observer data — zero out all role counts
+      for (const role of ['note_taker', 'silent_observer', 'pm_observer', 'stakeholder']) {
+        enhancedData[`${role}_count`] = 0;
+        enhancedData[`${role}_sessions`] = '-';
+      }
+    }
 
     // Generate new content with database participants
     updatedContent = generateParticipantTemplate(yamlConfig.output_template, enhancedData);
