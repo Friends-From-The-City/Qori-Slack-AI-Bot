@@ -36,6 +36,10 @@ export function studySetupModalPlanStudy(studies: StudyOption[] | null, channelI
       type: "plain_text",
       text: "Plan your study",
     },
+    submit: {
+      type: "plain_text",
+      text: "Done",
+    },
     close: {
       type: "plain_text",
       text: "Close",
