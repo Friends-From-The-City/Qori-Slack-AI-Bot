@@ -41,7 +41,6 @@ import { handleMarkChangesCompleteAction, handleMarkChangesCompleteModal, handle
 import { openDiscussionGuideModal, handleDiscussionGuideSubmission } from './commands/discussion-guide/discussionGuideHandler';
 
 // Discovery
-import { openStakeholderGuideModal, handleStakeholderGuideSubmission } from './commands/discovery/stakeholderHandler';
 import { discoverHandler, handleDiscoverSubmission } from './commands/discoverHandler';
 
 // Fieldwork
@@ -262,8 +261,6 @@ slackApp.view('discussion_guide_modal', handleDiscussionGuideSubmission);
 
 // ─── Discovery ──────────────────────────────────────────────────
 
-slackApp.action('create_stakeholder_guide', openStakeholderGuideModal);
-slackApp.view('stakeholder_interview_guide_modal', handleStakeholderGuideSubmission);
 slackApp.view('discover_modal', handleDiscoverSubmission);
 
 // ─── Fieldwork & participants ───────────────────────────────────
