@@ -408,11 +408,27 @@ async function handleBriefSubmission({ ack, body, view, client }: SlackViewMiddl
 
   console.log(`📋 Structured data assembled: ${targetBarriers.length} barriers, ${researchQuestions.length} questions, ${researchObjectives.length} objectives`);
 
+  // ── Resolve stakeholder display name from users_select ──
+  const stakeholderUserId: string | null =
+    values.stakeholder_block?.stakeholder_select?.selected_user || null;
+  let requestorName = '';
+  if (stakeholderUserId) {
+    try {
+      const userInfo = await client.users.info({ user: stakeholderUserId });
+      const user = userInfo.user as Record<string, any> | undefined;
+      requestorName = user?.real_name || user?.profile?.display_name || user?.name || stakeholderUserId;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn('Could not resolve stakeholder display name:', message);
+      requestorName = stakeholderUserId;
+    }
+  }
+
   // ── Assemble complete data object ──
   const data: BriefTemplateInput = {
     selected_study: studyName,
     lead_researcher: leadResearcher,
-    requestor_name: (extract('stakeholder_block', 'stakeholder_input') as string) || '',
+    requestor_name: requestorName,
     problem_statement: problemStatement,
     learning_objectives: learningObjectives,
     out_of_scope: outOfScope,

@@ -1,10 +1,17 @@
 interface BasicInfoInitialValues {
   participant_name?: string;
   study_name?: string;
-  researcher_name?: string;
-  researcher_email?: string;
+  researcher_user_id?: string;
 }
 
+/**
+ * Basic info blocks for outreach modals.
+ *
+ * Researcher is a users_select — handler resolves name and email from
+ * client.users.info() or falls back to the study record. This replaces
+ * the previous researcher_name + researcher_email text inputs (which
+ * the handler was already ignoring in favor of the study DB record).
+ */
 export const createBasicInfoBlocks = (initialValues: BasicInfoInitialValues = {}) => [
   {
     type: "input",
@@ -32,58 +39,16 @@ export const createBasicInfoBlocks = (initialValues: BasicInfoInitialValues = {}
   },
   {
     type: "input",
-    block_id: "researcher_name",
-    label: { type: "plain_text", text: "Researcher Name *", emoji: true },
+    block_id: "researcher_block",
+    label: { type: "plain_text", text: "Researcher *", emoji: true },
     element: {
-      type: "plain_text_input",
-      action_id: "value",
-      placeholder: { type: "plain_text", text: "e.g. Jordan (UX Researcher)" },
-      initial_value: initialValues.researcher_name || "",
+      type: "users_select",
+      action_id: "researcher_select",
+      placeholder: { type: "plain_text", text: "Select researcher..." },
+      ...(initialValues.researcher_user_id ? { initial_user: initialValues.researcher_user_id } : {}),
     },
     optional: false,
   },
-  {
-    type: "input",
-    block_id: "researcher_email",
-    label: { type: "plain_text", text: "Researcher Email *", emoji: true },
-    element: {
-      type: "plain_text_input",
-      action_id: "value",
-      placeholder: { type: "plain_text", text: "e.g. jordan.researcher@va.gov" },
-      initial_value: initialValues.researcher_email || "",
-    },
-    optional: false,
-  },
-  // {
-  //   type: "input",
-  //   block_id: "contact_method",
-  //   label: { type: "plain_text", text: "Contact Method *", emoji: true },
-  //   element: {
-  //     type: "static_select",
-  //     action_id: "value",
-  //     options: [
-  //       { text: { type: "plain_text", text: "📧 Email", emoji: true }, value: "Email" },
-  //       { text: { type: "plain_text", text: "Recruitment Agency", emoji: true }, value: "Recruitment Agency" },
-  //       // { text: { type: "plain_text", text: "📞 Phone Call", emoji: true }, value: "Phone Call" },
-  //     ],
-  //   },
-  //   optional: false,
-  // },
-  // {
-  //   type: "input",
-  //   block_id: "tone",
-  //   label: { type: "plain_text", text: "Tone *", emoji: true },
-  //   element: {
-  //     type: "static_select",
-  //     action_id: "value",
-  //     options: [
-  //       { text: { type: "plain_text", text: "😊 Friendly", emoji: true }, value: "Friendly" },
-  //       { text: { type: "plain_text", text: "📝 Formal", emoji: true }, value: "Formal" },
-  //       { text: { type: "plain_text", text: "💬 Casual", emoji: true }, value: "Casual" },
-  //     ],
-  //   },
-  //   optional: false,
-  // },
 ];
 
 // For backward compatibility
