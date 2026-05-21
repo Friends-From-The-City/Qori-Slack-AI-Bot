@@ -41,9 +41,7 @@ import { handleMarkChangesCompleteAction, handleMarkChangesCompleteModal, handle
 import { openDiscussionGuideModal, handleDiscussionGuideSubmission } from './commands/discussion-guide/discussionGuideHandler';
 
 // Discovery
-import { openDeskResearchModal, handleDeskResearchSubmission } from './commands/discovery/deskResearchHandler';
-import { openStakeholderGuideModal, openStakeholderInterviewGuideModal, handleStakeholderGuideSubmission, openUploadStakeholderNotesModal, handleStakeholderNotesSubmission } from './commands/discovery/stakeholderHandler';
-import { openUploadSurveyDataModal, handleSurveyDataSubmission } from './commands/discovery/surveyHandler';
+import { openStakeholderGuideModal, handleStakeholderGuideSubmission } from './commands/discovery/stakeholderHandler';
 import { discoverHandler, handleDiscoverSubmission } from './commands/discoverHandler';
 
 // Fieldwork
@@ -262,17 +260,10 @@ slackApp.action('approve_changes', handleApproveChanges);
 slackApp.action('create_discussion_guide', openDiscussionGuideModal);
 slackApp.view('discussion_guide_modal', handleDiscussionGuideSubmission);
 
-// ─── Discovery uploads ──────────────────────────────────────────
+// ─── Discovery ──────────────────────────────────────────────────
 
-slackApp.action('upload_desk_research', openDeskResearchModal);
-slackApp.view('upload_desk_research_modal', handleDeskResearchSubmission);
 slackApp.action('create_stakeholder_guide', openStakeholderGuideModal);
-slackApp.action('create_stakeholder_interview_guide', openStakeholderInterviewGuideModal);
 slackApp.view('stakeholder_interview_guide_modal', handleStakeholderGuideSubmission);
-slackApp.action('upload_stakeholder_notes', openUploadStakeholderNotesModal);
-slackApp.view('upload_stakeholder_notes_modal', handleStakeholderNotesSubmission);
-slackApp.action('upload_survey_data', openUploadSurveyDataModal);
-slackApp.view('upload_survey_data_modal', handleSurveyDataSubmission);
 slackApp.view('discover_modal', handleDiscoverSubmission);
 
 // ─── Fieldwork & participants ───────────────────────────────────

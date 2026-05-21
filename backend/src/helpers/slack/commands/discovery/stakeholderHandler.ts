@@ -1,11 +1,14 @@
 /**
- * stakeholderHandler.ts — Stakeholder interview guide + notes upload
+ * stakeholderHandler.ts — Stakeholder interview guide modal opener + submission
  *
- * Extracted from events.js. Contains four handlers:
- * - create_stakeholder_guide: opens modal with study picker + cascade readiness
- * - create_stakeholder_interview_guide: opens interview guide modal (simpler variant)
- * - upload_stakeholder_notes: opens notes upload modal
- * - upload_stakeholder_notes_modal: processes files, runs YAML template
+ * Handles the create_stakeholder_guide action (opens modal with study picker +
+ * cascade readiness) and the stakeholder_interview_guide_modal submission
+ * (renders YAML template, posts result).
+ *
+ * The study-scoped upload handlers (upload_stakeholder_notes, upload_stakeholder_notes_modal)
+ * were removed — discovery uploads now go through /qori-discover.
+ * The simpler opener (create_stakeholder_interview_guide) was also removed — unused,
+ * the study setup hub routes to openStakeholderGuideModal which includes cascade readiness.
  */
 
 import type { AllMiddlewareArgs, SlackActionMiddlewareArgs, SlackViewMiddlewareArgs, BlockAction, ViewSubmitAction } from '@slack/bolt';
@@ -19,9 +22,6 @@ import { sendStudyResultMessage, generateStudyResultBlocks } from '../../ui/stud
 import { readStudyVariables } from '../../../studyVariables';
 import { buildCascadeReadiness, buildCascadeBlocks } from '../../ui/cascadeReadinessBlocks';
 import { stakeholderInterviewGuideModal } from '../../ui/stakeholderInterviewGuideModal';
-import { uploadStakeholderNotesModal } from '../../ui/uploadStakeholderNotesModal';
-import { processSlackFiles } from '../../../pdfProcessor';
-import { parseDocuments, validateDocuments } from '../../../documentParser';
 
 // ─── Block Kit manipulation type ──────────────────────────────────
 
@@ -47,12 +47,6 @@ interface StakeholderGuideTemplateInput {
   session_duration: string;
   stakeholder_name: string;
   study_name: string;
-}
-
-interface StakeholderNotesTemplateInput {
-  selected_study: string;
-  study_name: string;
-  combined_file_content: string;
 }
 
 // ─── Modal opener: create_stakeholder_guide ──────────────────────
@@ -140,74 +134,6 @@ async function openStakeholderGuideModal({ ack, body, client }: SlackActionMiddl
     const message = err instanceof Error ? err.message : String(err);
     const detail = (err as Record<string, unknown>)?.data ?? message;
     console.error('Error opening stakeholder guide modal:', detail);
-  }
-}
-
-// ─── Modal opener: create_stakeholder_interview_guide ────────────
-
-async function openStakeholderInterviewGuideModal({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
-  await ack();
-
-  if (!('view' in body) || !body.view) {
-    console.warn('Stakeholder interview guide opener received non-modal action context');
-    return;
-  }
-
-  try {
-    const meta = JSON.parse(body.view.private_metadata || '{}');
-    const selectedFromView = body.view.state?.values?.study_selection?.study_select?.selected_option || null;
-    let studyName: string = selectedFromView?.text?.text || meta.studyName || meta.selectedStudy || meta.study_name || '';
-    const studyId: string | null = selectedFromView?.value || meta.studyId || null;
-
-    // Validate that study is selected
-    if (!studyName || studyId === 'loading' || studyId === 'no_studies') {
-      await client.chat.postEphemeral({
-        channel: meta.channelId || body.user.id,
-        user: body.user.id,
-        text: '❌ Please select a study before creating a stakeholder interview guide.',
-      });
-      return;
-    }
-
-    // Fallback: default to the user's first study if metadata missing
-    if (!studyName) {
-      try {
-        const studies = await getStudiesByUser(body.user.id);
-        if (Array.isArray(studies) && studies.length > 0) {
-          studyName = studies[0].name;
-        }
-      } catch (e) {
-        const eMessage = e instanceof Error ? e.message : String(e);
-        console.warn('⚠️ Could not infer studyName for stakeholder interview guide:', eMessage);
-      }
-    }
-
-    // Clone modal blocks and auto-populate study
-    const modalBlocks: MutableBlock[] = [...stakeholderInterviewGuideModal.blocks];
-    const studyBlockIndex = modalBlocks.findIndex(b => b.block_id === 'study_select_block');
-
-    if (studyBlockIndex !== -1 && studyName && modalBlocks[studyBlockIndex].element) {
-      modalBlocks[studyBlockIndex] = {
-        ...modalBlocks[studyBlockIndex],
-        element: {
-          ...modalBlocks[studyBlockIndex].element!,
-          initial_value: studyName,
-        },
-      };
-    }
-
-    await client.views.push({
-      trigger_id: body.trigger_id,
-      view: {
-        ...stakeholderInterviewGuideModal,
-        blocks: modalBlocks,
-        private_metadata: JSON.stringify({ ...(meta || {}), studyName, studyId, channelId: meta.channelId }),
-      } as View,
-    });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    const detail = (err as Record<string, unknown>)?.data ?? message;
-    console.error('Error opening stakeholder interview guide modal:', detail);
   }
 }
 
@@ -315,213 +241,7 @@ async function handleStakeholderGuideSubmission({ ack, body, view, client }: Sla
   }
 }
 
-// ─── Modal opener: upload_stakeholder_notes ──────────────────────
-
-async function openUploadStakeholderNotesModal({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
-  await ack();
-
-  if (!('view' in body) || !body.view) {
-    console.warn('Upload stakeholder notes opener received non-modal action context');
-    return;
-  }
-
-  try {
-    const meta = JSON.parse(body.view.private_metadata || '{}');
-    const selectedFromView = body.view.state?.values?.study_selection?.study_select?.selected_option || null;
-    let studyName: string = selectedFromView?.text?.text || meta.studyName || meta.selectedStudy || meta.study_name || '';
-    const studyId: string | null = selectedFromView?.value || meta.studyId || null;
-
-    // Validate that study is selected
-    if (!studyName || studyId === 'loading' || studyId === 'no_studies') {
-      await client.chat.postEphemeral({
-        channel: meta.channelId || body.user.id,
-        user: body.user.id,
-        text: '❌ Please select a study before uploading stakeholder notes.',
-      });
-      return;
-    }
-
-    // Fetch studies for the user to populate dropdown
-    const studies = await getStudiesByUser(body.user.id);
-    const studyOptions = studies.map((study: any) => ({
-      text: { type: 'plain_text', text: study.name },
-      value: String(study.id),
-    }));
-
-    // Update modal with study options and auto-populate
-    const modalBlocks: MutableBlock[] = [...uploadStakeholderNotesModal.blocks];
-    const studyBlockIndex = modalBlocks.findIndex(b => b.block_id === 'study_select_block');
-
-    if (studyBlockIndex !== -1 && studyOptions.length > 0 && modalBlocks[studyBlockIndex].elements) {
-      modalBlocks[studyBlockIndex] = {
-        ...modalBlocks[studyBlockIndex],
-        elements: [
-          {
-            ...modalBlocks[studyBlockIndex].elements![0],
-            options: studyOptions,
-            initial_option: studyName
-              ? studyOptions.find((o: any) => o.text.text === studyName) || studyOptions[0]
-              : studyOptions[0],
-          },
-        ],
-      };
-    }
-
-    await client.views.push({
-      trigger_id: body.trigger_id,
-      view: {
-        ...uploadStakeholderNotesModal,
-        blocks: modalBlocks,
-        private_metadata: JSON.stringify({ ...(meta || {}), studyName, studyId, channelId: meta.channelId }),
-      } as View,
-    });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    const detail = (err as Record<string, unknown>)?.data ?? message;
-    console.error('Error opening upload stakeholder notes modal:', detail);
-  }
-}
-
-// ─── Submission handler: upload_stakeholder_notes_modal ──────────
-
-async function handleStakeholderNotesSubmission({ ack, body, view, client }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs) {
-  await ack();
-
-  const values = view.state.values;
-  const meta = JSON.parse(view.private_metadata || '{}');
-  let { channelId, studyName, studyId } = meta;
-
-  // Get selected study from the dropdown if not in metadata
-  const selectedStudy = values.study_select_block?.selected_study?.selected_option;
-  if (selectedStudy) {
-    studyName = selectedStudy.text.text || studyName;
-    studyId = selectedStudy.value || studyId;
-  }
-
-  console.log('🚀 ~ upload-stakeholder-notes submission studyName:', studyName);
-
-  // Validate required fields
-  if (!studyName) {
-    await client.chat.postMessage({
-      channel: channelId || body.user?.id,
-      text: '❌ Study name is required. Please select a study and try again.',
-    });
-    return;
-  }
-
-  if (!channelId) {
-    await client.chat.postMessage({
-      channel: body.user?.id || '',
-      text: '❌ Channel ID is required but could not be determined. Please try again.',
-    });
-    return;
-  }
-
-  // Extract form data
-  const uploadedFiles = values.file_upload_block?.file_upload?.files?.map((file: any) => ({
-    id: file.id,
-    name: file.name,
-    mimetype: file.mimetype,
-    url: file.url_private,
-  })) || [];
-
-  console.log(`🚀 ~ stakeholder notes: study=${studyName}, files=${uploadedFiles.length}`);
-
-  // Validate files
-  if (uploadedFiles.length === 0) {
-    await client.chat.postMessage({
-      channel: channelId,
-      text: '❌ Please upload at least one transcript or notes file.',
-    });
-    return;
-  }
-
-  try {
-    // Process uploaded files to extract content
-    const processedFiles = await processSlackFiles(uploadedFiles, process.env.SLACK_BOT_TOKEN!);
-
-    // Prepare documents array
-    const documents = processedFiles.map((file: any) => ({
-      name: file.name,
-      content: file.content,
-      type: file.type,
-      size: file.size,
-    }));
-
-    // Validate documents
-    const validation = validateDocuments(documents);
-    if (!validation.isValid) {
-      await client.chat.postMessage({
-        channel: channelId,
-        text: `❌ ${validation.message}`,
-      });
-      return;
-    }
-
-    // Parse documents into structured format
-    const parsedDocuments = parseDocuments(documents);
-    const formattedDocumentContent: string = parsedDocuments.structured_format;
-
-    const stakeholderNotesData: StakeholderNotesTemplateInput = {
-      selected_study: studyName,
-      study_name: studyName,
-      combined_file_content: formattedDocumentContent,
-    };
-
-    // Get the study
-    const study = await getResearchStudyWithRoles(studyName);
-
-    if (!study) {
-      await client.chat.postMessage({
-        channel: channelId,
-        text: `❌ Study "${studyName}" not found. Please verify the study name and try again.`,
-      });
-      return;
-    }
-
-    // Fetch and process the YAML template for stakeholder notes
-    const file = await fetchFileFromRepo(
-      getConfigRepo(),
-      YAML_TEMPLATE_PATH,
-      'stakeholder_synthesis.yaml',
-    );
-
-    const renderedYaml = await processYamlTemplate(
-      file.content,
-      stakeholderNotesData,
-      // @ts-expect-error — pre-existing type mismatch from require() → import migration
-      study.path,
-    );
-
-    const url: string = renderedYaml.result.url;
-
-    // Register in research_status so synthesis modal can discover this file
-    const stakeholderSynthesisFileName = url.split('/').pop() || 'stakeholder_synthesis.md';
-    await addStudyStatus({
-      study_name: studyName,
-      path: url,
-      file_name: stakeholderSynthesisFileName,
-      status: 'created',
-      created_by: body.user?.id || null,
-    });
-
-    // Generate and send result message
-    const blocks = generateStudyResultBlocks(studyName, study, url, channelId, 'stakeholder_notes');
-    await sendStudyResultMessage(client, channelId, studyName, blocks, 'stakeholder_notes');
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error('Error processing stakeholder notes:', error);
-    await client.chat.postMessage({
-      channel: channelId,
-      text: `❌ There was an error processing your stakeholder notes: ${message}\n\nPlease try again or contact support.`,
-    });
-  }
-}
-
 export {
   openStakeholderGuideModal,
-  openStakeholderInterviewGuideModal,
   handleStakeholderGuideSubmission,
-  openUploadStakeholderNotesModal,
-  handleStakeholderNotesSubmission,
 };
