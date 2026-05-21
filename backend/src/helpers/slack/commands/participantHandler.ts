@@ -9,6 +9,16 @@ import { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo } from "../../gith
 import { refreshDashboardAfterAction } from './fieldworkHandler';
 import type { View } from '@slack/types';
 
+/** Resolve Slack user ID to display name. Falls back to username, never to raw ID. */
+async function resolveDisplayName(client: AllMiddlewareArgs['client'], userId: string, fallbackName?: string): Promise<string> {
+  try {
+    const result = await client.users.info({ user: userId });
+    return result.user?.profile?.display_name || result.user?.real_name || fallbackName || 'Unknown';
+  } catch {
+    return fallbackName || 'Unknown';
+  }
+}
+
 async function participantHandler({ ack, body, client, command }: SlackCommandMiddlewareArgs & AllMiddlewareArgs): Promise<void> {
   try {
     console.log("🚀 ~ participantHandler ~ body:", body);
@@ -330,6 +340,7 @@ async function handleUpdateParticipantSubmission({ ack, body, view, client }: Sl
         const yamlTemplateFile = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, "participant_tracker.yaml");
 
         if (yamlTemplateFile && yamlTemplateFile.content) {
+          const displayName = await resolveDisplayName(client, body.user.id, body.user.name);
           const templateData = {
             study_id: studyId,
             study_name: study.name,
@@ -337,7 +348,7 @@ async function handleUpdateParticipantSubmission({ ack, body, view, client }: Sl
             status_select: newStatus,
             notes_field: updateNotes,
             current_date: new Date().toISOString().split('T')[0],
-            added_by: body.user.name || body.user.id
+            added_by: displayName
           };
 
           // @ts-expect-error — pre-existing type mismatch from require() → import migration
