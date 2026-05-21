@@ -1,5 +1,6 @@
 import { researchBriefModal } from './researchBriefModal';
 import { loadDiscoveryArtifacts, aggregateDiscoveryVariables, type DiscoveryArtifact } from '../../discoveryLoader';
+import { formatVariableCategories } from '../../cascadeVariableCategories';
 
 // ─── Modal metadata contract ─────────────────────────────────────
 
@@ -197,15 +198,12 @@ export async function buildBriefEntryModal(leadResearcher: string | null, channe
     } else {
       // Build checkbox options from artifacts — AUTO-SELECT ALL
       const checkboxOptions = artifacts.map(a => {
-        const countLabel = a.label === 'stakeholder'
-          ? `${a.variableCount} constraints/priorities`
-          : a.label === 'survey'
-            ? `${a.variableCount} themes/findings`
-            : `${a.variableCount} findings`;
+        const categories = formatVariableCategories(Object.keys(a.variables));
+        const categoryLabel = categories || `${a.variableCount} variables`;
         return {
           text: {
             type: "mrkdwn",
-            text: `${a.icon} *${a.slug}*\n      ${a.label} · ${countLabel} · ${a.date}`,
+            text: `${a.icon} *${a.slug}*\n      ${a.label} · ${categoryLabel} · ${a.date}`,
           },
           value: `${a.type}::${a.slug}`,
         };
