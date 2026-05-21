@@ -1,5 +1,57 @@
-/* eslint-disable max-len */
-/* eslint-disable quotes */
+/**
+ * Discussion Guide Modal v2.0
+ *
+ * v2.0: Cascade-driven redesign per modal design principles.
+ * - Study name → non-editable context block (handler reads from private_metadata)
+ * - Research focus and questions pre-filled from cascade by opener
+ * - Methodology pre-selected from cascade by opener
+ * - tree_test → tree_testing (matches brief enum)
+ * - Conversational labels
+ * - Cascade gate (opener hides form when required vars missing)
+ *
+ * v1.0: Lead moderator converted to users_select (PR #157)
+ */
+
+/** Block ID for the study name context display. Used by opener to inject study name. */
+export const DG_STUDY_DISPLAY_BLOCK_ID = 'dg_study_display_block';
+
+/**
+ * Reverse mapping: brief methodology label → select option value.
+ * Brief stores the label string (e.g., "Moderated usability testing") in cascade.
+ * This map converts it back to the select enum value for pre-selection.
+ *
+ * If the cascade value doesn't match any key, the select stays unset
+ * (custom method override or survey — no DG option for those).
+ */
+export const METHODOLOGY_LABEL_TO_VALUE: Record<string, string> = {
+  'Moderated usability testing': 'usability_testing',
+  'User interviews': 'user_interviews',
+  'Contextual inquiry': 'contextual_inquiry',
+  'Concept testing': 'concept_testing',
+  'Card sorting': 'card_sorting',
+  'Tree testing': 'tree_testing',
+  'Mixed methods': 'mixed_methods',
+  // Also handle raw enum values (in case extraction returns the value, not the label)
+  'usability_testing': 'usability_testing',
+  'user_interviews': 'user_interviews',
+  'contextual_inquiry': 'contextual_inquiry',
+  'concept_testing': 'concept_testing',
+  'card_sorting': 'card_sorting',
+  'tree_testing': 'tree_testing',
+  'mixed_methods': 'mixed_methods',
+};
+
+/** Select option value → display text for building initial_option. */
+export const METHODOLOGY_VALUE_TO_TEXT: Record<string, string> = {
+  usability_testing: 'Usability Testing',
+  user_interviews: 'User Interviews',
+  card_sorting: 'Card Sorting',
+  concept_testing: 'Concept Testing',
+  contextual_inquiry: 'Contextual Inquiry',
+  tree_testing: 'Tree Testing',
+  mixed_methods: 'Mixed Methods',
+};
+
 const discussionGuideModal = {
   type: "modal",
   callback_id: "discussion_guide_modal",
@@ -16,49 +68,31 @@ const discussionGuideModal = {
     text: "Cancel",
   },
   blocks: [
+    // Study name — non-editable display, set by opener
     {
       type: "context",
+      block_id: DG_STUDY_DISPLAY_BLOCK_ID,
       elements: [
         {
           type: "mrkdwn",
-          text: "Create a session guide for your user research. Qori generates introduction scripts, methodology-specific tasks, and closing protocols.",
+          text: ":speech_balloon: *{{study_name}}*\nBuilding a session guide from your approved brief.",
         },
       ],
     },
     {
       type: "divider",
     },
-    // Study (auto-populated)
-    {
-      type: "input",
-      block_id: "study_name",
-      element: {
-        type: "plain_text_input",
-        action_id: "value",
-        placeholder: {
-          type: "plain_text",
-          text: "Auto-selected study name",
-        },
-      },
-      label: {
-        type: "plain_text",
-        text: "Study",
-      },
-    },
-    {
-      type: "divider",
-    },
-    // Research goal / focus
+    // Research focus (pre-filled from cascade objectives by opener)
     {
       type: "input",
       block_id: "research_focus_block",
       label: {
         type: "plain_text",
-        text: "Research goal / focus",
+        text: "What should this session focus on?",
       },
       hint: {
         type: "plain_text",
-        text: "What are you trying to learn in this session?",
+        text: "Pre-filled from your brief — refine for this session",
       },
       element: {
         type: "plain_text_input",
@@ -70,17 +104,17 @@ const discussionGuideModal = {
         multiline: true,
       },
     },
-    // Research questions
+    // Research questions (pre-filled from cascade by opener)
     {
       type: "input",
       block_id: "research_questions_block",
       label: {
         type: "plain_text",
-        text: "Research questions",
+        text: "Which questions should this session answer?",
       },
       hint: {
         type: "plain_text",
-        text: "Specific questions this session should answer",
+        text: "Pre-filled from your brief — remove any not relevant to this session",
       },
       element: {
         type: "plain_text_input",
@@ -95,13 +129,13 @@ const discussionGuideModal = {
     {
       type: "divider",
     },
-    // Methodology
+    // Methodology (pre-selected from cascade by opener)
     {
       type: "input",
       block_id: "research_method_block",
       label: {
         type: "plain_text",
-        text: "Methodology",
+        text: "How are you running this session?",
       },
       element: {
         type: "static_select",
@@ -132,8 +166,8 @@ const discussionGuideModal = {
             value: "contextual_inquiry",
           },
           {
-            text: { type: "plain_text", text: "Tree Test" },
-            value: "tree_test",
+            text: { type: "plain_text", text: "Tree Testing" },
+            value: "tree_testing",
           },
           {
             text: { type: "plain_text", text: "Mixed Methods" },
@@ -148,7 +182,7 @@ const discussionGuideModal = {
       block_id: "session_length_block",
       label: {
         type: "plain_text",
-        text: "Session length",
+        text: "How long is each session?",
       },
       element: {
         type: "static_select",
