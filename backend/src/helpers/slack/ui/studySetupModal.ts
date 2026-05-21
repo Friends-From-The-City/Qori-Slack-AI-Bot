@@ -109,22 +109,6 @@ export function studySetupModalPlanStudy(studies: StudyOption[] | null, channelI
           value: "discussion_guide",
         },
       },
-      {
-        type: "section",
-        text: {
-          type: "mrkdwn",
-          text: ":studio_microphone: *Stakeholder interview guide*\nQuestions for PMs, engineers, policy SMEs",
-        },
-        accessory: {
-          type: "button",
-          text: {
-            type: "plain_text",
-            text: "Create",
-          },
-          action_id: "create_stakeholder_guide",
-          value: "stakeholder_guide",
-        },
-      },
     ],
   };
 }

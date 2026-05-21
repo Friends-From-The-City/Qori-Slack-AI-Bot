@@ -119,10 +119,6 @@ const TEMPLATE_CONSUMES: Record<string, ConsumeSpec[]> = {
     { key: 'target_barriers', required: true, label: 'Target barriers', source_hint: 'Create research brief first' },
     { key: 'participant_criteria', required: false, label: 'Participant criteria', source_hint: 'Create research brief first' },
   ],
-  stakeholder_interview_guide: [
-    { key: 'discovered_barriers', required: false, label: 'Discovered barriers', source_hint: 'Run desk research first' },
-    { key: 'knowledge_gaps', required: false, label: 'Knowledge gaps', source_hint: 'Run desk research first' },
-  ],
 };
 
 /**

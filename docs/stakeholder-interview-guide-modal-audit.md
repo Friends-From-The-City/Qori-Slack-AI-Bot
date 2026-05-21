@@ -1,9 +1,9 @@
 # Stakeholder Interview Guide Modal Design Audit
 
 **Date:** 2026-05-21
-**Status:** Review — no code changes until approved
-**Target:** `stakeholderInterviewGuideModal.ts` + `stakeholderHandler.ts`
-**Entry point:** `/qori-plan` → select study → "Create" next to Stakeholder interview guide
+**Status:** ARCHIVED — Template removed 2026-05-21. Pre-launch simplification: no validated researcher demand, architecturally problematic (no consumes block, misplaced under /qori-plan). Audit preserved as reference for cascade-driven UX patterns. If post-launch usage reveals demand, revisit as inline cascade-native suggestions, not a separate template.
+**Target (removed):** `stakeholderInterviewGuideModal.ts` + `stakeholderHandler.ts`
+**Entry point (removed):** `/qori-plan` → select study → "Create" next to Stakeholder interview guide
 
 ---
 
