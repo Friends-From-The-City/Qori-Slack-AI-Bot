@@ -1,0 +1,86 @@
+# Prioritized usability issue — severity-rated interface problem with evidence and fix
+# Emitted by: usability_issues_extractor
+# Consumed by: research_readout (findings prioritization)
+#
+# v1.0 (May 21, 2026): Initial schema. Lean required core (7 fields) for
+#   downstream prioritization + rich enrichment (10 nullable) for context.
+#   Replace strategy (study-level, not per-participant pool).
+type: object
+required: [id, issue_title, category, severity, participants_affected, evidence_nuggets, confidence]
+properties:
+  # ── Required core (7 fields) ──────────────────────────────
+  id:
+    type: string
+    description: "Format: issue-01, issue-02, etc."
+  issue_title:
+    type: string
+    description: "Specific issue name from participant language, not generic UX jargon"
+  category:
+    type: string
+    enum: [navigation, forms, search, content, visual_design, accessibility, feedback, workflow, error_handling]
+    description: "Issue classification for downstream filtering"
+  severity:
+    type: integer
+    description: "1-4 Nielsen scale: 1=cosmetic, 2=minor, 3=major, 4=catastrophic"
+  participants_affected:
+    type: array
+    items:
+      type: string
+    description: "PT-XXX IDs who experienced this issue"
+  evidence_nuggets:
+    type: array
+    items:
+      type: string
+    description: "References to atomic_nugget_core.id values documenting this issue"
+  confidence:
+    type: string
+    enum: [Strong, Moderate, Limited]
+    description: "Evidence quality assessment"
+
+  # ── Enrichment (10 nullable fields) ────────────────────────
+  issue_description:
+    type: string
+    nullable: true
+    description: "1-2 sentence description of what's broken and why it matters"
+  location:
+    type: string
+    nullable: true
+    description: "Specific screen, feature, or interface element where issue occurs"
+  frequency:
+    type: string
+    nullable: true
+    enum: [all_users, majority, several, isolated]
+    description: "How widely observed across participant pool"
+  participant_coverage:
+    type: string
+    nullable: true
+    description: "X of Y participants format, e.g. '4 of 6'"
+  task_impact:
+    type: string
+    nullable: true
+    description: "How this affects task completion (blocks, delays, workaround needed)"
+  fix_recommendation:
+    type: string
+    nullable: true
+    description: "Primary specific, actionable fix"
+  fix_complexity:
+    type: string
+    nullable: true
+    enum: [Low, Medium, High]
+    description: "Implementation effort estimate"
+  quick_win:
+    type: boolean
+    nullable: true
+    description: "True if low-effort fix with high impact"
+  linked_themes:
+    type: array
+    nullable: true
+    items:
+      type: string
+    description: "validated_theme.id references if issue maps to a theme"
+  linked_barriers:
+    type: array
+    nullable: true
+    items:
+      type: string
+    description: "target_barrier IDs (TB-XXX) if issue validates a barrier"
