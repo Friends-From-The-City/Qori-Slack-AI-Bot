@@ -616,7 +616,6 @@ export async function processParticipantYamlTemplate(
         participant_name: p.participant_name,
         contact_details: p.contact_details,
         recruitment_source: getRecruitmentSourceDisplay(p.recruitment_source || 'unknown'),
-        recruitment_source: p.recruitment_source,
         scheduled_date: formatScheduleDisplay(p.scheduled_date, p.scheduled_time),
         scheduled_time: p.scheduled_time,
         status_select: PARTICIPANT_STATUS_LABELS[p.status_select as ParticipantStatus] || p.status_select,
