@@ -93,6 +93,24 @@ Items accumulated during pre-migration work and during migration debugging. See 
 
 ---
 
+## Cascade visibility follow-ons
+
+Filed 2026-05-21 as part of the discovery surface redesign (D6: cascade visibility principle).
+
+### Brief modal discovery indicator
+
+Soft signal at top of `/qori-brief` modal showing what discovery artifacts will inform the brief. When artifacts exist: "Discovery available: 2 artifacts will inform this brief." When none: "No discovery yet — brief will be generated from your inputs alone." Information, not a gate. Must cohere with the existing discovery checkbox section. Ships separately after the discovery hub lands.
+
+**Why:** Discovery's cascade contribution is currently invisible until the researcher reaches the checkbox section. The indicator front-loads the information at the moment it matters — when the researcher is deciding whether to start a brief.
+
+### Generated artifact cascade-depth signal
+
+Every rendered document (brief, plan, discussion guide, downstream synthesis) shows what informed it in a "Generated from" block. Examples: "Generated from: researcher inputs + desk research (veteran-telehealth-barriers, May 15) + stakeholder synthesis (claims-process, May 18)" or "Generated from: researcher inputs only. No upstream discovery." Touches every cascade-emitting template's output structure. Separate workstream.
+
+**Why:** Federal customers care about provenance. Researchers care about knowing what their work is built on. The cascade summary section in brief and plan outputs partially does this but is currently more for engineers than researchers/stakeholders. This workstream makes it researcher-readable and consistent across all templates.
+
+---
+
 ## Slack surface area expansion
 
 These are larger product additions that change Qori's surface area meaningfully. Both are post-launch candidates — substantial enough to deserve dedicated design and implementation phases rather than being bundled with the current polish work.

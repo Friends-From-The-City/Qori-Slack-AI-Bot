@@ -1,16 +1,23 @@
 /**
  * discoverHandler.ts — /qori-discover slash command
  *
- * Discovery is pre-study research. This command opens a modal,
- * collects a topic + files + discovery type, then routes to the
- * appropriate YAML template. Output lands in _discovery/{type}/
+ * v2.0: Hub-based redesign per docs/qori-discover-redesign-spec.md.
+ * - Command opens a sections-with-accessories hub (no input blocks, no submit)
+ * - Hub shows existing discovery artifacts + next-step guidance (D1, D2)
+ * - Three "Start" buttons open type-specific modals via views.update
+ * - Single submission handler reads discoveryType from private_metadata
+ *
+ * Discovery is pre-study research. Output lands in _discovery/{type}/
  * in the qori-studies repo (not study-scoped).
  */
 
-import type { AllMiddlewareArgs, SlackCommandMiddlewareArgs, SlackViewMiddlewareArgs, ViewSubmitAction } from '@slack/bolt';
+import type { AllMiddlewareArgs, SlackActionMiddlewareArgs, SlackCommandMiddlewareArgs, SlackViewMiddlewareArgs, BlockAction, ViewSubmitAction } from '@slack/bolt';
 import type { View } from '@slack/types';
 
-import { discoverModal } from '../ui/discoverModal';
+import { discoverHubModal, DISCOVERY_GUIDANCE_BLOCK_ID, DISCOVERY_ARTIFACTS_BLOCK_ID } from '../ui/discoverHubModal';
+import { DISCOVER_TYPE_MODALS } from '../ui/discoverTypeModals';
+import { loadDiscoveryArtifacts, type DiscoveryArtifact } from '../../discoveryLoader';
+import { formatVariableCategories } from '../../cascadeVariableCategories';
 import { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo, createOrUpdateFileOnGitHub, fetchFileFromRepoByPath } from '../../github';
 import { format } from 'date-fns';
 import { processYamlTemplate } from '../../yamlProcessor';
@@ -75,18 +82,20 @@ interface DiscoveryTemplateInput {
   _discovery_team: string;
   selected_study: string;
   study_name: string;
-  // Mechanical document inventory (handler-assembled for Handlebars)
   document_count: number;
   document_names: string[];
   document_types: string[];
-  // Survey-specific
   survey_name?: string;
   question_focus?: string;
   survey_files?: UploadedFile[];
-  // Stakeholder-specific
   study_channel?: string;
   researcher_contact?: string;
   detected_files?: string;
+}
+
+interface DiscoverMeta {
+  channelId?: string;
+  discoveryType?: string;
 }
 
 // ─── Constants ──────────────────────────────────────────────────
@@ -120,6 +129,13 @@ const DISCOVERY_TYPES: Record<DiscoveryTypeKey, DiscoveryTypeConfig> = {
   },
 };
 
+/** Type-aware next-step guidance for success messages (D2). */
+const SUCCESS_GUIDANCE: Record<DiscoveryTypeKey, string> = {
+  desk_research: 'Run `/qori-discover` again for stakeholder interviews, or `/qori-brief` to start your study.',
+  stakeholder_synthesis: 'Run `/qori-discover` for survey data, or `/qori-brief` to start your study.',
+  survey_synthesis: 'Run `/qori-brief` to start your study — all discovery feeds in automatically.',
+};
+
 const DISCOVERY_README = `# Discovery Research
 
 Pre-study discovery research that informs briefs and accumulates as organizational memory across studies.
@@ -142,9 +158,6 @@ Each artifact is identified by a topic slug. Variables are stored per type in \`
 
 // ─── Helpers ────────────────────────────────────────────────────
 
-/**
- * Slugify a topic string for use in filenames and paths.
- */
 function slugifyTopic(topic: string): string {
   return topic
     .toLowerCase()
@@ -154,9 +167,6 @@ function slugifyTopic(topic: string): string {
     .replace(/^-|-$/g, '');
 }
 
-/**
- * Scaffold {team}/_discovery/ folders in qori-studies if they don't exist.
- */
 async function scaffoldDiscoveryFolders(team: string): Promise<void> {
   const readmePath = `${team}/_discovery/README.md`;
   try {
@@ -176,29 +186,163 @@ async function scaffoldDiscoveryFolders(team: string): Promise<void> {
   }
 }
 
+// ─── D1: Discovery visibility helpers ──────────────────────────
+
+/** Format artifact list for the hub's visibility section. Max 5, concrete categories. */
+function buildArtifactDisplayText(artifacts: DiscoveryArtifact[]): string {
+  if (artifacts.length === 0) {
+    return '_No discovery research yet. Start with desk research to build your team\'s knowledge base._';
+  }
+
+  const shown = artifacts.slice(0, 5);
+  const lines = shown.map(a => {
+    const varKeys = Object.keys(a.variables);
+    const categories = formatVariableCategories(varKeys);
+    const dateStr = a.date || '';
+    return `${a.icon} ${a.slug}${dateStr ? ` · ${dateStr}` : ''}${categories ? ` · ${categories}` : ''}`;
+  });
+
+  if (artifacts.length > 5) {
+    lines.push(`_...and ${artifacts.length - 5} more. These all feed into /qori-brief automatically._`);
+  } else {
+    lines.push('_These feed into /qori-brief automatically._');
+  }
+
+  return lines.join('\n');
+}
+
+// ─── D2: Next-step guidance ────────────────────────────────────
+
+/** Build guidance text based on which discovery types have artifacts. */
+function buildGuidanceText(artifacts: DiscoveryArtifact[]): string {
+  const hasDesk = artifacts.some(a => a.type === 'desk-research');
+  const hasStakeholder = artifacts.some(a => a.type === 'stakeholder-interviews');
+  const hasSurvey = artifacts.some(a => a.type === 'survey-synthesis');
+
+  const key = `${hasDesk ? '1' : '0'}-${hasStakeholder ? '1' : '0'}-${hasSurvey ? '1' : '0'}`;
+
+  const GUIDANCE: Record<string, string> = {
+    '0-0-0': '_Start with desk research — reports and background docs build the foundation._',
+    '1-0-0': '_Desk research done. Stakeholder interviews add constraints and priorities._',
+    '0-1-0': '_Stakeholder context captured. Add desk research for broader grounding._',
+    '0-0-1': '_Survey data captured. Add desk research or stakeholder context to round out discovery._',
+    '1-1-0': '_Ready for /qori-brief, or add survey data first._',
+    '1-0-1': '_Ready for /qori-brief, or add stakeholder interviews for constraints._',
+    '0-1-1': '_Ready for /qori-brief, or add desk research for broader grounding._',
+    '1-1-1': '_Discovery complete. Run /qori-brief to start your study._',
+  };
+
+  return GUIDANCE[key] || '_Discovery in progress. Run /qori-brief when you\'re ready to start your study._';
+}
+
 // ─── Command handler ────────────────────────────────────────────
 
 async function discoverHandler({ ack, body, client, command }: SlackCommandMiddlewareArgs & AllMiddlewareArgs): Promise<void> {
   await ack();
 
   const channelId = command.channel_id;
+  const team = getTeamSlug();
 
   try {
+    // Load existing discovery artifacts for visibility + guidance
+    let artifacts: DiscoveryArtifact[] = [];
+    try {
+      artifacts = await loadDiscoveryArtifacts(team);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn('Could not load discovery artifacts for hub:', message);
+    }
+
+    // Build dynamic hub blocks — loose typing for Block Kit manipulation
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const blocks: any[] = [...discoverHubModal.blocks];
+
+    // Inject D2 guidance
+    const guidanceIdx = blocks.findIndex(b => b.block_id === DISCOVERY_GUIDANCE_BLOCK_ID);
+    if (guidanceIdx !== -1) {
+      blocks[guidanceIdx] = {
+        ...blocks[guidanceIdx],
+        elements: [
+          {
+            type: "mrkdwn",
+            text: buildGuidanceText(artifacts),
+          },
+        ],
+      };
+    }
+
+    // Inject D1 artifact visibility
+    const artifactsIdx = blocks.findIndex(b => b.block_id === DISCOVERY_ARTIFACTS_BLOCK_ID);
+    if (artifactsIdx !== -1) {
+      blocks[artifactsIdx] = {
+        ...blocks[artifactsIdx],
+        elements: [
+          {
+            type: "mrkdwn",
+            text: buildArtifactDisplayText(artifacts),
+          },
+        ],
+      };
+    }
+
     await client.views.open({
       trigger_id: body.trigger_id,
       view: {
-        ...discoverModal,
-        private_metadata: JSON.stringify({ channelId }),
+        ...discoverHubModal,
+        blocks,
+        private_metadata: JSON.stringify({ channelId } satisfies DiscoverMeta),
       } as View,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     const detail = (err as Record<string, unknown>)?.data ?? message;
-    console.error('Error opening discover modal:', detail);
+    console.error('Error opening discover hub:', detail);
     await client.chat.postMessage({
       channel: channelId,
-      text: '❌ Failed to open the discovery modal. Please try again.',
+      text: '❌ Failed to open the discovery hub. Please try again.',
     });
+  }
+}
+
+// ─── Action handler: hub → type-specific modal ─────────────────
+
+async function openDiscoverTypeModal({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs): Promise<void> {
+  await ack();
+
+  if (!('view' in body) || !body.view) {
+    console.warn('Discovery type opener received non-modal action context');
+    return;
+  }
+
+  try {
+    const meta = JSON.parse(body.view.private_metadata || '{}') as DiscoverMeta;
+
+    // Extract discovery type from the action value
+    const action = (body as any).actions?.[0];
+    const discoveryType: string | undefined = action?.value;
+
+    if (!discoveryType || !DISCOVER_TYPE_MODALS[discoveryType]) {
+      console.error('Unknown discovery type from action:', discoveryType);
+      return;
+    }
+
+    const modal = DISCOVER_TYPE_MODALS[discoveryType];
+
+    await client.views.update({
+      view_id: body.view.id,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Block Kit types don't align with Slack's View type
+      view: {
+        ...modal,
+        private_metadata: JSON.stringify({
+          channelId: meta.channelId,
+          discoveryType,
+        } satisfies DiscoverMeta),
+      } as any as View,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const detail = (err as Record<string, unknown>)?.data ?? message;
+    console.error('Error opening discovery type modal:', detail);
   }
 }
 
@@ -208,12 +352,22 @@ async function handleDiscoverSubmission({ ack, view, body, client }: SlackViewMi
   await ack();
 
   const values = view.state.values;
-  const meta = JSON.parse(view.private_metadata || '{}') as { channelId?: string };
-  const { channelId } = meta;
+  const meta = JSON.parse(view.private_metadata || '{}') as DiscoverMeta;
+  const { channelId, discoveryType } = meta;
   const userId: string = body.user?.id || '';
 
+  const replyChannel: string = channelId || userId;
+
+  // Read discovery type from private_metadata (set by action handler)
+  if (!discoveryType || !DISCOVERY_TYPES[discoveryType as DiscoveryTypeKey]) {
+    await client.chat.postMessage({
+      channel: replyChannel,
+      text: '❌ Discovery type missing. Please try again from /qori-discover.',
+    });
+    return;
+  }
+
   // Extract form values
-  const discoveryType = values.discovery_type_block?.discovery_type?.selected_option?.value as string | undefined;
   const topic = values.topic_block?.topic?.value?.trim() as string | undefined;
   const description = values.description_block?.description?.value?.trim() || null;
   const surveyName = values.survey_name_block?.survey_name?.value?.trim() || null;
@@ -226,17 +380,7 @@ async function handleDiscoverSubmission({ ack, view, body, client }: SlackViewMi
     url: file.url_private,
   })) || [];
 
-  const replyChannel: string = channelId || userId;
-
   // Validate required fields
-  if (!discoveryType || !DISCOVERY_TYPES[discoveryType as DiscoveryTypeKey]) {
-    await client.chat.postMessage({
-      channel: replyChannel,
-      text: '❌ Please select a discovery type.',
-    });
-    return;
-  }
-
   if (!topic) {
     await client.chat.postMessage({
       channel: replyChannel,
@@ -257,14 +401,6 @@ async function handleDiscoverSubmission({ ack, view, body, client }: SlackViewMi
     await client.chat.postMessage({
       channel: replyChannel,
       text: '❌ Please upload at least one file to analyze.',
-    });
-    return;
-  }
-
-  if (discoveryType === 'survey_synthesis' && !surveyName) {
-    await client.chat.postMessage({
-      channel: replyChannel,
-      text: '❌ Survey name is required for survey synthesis. Please try again.',
     });
     return;
   }
@@ -317,7 +453,6 @@ async function handleDiscoverSubmission({ ack, view, body, client }: SlackViewMi
     const parsedDocuments: ParsedDocuments = parseDocuments(documents);
     const formattedDocumentContent: string = parsedDocuments.structured_format;
 
-    // Mechanical document inventory for Handlebars rendering
     const MIME_LABELS: Record<string, string> = {
       'application/pdf': 'PDF',
       'text/plain': 'Text',
@@ -371,6 +506,10 @@ async function handleDiscoverSubmission({ ack, view, body, client }: SlackViewMi
 
     const url: string = renderedYaml.result.url;
 
+    // Type-aware next-step guidance (D2)
+    const nextStep = SUCCESS_GUIDANCE[discoveryType as DiscoveryTypeKey]
+      || 'Run `/qori-brief` to start your study.';
+
     await client.chat.postMessage({
       channel: replyChannel,
       blocks: [
@@ -407,7 +546,7 @@ async function handleDiscoverSubmission({ ack, view, body, client }: SlackViewMi
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: `*Next:* Run \`/qori-brief\` to initiate a study informed by this discovery.`,
+            text: `*Next:* ${nextStep}`,
           },
         },
       ],
@@ -426,5 +565,6 @@ async function handleDiscoverSubmission({ ack, view, body, client }: SlackViewMi
 
 export {
   discoverHandler,
+  openDiscoverTypeModal,
   handleDiscoverSubmission,
 };
