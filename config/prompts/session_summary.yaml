@@ -3,24 +3,21 @@
 # ═══════════════════════════════════════════════════════════
 id: analyze_notes
 name: analyze_session_notes
-label: "📝 Analyze Notes"
-version: "v2.0"
-description: Cascade-aware session analysis — generates session summary with pain points, barrier validation, cascade citation markers, and rich variable emissions for downstream templates
+label: "Analyze Notes"
+version: "v7.0"
+
+description: |
+  Analyze session transcript and observer notes to produce a structured
+  session summary with pain points, insights, and barrier validation.
+  v7.0: Interleaved Handlebars/AI — mechanical content rendered by
+  template, LLM writes bounded analytical sections. Emits 5 pool
+  variables (atomic nuggets, participant metadata, task completion
+  records, barrier validations) consumed by all downstream synthesis
+  and readout templates. Per ADR 0005/0016.
 
 author: Qori R&D
 created: 2025-10-25
-last_updated: 2026-05-04
-
-# v2.0 CHANGELOG (2026-05-04)
-# - Cascade-aware: consumes target_barriers, research_questions, methodology_selection from brief
-# - Deepened schemas: atomic_nugget, participant_metadata, task_completion_record, barrier_validation
-#   now capture verbatim quotes, behavioral context, emotional state, confidence levels
-# - Added Barrier Validation section (conditional on upstream target_barriers)
-# - Added Upstream Context appendix (conditional on upstream variables)
-# - Added CASCADE-AWARE GENERATION instructions for TB/RQ citation markers
-# - Modal shows Cascade Context section when brief variables exist
-# - atomic_nuggets pool_strategy changed to append_or_replace_per_participant
-# - Added methodology_selection to consumes block
+last_updated: 2026-05-21
 
 # ═══════════════════════════════════════════════════════════
 # CONFIGURATION
@@ -150,11 +147,18 @@ emits:
     extract_from: "Barrier validation section, findings that confirm or refute target barriers"
 
 # ═══════════════════════════════════════════════════════════
-# AI GENERATION
+# AI GENERATION — focused, bounded task
 # ═══════════════════════════════════════════════════════════
 ai_generation_tasks:
-  - task_id: "analyze_and_extract"
-    output_variable: "session_summary_output"
+
+  # Single analysis_body task — Summary + participant context + pain points
+  # + what worked + key insights + recommended actions + barrier validation
+  # (conditional) + methodology prose.
+  # Kept as one task because of strong cross-section coherence: summary
+  # callout references pain points, insights reference pain points,
+  # recommended actions address pain points by number, barrier validation
+  # cross-references findings, methodology counts sources.
+  - task_id: "analysis_body"
     prompt: |
       You are analyzing a UX research session to create a comprehensive session summary.
 
@@ -251,14 +255,10 @@ ai_generation_tasks:
         Example: Limited (observer interpretation, no direct quote)
 
       ============================================================
-      OUTPUT DOCUMENT
+      GENERATE THESE SECTIONS
       ============================================================
 
-      # Session Summary: {{participant_id}}
-
-      **Study:** {{study_name}} &nbsp; | &nbsp; **Researcher:** {{researcher_contact}} &nbsp; | &nbsp; **Date:** {{session_date}}
-
-      ---
+      Output ALL sections below. Use ## headings. Do not stop early.
 
       ## Summary
 
@@ -390,7 +390,7 @@ ai_generation_tasks:
 
       | Target barrier | Status | Evidence |
       |----------------|--------|----------|
-      | TB-001: [barrier text from brief] | ✓ Confirmed / ✗ Refuted / ◯ Not addressed | [observation summary with quote ref] |
+      | TB-001: [barrier text from brief] | Confirmed / Refuted / Not addressed | [observation summary with quote ref] |
       | TB-002: [barrier text] | [status] | [evidence] |
 
       **Confidence** — [Strong/Moderate/Limited] ([parenthetical reasoning for overall barrier validation confidence])
@@ -412,59 +412,11 @@ ai_generation_tasks:
 
       **Limitations** — [Single participant caveat. Note source completeness. Cross-reference recommendation.]
 
-      ### References
-
-      - Nielsen Norman Group — Moderated usability testing methodology
-      - Krug, S. — *Rocket Surgery Made Easy* (2010)
-      - Hall, E. — *Just Enough Research* (2nd ed., 2019)
-      - W3C Web Content Accessibility Guidelines (WCAG) 2.2
-
-      ---
-
-      {% if upstream_target_barriers %}
-      ## Upstream context
-
-      This session summary was analyzed against upstream inputs from the research brief.
-
-      | Source | Used for |
-      |--------|----------|
-      | research_brief ({{study_name}}) | Target barriers [TB-001..n], research questions [RQ-001..n], methodology context |
-
-      Citation markers throughout: [TB-XXX] = target barriers, [RQ-XXX] = research questions.
-
-      ---
-
-      {% endif %}
-      ## Appendix
-
-      <details>
-      <summary><strong>Sources analyzed</strong></summary>
-
-      | Source | Location | Status |
-      |--------|----------|--------|
-      | {{participant_id}} transcript | 03-fieldwork/transcripts/ | Analyzed |
-      | Observer notes | 03-fieldwork/session-notes/ | [Include count if used, or "Not included"] |
-
-      Only sources that were actually analyzed are listed. The transcript is the primary source; observer notes are supporting context when available.
-
-      </details>
-
-      <details>
-      <summary><strong>Validity checklist</strong></summary>
-
-      | Criterion | Verified |
-      |-----------|:--------:|
-      | All quotes verbatim from session transcript | ✓ |
-      | Pain points grounded in specific observed behaviors | ✓ |
-      | Inferences (insights, opportunities) traced to evidence | ✓ |
-      | Confidence levels declared per pain point | ✓ |
-      | Source documents listed in methodology | ✓ |
-
-      </details>
-
-      ============================================================
-      QUALITY CHECKS (do not include in output)
-      ============================================================
+      OUTPUT BOUNDARIES: Do not generate the document title, masthead,
+      references list, upstream context section, sources appendix,
+      validity checklist, or cascade summary. The template handles
+      those sections.
+      USE ## headings for each section (## Summary, ## Pain points, etc.).
 
       Before outputting, verify:
       - Every pain point has source evidence and a Confidence level with reasoning
@@ -473,130 +425,121 @@ ai_generation_tasks:
       - Insights reveal something about the USER, not just the interface
       - Actions link to specific pain points by number
       - Summary narrative references specific findings from THIS session
-
       Do NOT output a footer or "Generated by Qori" line — that is added automatically.
 
 # ═══════════════════════════════════════════════════════════
-# OUTPUT
+# OUTPUT — interleaved Handlebars + AI prose
 # ═══════════════════════════════════════════════════════════
 output_template: |
-  {{ai_generated.analyze_and_extract}}
+  # Session Summary: {{participant_id}}
+
+  **Study:** {{study_name}} &nbsp; | &nbsp; **Analyzer:** {{analyzer}} &nbsp; | &nbsp; **Date:** {{session_date}}
+
+  ---
+
+  {{ai_generated.analysis_body}}
+
+  ---
+
+  ### References
+
+  - Nielsen Norman Group -- Moderated usability testing methodology
+  - Krug, S. -- *Rocket Surgery Made Easy* (2010)
+  - Hall, E. -- *Just Enough Research* (2nd ed., 2019)
+  - W3C Web Content Accessibility Guidelines (WCAG) 2.2
+
+  ---
+
+  {{#if upstream_target_barriers}}
+  <details>
+  <summary><strong>Upstream context</strong></summary>
+
+  This session summary was analyzed against upstream inputs from the research brief.
+
+  | Source | Used for |
+  |--------|----------|
+  | research_brief ({{study_name}}) | Target barriers [TB-001..n], research questions [RQ-001..n], methodology context |
+
+  Citation markers throughout: [TB-XXX] = target barriers, [RQ-XXX] = research questions.
+
+  </details>
+  {{/if}}
+
+  <details>
+  <summary><strong>Sources analyzed</strong></summary>
+
+  | Source | Location | Status |
+  |--------|----------|--------|
+  | {{participant_id}} transcript | 03-fieldwork/transcripts/ | Analyzed |
+  | Observer notes | 03-fieldwork/session-notes/ | Analyzed |
+
+  Only sources that were actually analyzed are listed. The transcript is the primary source; observer notes are supporting context when available.
+
+  </details>
+
+  <details>
+  <summary><strong>Validity checklist</strong></summary>
+
+  | Criterion | Verified |
+  |-----------|:--------:|
+  | All quotes verbatim from session transcript | |
+  | Pain points grounded in specific observed behaviors | |
+  | Inferences (insights, opportunities) traced to evidence | |
+  | Confidence levels declared per pain point | |
+  | Source documents listed in methodology | |
+
+  </details>
+
+  ---
+
+  ## Cascade summary
+
+  This session summary emits pool variables consumed by downstream synthesis templates.
+
+  | Variable | Pool | Strategy | Description |
+  |----------|:----:|----------|-------------|
+  | atomic_nugget_core | Yes | append_or_replace_per_participant | Core observation fields (6 required) |
+  | atomic_nugget_detail | Yes | append_or_replace_per_participant | Enrichment fields linked by id (10 nullable) |
+  | participant_metadata | Yes | append_or_replace_per_participant | Demographics and session context |
+  | task_completion_records | Yes | append_or_replace_per_participant | Per-task success/failure records |
+  | barrier_validations | Yes | append_or_replace_per_participant | Target barrier confirmation/refutation |
+
+  **Consumed from upstream:**
+
+  | Variable | Source | Role |
+  |----------|--------|------|
+  | target_barriers | research_brief | Barrier validation grounding |
+  | research_questions | research_brief | Question framing |
+  | methodology_selection | research_brief | Observation framing |
 
 output_options:
   path: "03-fieldwork/session-summaries/"
   filename: "{{participant_id}}-session-summary-{{current_date_iso}}.md"
 
 # ═══════════════════════════════════════════════════════════
-# METADATA (documentation only — not read by backend)
+# METADATA
 # ═══════════════════════════════════════════════════════════
-slack_command:
-  command: "/analyze-notes"
-  description: "Analyze session notes and transcript to generate summary"
-  usage_hint: "Select session, notes, and transcript to analyze"
-
-external_data_sources:
-  sessions:
-    file_path: "03-fieldwork/sessions/"
-    endpoint: "/api/slack/options/sessions"
-    cache_duration: "5 minutes"
-    option_mapping:
-      value: "{{session_id}}"
-      label: "{{participant_id}} - {{participant_name}} ({{session_date}})"
-      description: "{{study_name}} | {{notes_count}} notes available"
-    filters:
-      - has_notes: true
-      - status: "completed"
-
-  session_notes:
-    file_path: "03-fieldwork/session-notes/{{session_id}}/"
-    endpoint: "/api/slack/options/session-notes"
-    dynamic: true
-    depends_on: "session_id"
-    option_mapping:
-      value: "{{note_file_path}}"
-      label: "{{observer_name}} - {{submission_date}}"
-      description: "{{note_length}} characters | Submitted {{submission_time}}"
-
-  coded_transcripts:
-    file_path: "03-fieldwork/coded-transcripts/{{session_id}}/"
-    endpoint: "/api/slack/options/coded-transcripts"
-    dynamic: true
-    depends_on: "session_id"
-    option_mapping:
-      value: "{{coded_transcript_file_path}}"
-      label: "{{coded_transcript_name}}"
-      description: "{{codes_count}} codes | {{pain_points_count}} pain points"
-
-slack_ui:
-  modal:
-    title: "Analyze Notes"
-    submit_label: "Analyze & Generate"
-    close_label: "Cancel"
-    sections:
-      - section_title: "Session Selection"
-        section_description: "Choose the session to analyze"
-        fields:
-          - session_id
-      - section_title: "Sources to Analyze"
-        section_description: "Select notes and session transcript for analysis"
-        fields:
-          - selected_notes
-          - coded_transcript_file
-
-processing_rules:
-  combine_multiple_notes: true
-  transcript_is_primary_source: true
-  synthesize_all_sources: true
-  extract_verbatim_quotes: true
-  prioritize_by_severity: true
-  fail_gracefully_on_empty_sources: true
-  require_source_attribution: true
-
-validation_rules:
-  require_at_least_one_note: true
-  require_transcript: true
-  validate_quote_format: true
-  check_timestamp_presence: true
-
-quality_assurance:
-  verify_quote_accuracy: true
-  check_severity_labels: true
-  validate_impact_levels: true
-  ensure_actionable_recommendations: true
-  cross_reference_sources: true
-
-notify:
-  - role: team
-    action: "Session summary generated"
-    channel: "{{study_channel}}"
-    message: "Session summary for {{participant_id}} is ready for review."
-
 notes: |
-  v1.6 Changes (Design Language Translation):
-  - Translated locked design from docs/design-references/session-summary-reference.md
-  - Modified Pattern A traceability: Confidence per pain point, Sources consolidated
-    in Methodology (not per-finding — single participant, same source files)
-  - Added Summary section with narrative + > [!IMPORTANT] callout
-  - Pain points: removed <details> collapsing (core content, not supplementary),
-    added editorial numbering (### 01 &nbsp;&nbsp;), added Confidence metadata line,
-    severity moved from sub-headings to per-item metadata
-  - Participant context: GFM table → bold-em-dash paragraphs (standard 4.3)
-  - What worked: table → H3 sub-sections with quotes
-  - Key insights: HTML two-column table → sequential H3 sections
-  - Removed Verbatim Quotes section (quotes inline as evidence in pain points/insights)
-  - Removed ASCII art "Findings at a Glance" box (Summary section replaces)
-  - Removed Session Metadata <details> (backend footer covers this)
-  - Methodology: tables → bold-em-dash prose, added References
-  - Added Appendix with Related Artifacts + Validity Checklist
-  - Footer removed from prompt (backend buildTraceabilityFooter handles it)
-  - Filename: {{participant_id}}-session-summary-{{current_date_iso}}.md
-  - H1: clean text with participant ID (# Session Summary: PT-001)
-  - Added masthead (Study/Researcher/Date)
+  v7.0: Interleaved Handlebars/AI architecture (ADR 0005/0016 pattern).
+  - Monolithic analyze_and_extract task replaced by analysis_body task.
+  - Handlebars renders: masthead, references (static), upstream context
+    (toggle, conditional), sources appendix (toggle), validity checklist
+    (toggle), cascade summary (always present).
+  - Barrier validation conditional stays in AI prompt (Option b from delta —
+    avoids wasted generation when no upstream barriers exist).
+  - Methodology prose stays in AI task (varies per session — format, tasks,
+    source count, limitations). References moved to Handlebars (static).
+  - OUTPUT BOUNDARIES instruction added.
+  - Dead metadata sections removed (slack_command, external_data_sources,
+    slack_ui, processing_rules, validation_rules, quality_assurance, notify —
+    all documentation-only, never read by backend. Handler is source of truth).
+  - Validity checklist checkmarks removed (reviewer prompts, not auto-populated).
+  - Cascade summary added (standard v7.0 — 5 emits + 3 consumes).
+  - Quality checks moved to prompt-only instructions (no longer in output structure).
+  - All 5 emit schemas and 3 consumes unchanged from v2.0.
+  - No handler changes needed (analyzeNotesHandler.ts independent of prompt structure).
 
-  v1.5: Standards Polish (canonical structure, dead config removal)
-  v1.4: GitHub-styled output with collapsible sections
-
-output_use: |
-  Analyzes session notes and transcript together to generate comprehensive session
-  summaries. Synthesizes multiple observer perspectives with transcript content to
-  extract pain points with confidence levels, insights, and actionable recommendations.
+  v2.0: Cascade-aware retrofit (superseded by v7.0).
+  v1.6: Design language translation.
+  v1.5: Standards polish.
+  v1.4: GitHub-styled output with collapsible sections.
