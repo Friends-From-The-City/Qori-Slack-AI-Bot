@@ -558,7 +558,7 @@ export async function processParticipantYamlTemplate(
         recruitment_source: p.recruitment_source,
         scheduled_date: p.scheduled_date,
         scheduled_time: p.scheduled_time,
-        status_select: p.status_select,
+        status_select: PARTICIPANT_STATUS_LABELS[p.status_select as ParticipantStatus] || p.status_select,
         notes_field: p.notes_field,
         demographics_info: p.demographics_info,
       })),
