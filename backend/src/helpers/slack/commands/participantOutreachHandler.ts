@@ -1019,7 +1019,13 @@ async function handleAddParticipantSubmit({ ack, body, view, client }: SlackView
     };
 
     const current_date = new Date().toISOString().split('T')[0];
-    const added_by = userId;
+    let added_by = userId;
+    try {
+      const userInfo = await client.users.info({ user: userId });
+      added_by = userInfo.user?.profile?.display_name || userInfo.user?.real_name || userId;
+    } catch {
+      // Fall through with userId if API fails
+    }
 
     const data = {
       study_id,
