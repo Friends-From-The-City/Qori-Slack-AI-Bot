@@ -41,7 +41,7 @@ import { handleMarkChangesCompleteAction, handleMarkChangesCompleteModal, handle
 import { openDiscussionGuideModal, handleDiscussionGuideSubmission } from './commands/discussion-guide/discussionGuideHandler';
 
 // Discovery
-import { discoverHandler, handleDiscoverSubmission } from './commands/discoverHandler';
+import { discoverHandler, openDiscoverTypeModal, handleDiscoverSubmission } from './commands/discoverHandler';
 
 // Fieldwork
 import { fieldworkHandler, handleFieldworkStudyPickerSubmit, handleFieldworkAddParticipant, handleFieldworkUpdateStatus, handleFieldworkObserve, handleFieldworkOutreach, handleFieldworkUploadNotes } from './commands/fieldworkHandler';
@@ -261,7 +261,12 @@ slackApp.view('discussion_guide_modal', handleDiscussionGuideSubmission);
 
 // ─── Discovery ──────────────────────────────────────────────────
 
-slackApp.view('discover_modal', handleDiscoverSubmission);
+slackApp.action('discover_desk_research', openDiscoverTypeModal);
+slackApp.action('discover_stakeholder_synthesis', openDiscoverTypeModal);
+slackApp.action('discover_survey_synthesis', openDiscoverTypeModal);
+slackApp.view('discover_desk_research_modal', handleDiscoverSubmission);
+slackApp.view('discover_stakeholder_modal', handleDiscoverSubmission);
+slackApp.view('discover_survey_modal', handleDiscoverSubmission);
 
 // ─── Fieldwork & participants ───────────────────────────────────
 
