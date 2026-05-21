@@ -1,0 +1,91 @@
+# Design HMW opportunity — research-grounded How Might We statement
+# Emitted by: design_opportunity_generator
+# Consumed by: none currently (structural completeness + future readiness)
+#
+# v1.0 (May 21, 2026): Initial schema. Replace strategy (study-level).
+#
+# DESIGN NOTE — HMW as single field:
+# The hmw_statement is a single string field, unlike validated_job's
+# three-field When/Want/So split. HMW statements are read holistically —
+# splitting would lose the rhetorical rhythm ("How might we [verb] for
+# [user] when [situation] so that [outcome]?"). The verb/user/situation/
+# outcome formula is a prompt instruction that guides generation, not an
+# extraction structure that downstream consumers reference by part.
+#
+# Emerging principle: split structured statements only when downstream
+# consumers need to reference parts independently. JTBD's triad is split
+# because design_opportunities keys on want_motivation for HMW framing.
+# HMW statements have no consumer that needs sub-parts.
+type: object
+required: [id, hmw_title, hmw_statement, source_problem, evidence_nuggets, confidence]
+properties:
+  # ── Required core (6 fields) ──────────────────────────────
+  id:
+    type: string
+    description: "Format: hmw-01, hmw-02, etc."
+  hmw_title:
+    type: string
+    description: "Short descriptive name for the opportunity"
+  hmw_statement:
+    type: string
+    description: "Full HMW: 'How might we [verb] for [user] when [situation] so that [outcome]?'"
+  source_problem:
+    type: string
+    description: "1-2 sentence problem statement grounded in research quote"
+  evidence_nuggets:
+    type: array
+    items:
+      type: string
+    description: "References to atomic_nugget_core.id values"
+  confidence:
+    type: string
+    enum: [Strong, Moderate, Limited]
+    description: "Evidence quality assessment"
+
+  # ── Enrichment (9 nullable fields) ─────────────────────────
+  participants_affected:
+    type: array
+    nullable: true
+    items:
+      type: string
+    description: "PT-XXX IDs whose data supports this opportunity"
+  participant_coverage:
+    type: string
+    nullable: true
+    description: "X of Y participants format, e.g. '3 of 6'"
+  impact:
+    type: string
+    nullable: true
+    enum: [High, Medium, Low]
+    description: "User impact if problem remains unsolved"
+  effort:
+    type: string
+    nullable: true
+    enum: [High, Medium, Low]
+    description: "Implementation effort estimate"
+  design_direction:
+    type: string
+    nullable: true
+    description: "General approach — NOT a specific solution"
+  success_metric:
+    type: string
+    nullable: true
+    description: "Measurable outcome (e.g., 'finds feature in under 2 taps')"
+  linked_themes:
+    type: array
+    nullable: true
+    items:
+      type: string
+    description: "validated_theme.id references"
+  linked_jobs:
+    type: array
+    nullable: true
+    items:
+      type: string
+    description: "validated_job.id references if opportunity addresses a job"
+  linked_barriers:
+    type: array
+    nullable: true
+    items:
+      type: string
+    description: "target_barrier IDs (TB-XXX)"

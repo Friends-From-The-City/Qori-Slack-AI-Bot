@@ -3,16 +3,20 @@
 # ═══════════════════════════════════════════════════════════
 id: design_opportunities
 name: generate_design_opportunities
-label: 💡 Design Opportunities
-version: "v2.4"
+label: "Design Opportunities"
+version: "v7.0"
 
-description: >
-  Transform research-grounded problems into How Might We (HMW) opportunity
-  statements. Each opportunity traces directly to user evidence.
+description: |
+  Transform research-grounded problems into How Might We (HMW)
+  opportunity statements. Each opportunity traces directly to user
+  evidence. v7.0: Interleaved Handlebars/AI — mechanical content
+  rendered by template, LLM writes bounded analytical sections.
+  Emits design_hmw_opportunities for structural completeness and
+  future consumption. Replace strategy (study-level). Per ADR 0005/0016.
 
 author: Qori R&D
 created: 2025-06-26
-last_updated: 2026-04-29
+last_updated: 2026-05-21
 
 # ═══════════════════════════════════════════════════════════
 # CONFIGURATION
@@ -24,295 +28,409 @@ input_processing: auto_file_discovery
 # INPUTS
 # ═══════════════════════════════════════════════════════════
 input_variables:
-  - selected_study              # Study name from synthesis modal dropdown
-  - include_session_summaries   # Boolean from checkbox (OPTIONAL)
-  - include_transcripts         # Boolean from checkbox (OPTIONAL)
-  - include_existing_analysis   # Boolean from checkbox (OPTIONAL)
-  - discovered_files            # Files found by auto-discovery (GENERATED)
-  - combined_file_content       # Auto-combined content from selected files (GENERATED)
+  - selected_study
+  - include_research_plan
+  - include_participant_notes
+  - include_raw_transcripts
+  - discovered_files
+  - combined_file_content
 
 # ═══════════════════════════════════════════════════════════
 # CASCADE CONTRACT
 # ═══════════════════════════════════════════════════════════
 consumes:
-  - key: atomic_nuggets
+  - key: atomic_nugget_core
     source: session_summary
     required: true
-    inject_as: context
-    description: "Atomic observations — evidence base for opportunities"
+    inject_as: reference
+    description: "Pool of typed observations — primary evidence for opportunities"
+
+  - key: atomic_nugget_detail
+    source: session_summary
+    required: true
+    inject_as: reference
+    description: "Rich context for nuggets — verbatim quotes, behaviors, emotional state"
+
   - key: validated_themes
     source: affinity_mapping
     required: false
-    inject_as: context
-    description: "Validated themes to ground opportunities"
+    inject_as: reference
+    description: "Cross-participant patterns to ground opportunities"
+
   - key: personas
     source: persona_generator
     required: false
-    inject_as: context
-    description: "Personas to anchor opportunity framing (who benefits)"
+    inject_as: reference
+    description: "Behavioral archetypes — who benefits from each opportunity"
+
   - key: stakeholder_constraints
     source: stakeholder_synthesis
     required: false
     inject_as: context
     description: "Constraints that bound feasibility of opportunities"
 
+  - key: validated_jobs
+    source: jobs_to_be_done
+    required: false
+    inject_as: reference
+    description: "Progress-focused jobs — what users are trying to accomplish"
+
+  - key: target_barriers
+    source: research_brief
+    required: false
+    inject_as: grounding
+    description: "Hypothesized barriers — opportunities can address these"
+
+  - key: research_questions
+    source: research_brief
+    required: false
+    inject_as: context
+    description: "Research questions to address through opportunity analysis"
+
+emits:
+  - key: design_hmw_opportunities
+    pool: false
+    pool_strategy: replace
+    extraction_model: sonnet
+    schema:
+      type: array
+      items:
+        $ref: schemas/design_hmw_opportunity.yaml
+    extract_from: "ALL numbered opportunity sections — extract EVERY opportunity as a separate array item"
+
 # ═══════════════════════════════════════════════════════════
-# AI GENERATION
+# AI GENERATION — focused, bounded task
 # ═══════════════════════════════════════════════════════════
 ai_generation_tasks:
-  - task_id: "opportunities_complete"
+
+  # Single analysis_body task — Overview table + per-opportunity sections
+  # (problem, HMW, impact, design direction, scope/priority) +
+  # Prioritization matrix.
+  # Kept as one task for cross-opportunity coherence: prioritization
+  # references impact across all opportunities.
+  - task_id: "analysis_body"
     prompt: |
       You are generating design opportunities from research data.
 
-      IMPORTANT: Generate the COMPLETE output following the format below. Do not stop early.
-
       ============================================================
-      RULES — READ THEN GENERATE FULL OUTPUT
+      CRITICAL RULES
       ============================================================
 
       RULE 1: HMWs COME FROM PROBLEMS — NO INVENTION
-
       Every HMW must trace DIRECTLY to a problem found in the research.
-
-      ❌ WRONG (invented):
-      - "How might we improve personalization?"
-      - "How might we foster community connection?"
-      - "How might we reduce information overload?"
-
-      ✅ RIGHT (from research):
-      - "How might we help veterans know their claim is processing without checking daily?" (from PT-003 claim status confusion)
-      - "How might we make profile editing discoverable for users with large text settings?" (from PT-003 hidden edit button)
-
       If you cannot cite a specific participant and quote, DO NOT include the HMW.
 
+      Bad (invented): "How might we improve personalization?"
+      Good (from research): "How might we help veterans know their claim is
+      processing without checking daily?" (from PT-003 claim status confusion)
+
       RULE 2: HMW FORMULA
-
-      Use this structure:
       "How might we [VERB] for [USER] when [SITUATION] so that [OUTCOME]?"
-
       - VERB: action word (help, enable, reduce, simplify)
       - USER: veterans, users with accessibility needs, etc.
       - SITUATION: specific trigger from research
       - OUTCOME: desired state (NOT a solution)
 
       RULE 3: SCOPE — NOT TOO BROAD, NOT TOO NARROW
-
-      ❌ TOO BROAD: "How might we improve the app experience?"
-      ❌ TOO NARROW: "How might we move the edit button 10 pixels higher?"
-      ✅ JUST RIGHT: "How might we make profile editing obvious without scrolling?"
+      Bad broad: "How might we improve the app experience?"
+      Bad narrow: "How might we move the edit button 10 pixels higher?"
+      Good: "How might we make profile editing obvious without scrolling?"
 
       RULE 4: NO SOLUTIONS IN HMWs
-
       HMWs invite exploration, they don't prescribe answers.
+      Bad: "How might we add a loading spinner?"
+      Good: "How might we reassure users the app is working during slow loads?"
 
-      ❌ WRONG: "How might we add a loading spinner?"
-      ✅ RIGHT: "How might we reassure users the app is working during slow loads?"
-
-      RULE 5: VA CONTEXT ONLY
-
-      Users are Veterans accessing VA services.
-      Problems relate to: app usability, claims, benefits, healthcare, prescriptions.
-
-      ❌ NEVER mention:
-      - "platform community," "social features," "personalization algorithms"
-      - "coworking," "personal shopper," "content recommendations"
-      - Marketing, Sales, engagement metrics
+      RULE 5: VA GOVERNMENT CONTEXT ONLY
+      Users are Veterans accessing VA services. Problems relate to:
+      app usability, claims, benefits, healthcare, prescriptions.
 
       RULE 6: CITE EVERYTHING
+      Every opportunity must include Participant ID (PT-001, PT-002)
+      and direct quote with timestamp if available.
 
-      Every opportunity must include:
-      - Participant ID (PT-001, PT-002, etc.)
-      - Direct quote from research
-      - Timestamp if available
+      RULE 7: CONFIDENCE ASSESSMENT (required per opportunity)
+      - Strong: 3+ participants, consistent evidence, multiple quotes
+      - Moderate: 2 participants OR mixed evidence
+      - Limited: 1 participant OR weak evidence
 
-      RULE 7: VERIFY BEFORE SUBMITTING
-      - Every HMW traces to a specific research finding
-      - No invented problems or generic UX issues
-      - HMWs are scoped appropriately (not too broad/narrow)
-      - All quotes are verbatim from source data
-      - Context is VA/veterans only
+      {% if upstream_atomic_nugget_core %}
+      ============================================================
+      CASCADE-AWARE GENERATION
+      ============================================================
+
+      You have upstream nugget pool and analysis context. Your job:
+
+      1. **Ground opportunities in nuggets.** Use nugget_type (pain_point,
+         task_failure, workaround, accessibility_issue) to identify problems
+         worth framing as HMW opportunities.
+
+      2. **Cite supporting nuggets by ID.** Reference nugget IDs (e.g.,
+         nugget-PT001-003) in evidence.
+
+      3. **Include representative verbatim quotes.** Pull the strongest
+         verbatim_quote from supporting nuggets. Attribute with PT ID.
+
+      {% if upstream_validated_jobs %}
+      4. **Link opportunities to jobs.** When an HMW addresses a validated
+         job's progress need, reference the job ID (job-XX). Frame the
+         opportunity's OUTCOME in terms of the job's want_motivation.
+
+      VALIDATED JOBS:
+      {{upstream_validated_jobs}}
+      {% endif %}
+
+      {% if upstream_personas %}
+      5. **Reference affected personas.** When an opportunity serves a
+         specific persona, reference persona ID (persona-XX).
+
+      PERSONAS:
+      {{upstream_personas}}
+      {% endif %}
+
+      {% if upstream_validated_themes %}
+      VALIDATED THEMES:
+      {{upstream_validated_themes}}
+      {% endif %}
+
+      {% if upstream_target_barriers %}
+      6. **Mark opportunity-barrier relationships.**
+         - [addresses TB-001] when opportunity tackles a target barrier
+         - [addresses RQ-001] when opportunity addresses a research question
+
+      TARGET BARRIERS:
+      {{upstream_target_barriers}}
+      {% endif %}
+
+      {% if upstream_research_questions %}
+      RESEARCH QUESTIONS:
+      {{upstream_research_questions}}
+      {% endif %}
+
+      {% if upstream_stakeholder_constraints %}
+      STAKEHOLDER CONSTRAINTS:
+      {{upstream_stakeholder_constraints}}
+      {% endif %}
+
+      ATOMIC NUGGETS — CORE:
+      {{upstream_atomic_nugget_core}}
+
+      ATOMIC NUGGETS — DETAIL:
+      {{upstream_atomic_nugget_detail}}
+
+      {% endif %}
 
       ============================================================
       INPUT DATA
       ============================================================
 
       **Study:** {{selected_study}}
-      **Research Data:** {{combined_file_content}}
+      **Input Data:** {{combined_file_content}}
 
       ============================================================
-      NOW GENERATE THE COMPLETE OUTPUT BELOW
+      GENERATE THESE SECTIONS
       ============================================================
 
-      # 💡 Design Opportunities: {{selected_study}}
-
-      > **[X] opportunities** from **[Y] participants**
-
-      ---
+      Output ALL sections below. Use ## headings. Do not stop early.
 
       ## Overview
 
       | Priority | Opportunity | From Problem | Evidence |
       |:--------:|-------------|--------------|----------|
-      | 🔴 | [Short HMW name] | [Pain point summary] | PT-001, PT-002 |
-      | 🔴 | [Short HMW name] | [Pain point summary] | PT-003 |
-      | 🟡 | [Short HMW name] | [Pain point summary] | PT-001 |
+      | High | [Short HMW name] | [Pain point summary] | PT-001, PT-002 |
+      [continue for each opportunity]
 
       ---
 
-      ## Opportunity 1: [Short Descriptive Name]
+      ## Opportunity 01: [Short Descriptive Name]
 
       **The Problem:**
 
-      > "[Direct quote from research]" — PT-001, 00:00:00
+      > "[Direct quote from research]"
+      > — PT-00X, [timestamp] via nugget-PT00X-003
 
-      [1-2 sentence problem statement grounded in the quote above]
+      [1-2 sentence problem statement grounded in the quote]
 
       **How Might We...**
 
       > How might we **[verb]** for **[veterans]** when **[situation from research]** so that **[desired outcome]**?
 
+      **Confidence** — [Strong/Moderate/Limited] ([reasoning])
+
       **Why This Matters:**
 
       | User Impact | Evidence Strength |
       |:------------|:------------------|
-      | [What happens if unsolved] | [Strong/Moderate] — [X] participants mentioned |
+      | [What happens if unsolved] | [Strong/Moderate] — [X] participants |
 
       **Design Direction:** [General approach — NOT a specific solution]
 
-      **Success Looks Like:** [Measurable outcome — e.g., "User finds feature in under 2 taps"]
-
-      | Scope | Priority |
-      |:------|:---------|
-      | 🔵⚪⚪ Small | 🔴 High |
-
-      ---
-
-      ## Opportunity 2: [Short Descriptive Name]
-
-      **The Problem:**
-
-      > "[Direct quote from research]" — PT-002, 00:00:00
-
-      [1-2 sentence problem statement]
-
-      **How Might We...**
-
-      > How might we **[verb]** for **[veterans]** when **[situation]** so that **[outcome]**?
-
-      **Why This Matters:**
-
-      | User Impact | Evidence Strength |
-      |:------------|:------------------|
-      | [Impact] | [Strength] — [X] participants |
-
-      **Design Direction:** [Approach]
-
       **Success Looks Like:** [Measurable outcome]
 
-      | Scope | Priority |
-      |:------|:---------|
-      | 🔵🔵⚪ Medium | 🔴 High |
+      | Impact | Effort |
+      |:------:|:------:|
+      | High | Low |
 
       ---
 
-      ## Opportunity 3: [Short Descriptive Name]
+      ## Opportunity 02: [Short Descriptive Name]
 
-      [Same format — continue for each distinct opportunity]
+      [Same complete format as Opportunity 01]
+
+      ---
+
+      [REPEAT FOR EACH OPPORTUNITY — typically 3-6]
 
       ---
 
       ## Prioritization
 
-      > **Impact:** 🔴 High | 🟡 Medium | 🟢 Low — **Effort:** 🔵🔵🔵 High | 🔵🔵⚪ Med | 🔵⚪⚪ Low
-
       | # | Opportunity | Impact | Effort | When |
       |:--|:------------|:------:|:------:|:----:|
-      | 1 | [Name] | 🔴 High | 🔵⚪⚪ | Now |
-      | 2 | [Name] | 🔴 High | 🔵🔵⚪ | Next |
-      | 3 | [Name] | 🟡 Med | 🔵🔵🔵 | Later |
+      | 1 | [Name] | High | Low | Now |
+      | 2 | [Name] | High | Medium | Next |
+      | 3 | [Name] | Medium | High | Later |
 
-      ---
+      OUTPUT BOUNDARIES: Do not generate the document title, masthead,
+      methodology framework description, references, upstream context section,
+      validity checklist, or cascade summary. The template handles those sections.
+      USE ## headings for each section (## Overview, ## Opportunity 01, etc.).
 
-      ## Methodology
-
-      **Framework:** How Might We (HMW) Opportunity Framing
-
-      **Approach:** Transform research-grounded problems into open questions that invite solution exploration without prescribing answers.
-
-      **Data Sources:** [List participant IDs]
-
-      ### References
-
-      - **IDEO** — Design Thinking, HMW framework origin
-      - **Stanford d.school** — "How Might We" question methodology
-      - **Nielsen Norman Group** — From research insights to design opportunities
-      - **Vijay Kumar** — "101 Design Methods" (Opportunity framing)
-
-      ---
-
-      *Generated by Qori • {{current_date}}*
+      Before outputting, verify:
+      - Every HMW traces to a specific research finding with quote
+      - No invented problems or generic UX issues
+      - HMWs are scoped appropriately (not too broad/narrow)
+      - No solutions embedded in HMW statements
+      - Confidence assessment present per opportunity
+      Do NOT output a footer or "Generated by Qori" line — that is added automatically.
 
 # ═══════════════════════════════════════════════════════════
-# OUTPUT
+# OUTPUT — interleaved Handlebars + AI prose
 # ═══════════════════════════════════════════════════════════
 output_template: |
-  {{ai_generated.opportunities_complete}}
+  # Design Opportunities
+
+  **Study:** {{selected_study}} &nbsp; | &nbsp; **Researcher:** {{researcher_contact}} &nbsp; | &nbsp; **Date:** {{current_date}}
+
+  ---
+
+  {{ai_generated.analysis_body}}
+
+  ---
+
+  <details>
+  <summary><strong>Methodology</strong></summary>
+
+  **Framework:** How Might We (HMW) Opportunity Framing
+
+  **Approach:** Transform research-grounded problems into open questions that invite solution exploration without prescribing answers. Each HMW follows the formula: "How might we [verb] for [user] when [situation] so that [outcome]?"
+
+  **Scope Calibration:** HMWs are scoped to be broad enough for multiple solutions but specific enough to be actionable. Too broad invites platitudes; too narrow prescribes implementation.
+
+  ### References
+
+  - **IDEO** -- Design Thinking, HMW framework origin
+  - **Stanford d.school** -- "How Might We" question methodology
+  - **Nielsen Norman Group** -- From research insights to design opportunities
+  - **Vijay Kumar** -- "101 Design Methods" (Opportunity framing)
+
+  </details>
+
+  {{#if upstream_atomic_nugget_core}}
+  <details>
+  <summary><strong>Upstream context</strong></summary>
+
+  This opportunity analysis was synthesized from:
+
+  | Source | Used for |
+  |--------|----------|
+  | session_summary outputs | Nuggets across participants |
+  {{#if upstream_validated_themes}}| affinity_mapping | Validated themes for opportunity grounding |{{/if}}
+  {{#if upstream_personas}}| persona_generator | Personas for user framing |{{/if}}
+  {{#if upstream_validated_jobs}}| jobs_to_be_done | Progress-focused jobs for HMW outcome framing |{{/if}}
+  {{#if upstream_stakeholder_constraints}}| stakeholder_synthesis | Feasibility constraints |{{/if}}
+  {{#if upstream_target_barriers}}| research_brief | Target barriers, research questions |{{/if}}
+
+  Citation markers throughout:
+  - [addresses TB-XXX] = opportunity tackles target barrier
+  - [addresses RQ-XXX] = opportunity addresses research question
+  - nugget-PT00X-XXX = source nugget reference
+  - job-XX = linked validated job
+  - persona-XX = affected persona
+  - theme-XX = linked validated theme
+
+  </details>
+  {{/if}}
+
+  <details>
+  <summary><strong>Validity checklist</strong></summary>
+
+  | Criterion | Verified |
+  |-----------|:--------:|
+  | Every HMW traces to specific research finding with quote | |
+  | No invented problems or generic UX issues | |
+  | HMWs scoped appropriately (not too broad/narrow) | |
+  | No solutions embedded in HMW statements | |
+  | All quotes verbatim with participant ID | |
+  | Confidence assessment present per opportunity | |
+
+  </details>
+
+  ---
+
+  ## Cascade summary
+
+  This opportunity analysis emits variables for structural completeness. Replace strategy — one analysis per study, not per-participant pool.
+
+  | Variable | Pool | Strategy | Description |
+  |----------|:----:|----------|-------------|
+  | design_hmw_opportunities | No | replace | HMW opportunity statements with evidence and design direction (6 req + 9 nullable fields) |
+
+  **Consumed from upstream:**
+
+  | Variable | Source | Role |
+  |----------|--------|------|
+  | atomic_nugget_core | session_summary | Primary evidence for opportunities |
+  | atomic_nugget_detail | session_summary | Verbatim quotes, behaviors, context |
+  | validated_themes | affinity_mapping | Opportunity grounding |
+  | personas | persona_generator | User framing (who benefits) |
+  | stakeholder_constraints | stakeholder_synthesis | Feasibility bounds |
+  | validated_jobs | jobs_to_be_done | Progress-focused job framing |
+  | target_barriers | research_brief | Barrier addressing |
+  | research_questions | research_brief | Question addressing |
 
 output_options:
   path: "04-analysis/design-opportunities/"
-  filename: "{{selected_study}}_design_opportunities_{{current_date}}.md"
+  filename: "{{selected_study}}-design-opportunities-{{current_date_iso}}.md"
 
 # ═══════════════════════════════════════════════════════════
-# METADATA (documentation only — not read by backend)
+# METADATA
 # ═══════════════════════════════════════════════════════════
-processing_workflow:
-  1. validate_slack_modal_inputs
-  2. discover_files_from_study_selection
-  3. combine_selected_files_with_truncation
-  4. execute_opportunities_complete
-  5. format_output
-  6. save_to_analysis_folder
-
-auto_variables:
-  - opportunity_count: extract_opportunity_count(ai_generated.opportunities_complete) || 4
-  - current_date: new Date().toISOString().split('T')[0]
-  - analysis_version: generate_version_number() || "v1.0"
-
-notify:
-  - role: team
-    action: "Design opportunities generated"
-    channel: "{{study_channel}}"
-    message: "Design opportunities for {{selected_study}} complete. {{opportunity_count}} HMW opportunities generated."
-
-quality_assurance:
-  require_research_grounded_hmw: true
-  require_citations: true
-  require_appropriate_scope: true
-  require_va_context: true
-  prohibit_solutions_in_hmw: true
-
 notes: |
-  v2.4 Changes (Standards Polish):
-  - Applied canonical key ordering (IDENTITY → CONFIGURATION → INPUTS → AI GENERATION → OUTPUT → METADATA)
-  - Removed dead config: llm_config, system_limits, privacy_controls, study_metadata, auto_file_discovery
-  - Removed github_file_template (identical passthrough, redundant)
-  - Removed default_delivery, slack_format, file_format from output_options (dead config)
-  - Updated prompt: summary blockquote reordered to metrics first (no date)
-  - Removed decorative emoji from Methodology heading (was 📚)
-  - Unwrapped Methodology from <details> toggle — should be visible, not collapsed
-  - Standardized participant ID format to PT-001 (hyphenated)
-  - Changed filename from {{study_folder}} to {{selected_study}} (matches actual variable)
-  - Added inline comments on input_variables
+  v7.0: Interleaved Handlebars/AI architecture (ADR 0005/0016 pattern).
+  - Monolithic opportunities_complete task replaced by analysis_body task.
+  - Handlebars renders: masthead, methodology (toggle with HMW framework
+    description, scope calibration, and IDEO/Stanford/NNG/Kumar references),
+    upstream context (toggle, conditional — richest upstream display of any
+    template, shows 6 potential sources), validity checklist (toggle),
+    cascade summary (always present).
+  - NEW: emits design_hmw_opportunities (replace strategy, Sonnet extraction).
+    No downstream consumer currently — emit exists for structural completeness
+    and future consumption readiness. HMW statement is a single field (see
+    schema comment in design_hmw_opportunity.yaml for rationale).
+  - Replace strategy is intentional: design opportunities is a study-level
+    synthesis, not a per-participant pool.
+  - Consumes updated: atomic_nuggets split into atomic_nugget_core +
+    atomic_nugget_detail. Added target_barriers and research_questions
+    from research_brief. Changed inject_as from context to reference for
+    themes and personas. validated_jobs already added in PR #150.
+  - OUTPUT BOUNDARIES instruction added.
+  - Anti-fabrication guards preserved (7 rules — strongest of any lateral
+    analysis template).
+  - Dead metadata removed (processing_workflow, auto_variables, notify,
+    quality_assurance).
+  - No handler changes needed (researchSynthesisHandler.ts, ANALYSIS_YAML_MAPPING).
 
-  v2.3 Changes:
-  - HMW formula with verb/user/situation/outcome structure
-  - Scope and priority assessment per opportunity
-  - VA context enforcement
-  - Anti-hallucination rules
-
-  v2.0: Original implementation
-
-output_use: |
-  Generate How Might We opportunity statements from research data.
-  Each opportunity traces directly to user evidence with quotes and
-  participant citations. Includes prioritization and design direction.
+  v2.4: Standards polish.
+  v2.3: HMW formula, scope/priority assessment.
+  v2.0: Original implementation.
