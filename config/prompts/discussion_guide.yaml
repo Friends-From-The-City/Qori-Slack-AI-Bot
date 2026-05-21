@@ -222,7 +222,7 @@ ai_generation_tasks:
       Label main activities as "Observation 01", "Observation 02", etc.
       {% elif research_method == "card_sorting" %}
       Label main activities as "Task 01", "Task 02", etc.
-      {% elif research_method == "tree_test" %}
+      {% elif research_method == "tree_testing" %}
       Label main activities as "Task 01", "Task 02", etc.
       {% elif research_method == "mixed_methods" %}
       Split activities: first half as "Task" blocks, second half as "Topic" blocks.
@@ -256,15 +256,13 @@ ai_generation_tasks:
 
       ## Cascade summary
 
-      | Brief commitment | Count |
-      |------------------|-------|
+      | Brief commitment | Detail |
+      |------------------|--------|
       | Research objectives | [count from upstream_research_objectives] |
       | Research questions | [count from upstream_research_questions] |
       | Target barriers | [count from upstream_target_barriers] |
-      | Methodology | {{upstream_methodology_selection}} |
-      {% if upstream_participant_criteria %}
-      | Participant criteria | [one-line summary from upstream_participant_criteria] |
-      {% endif %}
+      | Methodology | {{upstream_methodology_selection}} |{% if upstream_participant_criteria %}
+      | Participant criteria | [one-line summary from upstream_participant_criteria] |{% endif %}
 
       {% endif %}
 
@@ -276,18 +274,18 @@ ai_generation_tasks:
       |-------|---------:|--------:|
       | Introduction and consent | [X] min | [X] min |
       | Warm-up | [X] min | [X] min |
-      {% if research_method == "usability_testing" or research_method == "card_sorting" or research_method == "tree_test" %}
-      | Tasks 01 – [{{task_count}}] | [X] min | [X] min |
+      {% if research_method == "usability_testing" or research_method == "card_sorting" or research_method == "tree_testinging" %}
+      | Tasks 01–0{{task_count}} | [X] min | [X] min |
       {% elif research_method == "user_interviews" %}
-      | Topics 01 – [{{task_count}}] | [X] min | [X] min |
+      | Topics 01–0{{task_count}} | [X] min | [X] min |
       {% elif research_method == "concept_testing" %}
-      | Concepts 01 – [{{task_count}}] | [X] min | [X] min |
+      | Concepts 01–0{{task_count}} | [X] min | [X] min |
       {% elif research_method == "contextual_inquiry" %}
-      | Observations 01 – [{{task_count}}] | [X] min | [X] min |
+      | Observations 01–0{{task_count}} | [X] min | [X] min |
       {% elif research_method == "mixed_methods" %}
       | Tasks and topics | [X] min | [X] min |
       {% else %}
-      | Activities 01 – [{{task_count}}] | [X] min | [X] min |
+      | Activities 01–0{{task_count}} | [X] min | [X] min |
       {% endif %}
       | Retrospective | [X] min | [X] min |
       | Closing | 2 min | {{session_length}} min |
@@ -504,7 +502,7 @@ ai_generation_tasks:
       [Continue for remaining observations.
        Each observation header MUST include [RQ-XXX] and [targets TB-XXX] markers.]
 
-      {% elif research_method == "tree_test" %}
+      {% elif research_method == "tree_testing" %}
       *Present the tree structure. For each question, ask where they would go to find the answer.*
 
       [Generate {{task_count}} tree question blocks:]
@@ -790,7 +788,7 @@ notes: |
   - Script text in blockquotes (> lines) for read-aloud distinction
   - Methodology-aware activity labeling (Task/Topic/Concept/Observation/Activity)
   - 7 Jinja2 branches: usability_testing, user_interviews, card_sorting,
-    concept_testing, contextual_inquiry, tree_test, mixed_methods + fallback
+    concept_testing, contextual_inquiry, tree_testing, mixed_methods + fallback
   - task_count from modal controls number of main activity blocks
   - Confirm checklists in Introduction and Closing sections
   - After-session debrief section
