@@ -1,7 +1,7 @@
 # Qori Modal Design Principles
 
-**Last updated:** 2026-05-20
-**Status:** Reference document for the modal polish workstream
+**Last updated:** 2026-05-21
+**Status:** Reference document for modal design and review
 **Companion to:** Slack Block Kit design guidelines (https://api.slack.com/block-kit/designing)
 
 This document captures the design principles Qori's modals should follow. It's a working reference, not a rigid spec — the goal is internal consistency across modals and a feel that matches what researchers expect from polished Slack apps like Donut, Polly, and Linear.
@@ -40,7 +40,7 @@ Avoid help text that just restates the label. The label says "Recruitment source
 
 When a field is only relevant in certain contexts, hide it until that context exists. Use `views.update` to revise the modal when a triggering choice is made. Don't show every possible field upfront and ask researchers to skip the irrelevant ones.
 
-Example: `/qori-discover` has different fields for desk research vs. stakeholder vs. survey. The first screen picks the discovery type. Subsequent fields appear based on that choice.
+Example: `/qori-discover` uses a hub modal with three "Start" buttons (desk research, stakeholder synthesis, survey synthesis). Each opens a type-specific modal with only the fields relevant to that type. Survey-specific fields (survey name, question focus) only appear in the survey modal. File type filtering narrows per type.
 
 The cost is one extra interaction (the type selection). The benefit is researchers see only the fields that apply to them. The cost is worth paying.
 
@@ -113,9 +113,10 @@ This pattern is implemented via `ack()` returning quickly, then the handler doin
 The "Start a Donut Channel" modal shows two big toggle buttons at the top: "✨ Intros" and "💧 Watercooler." One is selected (highlighted background); one is not. This makes the mode choice visually obvious and easy to switch.
 
 Qori can use this for:
-- Discovery type selection in `/qori-discover` (Desk research, Stakeholder, Survey)
 - Method override in `/qori-plan` (Use brief's method, Override)
 - Outreach type in outreach modal (DM, Email, Phone)
+
+Note: `/qori-discover` used to be a candidate for this pattern but was redesigned as a hub modal instead — the sections-with-accessories pattern (see below) fit better when each mode has entirely different fields.
 
 The pattern: 2-4 toggle buttons at the top, one selected by default (the most common choice or the cascade-suggested choice), researcher can switch with one tap. The rest of the modal updates to reflect the chosen mode.
 
@@ -196,3 +197,91 @@ When in doubt: favor defaults over fields, conversational copy over formal label
 
 Block Kit Builder: https://app.slack.com/block-kit-builder/
 Slack design guidelines: https://api.slack.com/block-kit/designing
+
+---
+
+## Pre-merge anti-pattern checklist
+
+Run this checklist during audits (before design), implementation (during code review), and PR review (before merge). Every modal change should pass all four checks.
+
+### 1. Form ID fields
+
+**Detection:** Any `input` block where the researcher types or confirms a value the system already knows — study name from a previous selection, channel ID, database record identifier.
+
+**Fix:** Replace with a non-editable `context` block for display. Handler reads from `private_metadata` (already set by the opener), not from form values.
+
+**Examples:**
+- Plan modal `study_folder_block` → context block (PR #156)
+- Discussion guide `study_name` → context block (PR #159)
+- Discovery hub has no study selector at all — discovery is pre-study
+
+**How to spot it:** If the opener sets `initial_value` on a text input from metadata or a previous selection, the field is a form ID field. The researcher isn't providing new information — they're confirming what the system already knows. Convert to context display.
+
+### 2. Cascade-blank inputs
+
+**Detection:** Any field that starts blank when upstream cascade variables contain the answer. The researcher is retyping what the brief (or other upstream template) already produced.
+
+**Fix:** Opener loads study variables via `readStudyVariables()`, formats the cascade data, and sets `initial_value` on the field. The researcher sees the pre-fill and can edit/refine.
+
+**Examples:**
+- Discussion guide "Research focus" pre-filled from `research_objectives` (PR #159)
+- Discussion guide "Research questions" pre-filled from `research_questions` with RQ IDs (PR #159)
+- Discussion guide "Methodology" pre-selected from `methodology_selection` via explicit enum map (PR #159)
+
+**How to spot it:** Compare the modal's fields against the YAML template's `consumes` block. Any consumed variable that has a matching modal field should be pre-filled. If the `yamlProcessor` auto-loads the variable for the LLM but the modal doesn't show it to the researcher, the researcher is blind to data the system already has.
+
+### 3. Formal labels
+
+**Detection:** Labels in noun form ("Research method", "Session duration", "Stakeholder role") rather than question form.
+
+**Fix:** Rewrite as questions: "How are you running this session?", "How long is each session?", "What's their role?"
+
+**Examples:**
+- Plan modal: "Lead researcher" → "Who's leading this study?" (PR #156)
+- Discussion guide: "Research goal / focus" → "What should this session focus on?" (PR #159)
+- Discovery hub: "Topic" → "What topic are you exploring?" (PR #163)
+
+**How to spot it:** Read each label aloud. If it sounds like a database column name, it's formal. If it sounds like something a colleague would ask, it's conversational. Exceptions: select dropdowns where the options speak for themselves (methodology, session length) — conversational labels are nice but the options do the real work.
+
+### 4. Missing cascade gates
+
+**Detection:** A modal shows the full form when required cascade variables are missing. The researcher fills out the form, submits, and gets a `TemplateContractError` DM — wasted time.
+
+**Fix:** Opener checks cascade readiness via `buildCascadeReadiness()`. When required variables are missing, show a warning-only view: study name context block + specific warning listing what's missing and how to fix it. No form fields, no submit button.
+
+**Examples:**
+- Plan modal: gates on `research_objectives`, `research_questions`, `methodology_selection`, `target_barriers` (PR #156)
+- Discussion guide: same gate pattern (PR #159)
+- Discovery hub: no gate needed — discovery is the cascade root, nothing upstream
+
+**How to spot it:** Check the YAML template's `consumes` block for `required: true` variables. If any are required, the modal needs a gate. If all consumed variables are optional, no gate needed (handler fallbacks cover it).
+
+**When NOT to gate:** Discovery modals, stakeholder modals where all upstream is optional, any modal where the researcher is providing genuinely new information (not consuming cascade data).
+
+### How to use this checklist
+
+**During audit:** Run all 4 checks against the current modal. Document findings in the audit doc (see `docs/qori-plan-modal-audit.md` and `docs/qori-discussion-guide-modal-audit.md` for format).
+
+**During implementation:** Before writing code, verify the proposed modal design passes all 4 checks. The check often reveals fields to remove, pre-fills to add, or labels to rewrite.
+
+**During PR review:** Reviewer runs the 4 checks against the diff. Any new `input` block should be evaluated: is it a form ID field? Could it be pre-filled? Is the label conversational? Does the modal need a gate?
+
+### Precedents
+
+Three modal redesigns have proven these patterns:
+
+| Modal | PRs | Patterns applied |
+|---|---|---|
+| Plan modal (`/qori-plan`) | #156, #158 | Form ID → context block, cascade gate, conversational copy, `users_select` for people fields |
+| Discussion guide (`/qori-plan` → Create) | #157, #159, #160 | Cascade pre-fill (focus, questions, methodology), cascade gate, enum normalization, generating notification |
+| Discovery hub (`/qori-discover`) | #163 | Hub pattern (no input blocks → no submit), type-specific modals with narrowed file types, discovery visibility, next-step guidance |
+
+### Future modal work to audit
+
+These modals haven't been through the anti-pattern checklist yet:
+
+- **`/qori-brief` modal** — the largest modal in the system. Has the discovery checkbox section which should get the D6 indicator. Formal labels throughout.
+- **`/qori-analyze` session summary modal** — file selection may be a manual-selection-when-cascade-knows anti-pattern.
+- **`/qori-synthesis` modals** — 7 synthesis types, each with file selection. The synthesis ordering modal shows recommended analysis order but the individual modals may have cascade-blank fields.
+- **`/qori-fieldwork` modals** — participant tracker, observer, outreach. The `users_select` conversion is done (PR #157) but other anti-patterns haven't been audited.
+- **Outreach modals** — the `basicInfoBlock` was simplified (PR #157) but the full outreach flow hasn't been audited.
