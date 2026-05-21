@@ -222,12 +222,15 @@ export const requestResearchModal = {
       },
       hint: {
         type: "plain_text",
-        text: "Auto-populated from your Slack profile",
+        text: "Auto-filled with you — change if submitting on someone's behalf",
       },
       element: {
-        type: "plain_text_input",
-        action_id: "submitted_by_input",
-        initial_value: "{{user_name}}",
+        type: "users_select",
+        action_id: "submitted_by_select",
+        placeholder: {
+          type: "plain_text",
+          text: "Select person...",
+        },
       },
     },
   ],

@@ -214,7 +214,7 @@ const discussionGuideModal = {
     {
       type: "divider",
     },
-    // Lead moderator (auto-filled)
+    // Lead moderator (users_select — defaults to opener)
     {
       type: "input",
       block_id: "lead_moderator_block",
@@ -224,12 +224,15 @@ const discussionGuideModal = {
       },
       hint: {
         type: "plain_text",
-        text: "Auto-filled from your profile. Edit if needed.",
+        text: "Auto-filled with you — change if someone else is moderating",
       },
       element: {
-        type: "plain_text_input",
-        action_id: "lead_moderator",
-        initial_value: "{{lead_researcher}}",
+        type: "users_select",
+        action_id: "lead_moderator_select",
+        placeholder: {
+          type: "plain_text",
+          text: "Select moderator...",
+        },
       },
     },
   ],

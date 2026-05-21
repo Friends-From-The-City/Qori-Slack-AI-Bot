@@ -53,9 +53,10 @@ async function requestResearchHandler({ ack, command, client }: SlackCommandMidd
 
     const modalView = JSON.parse(JSON.stringify(requestResearchModal));
 
+    // Set initial_user on users_select
     const submittedByBlock = modalView.blocks.find((block: any) => block.block_id === 'submitted_by_block');
     if (submittedByBlock) {
-      submittedByBlock.element.initial_value = displayName;
+      submittedByBlock.element.initial_user = command.user_id;
     }
 
     await client.views.open({
@@ -98,6 +99,22 @@ async function handleRequestResearchSubmission({ ack, body, view, client }: Slac
     return '';
   };
 
+  // Resolve submitted-by user from users_select
+  const submittedByUserId: string | null =
+    values.submitted_by_block?.submitted_by_select?.selected_user || null;
+  let submittedByName = '';
+  if (submittedByUserId) {
+    try {
+      const subInfo = await client.users.info({ user: submittedByUserId });
+      const subUser = subInfo.user as Record<string, any> | undefined;
+      submittedByName = subUser?.real_name || subUser?.profile?.display_name || subUser?.name || submittedByUserId;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn('Could not resolve submitted-by display name:', message);
+      submittedByName = submittedByUserId;
+    }
+  }
+
   const requestData: RequestData = {
     project_title: extract('project_title_block', 'project_title_input'),
     problem_description: extract('problem_description_block', 'problem_description_input'),
@@ -106,8 +123,8 @@ async function handleRequestResearchSubmission({ ack, body, view, client }: Slac
     urgency: extract('urgency_block', 'urgency_select'),
     deadline: extract('deadline_block', 'deadline_picker'),
     existing_knowledge: extract('existing_knowledge_block', 'existing_knowledge_input'),
-    prepared_by: extract('submitted_by_block', 'submitted_by_input'),
-    requestor_name: extract('submitted_by_block', 'submitted_by_input'),
+    prepared_by: submittedByName,
+    requestor_name: submittedByName,
     requestedBy: userId,
     channelId,
     timelineNeeded: extract('urgency_block', 'urgency_select'),

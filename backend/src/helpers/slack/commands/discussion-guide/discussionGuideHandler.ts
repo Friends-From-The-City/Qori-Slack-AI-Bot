@@ -95,24 +95,17 @@ async function openDiscussionGuideModal({ ack, body, client }: SlackActionMiddle
       };
     }
 
-    // Auto-fill lead moderator from study or Slack profile
-    let leadModerator: string | null = null;
+    // Set initial_user on lead moderator users_select
+    let leadModeratorUserId: string = body.user.id;
     try {
       const study = await getResearchStudyWithRoles(studyName);
-      if (study?.researcher_name) leadModerator = study.researcher_name;
+      if (study?.created_by) leadModeratorUserId = study.created_by;
     } catch (_err) { /* ignore */ }
-    if (!leadModerator) {
-      try {
-        const userInfo = await client.users.info({ user: body.user.id });
-        const user = userInfo.user as Record<string, any> | undefined;
-        leadModerator = user?.real_name || user?.profile?.display_name || user?.name || '';
-      } catch (_err) { /* ignore */ }
-    }
     const moderatorIdx = blocks.findIndex(b => b.block_id === 'lead_moderator_block');
-    if (moderatorIdx !== -1 && leadModerator && blocks[moderatorIdx].element) {
+    if (moderatorIdx !== -1 && blocks[moderatorIdx].element) {
       blocks[moderatorIdx] = {
         ...blocks[moderatorIdx],
-        element: { ...blocks[moderatorIdx].element!, initial_value: leadModerator },
+        element: { ...blocks[moderatorIdx].element!, initial_user: leadModeratorUserId },
       };
     }
 
@@ -189,6 +182,22 @@ async function handleDiscussionGuideSubmission({ ack, body, view, client }: Slac
     return null;
   };
 
+  // Resolve lead moderator display name from users_select
+  const moderatorUserId: string | null =
+    values.lead_moderator_block?.lead_moderator_select?.selected_user || null;
+  let leadResearcherName = '';
+  if (moderatorUserId) {
+    try {
+      const userInfo = await client.users.info({ user: moderatorUserId });
+      const user = userInfo.user as Record<string, any> | undefined;
+      leadResearcherName = user?.real_name || user?.profile?.display_name || user?.name || moderatorUserId;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn('Could not resolve moderator display name:', message);
+      leadResearcherName = moderatorUserId;
+    }
+  }
+
   const guideData: DiscussionGuideTemplateInput = {
     selected_study: studyName,
     study_name: studyName,
@@ -197,7 +206,7 @@ async function handleDiscussionGuideSubmission({ ack, body, view, client }: Slac
     research_method: extract('research_method_block', 'research_method') || 'usability_testing',
     session_length: extract('session_length_block', 'session_length') || '60',
     task_count: extract('task_count_block', 'task_count') || '5',
-    lead_researcher: extract('lead_moderator_block', 'lead_moderator') || body.user?.name || '',
+    lead_researcher: leadResearcherName || body.user?.name || '',
   };
 
   const study = await getResearchStudyWithRoles(studyName);

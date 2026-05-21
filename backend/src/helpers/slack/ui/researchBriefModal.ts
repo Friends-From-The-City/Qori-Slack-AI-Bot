@@ -53,7 +53,7 @@ export const researchBriefModal = {
         },
       },
     },
-    // Stakeholder
+    // Stakeholder (users_select — captures Slack user ID for approval routing)
     {
       type: "input",
       block_id: "stakeholder_block",
@@ -66,11 +66,11 @@ export const researchBriefModal = {
         text: "Stakeholder who will approve this brief",
       },
       element: {
-        type: "plain_text_input",
-        action_id: "stakeholder_input",
+        type: "users_select",
+        action_id: "stakeholder_select",
         placeholder: {
           type: "plain_text",
-          text: "e.g., Sarah Chen, Product",
+          text: "Select stakeholder...",
         },
       },
     },
