@@ -320,6 +320,19 @@ async function handleDiscussionGuideSubmission({ ack, body, view, client }: Slac
     }
   }
 
+  // Post "Generating..." progress message so researcher knows it's working
+  let progressTs: string | undefined;
+  try {
+    const progressResult = await client.chat.postMessage({
+      channel: channelId,
+      text: `:hourglass_flowing_sand: Generating discussion guide for *${studyName}*...`,
+    });
+    progressTs = progressResult.ts;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn('Could not post progress message:', message);
+  }
+
   const guideData: DiscussionGuideTemplateInput = {
     selected_study: studyName,
     study_name: studyName,
@@ -336,6 +349,21 @@ async function handleDiscussionGuideSubmission({ ack, body, view, client }: Slac
   const renderedYaml = await processYamlTemplate(file.content, guideData, study!.path ?? '');
 
   const url: string = renderedYaml.result.url;
+
+  // Update progress message → completion notification
+  if (progressTs) {
+    try {
+      await client.chat.update({
+        channel: channelId,
+        ts: progressTs,
+        text: `:speech_balloon: Discussion guide for *${studyName}* is ready — <${url}|view on GitHub>`,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn('Could not update progress message:', message);
+    }
+  }
+
   const blocks = generateStudyResultBlocks(studyName, study, url, channelId, 'discussion');
   await sendStudyResultMessage(client, channelId, studyName, blocks, 'discussion');
 
