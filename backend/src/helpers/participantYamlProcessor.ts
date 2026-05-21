@@ -615,7 +615,7 @@ export async function processParticipantYamlTemplate(
         id: p.participant_name || `P${p.id}`,
         participant_name: p.participant_name,
         contact_details: p.contact_details,
-        recruitment_source: p.recruitment_source,
+        recruitment_source: getRecruitmentSourceDisplay(p.recruitment_source || 'unknown'),
         scheduled_date: formatScheduleDisplay(p.scheduled_date, p.scheduled_time),
         scheduled_time: p.scheduled_time,
         status_select: PARTICIPANT_STATUS_LABELS[p.status_select as ParticipantStatus] || p.status_select,
@@ -639,18 +639,32 @@ export async function processParticipantYamlTemplate(
           const observers = await SessionObserverService.getObserverRequestsByStudy(inputValues.study_id);
           // Group observers by session_id to combine multiple observers per session
           const observersBySession = new Map<string, { names: string[]; roles: string[]; participant?: { scheduled_date?: string; scheduled_time?: string } }>();
+          // Track role counts for Role Distribution table
+          const roleCounts: Record<string, { count: number; sessions: Set<string> }> = {
+            note_taker: { count: 0, sessions: new Set() },
+            silent_observer: { count: 0, sessions: new Set() },
+            pm_observer: { count: 0, sessions: new Set() },
+            stakeholder: { count: 0, sessions: new Set() },
+          };
           for (const obs of observers as Array<{ session_id: string; requester_name: string | string[]; role?: string; status?: string; participant?: { scheduled_date?: string; scheduled_time?: string } }>) {
             const sessionId = normalizeSessionId(obs.session_id);
             const existing = observersBySession.get(sessionId) || { names: [], roles: [], participant: obs.participant };
             const obsNames = Array.isArray(obs.requester_name) ? obs.requester_name : [obs.requester_name];
-            const roleLabel = getObserverRoleDisplay(obs.role || 'observer');
+            const role = obs.role || 'observer';
+            const roleLabel = getObserverRoleDisplay(role);
             for (const name of obsNames) {
               existing.names.push(`${name} (${roleLabel})`);
             }
-            existing.roles.push(obs.role || 'observer');
+            existing.roles.push(role);
             observersBySession.set(sessionId, existing);
+            // Accumulate role distribution
+            if (roleCounts[role]) {
+              roleCounts[role].count += obsNames.length;
+              roleCounts[role].sessions.add(sessionId);
+            }
           }
-          return Array.from(observersBySession.entries()).map(([sessionId, data]) => ({
+          // Store roleCounts on the returned array for post-construction rollup
+          const sessionRows = Array.from(observersBySession.entries()).map(([sessionId, data]) => ({
             session_id: sessionId,
             date_time: formatScheduleDisplay(data.participant?.scheduled_date || null, data.participant?.scheduled_time),
             observer_names: data.names.length > 0 ? data.names.join(', ') : 'None',
@@ -659,6 +673,9 @@ export async function processParticipantYamlTemplate(
             observer_role: data.roles[0] || 'observer',
             status: 'confirmed',
           }));
+          // Attach roleCounts for post-construction rollup
+          (sessionRows as any)._roleCounts = roleCounts;
+          return sessionRows;
         } catch (err: unknown) {
           const message = err instanceof Error ? err.message : String(err);
           console.warn('⚠️ Could not fetch observer data for tracker:', message);
@@ -674,6 +691,22 @@ export async function processParticipantYamlTemplate(
       recruitment_analysis: generateRecruitmentAnalysis(allParticipants),
       next_steps_recommendations: generateNextStepsRecommendations(allParticipants, totalParticipantsCount),
     };
+
+    // Compute role distribution from observer data (must happen after enhancedData is built)
+    const sessionObservers = enhancedData.session_observers as Array<Record<string, unknown>> & { _roleCounts?: Record<string, { count: number; sessions: Set<string> }> };
+    const roleCounts = sessionObservers?._roleCounts;
+    if (roleCounts) {
+      for (const [role, data] of Object.entries(roleCounts)) {
+        enhancedData[`${role}_count`] = data.count;
+        enhancedData[`${role}_sessions`] = data.sessions.size > 0 ? Array.from(data.sessions).join(', ') : '-';
+      }
+    } else {
+      // No observer data — zero out all role counts
+      for (const role of ['note_taker', 'silent_observer', 'pm_observer', 'stakeholder']) {
+        enhancedData[`${role}_count`] = 0;
+        enhancedData[`${role}_sessions`] = '-';
+      }
+    }
 
     // Generate new content with database participants
     updatedContent = generateParticipantTemplate(yamlConfig.output_template, enhancedData);
