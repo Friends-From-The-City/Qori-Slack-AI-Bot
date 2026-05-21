@@ -172,12 +172,13 @@ output_template: |
 
   ## Observer Management
 
+  {{#if session_observers}}
   **Session Assignments:**
 
   | Session | Date/Time | Observers | Capacity | Pending Requests | Guidelines Sent |
   |---------|-----------|-----------|----------|------------------|-----------------|
   {{#each session_observers}}
-  | {{session_id}} | {{date_time}} | {{observers}} | {{capacity}}/3 | {{pending_count}} | ✅ Sent |
+  | {{session_id}} | {{date_time}} | {{observer_names}} | {{capacity}}/3 | {{pending_count}} | ✅ Sent |
   {{/each}}
 
   **Role Distribution:**
@@ -190,6 +191,9 @@ output_template: |
   | 🏛️ Stakeholder | {{stakeholder_count}} | {{stakeholder_sessions}} |
 
   **Guidelines:** Review session plan beforehand, stay muted, take notes without interrupting, share feedback after session.
+  {{else}}
+  *No observer assignments yet. Observers can be added via `/qori-fieldwork` → Observe Session.*
+  {{/if}}
 
   ---
 

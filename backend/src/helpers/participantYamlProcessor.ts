@@ -113,6 +113,7 @@ const SOURCE_MAPPINGS: Record<string, string> = {
   'phone': '📞 Phone Recruitment',
   'referral': '🤝 Referral',
   'online': '🌐 Social/Website',
+  'recruitment_agency': '🏢 Recruitment Agency',
   'csv_import': '📊 CSV Import',
   'api_import': '🔗 API Import',
   'unknown': '❓ Unknown',
@@ -120,24 +121,35 @@ const SOURCE_MAPPINGS: Record<string, string> = {
 
 const RACE_ETHNICITY_MAPPINGS: Record<string, string> = {
   'american_indian_alaska_native': 'American Indian or Alaska Native',
+  'american_indian': 'American Indian or Alaska Native',
   'asian': 'Asian',
   'black_african_american': 'Black or African American',
+  'black': 'Black or African American',
   'hispanic_latino': 'Hispanic or Latino',
+  'hispanic': 'Hispanic or Latino',
   'native_hawaiian_pacific_islander': 'Native Hawaiian or Other Pacific Islander',
+  'native_hawaiian': 'Native Hawaiian or Other Pacific Islander',
   'white': 'White',
   'two_or_more_races': 'Two or More Races',
+  'two_or_more': 'Two or More Races',
   'prefer_not_to_say': 'Prefer not to say',
 };
 
 const EDUCATION_LEVEL_MAPPINGS: Record<string, string> = {
   'less_than_high_school': 'Less than high school',
   'high_school_ged': 'High school diploma/GED',
+  'high_school': 'High school diploma/GED',
   'some_college': 'Some college',
   'associate_degree': 'Associate degree',
+  'associate': 'Associate degree',
   'bachelors_degree': "Bachelor's degree",
+  'bachelor': "Bachelor's degree",
   'masters_degree': "Master's degree",
+  'master': "Master's degree",
   'professional_degree': 'Professional degree',
+  'professional': 'Professional degree',
   'doctorate_degree': 'Doctorate degree',
+  'doctorate': 'Doctorate degree',
   'prefer_not_to_say': 'Prefer not to say',
 };
 
@@ -552,7 +564,7 @@ export async function processParticipantYamlTemplate(
       completed_sessions_count: completedSessionsCount,
       total_observer_assignments: 0,
       participants: allParticipants.map(p => ({
-        id: p.id,
+        id: p.participant_name || `P${p.id}`,
         participant_name: p.participant_name,
         contact_details: p.contact_details,
         recruitment_source: p.recruitment_source,
@@ -594,7 +606,7 @@ export async function processParticipantYamlTemplate(
       })(),
       observer_action_items: [],
       accommodations: allParticipants.filter(p => p.notes_field && p.notes_field.trim() !== '').map(p => ({
-        participant_id: p.id,
+        participant_id: p.participant_name || `P${p.id}`,
         accommodation_details: p.notes_field,
       })),
       demographics_summary: generateDemographicsSummary(allParticipants),
