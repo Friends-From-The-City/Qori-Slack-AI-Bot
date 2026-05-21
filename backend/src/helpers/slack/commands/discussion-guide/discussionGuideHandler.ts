@@ -1,22 +1,33 @@
 /**
  * discussionGuideHandler.ts — Discussion guide modal opener + submission
  *
- * Extracted from events.js. Handles the create_discussion_guide action
- * (opens the modal with study/moderator auto-population and cascade readiness)
- * and the discussion_guide_modal submission (renders YAML template, posts result).
+ * v2.0: Cascade-driven redesign.
+ * - Study name displayed as non-editable context block (not text input)
+ * - Research focus pre-filled from brief's research_objectives
+ * - Research questions pre-filled from brief's research_questions
+ * - Methodology pre-selected from brief's methodology_selection
+ * - Cascade gate: when required vars missing, show warning-only view
+ * - Single study fetch (was duplicated)
+ *
+ * v1.0: Lead moderator converted to users_select (PR #157)
  */
 
 import type { AllMiddlewareArgs, SlackActionMiddlewareArgs, SlackViewMiddlewareArgs, BlockAction, ViewSubmitAction } from '@slack/bolt';
 import type { View } from '@slack/types';
 
 import { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo } from '../../../github';
-import { getResearchStudyWithRoles, getStudiesByUser } from '../../../../services/research_study.service';
+import { getResearchStudyWithRoles } from '../../../../services/research_study.service';
 import { processYamlTemplate } from '../../../yamlProcessor';
 import { addStudyStatus } from '../../../../services/study-status.service';
 import { sendStudyResultMessage, generateStudyResultBlocks } from '../../ui/studyResultBlocks';
 import { readStudyVariables } from '../../../studyVariables';
 import { buildCascadeReadiness, buildCascadeBlocks } from '../../ui/cascadeReadinessBlocks';
-import { discussionGuideModal } from '../../ui/discussionGuideModal';
+import {
+  discussionGuideModal,
+  DG_STUDY_DISPLAY_BLOCK_ID,
+  METHODOLOGY_LABEL_TO_VALUE,
+  METHODOLOGY_VALUE_TO_TEXT,
+} from '../../ui/discussionGuideModal';
 
 // ─── Block Kit manipulation type ──────────────────────────────────
 
@@ -25,6 +36,7 @@ interface MutableBlock {
   type: string;
   block_id?: string;
   element?: { initial_value?: string; [key: string]: unknown };
+  elements?: Array<{ type: string; text?: string; [key: string]: unknown }>;
   [key: string]: unknown;
 }
 
@@ -41,13 +53,48 @@ interface DiscussionGuideTemplateInput {
   lead_researcher: string;
 }
 
+// ─── Cascade formatting helpers ─────────────────────────────────
+
+interface ResearchQuestion {
+  id?: string;
+  question?: string;
+  priority?: string;
+}
+
+/** Format research_objectives (array of strings) as bullet list for pre-fill. */
+function formatObjectivesForPrefill(objectives: unknown): string {
+  if (!Array.isArray(objectives)) return '';
+  return objectives
+    .map(obj => typeof obj === 'string' ? `• ${obj}` : '')
+    .filter(Boolean)
+    .join('\n');
+}
+
+/** Format research_questions (array of {id, question, priority}) for pre-fill. */
+function formatQuestionsForPrefill(questions: unknown): string {
+  if (!Array.isArray(questions)) return '';
+  return questions
+    .map((q: ResearchQuestion) => {
+      const id = q.id || '';
+      const question = q.question || '';
+      const priority = q.priority ? ` (${q.priority})` : '';
+      return id && question ? `${id}${priority}: ${question}` : question || '';
+    })
+    .filter(Boolean)
+    .join('\n');
+}
+
+/** Map cascade methodology label to select option value. Returns null if no match. */
+function resolveMethodologyValue(cascadeMethod: unknown): string | null {
+  if (typeof cascadeMethod !== 'string' || !cascadeMethod) return null;
+  return METHODOLOGY_LABEL_TO_VALUE[cascadeMethod] || null;
+}
+
 // ─── Modal opener ─────────────────────────────────────────────────
 
 async function openDiscussionGuideModal({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
   await ack();
 
-  // This handler only operates on actions triggered from a modal view.
-  // BlockAction doesn't always carry .view — guard against non-modal contexts.
   if (!('view' in body) || !body.view) {
     console.warn('Discussion guide opener received non-modal action context');
     return;
@@ -56,8 +103,8 @@ async function openDiscussionGuideModal({ ack, body, client }: SlackActionMiddle
   try {
     const meta = JSON.parse(body.view.private_metadata || '{}');
     const selectedFromView = body.view.state?.values?.study_selection?.study_select?.selected_option || null;
-    let studyName: string = selectedFromView?.text?.text || meta.studyName || meta.selectedStudy || meta.study_name || '';
-    let studyId: string | null = selectedFromView?.value || meta.studyId || null;
+    const studyName: string = selectedFromView?.text?.text || meta.studyName || meta.selectedStudy || meta.study_name || '';
+    const studyId: string | null = selectedFromView?.value || meta.studyId || null;
 
     if (!studyName || studyId === 'loading' || studyId === 'no_studies') {
       await client.chat.postEphemeral({
@@ -68,39 +115,150 @@ async function openDiscussionGuideModal({ ack, body, client }: SlackActionMiddle
       return;
     }
 
-    const blocks: MutableBlock[] = Array.from(discussionGuideModal.blocks);
-    const studyIdx = blocks.findIndex(b => b.block_id === 'study_name');
+    const userId = body.user.id;
 
-    if (!studyName) {
-      try {
-        const userId = body.user.id;
-        const studies = await getStudiesByUser(userId);
-        if (Array.isArray(studies) && studies.length > 0) {
-          studyName = studies[0].name;
-          studyId = String(studies[0].id);
-        }
-      } catch (e) {
-        const message = e instanceof Error ? e.message : String(e);
-        console.warn('⚠️ Could not infer studyName for discussion guide:', message);
+    // ── Single study fetch for all downstream uses ──
+    let studyPath: string | null = null;
+    let leadModeratorUserId: string = userId;
+    try {
+      const study = await getResearchStudyWithRoles(studyName);
+      if (study) {
+        if (study.created_by) leadModeratorUserId = study.created_by;
+        if (study.path) studyPath = decodeURIComponent(study.path);
       }
+    } catch (_err) { /* ignore — defaults are safe */ }
+
+    // ── Load study variables for cascade pre-fill + readiness ──
+    let cascadeBlocks: MutableBlock[] = [];
+    let cascadeGate = false;
+    let focusPrefill = '';
+    let questionsPrefill = '';
+    let methodologyValue: string | null = null;
+
+    try {
+      if (studyPath) {
+        const studyVars = await readStudyVariables(studyPath);
+
+        // Cascade readiness check
+        const cascadeData = buildCascadeReadiness(studyVars, 'discussion_guide');
+        const rawBlocks = buildCascadeBlocks(cascadeData);
+        if (rawBlocks.length > 0) {
+          cascadeBlocks = rawBlocks as MutableBlock[];
+          cascadeGate = true;
+        }
+
+        // Pre-fill from cascade variables (only if gate is open)
+        if (!cascadeGate && studyVars?.variables) {
+          const objectives = studyVars.variables.research_objectives?.value;
+          focusPrefill = formatObjectivesForPrefill(objectives);
+
+          const questions = studyVars.variables.research_questions?.value;
+          questionsPrefill = formatQuestionsForPrefill(questions);
+
+          const method = studyVars.variables.methodology_selection?.value;
+          methodologyValue = resolveMethodologyValue(method);
+        }
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn('⚠️ Cascade readiness/prefill failed for discussion guide:', message);
     }
 
-    if (studyIdx !== -1 && studyName && blocks[studyIdx].element) {
-      blocks[studyIdx] = {
-        ...blocks[studyIdx],
-        element: {
-          ...blocks[studyIdx].element!,
-          initial_value: studyName,
+    const privateMetadata = JSON.stringify({
+      ...(meta || {}),
+      studyName,
+      studyId,
+      userId,
+    });
+
+    // ── Cascade gate: warning-only view when required vars missing ──
+    if (cascadeGate) {
+      const warningBlocks: MutableBlock[] = [
+        {
+          type: "context",
+          block_id: DG_STUDY_DISPLAY_BLOCK_ID,
+          elements: [
+            {
+              type: "mrkdwn",
+              text: `:speech_balloon: *${studyName}*`,
+            },
+          ],
         },
+        ...cascadeBlocks,
+      ];
+
+      await client.views.update({
+        view_id: body.view.id,
+        view: {
+          type: "modal",
+          callback_id: "discussion_guide_modal",
+          title: discussionGuideModal.title,
+          close: discussionGuideModal.close,
+          blocks: warningBlocks,
+          private_metadata: privateMetadata,
+        } as View,
+      });
+      return;
+    }
+
+    // ── Normal view: study display + pre-filled form ──
+    const blocks: MutableBlock[] = [...discussionGuideModal.blocks];
+
+    // Set study name in context display block
+    const studyDisplayIdx = blocks.findIndex(b => b.block_id === DG_STUDY_DISPLAY_BLOCK_ID);
+    if (studyDisplayIdx !== -1) {
+      blocks[studyDisplayIdx] = {
+        ...blocks[studyDisplayIdx],
+        elements: [
+          {
+            type: "mrkdwn",
+            text: `:speech_balloon: *${studyName}*\nBuilding a session guide from your approved brief.`,
+          },
+        ],
       };
     }
 
-    // Set initial_user on lead moderator users_select
-    let leadModeratorUserId: string = body.user.id;
-    try {
-      const study = await getResearchStudyWithRoles(studyName);
-      if (study?.created_by) leadModeratorUserId = study.created_by;
-    } catch (_err) { /* ignore */ }
+    // Pre-fill research focus from cascade objectives
+    if (focusPrefill) {
+      const focusIdx = blocks.findIndex(b => b.block_id === 'research_focus_block');
+      if (focusIdx !== -1 && blocks[focusIdx].element) {
+        blocks[focusIdx] = {
+          ...blocks[focusIdx],
+          element: { ...blocks[focusIdx].element!, initial_value: focusPrefill },
+        };
+      }
+    }
+
+    // Pre-fill research questions from cascade
+    if (questionsPrefill) {
+      const questionsIdx = blocks.findIndex(b => b.block_id === 'research_questions_block');
+      if (questionsIdx !== -1 && blocks[questionsIdx].element) {
+        blocks[questionsIdx] = {
+          ...blocks[questionsIdx],
+          element: { ...blocks[questionsIdx].element!, initial_value: questionsPrefill },
+        };
+      }
+    }
+
+    // Pre-select methodology from cascade
+    if (methodologyValue) {
+      const methodIdx = blocks.findIndex(b => b.block_id === 'research_method_block');
+      const methodText = METHODOLOGY_VALUE_TO_TEXT[methodologyValue];
+      if (methodIdx !== -1 && methodText && blocks[methodIdx].element) {
+        blocks[methodIdx] = {
+          ...blocks[methodIdx],
+          element: {
+            ...blocks[methodIdx].element!,
+            initial_option: {
+              text: { type: "plain_text", text: methodText },
+              value: methodologyValue,
+            },
+          },
+        };
+      }
+    }
+
+    // Set initial_user on lead moderator
     const moderatorIdx = blocks.findIndex(b => b.block_id === 'lead_moderator_block');
     if (moderatorIdx !== -1 && blocks[moderatorIdx].element) {
       blocks[moderatorIdx] = {
@@ -109,32 +267,12 @@ async function openDiscussionGuideModal({ ack, body, client }: SlackActionMiddle
       };
     }
 
-    // Cascade readiness — inject upstream variable status (optional enrichment)
-    try {
-      const studyForCascade = await getResearchStudyWithRoles(studyName);
-      if (studyForCascade?.path) {
-        const studyVars = await readStudyVariables(decodeURIComponent(studyForCascade.path));
-        const cascadeData = buildCascadeReadiness(studyVars, 'discussion_guide');
-        const cascadeBlocks = buildCascadeBlocks(cascadeData);
-        if (cascadeBlocks.length > 0) {
-          const firstDivider = blocks.findIndex(b => b.type === 'divider');
-          if (firstDivider !== -1) {
-            // @ts-expect-error — pre-existing type mismatch from require() → import migration
-            blocks.splice(firstDivider, 0, ...cascadeBlocks);
-          }
-        }
-      }
-    } catch (err) {
-      const cascadeMessage = err instanceof Error ? err.message : String(err);
-      console.warn('⚠️ Cascade readiness failed for discussion guide:', cascadeMessage);
-    }
-
     await client.views.update({
       view_id: body.view.id,
       view: {
         ...discussionGuideModal,
         blocks,
-        private_metadata: JSON.stringify({ ...(meta || {}), studyName, studyId }),
+        private_metadata: privateMetadata,
       } as View,
     });
   } catch (err) {
@@ -150,26 +288,10 @@ async function handleDiscussionGuideSubmission({ ack, body, view, client }: Slac
 
   const values = view.state.values;
   const meta = JSON.parse(view.private_metadata || '{}');
-  let { channelId, studyName } = meta;
+  const { channelId, studyName } = meta;
 
   if (!studyName) {
-    const studyBlock = values?.study_name;
-    const inputStudy = studyBlock?.value?.value ?? studyBlock?.value ?? null;
-    if (inputStudy && typeof inputStudy === 'string' && inputStudy.trim().length > 0) {
-      studyName = inputStudy.trim();
-    }
-  }
-  if (!studyName) {
-    try {
-      const userId = body.user?.id || meta.userId;
-      const studies = await getStudiesByUser(userId);
-      if (Array.isArray(studies) && studies.length > 0) {
-        studyName = studies[0].name;
-      }
-    } catch (e) {
-      const submissionMessage = e instanceof Error ? e.message : String(e);
-      console.warn('⚠️ Could not infer studyName on submission:', submissionMessage);
-    }
+    throw new Error('No study selected — private_metadata missing studyName');
   }
 
   const extract = (blockId: string, actionId: string): string | null => {
