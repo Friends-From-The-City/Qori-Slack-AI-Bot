@@ -1,0 +1,96 @@
+# Validated job — progress-focused need extracted from research data
+# Emitted by: jobs_to_be_done
+# Consumed by: design_opportunity_generator (job framing for HMW statements)
+#
+# Follows Christensen's JTBD framework: jobs describe the progress people
+# want to make, not tasks they perform. Stable across technology changes.
+#
+# v1.0 (May 21, 2026): Initial schema. Replace strategy (study-level).
+#
+# DESIGN NOTE — When/Want/So triad split:
+# The When/Want/So statement is split into three separate required fields
+# (when_situation, want_motivation, so_outcome) rather than a single
+# job_statement string. This is intentional — it enables downstream
+# templates to reference specific parts of the JTBD triad without parsing.
+# design_opportunity_generator keys on want_motivation for HMW framing;
+# research_readout can reference when_situation for context.
+# JTBD practitioners who use looser job statements (e.g., "Help me [outcome]
+# without [obstacle]") would need to adapt to this three-part format.
+# The rigidity is a design choice for cascade clarity.
+type: object
+required: [id, job_title, when_situation, want_motivation, so_outcome, evidence_nuggets, confidence]
+properties:
+  # ── Required core (7 fields) ──────────────────────────────
+  id:
+    type: string
+    description: "Format: job-01, job-02, etc."
+  job_title:
+    type: string
+    description: "Progress-focused name, not task-focused. Test: describable without mentioning the app"
+  when_situation:
+    type: string
+    description: "The triggering situation: 'When I [specific context from research]'"
+  want_motivation:
+    type: string
+    description: "The desired progress: 'I want to [progress, NOT a UI action]'"
+  so_outcome:
+    type: string
+    description: "The life outcome: 'So I can [outcome, NOT app outcome]'"
+  evidence_nuggets:
+    type: array
+    items:
+      type: string
+    description: "References to atomic_nugget_core.id values supporting this job"
+  confidence:
+    type: string
+    enum: [Strong, Moderate, Limited]
+    description: "Evidence quality assessment"
+
+  # ── Enrichment (10 nullable fields) ────────────────────────
+  job_type:
+    type: string
+    nullable: true
+    enum: [functional, emotional, social, composite]
+    description: "Primary dimension of the job"
+  functional_need:
+    type: string
+    nullable: true
+    description: "What they're trying to accomplish (task dimension)"
+  emotional_need:
+    type: string
+    nullable: true
+    description: "How they want to feel (affect dimension)"
+  social_need:
+    type: string
+    nullable: true
+    description: "How they want to be perceived (identity dimension)"
+  current_workaround:
+    type: string
+    nullable: true
+    description: "What they 'hire' to do this job today"
+  participants_observed:
+    type: array
+    nullable: true
+    items:
+      type: string
+    description: "PT-XXX IDs who expressed this job"
+  participant_coverage:
+    type: string
+    nullable: true
+    description: "X of Y participants format, e.g. '4 of 6'"
+  linked_themes:
+    type: array
+    nullable: true
+    items:
+      type: string
+    description: "validated_theme.id references if job maps to themes"
+  linked_barriers:
+    type: array
+    nullable: true
+    items:
+      type: string
+    description: "target_barrier IDs (TB-XXX) if job relates to a barrier"
+  design_opportunity:
+    type: string
+    nullable: true
+    description: "Specific implementable fix that addresses this job's pain points"

@@ -55,6 +55,11 @@ consumes:
     required: false
     inject_as: context
     description: "Constraints that bound feasibility of opportunities"
+  - key: validated_jobs
+    source: jobs_to_be_done
+    required: false
+    inject_as: reference
+    description: "Progress-focused jobs for HMW opportunity framing (what users are trying to accomplish)"
 
 # ═══════════════════════════════════════════════════════════
 # AI GENERATION
