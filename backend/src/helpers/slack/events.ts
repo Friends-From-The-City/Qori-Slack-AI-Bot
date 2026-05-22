@@ -19,6 +19,9 @@ import { qoriMainCommand, handleStudySelect } from './commands/qoriMainHandler';
 
 // Study creation
 import { startResearchHandler, handleAddTeamMember, handleCreateStudySubmission } from './commands/createStudyHandler';
+
+// Project creation (Phase 2C)
+import { projectStartCommand, handleProjectCreateSubmission, handleProjectActionButton } from './commands/projectStartHandler';
 import { handleViewClosed, handlePlanStudyNoop, handleStudySetupSkip, handleUserSelectOptions } from './commands/study/studyLifecycleHandler';
 import { deleteStudyCommand, handleDeleteStudySubmission } from './commands/study/deleteStudyHandler';
 
@@ -176,7 +179,7 @@ slackExpressRouter.post('/commands', (req: any, res: any) => {
 // ─── Slash commands (entry points) ──────────────────────────────
 
 slackApp.command('/qori', qoriMainCommand);
-slackApp.command('/qori-start', startResearchHandler);
+slackApp.command('/qori-start', projectStartCommand);
 slackApp.command('/qori-brief', async ({ ack, client, command }) => {
   await ack();
   let leadResearcher = '';
@@ -223,6 +226,13 @@ slackApp.view('delete-study-modal', handleDeleteStudySubmission);
 // EventFromType<'view_closed'> resolves to BaseSlackEvent which lacks .view.
 // The handler uses an inline type with { event: { view: { callback_id } } }.
 slackApp.event('view_closed', handleViewClosed as any);
+
+// ─── Project creation (Phase 2C) ─────────────────────────────────
+
+slackApp.view('project_create_modal', handleProjectCreateSubmission);
+slackApp.action('project_action_discovery', handleProjectActionButton);
+slackApp.action('project_action_brief', handleProjectActionButton);
+slackApp.action('project_action_library', handleProjectActionButton);
 
 // ─── Research brief ─────────────────────────────────────────────
 

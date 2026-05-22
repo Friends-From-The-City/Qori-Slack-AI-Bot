@@ -100,25 +100,44 @@ export async function getProjectsByUser(userId: string): Promise<Project[]> {
 }
 
 /**
- * Bind a project to a Slack channel. Unbinds any existing project from that channel first.
+ * Bind a project to a Slack channel (bidirectional).
+ * Updates both projects.channel_id AND channel_config.project_id.
+ * Unbinds any existing project from that channel first.
  */
 export async function bindProjectToChannel(projectId: number, channelId: string): Promise<Project | null> {
+  const ChannelConfigModel = sequelize.models.ChannelConfig;
   const t = await sequelize.transaction();
   try {
-    // Unbind any existing project from this channel
+    // Unbind any existing project from this channel (projects side)
     await ProjectModel.update(
       { channel_id: null },
       { where: { channel_id: channelId }, transaction: t }
     );
 
-    // Bind the new project
+    // Unbind any existing project from this channel (channel_config side)
+    await ChannelConfigModel.update(
+      { project_id: null },
+      { where: { channel_id: channelId }, transaction: t }
+    );
+
+    // Bind the new project (projects side)
     const project = await ProjectModel.findByPk(projectId, { transaction: t });
     if (!project) {
       await t.rollback();
       return null;
     }
-
     await project.update({ channel_id: channelId }, { transaction: t });
+
+    // Bind the new project (channel_config side) — upsert
+    const [config] = await ChannelConfigModel.findOrCreate({
+      where: { channel_id: channelId },
+      defaults: { channel_id: channelId, project_id: projectId },
+      transaction: t,
+    });
+    if (config.get('project_id') !== projectId) {
+      await config.update({ project_id: projectId }, { transaction: t });
+    }
+
     await t.commit();
     return project;
   } catch (err) {
@@ -159,4 +178,45 @@ export async function findOrCreateProject(
     defaults: { ...defaults, slug } as CreationAttributes<Project>,
   });
   return [project, created];
+}
+
+/**
+ * Generate a URL-safe slug from a project name.
+ * "My Project Name" → "my-project-name"
+ */
+export function generateSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/[^\w\s-]/g, '') // Remove special characters except spaces and hyphens
+    .replace(/\s+/g, '-') // Replace spaces with hyphens
+    .replace(/-+/g, '-') // Collapse multiple hyphens
+    .replace(/^-|-$/g, ''); // Trim leading/trailing hyphens
+}
+
+/**
+ * Check if a slug is available (not already used by another project).
+ */
+export async function isSlugAvailable(slug: string): Promise<boolean> {
+  const existing = await ProjectModel.findOne({ where: { slug } });
+  return existing === null;
+}
+
+/**
+ * Create a project from a name, auto-generating the slug.
+ * Throws if the generated slug is already taken.
+ */
+export async function createProjectFromName(
+  name: string,
+  data: Omit<CreateProjectInput, 'name' | 'slug'>
+): Promise<Project> {
+  const slug = generateSlug(name);
+  if (!slug) {
+    throw new Error('Project name must contain at least one alphanumeric character');
+  }
+  const available = await isSlugAvailable(slug);
+  if (!available) {
+    throw new Error(`A project with slug "${slug}" already exists. Choose a different name.`);
+  }
+  return createProject({ ...data, name, slug });
 }
