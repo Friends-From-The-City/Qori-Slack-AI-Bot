@@ -9,7 +9,7 @@ import type { View } from '@slack/types';
 
 import sessionObserverService from '../../../services/session_observer.service';
 import studyParticipantService from '../../../services/study_participant.service';
-import { getStudiesByUser, getResearchStudyWithRoles } from '../../../services/research_study.service';
+import { getStudiesByUser, resolveStudyFromName } from '../../../services/research_study.service';
 import { sendObserverGuideDM } from '../ui/observerGuideDM';
 import { buildSelfJoinSessionPickerModal } from '../ui/selfJoinSessionPickerModal';
 import { refreshDashboardAfterAction } from './fieldworkHandler';
@@ -244,9 +244,9 @@ async function handleAddObserverSubmission({ ack, body, client, view }: SlackVie
     }
 
     // ── Update participant tracker on GitHub ──────────────
-    const study = await getResearchStudyWithRoles(studyName);
+    const resolvedStudy = await resolveStudyFromName(studyName);
     // @ts-expect-error — pre-existing type mismatch from require() → import migration
-    await updateObserverTracker(studyId, studyName, study?.path);
+    await updateObserverTracker(studyId, studyName, resolvedStudy?.study?.path);
 
     // ── Refresh dashboard ───────────────────────────────
     if (rootViewId) {
@@ -382,7 +382,8 @@ async function handleSelfJoinSubmission({ ack, body, client, view }: SlackViewMi
       await sendObserverGuideDM(client, joinerUserId, studyName);
 
       // Awareness DM to researcher (study creator)
-      const study = await getResearchStudyWithRoles(studyName);
+      const resolvedDM = await resolveStudyFromName(studyName);
+      const study = resolvedDM?.study ?? null;
 
       if (study && study.created_by) {
         // Get participant dates for context
@@ -421,9 +422,9 @@ async function handleSelfJoinSubmission({ ack, body, client, view }: SlackViewMi
 
     // ── Update participant tracker on GitHub ──────────────
     if (joinedSessions.length > 0) {
-      const studyForTracker = await getResearchStudyWithRoles(studyName);
+      const resolvedForTracker = await resolveStudyFromName(studyName);
       // @ts-expect-error — pre-existing type mismatch from require() → import migration
-      await updateObserverTracker(studyId, studyName, studyForTracker?.path);
+      await updateObserverTracker(studyId, studyName, resolvedForTracker?.study?.path);
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

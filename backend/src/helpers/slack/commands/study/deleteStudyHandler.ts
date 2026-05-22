@@ -8,7 +8,7 @@
 import type { AllMiddlewareArgs, SlackCommandMiddlewareArgs, SlackViewMiddlewareArgs, ViewSubmitAction } from '@slack/bolt';
 
 import { deleteStudyFolderFromGitHub } from '../../../github';
-import { getResearchStudyWithRoles, getStudiesByUser, deleteResearchStudy } from '../../../../services/research_study.service';
+import { resolveStudyFromName, getStudiesByUser, deleteResearchStudy } from '../../../../services/research_study.service';
 import { getActiveStudy as getActiveStudyState } from '../../../../services/slack-user-state.service';
 
 // ─── /qori-delete command ─────────────────────────────────────────
@@ -139,7 +139,8 @@ async function handleDeleteStudySubmission({ ack, body, view, client }: SlackVie
 
   try {
     // 1. Get study details before deletion (to get the path)
-    const study = await getResearchStudyWithRoles(studyName);
+    const resolved = await resolveStudyFromName(studyName);
+    const study = resolved?.study ?? null;
 
     if (!study) {
       await client.chat.update({

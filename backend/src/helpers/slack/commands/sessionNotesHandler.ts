@@ -11,7 +11,8 @@ import type { AllMiddlewareArgs, SlackCommandMiddlewareArgs, SlackActionMiddlewa
 import { buildSessionNotesView } from "../ui/sessionNotesModal";
 import sessionObserverService from "../../../services/session_observer.service";
 import sessionParticipantService from "../../../services/study_participant.service";
-import { getResearchStudyWithRoles } from "../../../services/research_study.service";
+import { resolveStudyFromName } from "../../../services/research_study.service";
+import type { VariableContext } from "../../studyVariables";
 import { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo, createOrUpdateFileOnGitHub } from "../../github";
 import { processYamlTemplate } from "../../yamlProcessor";
 import { studyNotesService } from "../../../services";
@@ -404,15 +405,20 @@ const handleSessionNotesSubmission = async ({ ack, body, view, client }: SlackVi
     let fileName: string;
 
     if (isManual) {
-      const study = await getResearchStudyWithRoles(templateData.study_name);
+      const resolved = await resolveStudyFromName(templateData.study_name);
+      if (!resolved) throw new Error(`Study "${templateData.study_name}" not found`);
+      const study = resolved.study;
+      const variableContext: VariableContext = { projectId: resolved.projectId, studyId: resolved.studyId };
       const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, yamlTemplateName!);
-      renderedYaml = await processYamlTemplate(file.content, templateData, study!.path ?? '');
+      renderedYaml = await processYamlTemplate(file.content, templateData, study!.path ?? '', 'primary-research', false, variableContext);
       console.log("🚀 ~ handleSessionNotesSubmission ~ renderedYaml:", renderedYaml);
       result = renderedYaml!.result;
       const urlParts: string[] = result.path.split('/');
       fileName = urlParts[urlParts.length - 1];
     } else {
-      const study = await getResearchStudyWithRoles(templateData.study_name);
+      const resolved = await resolveStudyFromName(templateData.study_name);
+      if (!resolved) throw new Error(`Study "${templateData.study_name}" not found`);
+      const study = resolved.study;
       // @ts-expect-error — pre-existing type mismatch from require() → import migration
       const baseFolder = decodeURIComponent(study!.path);
       const transcriptFileName = `${templateData.participant_name}-transcript-${new Date().toISOString().split('T')[0]}.md`;

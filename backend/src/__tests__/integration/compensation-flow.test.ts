@@ -4,6 +4,8 @@
  * Tests the bug class we spent three rounds debugging in Phase 4.
  * Verifies that DECIMAL(10,2) → number coercion, service attribute
  * whitelisting, and compensation calculation all work together.
+ *
+ * Phase 2B: Updated to create Project before ResearchStudy (FK required).
  */
 
 import { getTestDb, truncateAll } from './setup/testDb';
@@ -11,7 +13,21 @@ import { calculatePerPersonCompensation } from '../../utils/compensationCalculat
 
 const sequelize = getTestDb();
 
-beforeEach(() => truncateAll());
+let testProjectId: number;
+
+beforeEach(async () => {
+  await truncateAll();
+
+  const Project = sequelize.models.Project;
+  const project = await Project.create({
+    name: 'Compensation Test Project',
+    slug: 'compensation-test-project',
+    status: 'active',
+    created_by: 'U_TEST',
+  });
+  testProjectId = (project as unknown as { id: number }).id;
+});
+
 afterAll(() => sequelize.close());
 
 describe('compensation flow', () => {
@@ -19,7 +35,9 @@ describe('compensation flow', () => {
     const ResearchStudy = sequelize.models.ResearchStudy;
 
     const study = await ResearchStudy.create({
+      project_id: testProjectId,
       name: 'comp-test-study',
+      slug: 'comp-test-study',
       channel_name: 'test-channel',
       created_by: 'U_TEST',
       researcher_name: 'Test Researcher',
@@ -69,7 +87,9 @@ describe('compensation flow', () => {
     const ResearchStudy = sequelize.models.ResearchStudy;
 
     const study = await ResearchStudy.create({
+      project_id: testProjectId,
       name: 'odd-division-study',
+      slug: 'odd-division-study',
       channel_name: 'test',
       created_by: 'U_TEST',
       researcher_name: 'R',
@@ -93,7 +113,9 @@ describe('compensation flow', () => {
 
     // Store a budget with cents
     await ResearchStudy.create({
+      project_id: testProjectId,
       name: 'decimal-test',
+      slug: 'decimal-test',
       channel_name: 'test',
       created_by: 'U_TEST',
       researcher_name: 'R',

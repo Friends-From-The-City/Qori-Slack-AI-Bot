@@ -10,10 +10,10 @@
 import type { AllMiddlewareArgs, SlackActionMiddlewareArgs, BlockAction } from '@slack/bolt';
 import type { View } from '@slack/types';
 
-import { getResearchStudyWithRoles } from '../../../../services/research_study.service';
+import { resolveStudyFromName } from '../../../../services/research_study.service';
 import { researchPlanGeneratorModal } from '../../ui/researchPlanGeneratorModal';
 import { createStudyModal } from '../../ui/createStudyModal';
-import { readStudyVariables } from '../../../studyVariables';
+import { readStudyVariablesByContext } from '../../../studyVariables';
 import { buildCascadeReadiness, buildCascadeBlocks } from '../../ui/cascadeReadinessBlocks';
 
 // ─── Block Kit manipulation type ──────────────────────────────────
@@ -34,7 +34,8 @@ async function openPlanFromBrief({ ack, body, client }: SlackActionMiddlewareArg
   try {
     const actionValue = (body as unknown as { actions: Array<{ value: string }> }).actions[0].value;
     const { studyName, channelId } = JSON.parse(actionValue);
-    const study = await getResearchStudyWithRoles(studyName);
+    const resolved = await resolveStudyFromName(studyName);
+    const study = resolved?.study ?? null;
 
     // Fetch lead researcher
     let leadResearcher: string = study?.researcher_name || '';
@@ -65,8 +66,9 @@ async function openPlanFromBrief({ ack, body, client }: SlackActionMiddlewareArg
 
     // Inject cascade readiness
     try {
-      if (study?.path) {
-        const studyVars = await readStudyVariables(decodeURIComponent(study.path));
+      if (study?.path && resolved) {
+        const variableContext = { projectId: resolved.projectId, studyId: resolved.studyId };
+        const studyVars = await readStudyVariablesByContext(variableContext);
         const cascadeData = buildCascadeReadiness(studyVars, 'research_plan');
         const cascadeBlocks = buildCascadeBlocks(cascadeData);
         if (cascadeBlocks.length > 0) {

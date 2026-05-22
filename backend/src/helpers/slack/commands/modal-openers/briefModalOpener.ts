@@ -9,9 +9,9 @@
 import type { AllMiddlewareArgs, SlackActionMiddlewareArgs, BlockAction } from '@slack/bolt';
 import type { View } from '@slack/types';
 
-import { getResearchStudyWithRoles } from '../../../../services/research_study.service';
+import { resolveStudyFromName } from '../../../../services/research_study.service';
 import { researchBriefModal } from '../../ui/researchBriefModal';
-import { readStudyVariables } from '../../../studyVariables';
+import { readStudyVariablesByContext } from '../../../studyVariables';
 import { buildCascadeReadiness, buildCascadeBlocks } from '../../ui/cascadeReadinessBlocks';
 
 // ─── Block Kit manipulation type ──────────────────────────────────
@@ -44,10 +44,11 @@ async function openResearchBriefModal({ ack, body, client }: SlackActionMiddlewa
 
     // Fetch lead researcher: study record -> Slack profile fallback
     let leadResearcher: string | null = null;
+    let resolved: Awaited<ReturnType<typeof resolveStudyFromName>> = null;
     if (preselectStudyName) {
       try {
-        const study = await getResearchStudyWithRoles(preselectStudyName);
-        if (study?.researcher_name) leadResearcher = study.researcher_name;
+        resolved = await resolveStudyFromName(preselectStudyName);
+        if (resolved?.study?.researcher_name) leadResearcher = resolved.study.researcher_name;
       } catch (_error) { /* study may not exist yet — that's OK */ }
     }
     if (!leadResearcher) {
@@ -96,11 +97,11 @@ async function openResearchBriefModal({ ack, body, client }: SlackActionMiddlewa
     }
 
     // Cascade readiness (if study already exists and has upstream vars)
-    if (preselectStudyName) {
+    if (preselectStudyName && resolved) {
       try {
-        const studyForCascade = await getResearchStudyWithRoles(preselectStudyName);
-        if (studyForCascade?.path) {
-          const studyVars = await readStudyVariables(decodeURIComponent(studyForCascade.path));
+        if (resolved.study?.path) {
+          const variableContext = { projectId: resolved.projectId, studyId: resolved.studyId };
+          const studyVars = await readStudyVariablesByContext(variableContext);
           const cascadeData = buildCascadeReadiness(studyVars, 'research_brief');
           const cascadeBlocks = buildCascadeBlocks(cascadeData);
           if (cascadeBlocks.length > 0) {

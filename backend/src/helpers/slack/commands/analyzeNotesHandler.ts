@@ -10,14 +10,14 @@ import type { AllMiddlewareArgs, SlackCommandMiddlewareArgs, SlackActionMiddlewa
 import type { ResearchQuestion, TargetBarrier } from '../../../types/cascade';
 
 import { analyzeNotesModal } from "../ui/analyzeNotesModal";
-import { getStudiesByUser, getResearchStudyWithRoles } from "../../../services/research_study.service";
+import { getStudiesByUser, resolveStudyFromName } from "../../../services/research_study.service";
 import { getActiveStudy, setActiveStudy } from "../../../services/slack-user-state.service";
 import { studyNotesService } from "../../../services";
 import sessionSummaryService from "../../../services/session-summary.service";
 import sessionObserverService from "../../../services/session_observer.service";
 import { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepoByPath, fetchFileFromRepo } from "../../../helpers/github";
 import { processYamlTemplate } from "../../../helpers/yamlProcessor";
-import { readStudyVariables } from '../../studyVariables';
+import { readStudyVariablesByContext, type VariableContext } from '../../studyVariables';
 
 // ─── Cascade context ─────────────────────────────────────────────
 
@@ -31,10 +31,9 @@ interface CascadeContext {
  * Read cascade context from study variables (brief-emitted vars).
  * Non-blocking: returns null if variables are unavailable.
  */
-const getCascadeContext = async (studyPath: string): Promise<CascadeContext | null> => {
-  if (!studyPath) return null;
+const getCascadeContext = async (variableContext: VariableContext): Promise<CascadeContext | null> => {
   try {
-    const studyVars = await readStudyVariables(decodeURIComponent(studyPath));
+    const studyVars = await readStudyVariablesByContext(variableContext);
     if (!studyVars || !studyVars.variables) return null;
 
     const vars = studyVars.variables;
@@ -198,7 +197,12 @@ const handleAnalyzeNotesSubmission = async ({ ack, body, view, client }: SlackVi
       console.warn("Warning: Could not fetch some observer notes:", message);
     }
 
-    const study = await getResearchStudyWithRoles(studyName);
+    const resolved = await resolveStudyFromName(studyName);
+    if (!resolved) {
+      throw new Error(`Study "${studyName}" not found`);
+    }
+    const { study, projectId, studyId: resolvedStudyId } = resolved;
+    const variableContext: VariableContext = { projectId, studyId: resolvedStudyId };
 
     // Fetch GitHub content for each note file in parallel
     const noteContentPromises = noteDetails.map(async (note: NoteDetail) => {
@@ -276,8 +280,17 @@ const handleAnalyzeNotesSubmission = async ({ ack, body, view, client }: SlackVi
 
     const yamlTemplateFile = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, "session_summary.yaml");
 
-    // @ts-expect-error — pre-existing type mismatch from require() → import migration
-    const renderedYaml = await processYamlTemplate(yamlTemplateFile.content, templateData, study?.path);
+    const studyPath = study?.path;
+    if (!studyPath) throw new Error('Unexpected: study.path missing after resolution');
+
+    const renderedYaml = await processYamlTemplate(
+      yamlTemplateFile.content,
+      templateData,
+      studyPath,
+      'primary-research',
+      false,
+      variableContext
+    );
 
     const { result } = renderedYaml;
     const urlParts: string[] = result.path.split('/');
@@ -383,14 +396,14 @@ const handleStudySelectionChange = async ({ ack, body, client }: SlackActionMidd
     let sessions: unknown[] = [];
     let cascadeContext: CascadeContext | null = null;
     try {
-      const study = await getResearchStudyWithRoles(studyName);
+      const resolved = await resolveStudyFromName(studyName);
       const [sessionsResult, cascadeResult] = await Promise.all([
         sessionObserverService.getObserverRequestsByStudy(studyId).catch((err) => {
           const message = err instanceof Error ? err.message : String(err);
           console.warn("Warning: Could not fetch sessions:", message);
           return [];
         }),
-        study?.path ? getCascadeContext(study.path) : Promise.resolve(null),
+        resolved ? getCascadeContext({ projectId: resolved.projectId, studyId: resolved.studyId }) : Promise.resolve(null),
       ]);
       sessions = sessionsResult;
       cascadeContext = cascadeResult;
@@ -444,7 +457,7 @@ const handleSessionSelectionChange = async ({ ack, body, client }: SlackActionMi
     const studyId = parseInt(selectedStudyOption.value);
     const studyName: string = selectedStudyOption.text.text;
 
-    const study = await getResearchStudyWithRoles(studyName);
+    const resolved = await resolveStudyFromName(studyName);
     const [studies, sessions, cascadeContext] = await Promise.all([
       getStudiesByUser(body.user.id),
       sessionObserverService.getObserverRequestsByStudy(studyId).catch((err) => {
@@ -452,7 +465,7 @@ const handleSessionSelectionChange = async ({ ack, body, client }: SlackActionMi
         console.warn("Warning: Could not fetch sessions:", message);
         return [];
       }),
-      study?.path ? getCascadeContext(study.path) : Promise.resolve(null),
+      resolved ? getCascadeContext({ projectId: resolved.projectId, studyId: resolved.studyId }) : Promise.resolve(null),
     ]);
 
     if (!selectedSessionOption || selectedSessionOption.value === "no_sessions") {

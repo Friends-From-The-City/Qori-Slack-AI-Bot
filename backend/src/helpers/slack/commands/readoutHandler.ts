@@ -9,7 +9,8 @@
 import type { AllMiddlewareArgs, SlackCommandMiddlewareArgs, SlackActionMiddlewareArgs, SlackViewMiddlewareArgs, BlockAction, ViewSubmitAction } from '@slack/bolt';
 
 import { buildReadoutModal } from '../ui/readoutModal';
-import { getResearchStudyWithRoles, getStudiesByUser } from '../../../services/research_study.service';
+import { resolveStudyFromName, getStudiesByUser } from '../../../services/research_study.service';
+import type { VariableContext } from '../../studyVariables';
 import { getActiveStudy, setActiveStudy } from '../../../services/slack-user-state.service';
 import { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo, fetchFileFromRepoByPath, readFolders, readFolderContents } from '../../github';
 import { processYamlTemplate } from '../../yamlProcessor';
@@ -259,7 +260,12 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }: SlackVi
       return;
     }
 
-    const selectedStudy = (await getResearchStudyWithRoles(selectedStudyName))!;
+    const resolved = await resolveStudyFromName(selectedStudyName);
+    if (!resolved) {
+      throw new Error(`Study "${selectedStudyName}" not found`);
+    }
+    const selectedStudy = resolved.study;
+    const variableContext: VariableContext = { projectId: resolved.projectId, studyId: resolved.studyId };
     if (selectedStudy) await setActiveStudy(body.user.id, selectedStudy.id);
     const folderPath: string = selectedStudy.path ?? '';
     const reportType: string = state.reportType;
@@ -548,7 +554,7 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }: SlackVi
           try {
             const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, templateName);
             const audienceReportData: ReadoutTemplateInput = { ...reportData, target_audience: audience };
-            const rendered = await processYamlTemplate(file.content, audienceReportData, selectedStudy.path ?? '', 'primary-research');
+            const rendered = await processYamlTemplate(file.content, audienceReportData, selectedStudy.path ?? '', 'primary-research', false, variableContext);
 
             results.push({ audience, url: rendered.result.url, success: true });
 
@@ -602,7 +608,7 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }: SlackVi
       // Research readout (existing flow)
       const yamlTemplateName = 'research_readout.yaml';
       const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, yamlTemplateName);
-      const renderedYaml = await processYamlTemplate(file.content, reportData, selectedStudy.path ?? '', 'primary-research');
+      const renderedYaml = await processYamlTemplate(file.content, reportData, selectedStudy.path ?? '', 'primary-research', false, variableContext);
 
       await client.chat.postMessage({
         channel: body.user.id,

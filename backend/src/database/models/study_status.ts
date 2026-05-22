@@ -6,9 +6,13 @@ import {
   type InferAttributes,
   type InferCreationAttributes,
   type CreationOptional,
+  type ForeignKey,
+  type NonAttribute,
+  type BelongsToGetAssociationMixin,
   type Sequelize,
 } from 'sequelize';
 import type { StudyApprovalStatus } from '../../types/common';
+import type { ResearchStudy } from './research_study';
 
 class StudyStatus extends Model<
   InferAttributes<StudyStatus>,
@@ -16,7 +20,7 @@ class StudyStatus extends Model<
 > {
   // — Attributes —
   declare id: CreationOptional<number>;
-  declare study_name: string | null;
+  declare study_id: ForeignKey<number> | null;
   declare approved_by: string | null;
   declare requested_by: string | null;
   declare reason: string | null;
@@ -27,9 +31,17 @@ class StudyStatus extends Model<
   declare updated_at: CreationOptional<Date>;
   declare created_by: string | null;
 
+  // — Association mixins —
+  declare getStudy: BelongsToGetAssociationMixin<ResearchStudy>;
+  declare study?: NonAttribute<ResearchStudy>;
+
   // — Associations —
-  static associate() {
-    // No associations
+  static associate(models: Record<string, any>) {
+    this.belongsTo(models.ResearchStudy, {
+      foreignKey: 'study_id',
+      as: 'study',
+      onDelete: 'CASCADE',
+    });
   }
 }
 
@@ -41,9 +53,13 @@ export default (sequelize: Sequelize) => {
         primaryKey: true,
         autoIncrement: true,
       },
-      study_name: {
-        type: DataTypes.STRING,
+      study_id: {
+        type: DataTypes.INTEGER,
         allowNull: true,
+        references: {
+          model: 'research_studies',
+          key: 'id',
+        },
       },
       approved_by: {
         type: DataTypes.STRING,

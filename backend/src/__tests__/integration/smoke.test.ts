@@ -1,13 +1,29 @@
 /**
  * Smoke test — verifies the test database infrastructure works.
- * Creates a study via the model, queries it back, asserts shape.
+ * Creates a project and study via the models, queries them back, asserts shape.
  */
 
 import { getTestDb, truncateAll } from './setup/testDb';
 
 const sequelize = getTestDb();
 
-beforeEach(() => truncateAll());
+// Test fixture — created fresh in beforeEach
+let testProjectId: number;
+
+beforeEach(async () => {
+  await truncateAll();
+
+  // Create a project for all tests that need to create studies
+  const Project = sequelize.models.Project;
+  const project = await Project.create({
+    name: 'Test Project',
+    slug: 'test-project',
+    status: 'active',
+    created_by: 'U_TEST',
+  });
+  testProjectId = (project as unknown as { id: number }).id;
+});
+
 afterAll(() => sequelize.close());
 
 describe('test database infrastructure', () => {
@@ -16,7 +32,9 @@ describe('test database infrastructure', () => {
 
     // Create
     const study = await ResearchStudy.create({
+      project_id: testProjectId,
       name: 'test-study-001',
+      slug: 'test-study-001',
       channel_name: 'test-channel',
       created_by: 'U_TEST_USER',
       researcher_name: 'Test Researcher',
@@ -37,6 +55,7 @@ describe('test database infrastructure', () => {
     expect(found!.get('parsed_budget_amount')).toBe(1000);
     expect(found!.get('target_participants')).toBe(8);
     expect(found!.get('created_by')).toBe('U_TEST_USER');
+    expect(found!.get('project_id')).toBe(testProjectId);
   });
 
   it('per-test truncation works — table is empty at start', async () => {
@@ -50,7 +69,9 @@ describe('test database infrastructure', () => {
     const StudyParticipant = sequelize.models.StudyParticipant;
 
     const study = await ResearchStudy.create({
+      project_id: testProjectId,
       name: 'fk-test-study',
+      slug: 'fk-test-study',
       channel_name: 'test-channel',
       created_by: 'U_TEST',
       researcher_name: 'Researcher',

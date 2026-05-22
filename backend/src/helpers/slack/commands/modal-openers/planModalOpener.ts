@@ -17,9 +17,9 @@
 import type { AllMiddlewareArgs, SlackActionMiddlewareArgs, BlockAction } from '@slack/bolt';
 import type { View } from '@slack/types';
 
-import { getResearchStudyWithRoles } from '../../../../services/research_study.service';
+import { resolveStudyFromName } from '../../../../services/research_study.service';
 import { researchPlanGeneratorModal, STUDY_DISPLAY_BLOCK_ID } from '../../ui/researchPlanGeneratorModal';
-import { readStudyVariables } from '../../../studyVariables';
+import { readStudyVariablesByContext } from '../../../studyVariables';
 import { buildCascadeReadiness, buildCascadeBlocks } from '../../ui/cascadeReadinessBlocks';
 
 // ─── Block Kit manipulation type ──────────────────────────────────
@@ -67,9 +67,11 @@ async function openResearchPlanModal({ ack, body, client }: SlackActionMiddlewar
     // Fetch study for lead researcher ID and path
     let leadResearcherUserId: string = userId; // default: whoever opened the modal
     let studyPath: string | null = null;
+    let resolved: Awaited<ReturnType<typeof resolveStudyFromName>> = null;
     try {
-      const study = await getResearchStudyWithRoles(preselectStudyName);
-      if (study) {
+      resolved = await resolveStudyFromName(preselectStudyName);
+      if (resolved) {
+        const study = resolved.study;
         if (study.created_by) leadResearcherUserId = study.created_by;
         if (study.path) studyPath = decodeURIComponent(study.path);
       }
@@ -83,8 +85,9 @@ async function openResearchPlanModal({ ack, body, client }: SlackActionMiddlewar
     let cascadeBlocks: MutableBlock[] = [];
     let cascadeGate = false;
     try {
-      if (studyPath) {
-        const studyVars = await readStudyVariables(studyPath);
+      if (studyPath && resolved) {
+        const variableContext = { projectId: resolved.projectId, studyId: resolved.studyId };
+        const studyVars = await readStudyVariablesByContext(variableContext);
         const cascadeData = buildCascadeReadiness(studyVars, 'research_plan');
         const rawBlocks = buildCascadeBlocks(cascadeData);
         if (rawBlocks.length > 0) {

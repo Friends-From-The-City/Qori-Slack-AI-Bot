@@ -2,9 +2,9 @@ import type { WebClient } from '@slack/web-api';
 import type { BlockAction, ViewSubmitAction, ViewResponseAction, AckFn } from '@slack/bolt';
 import type { View } from '@slack/types';
 import { requestStudyChangesModal } from './ui/requestStudyChangesModal';
-import { getResearchStudyWithRoles } from '../../services/research_study.service';
+import { resolveStudyFromName } from '../../services/research_study.service';
 
-import { addStudyStatus, getStudyStatusByStudyName } from '../../services/study-status.service';
+import { addStudyStatus, getStudyStatusByStudyId } from '../../services/study-status.service';
 
 type DocumentType = 'plan' | 'brief' | 'discussion';
 
@@ -104,7 +104,8 @@ export async function handleApproveSubmission(
   if (type === 'brief') {
     const researchTeamChannelId = process.env.RESEARCH_TEAM_CHANNEL_ID || channelId;
 
-    const existingStudy = (await getResearchStudyWithRoles(studyName)) as ResearchStudy | null;
+    const resolved = await resolveStudyFromName(studyName);
+    const existingStudy = resolved?.study as unknown as ResearchStudy | null;
     const studyExists = !!(existingStudy && existingStudy.path);
 
     let ctaButton;
@@ -191,7 +192,8 @@ export async function handleApproveSubmission(
       }
     }
   } else {
-    const study = (await getResearchStudyWithRoles(studyName)) as ResearchStudy | null;
+    const resolvedStudy = await resolveStudyFromName(studyName);
+    const study = resolvedStudy?.study as unknown as ResearchStudy | null;
 
     if (study?.created_by) {
       try {
@@ -221,7 +223,11 @@ export async function handleRequestChanges(
 
   let fileOptions: FileOption[] = [];
   try {
-    const studyFiles = (await getStudyStatusByStudyName(studyName)) as unknown as StudyStatus[];
+    // Resolve study name to ID for FK-based lookup
+    const resolved = await resolveStudyFromName(studyName);
+    const studyFiles = resolved
+      ? ((await getStudyStatusByStudyId(resolved.studyId)) as unknown as StudyStatus[])
+      : [];
 
     fileOptions = studyFiles.map((file) => ({
       key: file.file_name || '',
@@ -317,7 +323,8 @@ export async function handleRequestChangesSubmission(
     path: url,
   });
 
-  const study = (await getResearchStudyWithRoles(studyName)) as ResearchStudy | null;
+  const resolvedForChanges = await resolveStudyFromName(studyName);
+  const study = resolvedForChanges?.study as unknown as ResearchStudy | null;
 
   if (study?.created_by) {
     try {

@@ -25,6 +25,9 @@ const { mockExecuteAiTasks, DEFAULT_AI_RESPONSES } = require('../__mocks__/langc
 const yamlPath = path.resolve(__dirname, '../../../../config/prompts/research_plan.yaml');
 const rawYaml = fs.readFileSync(yamlPath, 'utf8');
 
+// Mock variableContext for Phase 2B FK-based APIs
+const mockVariableContext = { projectId: 1, studyId: 1 };
+
 // Helper: run the processor with default fixtures
 async function renderPlan(inputOverrides = {}, upstreamOverrides = {}) {
   const inputs = makePlanInputs(inputOverrides);
@@ -34,6 +37,7 @@ async function renderPlan(inputOverrides = {}, upstreamOverrides = {}) {
     encodeURIComponent('studies/test-study'),
     'primary-research',
     false,
+    mockVariableContext,
   );
   return result.outputTemplate;
 }

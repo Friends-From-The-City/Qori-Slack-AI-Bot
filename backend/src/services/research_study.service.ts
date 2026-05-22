@@ -1,5 +1,6 @@
 import type { ResearchStudy } from '../database/models/research_study';
 import type { ResearchStudyUserRole } from '../database/models/research_study_user_role';
+import type { Project } from '../database/models/project';
 import type { CreationAttributes } from 'sequelize';
 
 import sequelize from '../database';
@@ -7,6 +8,7 @@ import sequelize from '../database';
 // Typed model references — cast once, use everywhere. See Phase 3 notes.
 const ResearchStudyModel = sequelize.models.ResearchStudy as typeof ResearchStudy;
 const UserRoleModel = sequelize.models.ResearchStudyUserRole as typeof ResearchStudyUserRole;
+const ProjectModel = sequelize.models.Project as typeof Project;
 
 interface RoleAssignment {
   user: string;
@@ -15,6 +17,8 @@ interface RoleAssignment {
 
 interface StudyInput {
   name: string;
+  project_id: number;
+  slug?: string | null;
   assignments?: RoleAssignment[];
   [key: string]: unknown;
 }
@@ -33,16 +37,20 @@ interface StudyComputedCounts {
 }
 
 const addResearchStudyWithRoles = async (data: StudyInput): Promise<ResearchStudy> => {
-  const { assignments = [], ...studyData } = data;
+  const { assignments = [], project_id, ...studyData } = data;
+
+  if (!project_id) {
+    throw new Error('project_id is required to create or update a study');
+  }
 
   // we want atomicity across study + roles:
   const t = await sequelize.transaction();
   try {
-    // 1) upsert the study
+    // 1) upsert the study — uniqueness is now (project_id, name)
     // Intentional attribute selection — see ADR L001
     let study = await ResearchStudyModel.findOne({
-      where: { name: studyData.name },
-      attributes: ['id', 'name', 'description', 'path', 'created_by', 'researcher_name', 'researcher_email', 'created_at', 'updated_at'],
+      where: { project_id, name: studyData.name },
+      attributes: ['id', 'project_id', 'name', 'slug', 'description', 'path', 'created_by', 'researcher_name', 'researcher_email', 'created_at', 'updated_at'],
       transaction: t,
     });
 
@@ -50,7 +58,10 @@ const addResearchStudyWithRoles = async (data: StudyInput): Promise<ResearchStud
       await study.update(studyData, { transaction: t });
       console.log('🔄 updated study', study.id);
     } else {
-      study = await ResearchStudyModel.create(studyData as CreationAttributes<ResearchStudy>, { transaction: t });
+      study = await ResearchStudyModel.create(
+        { ...studyData, project_id } as CreationAttributes<ResearchStudy>,
+        { transaction: t }
+      );
       console.log('✨ created study', study.id);
     }
 
@@ -84,24 +95,21 @@ const addResearchStudyWithRoles = async (data: StudyInput): Promise<ResearchStud
   }
 };
 
-const getResearchStudyWithRoles = async (name: string): Promise<ResearchStudy | null> => {
-  // findOne by name, include user roles
-  // Intentional attribute selection — see ADR L001
+/**
+ * Get a study by ID with user roles.
+ */
+const getStudyById = async (studyId: number): Promise<ResearchStudy | null> => {
   const study = await ResearchStudyModel.findOne({
-    where: { name },
-    attributes: ['id', 'name', 'description', 'path', 'created_by', 'researcher_name', 'researcher_email', 'created_at', 'updated_at', 'link', 'total_participants', 'parsed_budget_amount', 'target_participants'],
-    include: [{
-      model: UserRoleModel,
-      as: 'userRoles',
-      attributes: ['user_id', 'role', 'created_at'],
-    }],
+    where: { id: studyId },
+    attributes: ['id', 'project_id', 'name', 'slug', 'description', 'path', 'created_by', 'researcher_name', 'researcher_email', 'created_at', 'updated_at', 'link', 'total_participants', 'parsed_budget_amount', 'target_participants'],
+    include: [
+      { model: UserRoleModel, as: 'userRoles', attributes: ['user_id', 'role', 'created_at'] },
+      { model: ProjectModel, as: 'project', attributes: ['id', 'name', 'slug'] },
+    ],
   });
 
-  // Add computed counts (using the fields that are already in the study table)
   if (study) {
-    study.total_participants = study.total_participants || 0; // Use the field from the table
-    // Placeholder computed counts — injected onto the instance but not part of
-    // the model schema. Cast through intersection to avoid `as any`.
+    study.total_participants = study.total_participants || 0;
     const withCounts = study as ResearchStudy & StudyComputedCounts;
     withCounts.total_sessions = 0;
     withCounts.total_transcripts = 0;
@@ -109,6 +117,41 @@ const getResearchStudyWithRoles = async (name: string): Promise<ResearchStudy | 
   }
 
   return study;
+};
+
+/**
+ * Get a study by project_id and study name.
+ */
+const getStudyByProjectAndName = async (projectId: number, name: string): Promise<ResearchStudy | null> => {
+  const study = await ResearchStudyModel.findOne({
+    where: { project_id: projectId, name },
+    attributes: ['id', 'project_id', 'name', 'slug', 'description', 'path', 'created_by', 'researcher_name', 'researcher_email', 'created_at', 'updated_at', 'link', 'total_participants', 'parsed_budget_amount', 'target_participants'],
+    include: [
+      { model: UserRoleModel, as: 'userRoles', attributes: ['user_id', 'role', 'created_at'] },
+      { model: ProjectModel, as: 'project', attributes: ['id', 'name', 'slug'] },
+    ],
+  });
+
+  if (study) {
+    study.total_participants = study.total_participants || 0;
+    const withCounts = study as ResearchStudy & StudyComputedCounts;
+    withCounts.total_sessions = 0;
+    withCounts.total_transcripts = 0;
+    withCounts.total_summaries = 0;
+  }
+
+  return study;
+};
+
+/**
+ * @deprecated REMOVED in Phase 2B. Use getStudyByProjectAndName or getStudyById instead.
+ * @throws Always throws — name-only lookups are no longer supported.
+ */
+const getResearchStudyWithRoles = async (_name: string): Promise<ResearchStudy | null> => {
+  throw new Error(
+    'getResearchStudyWithRoles(name) removed in Phase 2B. ' +
+    'Use getStudyByProjectAndName(projectId, name) or getStudyById(studyId) instead.'
+  );
 };
 
 const getStudiesByUser = async (userId: string): Promise<ResearchStudy[]> => {
@@ -161,9 +204,71 @@ const deleteResearchStudy = async (studyId: number, userId: string): Promise<Del
   }
 };
 
+/**
+ * Get all studies for a project.
+ */
+const getStudiesByProject = async (projectId: number): Promise<ResearchStudy[]> => {
+  return ResearchStudyModel.findAll({
+    where: { project_id: projectId },
+    attributes: ['id', 'project_id', 'name', 'slug', 'description', 'path', 'created_by', 'researcher_name', 'researcher_email', 'created_at', 'updated_at'],
+    order: [['created_at', 'DESC']],
+  });
+};
+
+/**
+ * SCAFFOLDING: 2D removal deadline.
+ * Filed in: docs/scaffolding-to-remove.md
+ *
+ * Bridge function for handlers receiving studyName from legacy modal metadata.
+ * Returns the study with its project_id FK so handlers can call FK-based APIs.
+ *
+ * WHY IT EXISTS:
+ * Modal builders (2D scope) still pass studyName in private_metadata.
+ * Handlers need projectId + studyId to call the new FK-based cascade APIs.
+ * This function is the ONE place that translates name → FKs.
+ *
+ * DELETION TRIGGER:
+ * When 2D updates modal builders to pass projectId + studyId directly in
+ * private_metadata, delete this function and all handler usages.
+ *
+ * PATTERN ENFORCEMENT:
+ * See pattern-enforcement.test.ts for commented assertion to activate at 2D close.
+ */
+const resolveStudyFromName = async (studyName: string): Promise<{
+  study: ResearchStudy;
+  projectId: number;
+  studyId: number;
+} | null> => {
+  const study = await ResearchStudyModel.findOne({
+    where: { name: studyName },
+    attributes: [
+      'id', 'project_id', 'name', 'slug', 'channel_name', 'description',
+      'path', 'link', 'created_by', 'researcher_name', 'researcher_email',
+      'total_participants', 'parsed_budget_amount', 'target_participants',
+      'created_at', 'updated_at',
+    ],
+    include: [
+      { model: UserRoleModel, as: 'userRoles', attributes: ['user_id', 'role', 'created_at'] },
+      { model: ProjectModel, as: 'project', attributes: ['id', 'name', 'slug'] },
+    ],
+  });
+
+  if (!study) return null;
+
+  return {
+    study,
+    projectId: study.project_id,
+    studyId: study.id,
+  };
+};
+
 export {
   addResearchStudyWithRoles,
   getResearchStudyWithRoles,
+  getStudyById,
+  getStudyByProjectAndName,
   getStudiesByUser,
+  getStudiesByProject,
   deleteResearchStudy,
+  resolveStudyFromName,
 };

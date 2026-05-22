@@ -15,13 +15,13 @@ import { TemplateContractError } from '../../../types/handlers';
 import type { ResearchQuestion, TargetBarrier } from '../../../types/cascade';
 
 import { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo } from '../../github';
-import { getResearchStudyWithRoles } from '../../../services/research_study.service';
+import { resolveStudyFromName } from '../../../services/research_study.service';
 import { processYamlTemplate } from '../../yamlProcessor';
 import { addStudyStatus } from '../../../services/study-status.service';
 import { sendStudyResultMessage, generateStudyResultBlocks } from '../ui/studyResultBlocks';
 import { calculatePerPersonCompensation } from '../../../utils/compensationCalculator';
 import { buildTimelinePhases, buildTimelineSummary, type TimelinePhase } from '../../../utils/timelineComputation';
-import { readUpstreamVariables } from '../../studyVariables';
+import { readUpstreamVariablesByContext, type VariableContext } from '../../studyVariables';
 import research_planService from '../../../services/research_plan.service';
 
 // ─── Template input contract ──────────────────────────────────────
@@ -63,7 +63,12 @@ async function handlePlanSubmission({ ack, body, view, client }: SlackViewMiddle
 
   console.log('🚀 ~ Research Plan Generator ~ studyName:', studyName);
 
-  const study = await getResearchStudyWithRoles(studyName);
+  const resolved = await resolveStudyFromName(studyName);
+  if (!resolved) {
+    throw new Error(`Study "${studyName}" not found`);
+  }
+  const { study, projectId, studyId } = resolved;
+  const variableContext: VariableContext = { projectId, studyId };
 
   // Form extraction helper — Bolt's view state values are loosely typed
   const extract = (blockId: string, actionId: string): string | string[] | null => {
@@ -100,7 +105,7 @@ async function handlePlanSubmission({ ack, body, view, client }: SlackViewMiddle
   const perParticipantComp: number | null = calculatePerPersonCompensation(study);
 
   // ── Load upstream cascade variables (ADR 0007: fail loudly on missing required data) ──
-  const upstream = await readUpstreamVariables(study!.path || '', [
+  const upstream = await readUpstreamVariablesByContext(variableContext, [
     { key: 'research_objectives', required: true },
     { key: 'research_questions', required: true },
     { key: 'target_barriers', required: true },
@@ -170,8 +175,17 @@ async function handlePlanSubmission({ ack, body, view, client }: SlackViewMiddle
 
   // TemplateContractError propagates to global error middleware in events.ts
   const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, 'research_plan.yaml');
-  // @ts-expect-error — pre-existing type mismatch from require() → import migration
-  const renderedYaml = await processYamlTemplate(file.content, data, study!.path);
+  const studyPath = study?.path;
+  if (!studyPath) throw new Error('Unexpected: study.path missing after resolution');
+
+  const renderedYaml = await processYamlTemplate(
+    file.content,
+    data,
+    studyPath,
+    'primary-research',
+    false,
+    variableContext
+  );
 
   const url: string = renderedYaml.result.url;
   const urlParts: string[] = renderedYaml.result.path.split('/');

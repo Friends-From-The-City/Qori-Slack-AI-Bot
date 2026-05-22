@@ -2,15 +2,45 @@
  * Flow 4: Cascade variable flow — end-to-end
  *
  * Tests the cascade contract: variables stored correctly in StudyVariable,
- * retrievable by study_name + variable_key, pool vs singleton distinction
- * works, and JSONB values survive round-trip.
+ * retrievable by project_id + study_id + variable_key, pool vs singleton
+ * distinction works, and JSONB values survive round-trip.
+ *
+ * Phase 2B schema: Uses project_id + study_id FKs instead of study_name.
  */
 
 import { getTestDb, truncateAll } from './setup/testDb';
 
 const sequelize = getTestDb();
 
-beforeEach(() => truncateAll());
+let testProjectId: number;
+let testStudyId: number;
+
+beforeEach(async () => {
+  await truncateAll();
+
+  const Project = sequelize.models.Project;
+  const ResearchStudy = sequelize.models.ResearchStudy;
+
+  const project = await Project.create({
+    name: 'Cascade Test Project',
+    slug: 'cascade-test-project',
+    status: 'active',
+    created_by: 'U_TEST',
+  });
+  testProjectId = (project as unknown as { id: number }).id;
+
+  const study = await ResearchStudy.create({
+    project_id: testProjectId,
+    name: 'cascade-test',
+    slug: 'cascade-test',
+    channel_name: 'test-channel',
+    created_by: 'U_TEST',
+    researcher_name: 'Test Researcher',
+    researcher_email: 'test@example.com',
+  });
+  testStudyId = (study as unknown as { id: number }).id;
+});
+
 afterAll(() => sequelize.close());
 
 describe('cascade variable flow', () => {
@@ -19,7 +49,8 @@ describe('cascade variable flow', () => {
 
     // Write — mimics what writeVariablesToPostgres does for singletons
     await SV.create({
-      study_name: 'cascade-test',
+      project_id: testProjectId,
+      study_id: testStudyId,
       variable_key: 'research_objectives',
       variable_type: 'singleton',
       item_key: null,
@@ -35,7 +66,7 @@ describe('cascade variable flow', () => {
 
     // Read back — mimics what readUpstreamVariables does
     const rows = await SV.findAll({
-      where: { study_name: 'cascade-test', variable_key: 'research_objectives', scope: 'study' },
+      where: { project_id: testProjectId, study_id: testStudyId, variable_key: 'research_objectives', scope: 'study' },
     });
 
     expect(rows).toHaveLength(1);
@@ -58,7 +89,8 @@ describe('cascade variable flow', () => {
     // Write — mimics pool variable storage
     for (const q of questions) {
       await SV.create({
-        study_name: 'cascade-test',
+        project_id: testProjectId,
+        study_id: testStudyId,
         variable_key: 'research_questions',
         variable_type: 'pool',
         item_key: q.id,
@@ -75,7 +107,7 @@ describe('cascade variable flow', () => {
 
     // Read back
     const rows = await SV.findAll({
-      where: { study_name: 'cascade-test', variable_key: 'research_questions', scope: 'study' },
+      where: { project_id: testProjectId, study_id: testStudyId, variable_key: 'research_questions', scope: 'study' },
     });
 
     expect(rows).toHaveLength(2);
@@ -88,11 +120,25 @@ describe('cascade variable flow', () => {
     expect(poolValues.find((v: any) => v.id === 'RQ-002')).toBeDefined();
   });
 
-  it('scopes variables by study_name — different studies dont leak', async () => {
+  it('scopes variables by study_id — different studies dont leak', async () => {
     const SV = sequelize.models.StudyVariable;
+    const RS = sequelize.models.ResearchStudy;
+
+    // Create a second study in the same project
+    const studyB = await RS.create({
+      project_id: testProjectId,
+      name: 'study-b',
+      slug: 'study-b',
+      channel_name: 'test-channel',
+      created_by: 'U_TEST',
+      researcher_name: 'Test Researcher',
+      researcher_email: 'test@example.com',
+    });
+    const studyBId = (studyB as unknown as { id: number }).id;
 
     await SV.create({
-      study_name: 'study-a',
+      project_id: testProjectId,
+      study_id: testStudyId,
       variable_key: 'research_objectives',
       variable_type: 'singleton',
       value: ['Objective A'],
@@ -104,7 +150,8 @@ describe('cascade variable flow', () => {
     } as Record<string, unknown>);
 
     await SV.create({
-      study_name: 'study-b',
+      project_id: testProjectId,
+      study_id: studyBId,
       variable_key: 'research_objectives',
       variable_type: 'singleton',
       value: ['Objective B'],
@@ -116,10 +163,10 @@ describe('cascade variable flow', () => {
     } as Record<string, unknown>);
 
     const rowsA = await SV.findAll({
-      where: { study_name: 'study-a', variable_key: 'research_objectives', scope: 'study' },
+      where: { project_id: testProjectId, study_id: testStudyId, variable_key: 'research_objectives', scope: 'study' },
     });
     const rowsB = await SV.findAll({
-      where: { study_name: 'study-b', variable_key: 'research_objectives', scope: 'study' },
+      where: { project_id: testProjectId, study_id: studyBId, variable_key: 'research_objectives', scope: 'study' },
     });
 
     expect(rowsA).toHaveLength(1);
@@ -141,7 +188,8 @@ describe('cascade variable flow', () => {
     };
 
     await SV.create({
-      study_name: 'jsonb-test',
+      project_id: testProjectId,
+      study_id: testStudyId,
       variable_key: 'target_barriers',
       variable_type: 'pool',
       item_key: 'TB-001',
@@ -154,7 +202,7 @@ describe('cascade variable flow', () => {
     } as Record<string, unknown>);
 
     const rows = await SV.findAll({
-      where: { study_name: 'jsonb-test', variable_key: 'target_barriers' },
+      where: { project_id: testProjectId, study_id: testStudyId, variable_key: 'target_barriers' },
     });
 
     const stored = (rows[0] as any).value;
@@ -169,7 +217,8 @@ describe('cascade variable flow', () => {
     // Brief emits research_objectives (singleton: string[])
     const objectives = ['Understand appointment scheduling barriers', 'Identify digital access gaps'];
     await SV.create({
-      study_name: 'cascade-e2e',
+      project_id: testProjectId,
+      study_id: testStudyId,
       variable_key: 'research_objectives',
       variable_type: 'singleton',
       value: objectives,
@@ -187,7 +236,8 @@ describe('cascade variable flow', () => {
     ];
     for (const q of questions) {
       await SV.create({
-        study_name: 'cascade-e2e',
+        project_id: testProjectId,
+        study_id: testStudyId,
         variable_key: 'research_questions',
         variable_type: 'pool',
         item_key: q.id,
@@ -203,10 +253,10 @@ describe('cascade variable flow', () => {
 
     // Plan reads: objectives + questions (mimics readUpstreamVariables query)
     const objRows = await SV.findAll({
-      where: { study_name: 'cascade-e2e', variable_key: 'research_objectives', scope: 'study' },
+      where: { project_id: testProjectId, study_id: testStudyId, variable_key: 'research_objectives', scope: 'study' },
     });
     const qRows = await SV.findAll({
-      where: { study_name: 'cascade-e2e', variable_key: 'research_questions', scope: 'study' },
+      where: { project_id: testProjectId, study_id: testStudyId, variable_key: 'research_questions', scope: 'study' },
     });
 
     // Objectives: singleton → single row → value is string[]

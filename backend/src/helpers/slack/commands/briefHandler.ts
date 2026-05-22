@@ -15,7 +15,8 @@ import type { AllMiddlewareArgs, SlackViewMiddlewareArgs, ViewSubmitAction } fro
 
 import { format, parseISO, differenceInCalendarDays, isValid } from 'date-fns';
 import { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo, readFolders, copyFilesToFolder } from '../../github';
-import { getResearchStudyWithRoles, addResearchStudyWithRoles } from '../../../services/research_study.service';
+import { resolveStudyFromName, addResearchStudyWithRoles } from '../../../services/research_study.service';
+import type { VariableContext } from '../../studyVariables';
 import { getChannelConfigByChannelId } from '../../../services/channel-config.service';
 import { processYamlTemplate } from '../../yamlProcessor';
 import { executeAiGenerationTasks } from '../../langchain';
@@ -230,7 +231,8 @@ async function handleBriefSubmission({ ack, body, view, client }: SlackViewMiddl
   }
 
   // ── Study creation (unchanged from v6.0) ──
-  let study = await getResearchStudyWithRoles(studyName!);
+  let resolved = await resolveStudyFromName(studyName!);
+  let study = resolved?.study ?? null;
 
   if (!study || !study.path) {
     console.log('📁 Study does not exist yet — creating from brief submission');
@@ -254,6 +256,9 @@ async function handleBriefSubmission({ ack, body, view, client }: SlackViewMiddl
         channelConfig.product_folder_name
       );
 
+      // SCAFFOLDING: 2D removal — needs project_id from modal private_metadata
+      // See docs/scaffolding-to-remove.md entry #2
+      // @ts-expect-error project_id required but unavailable until 2D
       await addResearchStudyWithRoles({
         name: studyName,
         description: `Created from research brief`,
@@ -266,7 +271,8 @@ async function handleBriefSubmission({ ack, body, view, client }: SlackViewMiddl
         assignments: [],
       });
 
-      study = await getResearchStudyWithRoles(studyName!);
+      resolved = await resolveStudyFromName(studyName!);
+      study = resolved?.study ?? null;
       console.log(`✅ Study "${studyName}" created from brief, path: ${study!.path}`);
     } catch (createError) {
       const createMessage = createError instanceof Error ? createError.message : String(createError);
@@ -479,8 +485,9 @@ async function handleBriefSubmission({ ack, body, view, client }: SlackViewMiddl
   console.log(`📋 Assembled brief data: ${Object.keys(data).length} fields, ${data.objectives_count} objectives, ${data.research_questions_count} RQs, ${data.target_barriers_count} TBs, study: ${studyName}`);
 
   // ── Process YAML template (prose tasks + rendering + extraction) ──
+  const variableContext: VariableContext = { projectId: resolved!.projectId, studyId: resolved!.studyId };
   const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, "research_brief.yaml");
-  const renderedYaml = await processYamlTemplate(file.content, data, study!.path ?? '');
+  const renderedYaml = await processYamlTemplate(file.content, data, study!.path ?? '', 'primary-research', false, variableContext);
 
   const url: string = renderedYaml.result.url;
 

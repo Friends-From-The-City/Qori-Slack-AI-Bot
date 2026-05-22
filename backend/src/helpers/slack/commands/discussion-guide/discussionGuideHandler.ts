@@ -16,11 +16,11 @@ import type { AllMiddlewareArgs, SlackActionMiddlewareArgs, SlackViewMiddlewareA
 import type { View } from '@slack/types';
 
 import { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo } from '../../../github';
-import { getResearchStudyWithRoles } from '../../../../services/research_study.service';
+import { resolveStudyFromName } from '../../../../services/research_study.service';
 import { processYamlTemplate } from '../../../yamlProcessor';
 import { addStudyStatus } from '../../../../services/study-status.service';
 import { sendStudyResultMessage, generateStudyResultBlocks } from '../../ui/studyResultBlocks';
-import { readStudyVariables } from '../../../studyVariables';
+import { readStudyVariablesByContext, type VariableContext } from '../../../studyVariables';
 import { buildCascadeReadiness, buildCascadeBlocks } from '../../ui/cascadeReadinessBlocks';
 import {
   discussionGuideModal,
@@ -120,9 +120,12 @@ async function openDiscussionGuideModal({ ack, body, client }: SlackActionMiddle
     // ── Single study fetch for all downstream uses ──
     let studyPath: string | null = null;
     let leadModeratorUserId: string = userId;
+    let variableContext: VariableContext | null = null;
     try {
-      const study = await getResearchStudyWithRoles(studyName);
-      if (study) {
+      const resolved = await resolveStudyFromName(studyName);
+      if (resolved) {
+        const study = resolved.study;
+        variableContext = { projectId: resolved.projectId, studyId: resolved.studyId };
         if (study.created_by) leadModeratorUserId = study.created_by;
         if (study.path) studyPath = decodeURIComponent(study.path);
       }
@@ -136,8 +139,8 @@ async function openDiscussionGuideModal({ ack, body, client }: SlackActionMiddle
     let methodologyValue: string | null = null;
 
     try {
-      if (studyPath) {
-        const studyVars = await readStudyVariables(studyPath);
+      if (studyPath && variableContext) {
+        const studyVars = await readStudyVariablesByContext(variableContext);
 
         // Cascade readiness check
         const cascadeData = buildCascadeReadiness(studyVars, 'discussion_guide');
@@ -344,9 +347,12 @@ async function handleDiscussionGuideSubmission({ ack, body, view, client }: Slac
     lead_researcher: leadResearcherName || body.user?.name || '',
   };
 
-  const study = await getResearchStudyWithRoles(studyName);
+  const resolved = await resolveStudyFromName(studyName);
+  if (!resolved) throw new Error(`Study "${studyName}" not found`);
+  const study = resolved.study;
+  const variableContext: VariableContext = { projectId: resolved.projectId, studyId: resolved.studyId };
   const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, 'discussion_guide.yaml');
-  const renderedYaml = await processYamlTemplate(file.content, guideData, study!.path ?? '');
+  const renderedYaml = await processYamlTemplate(file.content, guideData, study!.path ?? '', 'primary-research', false, variableContext);
 
   const url: string = renderedYaml.result.url;
 

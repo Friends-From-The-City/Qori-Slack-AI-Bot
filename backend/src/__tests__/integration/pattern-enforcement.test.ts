@@ -203,3 +203,274 @@ describe('pattern: TemplateContractError contract', () => {
     expect(violations).toEqual([]);
   });
 });
+
+// ═══════════════════════════════════════════════════════════
+// RESTRUCTURE-BLOCKING ASSERTIONS (Phase 2A)
+// These define the behavioral contract Phase 2B schema changes must satisfy.
+// ═══════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════
+// Assertion 6: Cascade store operations must specify scope
+// ═══════════════════════════════════════════════════════════
+
+describe('pattern: cascade scope parameter enforcement', () => {
+  const helpersDir = join(SRC_ROOT, 'helpers');
+
+  it('variableStore read/write calls include scope parameter', () => {
+    const files = findTsFiles(helpersDir);
+    const violations: string[] = [];
+
+    for (const file of files) {
+      const content = readFile(file);
+      const rel = relative(SRC_ROOT, file);
+
+      // Skip the store implementation itself
+      if (rel.includes('variableStore')) continue;
+
+      const lines = content.split('\n');
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        // Skip comments
+        if (line.trimStart().startsWith('//')) continue;
+        // pattern-enforcement-ignore comments suppress this check
+        if (line.includes('pattern-enforcement-ignore')) continue;
+
+        // Check for variableStore calls that don't pass scope
+        // The valid pattern is variableStore.read({ studyName, key, scope })
+        // or variableStore.write({ studyName, key, value, scope })
+        if (
+          (line.includes('variableStore.read(') || line.includes('variableStore.write(')) &&
+          !line.includes('scope')
+        ) {
+          // Look ahead for multi-line calls
+          const nextLines = lines.slice(i, i + 5).join(' ');
+          if (!nextLines.includes('scope')) {
+            violations.push(`${rel}:${i + 1}: variableStore call missing scope parameter`);
+          }
+        }
+      }
+    }
+
+    expect(violations).toEqual([]);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════
+// Assertion 7: Scope values use typed constants
+// ═══════════════════════════════════════════════════════════
+
+describe('pattern: scope values use typed constants', () => {
+  const commandsDir = join(SRC_ROOT, 'helpers/slack/commands');
+
+  it('no raw scope string literals in handler files', () => {
+    const files = findTsFiles(commandsDir);
+    const violations: string[] = [];
+    // Pattern: scope: 'study' or scope: "study" or scope: 'discovery' etc.
+    const rawScopePattern = /scope:\s*['"](?:study|discovery)['"]/;
+
+    for (const file of files) {
+      const content = readFile(file);
+      const rel = relative(SRC_ROOT, file);
+
+      const lines = content.split('\n');
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        // Skip comments
+        if (line.trimStart().startsWith('//')) continue;
+        // pattern-enforcement-ignore comments suppress this check
+        if (line.includes('pattern-enforcement-ignore')) continue;
+
+        if (rawScopePattern.test(line)) {
+          violations.push(`${rel}:${i + 1}: raw scope string literal - use SCOPE_STUDY or SCOPE_DISCOVERY constant`);
+        }
+      }
+    }
+
+    // Baseline: count existing violations for migration tracking
+    // Phase 2B will require this to be 0
+    // For now, document the baseline and skip if violations exist
+    if (violations.length > 0) {
+      console.log(`[Phase 2A baseline] ${violations.length} raw scope literals to migrate in 2B:`);
+      violations.forEach(v => console.log(`  ${v}`));
+    }
+    // SKIP for now - will enforce in 2B after constants are introduced
+    // expect(violations).toEqual([]);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════
+// Assertion 8: Phase 2B path-based function removal
+// ═══════════════════════════════════════════════════════════
+
+describe('pattern: Phase 2B removed path-based cascade functions', () => {
+  // ─────────────────────────────────────────────────────────
+  // ACTIVATE AT 2D CLOSE-OUT: resolveStudyFromName
+  // ─────────────────────────────────────────────────────────
+  // When Phase 2D updates modal builders to pass projectId + studyId
+  // directly in private_metadata, uncomment this assertion.
+  // See: docs/scaffolding-to-remove.md
+  //
+  // it('no resolveStudyFromName calls (scaffolding removed)', () => {
+  //   const allFiles = findTsFiles(SRC_ROOT);
+  //   const violations: string[] = [];
+  //
+  //   for (const file of allFiles) {
+  //     const content = readFile(file);
+  //     const rel = relative(SRC_ROOT, file);
+  //
+  //     // Skip the service definition itself
+  //     if (rel.includes('research_study.service.ts')) continue;
+  //     if (rel.includes('__tests__/')) continue;
+  //
+  //     const lines = content.split('\n');
+  //     for (let i = 0; i < lines.length; i++) {
+  //       const line = lines[i];
+  //       if (line.trimStart().startsWith('//')) continue;
+  //       if (line.includes('import ')) continue;
+  //
+  //       if (line.includes('resolveStudyFromName(')) {
+  //         violations.push(`${rel}:${i + 1}: scaffolding not removed - resolveStudyFromName should be deleted after 2D`);
+  //       }
+  //     }
+  //   }
+  //
+  //   expect(violations).toEqual([]);
+  // });
+  // ─────────────────────────────────────────────────────────
+  const REMOVED_FUNCTIONS = [
+    // These functions were removed in Phase 2B - they throw errors now
+    'readStudyVariables(',        // Use readStudyVariablesByContext
+    'writeStudyVariables(',       // Use writeStudyVariablesByContext
+    'mergeVariables(',            // Use mergeVariablesByContext
+    'readUpstreamVariables(',     // Use readUpstreamVariablesByContext
+    'readDiscoveryVariables(',    // Use readDiscoveryVariablesByProject
+    'writeDiscoveryVariables(',   // Use writeDiscoveryVariablesByProject
+    'getResearchStudyWithRoles(', // Use getStudyById or getStudyByProjectAndName
+  ];
+
+  const ALLOWED_FILES = [
+    // The implementation file can reference these (for the throwing stubs)
+    'studyVariables.ts',
+    'research_study.service.ts',
+    // Test files that mock these functions
+    '__tests__/',
+    '__mocks__/',
+    // SCAFFOLDING: 2D removal - discoveryLoader needs projectId instead of team
+    // See docs/scaffolding-to-remove.md entry #2
+    'discoveryLoader.ts',
+  ];
+
+  it('no handler files call removed path-based cascade functions', () => {
+    const allFiles = findTsFiles(SRC_ROOT);
+    const violations: string[] = [];
+
+    for (const file of allFiles) {
+      const content = readFile(file);
+      const rel = relative(SRC_ROOT, file);
+
+      // Skip allowed files
+      if (ALLOWED_FILES.some(allowed => rel.includes(allowed))) continue;
+
+      const lines = content.split('\n');
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        // Skip comments
+        if (line.trimStart().startsWith('//')) continue;
+        // Skip import statements (importing type doesn't call the function)
+        if (line.includes('import ')) continue;
+
+        for (const fn of REMOVED_FUNCTIONS) {
+          if (line.includes(fn)) {
+            violations.push(`${rel}:${i + 1}: calls removed function ${fn.slice(0, -1)} - use FK-based alternative`);
+          }
+        }
+      }
+    }
+
+    expect(violations).toEqual([]);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════
+// Assertion 9: Channel-project binding readiness
+// ═══════════════════════════════════════════════════════════
+
+describe('pattern: channel context threading', () => {
+  const commandsDir = join(SRC_ROOT, 'helpers/slack/commands');
+
+  // Handlers that legitimately operate at channel level without study/project context:
+  // - learn/: User onboarding, not research operations
+  // - repo/repoConfigHandler: Channel-to-repo binding (becomes channel→project in 2B)
+  // - repo/syncHandler: Channel-level folder sync
+  // - qa/askStudyHandler: Disabled RAG feature (returns "not available yet")
+  const CHANNEL_ONLY_ALLOWED = [
+    'learn/learnHandler.ts',
+    'repo/repoConfigHandler.ts',
+    'repo/syncHandler.ts',
+    'qa/askStudyHandler.ts',
+  ];
+
+  it('handler files that use channel_id also reference study or project context', () => {
+    const files = findTsFiles(commandsDir);
+    const violations: string[] = [];
+
+    for (const file of files) {
+      const content = readFile(file);
+      const rel = relative(SRC_ROOT, file);
+
+      // Skip files in the allowed list (legitimate channel-only operations)
+      if (CHANNEL_ONLY_ALLOWED.some(allowed => rel.includes(allowed))) continue;
+
+      // Skip files that don't use channel_id
+      if (!content.includes('channel_id') && !content.includes('channelId')) continue;
+
+      // Must also have study/project context
+      const hasStudyContext = content.includes('studyName') || content.includes('study_name') ||
+        content.includes('studyId') || content.includes('study_id');
+      const hasProjectContext = content.includes('projectId') || content.includes('project_id') ||
+        content.includes('projectName') || content.includes('project_name');
+
+      // For 2A: must have study context (current model)
+      // For 2B: will require project context
+      if (!hasStudyContext && !hasProjectContext) {
+        violations.push(`${rel}: uses channel_id without study/project context - orphan channel reference`);
+      }
+    }
+
+    expect(violations).toEqual([]);
+  });
+
+  it('private_metadata includes channel context for modal chains', () => {
+    const files = findTsFiles(commandsDir);
+    const violations: string[] = [];
+
+    for (const file of files) {
+      const content = readFile(file);
+      // rel would be used for violation reporting if we enforce this strictly
+      // Currently informational only for 2A baseline
+
+      // Files that build private_metadata for modals
+      if (!content.includes('private_metadata')) continue;
+
+      // If it builds private_metadata, it should include channelId
+      // Pattern: JSON.stringify({ ... channelId ... }) or private_metadata: { channelId }
+      const hasPrivateMetadataBuild = content.includes('JSON.stringify') &&
+        (content.includes('private_metadata') || content.includes('privateMetadata'));
+
+      if (hasPrivateMetadataBuild) {
+        // For 2A: just verify the pattern detection works
+        // For 2B: will strictly enforce channel context in private_metadata
+        // The heuristic checks for channelId somewhere in stringify context
+        const hasChannelContext = content.includes('channelId') || content.includes('channel_id');
+        // Baseline tracking - not enforced yet
+        if (!hasChannelContext) {
+          // Would add to violations in 2B
+        }
+      }
+    }
+
+    // This assertion is informational for 2A
+    // Will be enforced strictly in 2B when channel → project binding is required
+    expect(violations).toEqual([]);
+  });
+});

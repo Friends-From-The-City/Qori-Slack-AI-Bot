@@ -6,8 +6,20 @@ import {
   type InferAttributes,
   type InferCreationAttributes,
   type CreationOptional,
+  type ForeignKey,
+  type NonAttribute,
+  type BelongsToGetAssociationMixin,
   type Sequelize,
 } from 'sequelize';
+import type { Project } from './project';
+import type { ResearchStudy } from './research_study';
+
+/**
+ * Cascade variable scope values.
+ * - study: Variables scoped to a specific study (brief, plan, synthesis, readout)
+ * - discovery: Variables scoped to the project (desk research, stakeholder synthesis)
+ */
+export type VariableScope = 'study' | 'discovery';
 
 class StudyVariable extends Model<
   InferAttributes<StudyVariable>,
@@ -15,7 +27,8 @@ class StudyVariable extends Model<
 > {
   // — Attributes —
   declare id: CreationOptional<number>;
-  declare study_name: string;
+  declare project_id: ForeignKey<number>;
+  declare study_id: ForeignKey<number> | null;
   declare variable_key: string;
   declare variable_type: string | null;
   declare item_key: string | null;
@@ -28,12 +41,33 @@ class StudyVariable extends Model<
   declare entry_count: number | null;
   declare is_pool: CreationOptional<boolean>;
   declare confidence: string | null;
-  declare scope: CreationOptional<string | null>;
+  declare scope: CreationOptional<VariableScope | null>;
   declare discovery_artifact_id: string | null;
   declare stale: CreationOptional<boolean>;
   declare extracted_at: CreationOptional<Date>;
   declare created_at: CreationOptional<Date>;
   declare updated_at: CreationOptional<Date>;
+
+  // — Association mixins —
+  declare getProject: BelongsToGetAssociationMixin<Project>;
+  declare project?: NonAttribute<Project>;
+  declare getStudy: BelongsToGetAssociationMixin<ResearchStudy>;
+  declare study?: NonAttribute<ResearchStudy>;
+
+  // — Associations —
+  static associate(models: Record<string, any>) {
+    this.belongsTo(models.Project, {
+      foreignKey: 'project_id',
+      as: 'project',
+      onDelete: 'CASCADE',
+    });
+
+    this.belongsTo(models.ResearchStudy, {
+      foreignKey: 'study_id',
+      as: 'study',
+      onDelete: 'CASCADE',
+    });
+  }
 }
 
 export default (sequelize: Sequelize) => {
@@ -44,9 +78,21 @@ export default (sequelize: Sequelize) => {
         primaryKey: true,
         autoIncrement: true,
       },
-      study_name: {
-        type: DataTypes.STRING,
+      project_id: {
+        type: DataTypes.INTEGER,
         allowNull: false,
+        references: {
+          model: 'projects',
+          key: 'id',
+        },
+      },
+      study_id: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        references: {
+          model: 'research_studies',
+          key: 'id',
+        },
       },
       variable_key: {
         type: DataTypes.STRING,

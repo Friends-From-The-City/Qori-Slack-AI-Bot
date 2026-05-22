@@ -10,14 +10,14 @@ import type { AllMiddlewareArgs, SlackCommandMiddlewareArgs, SlackActionMiddlewa
 import { TemplateContractError } from '../../../types/handlers';
 
 import { researchSynthesisModal } from "../ui/researchSynthesisModal";
-import { getStudiesByUser, getResearchStudyWithRoles } from "../../../services/research_study.service";
+import { getStudiesByUser, resolveStudyFromName } from "../../../services/research_study.service";
 import { getActiveStudy, setActiveStudy } from "../../../services/slack-user-state.service";
 import { studyNotesService } from "../../../services";
 import sessionSummaryService from "../../../services/session-summary.service";
 import { getStudyStakeholderGuide } from "../../../services/study-status.service";
 import { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepoByPath, fetchFileFromRepo, readFolderContents } from "../../../helpers/github";
 import { processYamlTemplate } from "../../../helpers/yamlProcessor";
-import { readStudyVariables } from '../../studyVariables';
+import { readStudyVariablesByContext, type VariableContext } from '../../studyVariables';
 import { buildCascadeReadiness } from "../ui/cascadeReadinessBlocks";
 import type { CascadeData } from "../ui/cascadeReadinessBlocks";
 
@@ -260,7 +260,7 @@ const handleStudySelectionChange = async ({ ack, body, client }: SlackActionMidd
     try {
       const selectedStudy = studies.find((s: Study) => s.id.toString() === studyId.toString());
       if (selectedStudy) {
-        stakeholderGuides = await getStudyStakeholderGuide(selectedStudy.name) as unknown as StakeholderGuide[];
+        stakeholderGuides = await getStudyStakeholderGuide(selectedStudy.id) as unknown as StakeholderGuide[];
         console.log(`✅ Fetched ${stakeholderGuides.length} stakeholder interview guides`);
       }
     } catch (error) {
@@ -351,9 +351,9 @@ const handleStudySelectionChange = async ({ ack, body, client }: SlackActionMidd
     try {
       const selectedStudy = studies.find((s: Study) => s.id.toString() === studyId.toString());
       if (selectedStudy) {
-        const study = await getResearchStudyWithRoles(selectedStudy.name);
-        if (study?.path) {
-          analysisFiles = await scanAnalysisFolders(study.path);
+        const resolved = await resolveStudyFromName(selectedStudy.name);
+        if (resolved?.study?.path) {
+          analysisFiles = await scanAnalysisFolders(resolved.study.path);
           console.log(`✅ Found ${analysisFiles.length} analysis-layer files`);
         }
       }
@@ -505,7 +505,7 @@ const handleLoadSynthesisFiles = async ({ ack, body, client }: SlackActionMiddle
     try {
       const selectedStudy = studies.find((s: Study) => s.id.toString() === studyId.toString());
       if (selectedStudy) {
-        stakeholderGuides = await getStudyStakeholderGuide(selectedStudy.name) as unknown as StakeholderGuide[];
+        stakeholderGuides = await getStudyStakeholderGuide(selectedStudy.id) as unknown as StakeholderGuide[];
         console.log(`✅ Fetched ${stakeholderGuides.length} stakeholder interview guides`);
       }
     } catch (error) {
@@ -514,12 +514,14 @@ const handleLoadSynthesisFiles = async ({ ack, body, client }: SlackActionMiddle
 
     // Scan analysis-layer folders
     let analysisFiles: AnalysisFile[] = [];
+    let variableContext: VariableContext | null = null;
     try {
       const selectedStudy = studies.find((s: Study) => s.id.toString() === studyId.toString());
       if (selectedStudy) {
-        const study = await getResearchStudyWithRoles(selectedStudy.name);
-        if (study?.path) {
-          analysisFiles = await scanAnalysisFolders(study.path);
+        const resolved = await resolveStudyFromName(selectedStudy.name);
+        if (resolved?.study?.path) {
+          analysisFiles = await scanAnalysisFolders(resolved.study.path);
+          variableContext = { projectId: resolved.projectId, studyId: resolved.studyId };
           console.log(`✅ Found ${analysisFiles.length} analysis-layer files (Load Files)`);
         }
       }
@@ -531,17 +533,12 @@ const handleLoadSynthesisFiles = async ({ ack, body, client }: SlackActionMiddle
     // Read cascade variables
     let cascadeData: CascadeData | null = null;
     try {
-      const selectedStudy = studies.find((s: Study) => s.id.toString() === studyId.toString());
-      if (selectedStudy) {
-        const study = await getResearchStudyWithRoles(selectedStudy.name);
-        if (study?.path) {
-          const decodedPath = decodeURIComponent(study.path);
-          const studyVars = await readStudyVariables(decodedPath);
-          if (studyVars) {
-            cascadeData = buildCascadeReadiness(studyVars, currentAnalysisMethod ?? '');
-            if (cascadeData) {
-              console.log(`✅ Cascade: ${cascadeData.available.length} variables available, ${cascadeData.missing.length} missing`);
-            }
+      if (variableContext) {
+        const studyVars = await readStudyVariablesByContext(variableContext);
+        if (studyVars) {
+          cascadeData = buildCascadeReadiness(studyVars, currentAnalysisMethod ?? '');
+          if (cascadeData) {
+            console.log(`✅ Cascade: ${cascadeData.available.length} variables available, ${cascadeData.missing.length} missing`);
           }
         }
       }
@@ -633,7 +630,7 @@ const handleLoadStudyNotes = async ({ ack, body, client }: SlackActionMiddleware
     try {
       const selectedStudy = studies.find((s: Study) => s.id.toString() === studyId.toString());
       if (selectedStudy) {
-        stakeholderGuides = await getStudyStakeholderGuide(selectedStudy.name) as unknown as StakeholderGuide[];
+        stakeholderGuides = await getStudyStakeholderGuide(selectedStudy.id) as unknown as StakeholderGuide[];
       }
     } catch (error) {
       console.error("Error fetching stakeholder guides:", error);
@@ -722,13 +719,15 @@ const handleResearchSynthesisSubmission = async ({ ack, body, view, client }: Sl
       throw new Error("Please select at least one file or data source for analysis.");
     }
 
-    const study = await getResearchStudyWithRoles(selectedStudyName!);
+    const resolved = await resolveStudyFromName(selectedStudyName!);
+    if (!resolved) throw new Error(`Study "${selectedStudyName}" not found`);
+    const study = resolved.study;
+    const variableContext: VariableContext = { projectId: resolved.projectId, studyId: resolved.studyId };
 
     // Cascade validation: synthesis methods that require upstream nuggets
     if (NUGGET_REQUIRED_METHODS.includes(analysisMethod) && study?.path) {
       try {
-        const decodedPath = decodeURIComponent(study.path);
-        const studyVars = await readStudyVariables(decodedPath);
+        const studyVars = await readStudyVariablesByContext(variableContext);
         const hasNuggetCore = studyVars?.variables?.atomic_nugget_core?.value &&
           Array.isArray(studyVars.variables.atomic_nugget_core.value) &&
           studyVars.variables.atomic_nugget_core.value.length > 0;
@@ -788,7 +787,7 @@ const handleResearchSynthesisSubmission = async ({ ack, body, view, client }: Sl
 
     if (selectedStakeholderGuideIds.length > 0) {
       try {
-        const allStakeholderGuides: StakeholderGuide[] = await getStudyStakeholderGuide(selectedStudyName!) as unknown as StakeholderGuide[];
+        const allStakeholderGuides: StakeholderGuide[] = await getStudyStakeholderGuide(resolved.studyId) as unknown as StakeholderGuide[];
         const selectedGuides = allStakeholderGuides.filter((guide: StakeholderGuide) =>
           selectedStakeholderGuideIds.includes(guide.id.toString())
         );
@@ -922,7 +921,7 @@ const handleResearchSynthesisSubmission = async ({ ack, body, view, client }: Sl
 
     try {
       const yamlTemplateFile = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, yamlFileName);
-      const renderedAnalysis = await processYamlTemplate(yamlTemplateFile.content, analysisData, study?.path ?? '');
+      const renderedAnalysis = await processYamlTemplate(yamlTemplateFile.content, analysisData, study?.path ?? '', 'primary-research', false, variableContext);
       console.log(`✅ Synthesis complete: ${renderedAnalysis.outputTemplate?.length || 0} chars`);
 
       const outputLines: string[] = renderedAnalysis.outputTemplate.split('\n').filter((line: string) => line.trim());

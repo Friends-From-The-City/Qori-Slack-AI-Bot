@@ -24,6 +24,7 @@ const mockMergeDiscovery = jest.fn().mockImplementation(
 const mockReadUpstreamDiscovery = jest.fn().mockResolvedValue({});
 
 module.exports = {
+  // Legacy (path-based) — kept for backward compatibility with existing tests
   readUpstreamVariables: mockReadUpstream,
   readStudyVariables: mockReadStudyVars,
   writeStudyVariables: mockWriteStudyVars,
@@ -32,6 +33,13 @@ module.exports = {
   writeDiscoveryVariables: mockWriteDiscovery,
   mergeDiscoveryVariables: mockMergeDiscovery,
   readUpstreamDiscoveryVariables: mockReadUpstreamDiscovery,
+  // Phase 2B FK-based APIs — new function names
+  readUpstreamVariablesByContext: mockReadUpstream,
+  readStudyVariablesByContext: mockReadStudyVars,
+  writeStudyVariablesByContext: mockWriteStudyVars,
+  mergeVariablesByContext: mockMergeVars,
+  readDiscoveryVariablesByProject: mockReadDiscovery,
+  writeDiscoveryVariablesByProject: mockWriteDiscovery,
   // Re-export for direct test access
   mockReadUpstream,
   mockReadStudyVars,
