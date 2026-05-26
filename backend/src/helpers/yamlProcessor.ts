@@ -346,6 +346,7 @@ export async function processYamlTemplate(
   const footer = buildTraceabilityFooter(yamlConfig, inputValues);
   const fullContent = outputTemplate + footer;
   const fullPath = path.posix.join(baseFolder, extraFolder, filePath, filename);
+
   const result = await createOrUpdateFileOnGitHub(fullPath, fullContent);
 
   // 8. EXTRACT PHASE: Runs AFTER document is written — non-blocking but trackable.
@@ -372,7 +373,7 @@ export async function processYamlTemplate(
         isDiscoveryScope &&
         inputValues.topic_slug &&
         inputValues._discovery_type &&
-        inputValues._discovery_team
+        inputValues.project_slug
       ) {
         // Discovery scope uses project-level storage (study_id = NULL)
         if (!variableContext) {
@@ -393,7 +394,7 @@ export async function processYamlTemplate(
             variableContext.projectId,
             inputValues._discovery_type as string,
             merged,
-            inputValues._discovery_team as string,
+            inputValues.project_slug as string,
           );
           console.log(
             `Extract: Wrote discovery variables for ${yamlConfig.id} to project:${variableContext.projectId}`,

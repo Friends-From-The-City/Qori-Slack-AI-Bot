@@ -273,13 +273,16 @@ export async function fetchFileFromRepo(repo: string, folderPath: string, fileNa
   const { Octokit } = await import('@octokit/rest');
   const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
   const owner = process.env.GITHUB_OWNER!;
+  // GITHUB_CONFIG_BRANCH allows fetching from a feature branch for local testing
+  // Only apply to config repo operations (YAML templates), not content repo operations
+  const ref = repo === getConfigRepo() ? (process.env.GITHUB_CONFIG_BRANCH || undefined) : undefined;
 
   const filePath = folderPath
     ? `${folderPath.replace(/\/$/, '')}/${fileName}`
     : fileName;
 
   try {
-    const { data: fileData } = await octokit.rest.repos.getContent({ owner, repo, path: filePath });
+    const { data: fileData } = await octokit.rest.repos.getContent({ owner, repo, path: filePath, ref });
     const content = Buffer.from((fileData as GitHubContentItem).content!, 'base64').toString('utf8');
     return { name: fileName, path: filePath, content };
   } catch (err: unknown) {
@@ -292,11 +295,13 @@ export async function fetchFileFromRepoByPath(repo: string, folderPath: string):
   const { Octokit } = await import('@octokit/rest');
   const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
   const owner = process.env.GITHUB_OWNER!;
+  // GITHUB_CONFIG_BRANCH only applies to config repo, not content repo
+  const ref = repo === getConfigRepo() ? (process.env.GITHUB_CONFIG_BRANCH || undefined) : undefined;
 
   const filePath = folderPath ? folderPath.replace(/\/$/, '') : '';
 
   try {
-    const { data: fileData } = await octokit.rest.repos.getContent({ owner, repo, path: filePath });
+    const { data: fileData } = await octokit.rest.repos.getContent({ owner, repo, path: filePath, ref });
     const content = Buffer.from((fileData as GitHubContentItem).content!, 'base64').toString('utf8');
     console.log(`🚀 ~ fetched ${filePath}:`, { path: filePath, content });
     return { path: filePath, content };

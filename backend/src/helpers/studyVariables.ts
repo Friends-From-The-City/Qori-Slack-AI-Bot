@@ -191,7 +191,7 @@ function getStudyVariableModel(): StudyVariableModel | null {
   try {
     // Dynamic import to avoid circular dependencies and handle missing DB gracefully
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const sequelize = require('../database').default as Sequelize;
+    const sequelize = require('../database') as Sequelize;
     return (sequelize.models.StudyVariable as StudyVariableModel) || null;
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
@@ -202,7 +202,7 @@ function getStudyVariableModel(): StudyVariableModel | null {
 
 function getSequelizeInstance(): Sequelize {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  return require('../database').default as Sequelize;
+  return require('../database') as Sequelize;
 }
 
 // ═══════════════════════════════════════════════════════════
