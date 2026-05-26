@@ -17,6 +17,7 @@ import type { View } from '@slack/types';
 
 import { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo } from '../../../github';
 import { resolveStudyFromName } from '../../../../services/research_study.service';
+import { getProjectById } from '../../../../services/project.service';
 import { processYamlTemplate } from '../../../yamlProcessor';
 import { addStudyStatus } from '../../../../services/study-status.service';
 import { sendStudyResultMessage, generateStudyResultBlocks } from '../../ui/studyResultBlocks';
@@ -297,6 +298,18 @@ async function handleDiscussionGuideSubmission({ ack, body, view, client }: Slac
     throw new Error('No study selected — private_metadata missing studyName');
   }
 
+  // Resolve study first so we can determine the target channel for messages
+  const resolved = await resolveStudyFromName(studyName);
+  if (!resolved) throw new Error(`Study "${studyName}" not found`);
+  const study = resolved.study;
+  const variableContext: VariableContext = { projectId: resolved.projectId, studyId: resolved.studyId };
+
+  // Resolve target channel: project's bound channel takes priority over trigger channel
+  // This ensures success messages land in the project's dedicated channel, not where
+  // the modal was triggered from (which may be a different project's channel).
+  const projectForChannel = await getProjectById(resolved.projectId);
+  const targetChannel = projectForChannel?.channel_id || channelId;
+
   const extract = (blockId: string, actionId: string): string | null => {
     const block = values[blockId];
     if (!block) return null;
@@ -323,11 +336,11 @@ async function handleDiscussionGuideSubmission({ ack, body, view, client }: Slac
     }
   }
 
-  // Post "Generating..." progress message so researcher knows it's working
+  // Post "Generating..." progress message to project's bound channel
   let progressTs: string | undefined;
   try {
     const progressResult = await client.chat.postMessage({
-      channel: channelId,
+      channel: targetChannel,
       text: `:hourglass_flowing_sand: Generating discussion guide for *${studyName}*...`,
     });
     progressTs = progressResult.ts;
@@ -347,20 +360,16 @@ async function handleDiscussionGuideSubmission({ ack, body, view, client }: Slac
     lead_researcher: leadResearcherName || body.user?.name || '',
   };
 
-  const resolved = await resolveStudyFromName(studyName);
-  if (!resolved) throw new Error(`Study "${studyName}" not found`);
-  const study = resolved.study;
-  const variableContext: VariableContext = { projectId: resolved.projectId, studyId: resolved.studyId };
   const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, 'discussion_guide.yaml');
   const renderedYaml = await processYamlTemplate(file.content, guideData, study!.path ?? '', 'primary-research', false, variableContext);
 
   const url: string = renderedYaml.result.url;
 
-  // Update progress message → completion notification
+  // Update progress message → completion notification (in project's bound channel)
   if (progressTs) {
     try {
       await client.chat.update({
-        channel: channelId,
+        channel: targetChannel,
         ts: progressTs,
         text: `:speech_balloon: Discussion guide for *${studyName}* is ready — <${url}|view on GitHub>`,
       });
@@ -370,8 +379,8 @@ async function handleDiscussionGuideSubmission({ ack, body, view, client }: Slac
     }
   }
 
-  const blocks = generateStudyResultBlocks(studyName, study, url, channelId, 'discussion');
-  await sendStudyResultMessage(client, channelId, studyName, blocks, 'discussion');
+  const blocks = generateStudyResultBlocks(studyName, study, url, targetChannel, 'discussion');
+  await sendStudyResultMessage(client, targetChannel, studyName, blocks, 'discussion');
 
   await addStudyStatus({
     study_name: studyName,

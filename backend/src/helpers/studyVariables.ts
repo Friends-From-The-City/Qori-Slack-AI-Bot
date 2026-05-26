@@ -562,7 +562,7 @@ export async function writeDiscoveryVariablesByProject(
   projectId: number,
   discoveryType: string,
   variablesData: DiscoveryVariablesStructure,
-  teamPath?: string
+  projectPath?: string
 ): Promise<void> {
   const StudyVariable = getStudyVariableModel();
 
@@ -577,9 +577,11 @@ export async function writeDiscoveryVariablesByProject(
   }
 
   // Also write GitHub artifact if path provided
-  if (teamPath) {
+  // Note: discoveryType is used for Postgres queries but NOT for file paths
+  // All discovery variables go to a single flat .variables/ folder
+  if (projectPath) {
     try {
-      const filePath = `${teamPath}/_discovery/${discoveryType}/${VARIABLES_DIR}/${DISCOVERY_VARIABLES_FILE}`;
+      const filePath = `${projectPath}/00-discovery/${VARIABLES_DIR}/${DISCOVERY_VARIABLES_FILE}`;
       variablesData.last_updated = new Date().toISOString();
       const content = JSON.stringify(variablesData, null, 2);
       await createOrUpdateFileOnGitHub(filePath, content);
@@ -643,9 +645,12 @@ export function mergeDiscoveryVariables(
 
 /**
  * Read upstream discovery variables.
+ *
+ * Phase 2D: Changed from team-based to projectId-based lookup.
+ * Uses readDiscoveryVariablesByProject (FK model) instead of deprecated readDiscoveryVariables.
  */
 export async function readUpstreamDiscoveryVariables(
-  team: string,
+  projectId: number,
   discoveryType: string,
   discoveryArtifactId: string,
   consumesSpec: ConsumeSpec[],
@@ -655,7 +660,7 @@ export async function readUpstreamDiscoveryVariables(
   const upstream: UpstreamVariables = {};
   for (const spec of consumesSpec) {
     const sourceType = spec.source_discovery_type || discoveryType;
-    const discoveryVars = await readDiscoveryVariables(team, sourceType);
+    const discoveryVars = await readDiscoveryVariablesByProject(projectId, sourceType);
     const artifactVars = discoveryVars.artifacts?.[discoveryArtifactId] || {};
     const variable = artifactVars[spec.key];
 
@@ -985,19 +990,8 @@ async function readStudyVariablesFromGitHub(studyBasePath: string): Promise<Stud
   }
 }
 
-async function readDiscoveryVariablesFromGitHub(team: string, discoveryType: string): Promise<DiscoveryVariablesStructure> {
-  const filePath = `${team}/_discovery/${discoveryType}/${VARIABLES_DIR}/${DISCOVERY_VARIABLES_FILE}`;
-  try {
-    const file = await fetchFileFromRepoByPath(getContentRepo(), filePath);
-    return JSON.parse(file.content) as DiscoveryVariablesStructure;
-  } catch (error: unknown) {
-    const err = error as { status?: number; message?: string };
-    if (err.status === 404 || err.message?.includes('Not Found') || err.message?.includes('Could not fetch file')) {
-      return createEmptyDiscoveryVariablesFile(team, discoveryType);
-    }
-    throw error;
-  }
-}
+// readDiscoveryVariablesFromGitHub DELETED in Phase 2D — dead code using old _discovery path pattern.
+// Discovery variables are now read via readDiscoveryVariablesByProject (Postgres-backed).
 
 // ═══════════════════════════════════════════════════════════
 // IN-MEMORY MERGE (fallback when Postgres unavailable)

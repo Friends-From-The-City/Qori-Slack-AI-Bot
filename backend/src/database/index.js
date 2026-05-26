@@ -2,19 +2,21 @@ const { Sequelize, DataTypes } = require("sequelize");
 const config = require("../config/sequelize");
 
 // Import your model definition functions
-const User = require("./models/user.model");
-const ChannelConfig = require("./models/channel_config");
-const ResearchStudy = require("./models/research_study")
-const ResearchStudyUserRole = require("./models/research_study_user_role")
-const StudyStatus = require("./models/study_status")
-const StudyParticipant = require("./models/study_participant")
-const SessionObserver = require("./models/session_observer")
-const StudyNotes = require("./models/study_notes")
-const ResearchPlan = require("./models/research_plan")
-const SessionSummary = require("./models/session_summary")
-const StudyVariable = require("./models/study_variable")
-const CreatedIssue = require("./models/created_issue")
-const SlackUserState = require("./models/slack_user_state")
+// TypeScript models use `export default`, so we need .default for CommonJS interop
+const User = require("./models/user.model").default;
+const ChannelConfig = require("./models/channel_config").default;
+const ResearchStudy = require("./models/research_study").default;
+const ResearchStudyUserRole = require("./models/research_study_user_role").default;
+const StudyStatus = require("./models/study_status").default;
+const StudyParticipant = require("./models/study_participant").default;
+const SessionObserver = require("./models/session_observer").default;
+const StudyNotes = require("./models/study_notes").default;
+const ResearchPlan = require("./models/research_plan").default;
+const SessionSummary = require("./models/session_summary").default;
+const StudyVariable = require("./models/study_variable").default;
+const CreatedIssue = require("./models/created_issue").default;
+const SlackUserState = require("./models/slack_user_state").default;
+const Project = require("./models/project").default;
 
 
 // Set environment and configuration
@@ -27,6 +29,7 @@ const sequelize = new Sequelize(sequelizeConfig);
 // List of all model definition functions
 const modelDefiners = [
   User,
+  Project,
   ChannelConfig,
   ResearchStudy,
   ResearchStudyUserRole,

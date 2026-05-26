@@ -339,7 +339,7 @@ output_template: |
   **Files analyzed:** {{document_count}}
 
 output_options:
-  path: "{{team}}/_discovery/survey-synthesis/"
+  path: "{{project_slug}}/00-discovery/"
   filename: "{{topic_slug}}-survey-synthesis-{{current_date_iso}}.md"
 
 # ═══════════════════════════════════════════════════════════

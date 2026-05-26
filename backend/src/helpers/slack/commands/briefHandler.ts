@@ -9,15 +9,19 @@
  * tasks + rendering.
  *
  * v7.0 restructure: interleaved Handlebars/AI architecture.
+ *
+ * Phase 2D: Uses projectId from modal metadata. Study name inherits from
+ * project slug. No resolveStudyFromName — uses getStudyByProjectAndName.
  */
 
 import type { AllMiddlewareArgs, SlackViewMiddlewareArgs, ViewSubmitAction } from '@slack/bolt';
 
 import { format, parseISO, differenceInCalendarDays, isValid } from 'date-fns';
+import sequelize from '../../../database';
 import { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo, readFolders, copyFilesToFolder } from '../../github';
-import { resolveStudyFromName, addResearchStudyWithRoles } from '../../../services/research_study.service';
+import { addResearchStudyWithRoles, getStudyByProjectAndName } from '../../../services/research_study.service';
+import { getProjectById } from '../../../services/project.service';
 import type { VariableContext } from '../../studyVariables';
-import { getChannelConfigByChannelId } from '../../../services/channel-config.service';
 import { processYamlTemplate } from '../../yamlProcessor';
 import { executeAiGenerationTasks } from '../../langchain';
 import { addStudyStatus } from '../../../services/study-status.service';
@@ -30,6 +34,7 @@ import {
   type TimelinePhase,
   type TimelinePreference,
 } from '../../../utils/timelineComputation';
+import type { BriefEntryModalMetadata } from '../ui/researchBriefEntryModal';
 
 // ─── Discovery type maps ────────────────────────────────────────
 
@@ -183,13 +188,37 @@ function parseJsonResponse<T>(raw: string, taskId: string): T {
 
 /**
  * Handle research_brief_modal submission.
+ *
+ * Phase 2D: Study name inherits from project slug (no study_name_block).
+ * Uses projectId from modal metadata for all FK-based operations.
  */
 async function handleBriefSubmission({ ack, body, view, client }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs): Promise<void> {
   await ack();
 
   const values = view.state.values;
-  const meta = JSON.parse(view.private_metadata || '{}');
-  const { channelId } = meta as { channelId: string };
+
+  // Parse typed metadata from modal
+  let meta: BriefEntryModalMetadata;
+  try {
+    meta = JSON.parse(view.private_metadata || '{}') as BriefEntryModalMetadata;
+  } catch {
+    console.error('Failed to parse brief modal metadata');
+    return;
+  }
+
+  const { channelId, projectId, projectName, projectSlug } = meta;
+
+  // Validate required metadata
+  if (!projectId || !projectSlug) {
+    console.error('Missing project context in brief modal metadata');
+    return;
+  }
+
+  // Resolve target channel: project's bound channel takes priority over trigger channel
+  // This ensures success messages land in the project's dedicated channel, not where
+  // the modal was triggered from (which may be a different project's channel).
+  const projectForChannel = await getProjectById(projectId);
+  const targetChannel = projectForChannel?.channel_id || channelId;
 
   // Helper function to extract values from different input types.
   const extract = (blockId: string, actionId: string): unknown => {
@@ -204,24 +233,16 @@ async function handleBriefSubmission({ ack, body, view, client }: SlackViewMiddl
     return null;
   };
 
-  // Extract and slugify study name
-  const studyNameRaw = (extract('study_name_block', 'study_name_input') as string | null) || meta.studyName;
-  const studyName: string | null = studyNameRaw
-    ? studyNameRaw.toLowerCase().replace(/[\s_]+/g, '-').replace(/[^a-z0-9-]/g, '').replace(/-+/g, '-').replace(/^-|-$/g, '')
-    : null;
+  // Study name inherits from project slug (Phase 2D: no study_name_block)
+  const studyName = projectSlug;
 
-  if (!studyName) {
-    console.error('No study name provided for research brief');
-    return;
-  }
+  console.log(`🚀 ~ Research Brief ~ studyName: ${studyName} (from project: ${projectName})`);
 
-  console.log("🚀 ~ Research Brief ~ studyName:", studyName);
-
-  // Post "Generating..." progress message
+  // Post "Generating..." progress message to project's bound channel
   let progressTs: string | undefined;
   try {
     const progressResult = await client.chat.postMessage({
-      channel: channelId,
+      channel: targetChannel,
       text: `:hourglass_flowing_sand: Creating research brief for *${studyName}*...`,
     });
     progressTs = progressResult.ts;
@@ -230,37 +251,43 @@ async function handleBriefSubmission({ ack, body, view, client }: SlackViewMiddl
     console.warn('Could not post brief progress message:', progressErr);
   }
 
-  // ── Study creation (unchanged from v6.0) ──
-  let resolved = await resolveStudyFromName(studyName!);
-  let study = resolved?.study ?? null;
+  // ── Study creation (Phase 2D: uses projectId from metadata) ──
+  let study = await getStudyByProjectAndName(projectId, studyName);
+  let studyId: number;
 
   if (!study || !study.path) {
     console.log('📁 Study does not exist yet — creating from brief submission');
+
+    // Start transaction: study creation + brief generation succeed or fail together
+    const t = await sequelize.transaction();
+
     try {
       const userInfo = await client.users.info({ user: body.user.id });
       const userEmail: string = userInfo.user?.profile?.email || `${body.user.id}@slack.com`;
       const userName: string = userInfo.user?.real_name || userInfo.user?.profile?.display_name || body.user.id;
 
-      const channelConfig = await getChannelConfigByChannelId(channelId);
-      if (!channelConfig) {
-        throw new Error('No channel config found — run /qori-repo first to link a repository folder');
+      // Get project for folder path
+      const project = await getProjectById(projectId);
+      if (!project) {
+        throw new Error('Project not found');
       }
 
+      // Create study folder in GitHub: {project-slug}/{study-slug}/
+      // No interstitial directory — study folders sit directly inside project
       const templateFiles = await readFolders('config/templates', getConfigRepo());
       const folderResult = await copyFilesToFolder(
         templateFiles,
-        `${channelConfig.sub_folder_name}/research`,
+        project.slug,
         studyName,
-        // @ts-expect-error — pre-existing type mismatch from require() → import migration
-        process.env.GITHUB_REPO,
-        channelConfig.product_folder_name
+        process.env.GITHUB_REPO || '',
+        ''
       );
 
-      // SCAFFOLDING: 2D removal — needs project_id from modal private_metadata
-      // See docs/scaffolding-to-remove.md entry #2
-      // @ts-expect-error project_id required but unavailable until 2D
-      await addResearchStudyWithRoles({
+      // Create study with project_id (Phase 2D: no @ts-expect-error)
+      study = await addResearchStudyWithRoles({
         name: studyName,
+        project_id: projectId,
+        slug: studyName,
         description: `Created from research brief`,
         created_by: body.user.id,
         researcher_name: userName,
@@ -271,10 +298,11 @@ async function handleBriefSubmission({ ack, body, view, client }: SlackViewMiddl
         assignments: [],
       });
 
-      resolved = await resolveStudyFromName(studyName!);
-      study = resolved?.study ?? null;
-      console.log(`✅ Study "${studyName}" created from brief, path: ${study!.path}`);
+      studyId = study.id;
+      await t.commit();
+      console.log(`✅ Study "${studyName}" created from brief, path: ${study.path}`);
     } catch (createError) {
+      await t.rollback();
       const createMessage = createError instanceof Error ? createError.message : String(createError);
       console.error('❌ Failed to create study from brief:', createError);
       const errMsg: string = createMessage.includes('<!DOCTYPE')
@@ -287,6 +315,8 @@ async function handleBriefSubmission({ ack, body, view, client }: SlackViewMiddl
       });
       return;
     }
+  } else {
+    studyId = study.id;
   }
 
   // ── Methodology (unchanged from v6.0) ──
@@ -305,7 +335,10 @@ async function handleBriefSubmission({ ack, body, view, client }: SlackViewMiddl
   const methodRadio = extract('research_method_block', 'research_method_select') as { value: string } | null;
   const methodValue: string = methodOverride ? 'custom' : (methodRadio?.value || 'usability_testing');
   const methodLabel: string = methodOverride || methodologyLabels[methodRadio?.value || 'usability_testing'] || (methodRadio?.value || 'usability_testing');
-  const leadResearcher: string = meta.leadResearcher || body.user.name || '';
+  // Lead researcher comes from form input (pre-filled by modal builder)
+  const leadResearcherInput = (extract('lead_researcher_block', 'lead_researcher_input') as string | null)
+    || (extract('lead_researcher', 'lead_researcher_input') as string | null);
+  const leadResearcher: string = leadResearcherInput || body.user.name || '';
 
   // ── Form values ──
   const problemStatement = (extract('problem_statement_block', 'problem_statement_input') as string) || '';
@@ -352,7 +385,7 @@ async function handleBriefSubmission({ ack, body, view, client }: SlackViewMiddl
   const timelineDisplay = TIMELINE_DISPLAY_LABELS[timelinePref] || TIMELINE_DISPLAY_LABELS.standard;
   const timelinePhases = buildTimelinePhases(startDate, timelinePref);
 
-  // ── Discovery injection (unchanged from v6.0) ──
+  // ── Discovery injection (Phase 2D: uses projectId from metadata) ──
   const discoveryContext: Record<string, unknown> = {};
   let discoveryCount: number | undefined;
   let discoverySources: string | undefined;
@@ -360,9 +393,8 @@ async function handleBriefSubmission({ ack, body, view, client }: SlackViewMiddl
 
   const discoverySelections = (extract('discovery_selection_block', 'discovery_selection') as string[] | null) || [];
   if (discoverySelections.length > 0) {
-    const team: string = meta.team || process.env.QORI_TEAM_SLUG || 'friends-lab';
     try {
-      const allArtifacts: DiscoveryArtifact[] = await loadDiscoveryArtifacts(team);
+      const allArtifacts: DiscoveryArtifact[] = await loadDiscoveryArtifacts(projectId);
       const selectedSlugs = new Set(discoverySelections);
       const selectedArtifacts = allArtifacts.filter((a: DiscoveryArtifact) => selectedSlugs.has(`${a.type}::${a.slug}`));
 
@@ -485,17 +517,17 @@ async function handleBriefSubmission({ ack, body, view, client }: SlackViewMiddl
   console.log(`📋 Assembled brief data: ${Object.keys(data).length} fields, ${data.objectives_count} objectives, ${data.research_questions_count} RQs, ${data.target_barriers_count} TBs, study: ${studyName}`);
 
   // ── Process YAML template (prose tasks + rendering + extraction) ──
-  const variableContext: VariableContext = { projectId: resolved!.projectId, studyId: resolved!.studyId };
+  const variableContext: VariableContext = { projectId, studyId };
   const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, "research_brief.yaml");
-  const renderedYaml = await processYamlTemplate(file.content, data, study!.path ?? '', 'primary-research', false, variableContext);
+  const renderedYaml = await processYamlTemplate(file.content, data, study.path ?? '', 'primary-research', false, variableContext);
 
   const url: string = renderedYaml.result.url;
 
-  // Update progress message → completion
+  // Update progress message → completion (in project's bound channel)
   if (progressTs) {
     try {
       await client.chat.update({
-        channel: channelId,
+        channel: targetChannel,
         ts: progressTs,
         text: `:memo: Research brief for *${studyName}* is ready — <${url}|view on GitHub>`,
       });
@@ -505,8 +537,8 @@ async function handleBriefSubmission({ ack, body, view, client }: SlackViewMiddl
     }
   }
 
-  const blocks = generateStudyResultBlocks(studyName, study, url, channelId, 'brief');
-  await sendStudyResultMessage(client, channelId, studyName, blocks, 'brief');
+  const blocks = generateStudyResultBlocks(studyName, study, url, targetChannel, 'brief');
+  await sendStudyResultMessage(client, targetChannel, studyName, blocks, 'brief');
 
   // Notify researcher via DM
   try {

@@ -4,11 +4,13 @@ import { formatVariableCategories } from '../../cascadeVariableCategories';
 
 // ─── Modal metadata contract ─────────────────────────────────────
 
-/** The shape of private_metadata for the research_brief_modal (opened directly via /qori-brief). */
+/** The shape of private_metadata for the research_brief_modal. */
 export interface BriefEntryModalMetadata {
   channelId: string;
-  source: 'qori_brief_command';
-  team: string;
+  projectId: number;
+  projectName: string;
+  projectSlug: string;
+  source: 'qori_brief_command' | 'project_next_steps';
 }
 
 interface CascadeFields {
@@ -23,9 +25,13 @@ interface CascadeFields {
   risksPreview?: string;
 }
 
-const DEFAULT_TEAM = 'friends-lab';
-function getTeamSlug(): string {
-  return process.env.QORI_TEAM_SLUG || DEFAULT_TEAM;
+interface BuildBriefEntryModalOptions {
+  leadResearcher: string | null;
+  channelId: string;
+  projectId: number;
+  projectName: string;
+  projectSlug: string;
+  source: 'qori_brief_command' | 'project_next_steps';
 }
 
 /**
@@ -135,11 +141,34 @@ function synthesizeCascadeFields(upstream: Record<string, string>, artifacts: Di
 }
 
 /**
- * Build the brief entry modal for /qori-brief command.
+ * Build the brief entry modal.
  * Cascade-aware: auto-selects discovery, pre-populates fields with sparkle markers.
+ *
+ * Phase 2D: Requires projectId. Study name is inherited from project (no study_name_block).
  */
-export async function buildBriefEntryModal(leadResearcher: string | null, channelId: string) {
+export async function buildBriefEntryModal(options: BuildBriefEntryModalOptions) {
+  const { leadResearcher, channelId, projectId, projectName, projectSlug, source } = options;
   const modalBlocks: Record<string, unknown>[] = JSON.parse(JSON.stringify(researchBriefModal.blocks));
+
+  // Remove study_name_block — study inherits project name
+  const studyNameIdx = modalBlocks.findIndex((b: Record<string, unknown>) => b.block_id === 'study_name_block');
+  if (studyNameIdx !== -1) {
+    modalBlocks.splice(studyNameIdx, 1);
+  }
+
+  // Add project context block at the top (after first context/divider)
+  const projectContextBlock = {
+    type: "context",
+    block_id: "project_context_block",
+    elements: [
+      {
+        type: "mrkdwn",
+        text: `:file_folder: Creating research brief for project *${projectName}*`,
+      },
+    ],
+  };
+  // Insert after first block (usually a header context)
+  modalBlocks.splice(1, 0, projectContextBlock);
 
   // Pre-fill lead researcher if available
   if (leadResearcher) {
@@ -168,11 +197,10 @@ export async function buildBriefEntryModal(leadResearcher: string | null, channe
     };
   }
 
-  // Query discovery artifacts for this team
-  const team = getTeamSlug();
+  // Query discovery artifacts for this project
   let artifacts: DiscoveryArtifact[] = [];
   try {
-    artifacts = await loadDiscoveryArtifacts(team);
+    artifacts = await loadDiscoveryArtifacts(projectId);
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     console.warn('⚠️ Failed to load discovery artifacts for brief modal:', message);
@@ -391,6 +419,12 @@ export async function buildBriefEntryModal(leadResearcher: string | null, channe
   return {
     ...researchBriefModal,
     blocks: modalBlocks,
-    private_metadata: JSON.stringify({ channelId, source: 'qori_brief_command', team } satisfies BriefEntryModalMetadata),
+    private_metadata: JSON.stringify({
+      channelId,
+      projectId,
+      projectName,
+      projectSlug,
+      source,
+    } satisfies BriefEntryModalMetadata),
   };
 }

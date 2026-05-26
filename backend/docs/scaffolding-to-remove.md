@@ -40,7 +40,7 @@ and pass `variableContext: { projectId, studyId }` to FK-based cascade APIs.
 
 **Handlers:**
 - `helpers/slack/commands/analyzeNotesHandler.ts` ✅
-- `helpers/slack/commands/briefHandler.ts` ✅
+- ~~`helpers/slack/commands/briefHandler.ts`~~ ✅ MIGRATED in 2D-A — now uses `getStudyByProjectAndName`
 - `helpers/slack/commands/discussion-guide/discussionGuideHandler.ts` ✅
 - `helpers/slack/commands/participantOutreachHandler.ts` ✅
 - `helpers/slack/commands/planHandler.ts` ✅
@@ -70,54 +70,90 @@ and pass `variableContext: { projectId, studyId }` to FK-based cascade APIs.
 
 ---
 
-## 2. `briefHandler` study creation without project_id
+## ~~2. `briefHandler` study creation without project_id~~ ✅ REMOVED
 
-**File:** `src/helpers/slack/commands/briefHandler.ts:259`
+**Status:** Removed in Phase 2D-A (2026-05-22)
 
-**What the code does:**
-When a user approves a brief and clicks "Create Study from Brief", this code path calls `addResearchStudyWithRoles()` to create the study record.
-
-**Why it's broken:**
-In 2B step 5, `StudyInput` was updated to require `project_id`. The function now throws at runtime:
-```
-"project_id is required to create or update a study"
-```
-
-The handler doesn't have project context to pass.
-
-**Runtime impact:**
-Study creation from briefs is broken. Users will see an error when trying to create a study from an approved brief.
-
-**Deletion trigger:**
-Phase 2D, when `briefModalOpener` and `briefHandler` entry modal pass `project_id` in `private_metadata`.
-
-**Pattern enforcement:**
-The typecheck error at line 259 will clear once `project_id` is passed to `addResearchStudyWithRoles`.
+**What was done:**
+- Updated `briefHandler.ts` to receive `projectId` from modal metadata
+- Removed the `@ts-expect-error project_id required` comment
+- `addResearchStudyWithRoles` now receives `project_id: projectId` directly
+- Transaction wrap added for atomic study creation + brief generation
 
 ---
 
-## 3. `loadDiscoveryArtifacts` team-based lookup
+## ~~3. `loadDiscoveryArtifacts` team-based lookup~~ ✅ REMOVED
 
-**File:** `src/helpers/discoveryLoader.ts`
+**Status:** Removed in Phase 2D-A (2026-05-22)
 
-**Function signature:**
+**What was done:**
+- Updated function signature from `loadDiscoveryArtifacts(team: string)` to `loadDiscoveryArtifacts(projectId: number)`
+- Replaced `readDiscoveryVariables(team, type)` with `readDiscoveryVariablesByProject(projectId, type)`
+- Updated all callers to pass `projectId` from channel context:
+  - `researchBriefEntryModal.ts`
+  - `briefHandler.ts`
+  - `discoverHandler.ts`
+
+---
+
+## 4. Silent error swallow in yamlProcessor transform phase
+
+**File:** `src/helpers/yamlProcessor.ts:272-279`
+
+**Code:**
 ```typescript
-loadDiscoveryArtifacts(team: string): Promise<DiscoveryArtifact[]>
+} catch (error: unknown) {
+  if (error instanceof TemplateContractError) throw error;
+  const message = error instanceof Error ? error.message : String(error);
+  console.warn(
+    `Transform phase failed for ${yamlConfig.id}, continuing without upstream variables:`,
+    message,
+  );
+}
 ```
 
-**Why it exists:**
-Discovery loading currently uses `team` string to find artifacts via `readDiscoveryVariables(team, type)`. The FK-based alternative `readDiscoveryVariablesByProject` requires `projectId`, but the callers don't have project context yet.
+**Why this is a problem:**
 
-**Deletion trigger:**
-Phase 2C adds channel-project binding. After that, callers will have access to `projectId` via channel context.
+This catch block swallows ALL non-TemplateContractError errors. This hid a critical bug where `readUpstreamDiscoveryVariables` called a deprecated function that always throws — the error was swallowed and processing continued without upstream variables, causing silent cascade failures.
 
-**Pattern enforcement assertion:**
-Located in `src/__tests__/integration/pattern-enforcement.test.ts`, in the ALLOWED_FILES list. Remove `'discoveryLoader.ts'` from the list after migration.
+**Behavior that needs fixing:**
 
-**Migration steps:**
-1. Update function signature to `loadDiscoveryArtifacts(projectId: number)`
-2. Replace `readDiscoveryVariables(team, type)` with `readDiscoveryVariablesByProject(projectId, type)`
-3. Update callers to pass `projectId` from channel context
+1. `TemplateContractError` is rethrown (correct — required cascade violations propagate)
+2. All other errors are swallowed with console.warn (incorrect — hides real bugs)
+
+**What should happen:**
+
+- Database connection errors should surface (user sees "temporary error, try again")
+- Programming errors (like calling deprecated functions) should surface as bugs
+- Only EXPECTED failures (like "no upstream variables found") should be handled silently
+
+**Suggested fix:**
+
+Create a specific `UpstreamVariableNotFoundError` for expected "no data" cases. All other errors should propagate or at minimum DM the user that cascade consumption failed.
+
+**Priority:** High — silent error swallowing hid the deprecated function bug for months.
+
+**Filed:** 2026-05-26 during Phase 2D discovery path audit
+
+---
+
+## 5. Pattern enforcement test gap for internal calls
+
+**File:** `src/__tests__/integration/pattern-enforcement.test.ts`
+
+**Issue:**
+
+The `ALLOWED_FILES` list (line 351-360) includes `studyVariables.ts` to allow the deprecated function DEFINITIONS (throwing stubs). But this also allows CALLS to those deprecated functions from within the same file, like the bug at line 660.
+
+**Suggested fix:**
+
+The test should only allow lines that DEFINE the deprecated functions (the `export async function readDiscoveryVariables` line), not lines that CALL them. Could use more specific regex patterns:
+- Allow: `export async function readDiscoveryVariables(`
+- Disallow: `readDiscoveryVariables(` when not preceded by `export async function`
+
+**Priority:** Medium — prevents regression but bug was already caught manually.
+
+**Filed:** 2026-05-26 during Phase 2D discovery path audit
 
 ---
 

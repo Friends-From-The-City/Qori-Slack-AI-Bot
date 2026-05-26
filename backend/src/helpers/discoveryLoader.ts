@@ -1,12 +1,14 @@
 /**
- * discoveryLoader.ts — Load available discovery artifacts for a team.
+ * discoveryLoader.ts — Load available discovery artifacts for a project.
  *
- * Reads discovery variables from Postgres (with GitHub fallback)
- * for each discovery type and returns a flat list of artifacts with
- * metadata suitable for modal display and variable aggregation.
+ * Phase 2D: Uses projectId instead of team string.
+ *
+ * Reads discovery variables from Postgres for each discovery type
+ * and returns a flat list of artifacts with metadata suitable for
+ * modal display and variable aggregation.
  */
 import {
-  readDiscoveryVariables,
+  readDiscoveryVariablesByProject,
   type DiscoveryVariablesStructure,
   type StoredVariable,
 } from './studyVariables';
@@ -34,15 +36,17 @@ export const DISCOVERY_TYPES: DiscoveryTypeConfig[] = [
 ];
 
 /**
- * Load all discovery artifacts for a team.
+ * Load all discovery artifacts for a project.
  * Returns a flat array sorted by date (newest first).
+ *
+ * Phase 2D: Uses projectId instead of team string.
  */
-export async function loadDiscoveryArtifacts(team: string): Promise<DiscoveryArtifact[]> {
+export async function loadDiscoveryArtifacts(projectId: number): Promise<DiscoveryArtifact[]> {
   const artifacts: DiscoveryArtifact[] = [];
 
   for (const { type, icon, label } of DISCOVERY_TYPES) {
     try {
-      const data: DiscoveryVariablesStructure = await readDiscoveryVariables(team, type);
+      const data: DiscoveryVariablesStructure = await readDiscoveryVariablesByProject(projectId, type);
       if (!data.artifacts || Object.keys(data.artifacts).length === 0) continue;
 
       for (const [slug, variables] of Object.entries(data.artifacts)) {
@@ -81,7 +85,7 @@ export async function loadDiscoveryArtifacts(team: string): Promise<DiscoveryArt
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
-      console.log(`Discovery: no variables for ${team}/_discovery/${type} (${message})`);
+      console.log(`Discovery: no variables for project ${projectId}, type ${type} (${message})`);
     }
   }
 

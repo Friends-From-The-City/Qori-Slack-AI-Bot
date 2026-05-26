@@ -209,10 +209,10 @@ export async function processYamlTemplate(
   // 3.5 TRANSFORM PHASE: Read upstream variables if consumes spec exists
   const isDiscoveryScope = yamlConfig.discovery_scope === true;
   if (yamlConfig.consumes && yamlConfig.consumes.length > 0) {
-    // Require variableContext for study-scoped templates (Phase 2B)
-    if (!isDiscoveryScope && !variableContext) {
+    // Require variableContext for ALL templates with consumes blocks (Phase 2D)
+    if (!variableContext) {
       throw new Error(
-        `processYamlTemplate requires variableContext for study-scoped template '${yamlConfig.id}'. ` +
+        `processYamlTemplate requires variableContext for template '${yamlConfig.id}' with consumes block. ` +
         `Caller must resolve projectId/studyId and pass context.`
       );
     }
@@ -220,12 +220,12 @@ export async function processYamlTemplate(
     try {
       const upstream: UpstreamVariables = isDiscoveryScope
         ? await readUpstreamDiscoveryVariables(
-            (inputValues._discovery_team as string) || '',
+            variableContext.projectId,
             (inputValues._discovery_type as string) || '',
             (inputValues.topic_slug as string) || '',
             yamlConfig.consumes,
           )
-        : await readUpstreamVariablesByContext(variableContext!, yamlConfig.consumes);
+        : await readUpstreamVariablesByContext(variableContext, yamlConfig.consumes);
 
       // Enforce cascade contracts: required variables must be present
       for (const spec of yamlConfig.consumes) {

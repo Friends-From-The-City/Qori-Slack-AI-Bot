@@ -355,9 +355,8 @@ describe('pattern: Phase 2B removed path-based cascade functions', () => {
     // Test files that mock these functions
     '__tests__/',
     '__mocks__/',
-    // SCAFFOLDING: 2D removal - discoveryLoader needs projectId instead of team
-    // See docs/scaffolding-to-remove.md entry #2
-    'discoveryLoader.ts',
+    // NOTE: discoveryLoader.ts removed from ALLOWED_FILES in Phase 2D-A (2026-05-22)
+    // It now uses readDiscoveryVariablesByProject(projectId) instead of readDiscoveryVariables(team)
   ];
 
   it('no handler files call removed path-based cascade functions', () => {

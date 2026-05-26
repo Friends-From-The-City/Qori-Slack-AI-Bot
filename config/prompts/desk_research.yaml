@@ -374,7 +374,7 @@ output_template: |
 
 output_options:
   filename: "{{topic_slug}}-desk-research-{{current_date_iso}}.md"
-  path: "{{team}}/_discovery/desk-research/"
+  path: "{{project_slug}}/00-discovery/"
 
   delivery:
     github:

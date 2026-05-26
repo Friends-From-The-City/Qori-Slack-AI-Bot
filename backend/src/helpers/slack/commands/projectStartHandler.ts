@@ -13,7 +13,11 @@ import type { WebClient } from '@slack/web-api';
 import { createProjectFromName, bindProjectToChannel } from '../../../services/project.service';
 import { createOrUpdateFileOnGitHub } from '../../github';
 import { projectCreationModal, type ProjectCreationModalMetadata } from '../ui/projectCreationModal';
-import { projectCreatedNextStepsModal } from '../ui/projectCreatedNextStepsModal';
+import { projectCreatedNextStepsModal, type ProjectNextStepsModalMetadata } from '../ui/projectCreatedNextStepsModal';
+import { buildBriefEntryModal } from '../ui/researchBriefEntryModal';
+import { discoverHubModal, DISCOVERY_GUIDANCE_BLOCK_ID, DISCOVERY_ARTIFACTS_BLOCK_ID } from '../ui/discoverHubModal';
+import { loadDiscoveryArtifacts, type DiscoveryArtifact } from '../../discoveryLoader';
+import { buildGuidanceText, buildArtifactDisplayText } from './discoverHandler';
 
 // ─── Channel naming utilities ────────────────────────────────────
 
@@ -152,8 +156,8 @@ ${project.description || 'Research project created via Qori.'}
 
 ## Structure
 
-- \`_discovery/\` — Desk research, stakeholder interviews, survey synthesis
-- \`studies/\` — Individual research studies
+- \`00-discovery/\` — Desk research, stakeholder synthesis, survey synthesis
+- \`{study-slug}/\` — Individual research studies (01-brief → 06-tickets within each)
 
 ---
 
@@ -281,31 +285,159 @@ ${project.description || 'Research project created via Qori.'}
   }
 }
 
-// ─── Button handlers (all gated for Phase 2C) ───────────────────
+// ─── Button handlers ────────────────────────────────────────────
 
 /**
- * Placeholder handler for project action buttons.
- * All buttons in the next-steps modal route here and show
- * a "coming soon" message.
+ * Handle project action buttons from the next-steps modal.
+ *
+ * Phase 2D: Brief and Discovery buttons open their respective modals with project context.
+ * Library remains "coming soon" placeholder.
  */
 async function handleProjectActionButton({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
   await ack();
 
   const actionId = (body as BlockAction).actions?.[0]?.action_id || 'unknown';
 
-  // Map action IDs to friendly names
-  const actionLabels: Record<string, string> = {
-    project_action_discovery: 'Discovery',
-    project_action_brief: 'Research brief',
-    project_action_library: 'Library import',
-  };
+  // Parse modal metadata for project context
+  let metadata: ProjectNextStepsModalMetadata;
+  try {
+    const viewBody = body as BlockAction & { view?: { private_metadata?: string } };
+    metadata = JSON.parse(viewBody.view?.private_metadata || '{}') as ProjectNextStepsModalMetadata;
+  } catch {
+    await client.chat.postEphemeral({
+      channel: body.user.id,
+      user: body.user.id,
+      text: '❌ Could not read project context. Please try again.',
+    });
+    return;
+  }
 
-  const label = actionLabels[actionId] || actionId;
+  // Handle brief button — open the brief entry modal
+  if (actionId === 'project_action_brief') {
+    try {
+      // Get user's display name for lead researcher pre-fill
+      let leadResearcher: string | null = null;
+      try {
+        const userInfo = await client.users.info({ user: body.user.id });
+        leadResearcher = userInfo.user?.real_name || userInfo.user?.profile?.display_name || null;
+      } catch {
+        // Non-critical — leave null
+      }
 
+      const briefModal = await buildBriefEntryModal({
+        leadResearcher,
+        channelId: metadata.channelId || metadata.createdChannelId || body.user.id,
+        projectId: metadata.projectId,
+        projectName: metadata.projectName,
+        projectSlug: metadata.projectSlug,
+        source: 'project_next_steps',
+      });
+
+      await client.views.push({
+        trigger_id: (body as BlockAction).trigger_id,
+        // @ts-expect-error — modal blocks are Record<string,unknown>[] from JSON.parse; structurally valid at runtime
+        view: briefModal,
+      });
+      return;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error('Failed to open brief modal from project next steps:', message);
+      await client.chat.postEphemeral({
+        channel: body.user.id,
+        user: body.user.id,
+        text: `❌ Could not open brief modal: ${message}`,
+      });
+      return;
+    }
+  }
+
+  // Handle discovery button — open the discover hub modal
+  if (actionId === 'project_action_discovery') {
+    try {
+      // Load existing discovery artifacts for this project
+      let artifacts: DiscoveryArtifact[] = [];
+      try {
+        artifacts = await loadDiscoveryArtifacts(metadata.projectId);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.warn('Could not load discovery artifacts for hub:', message);
+      }
+
+      // Build dynamic hub blocks
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const blocks: any[] = [...discoverHubModal.blocks];
+
+      // Inject D2 guidance
+      const guidanceIdx = blocks.findIndex((b: { block_id?: string }) => b.block_id === DISCOVERY_GUIDANCE_BLOCK_ID);
+      if (guidanceIdx !== -1) {
+        blocks[guidanceIdx] = {
+          ...blocks[guidanceIdx],
+          elements: [
+            {
+              type: "mrkdwn",
+              text: buildGuidanceText(artifacts),
+            },
+          ],
+        };
+      }
+
+      // Inject D1 artifact visibility
+      const artifactsIdx = blocks.findIndex((b: { block_id?: string }) => b.block_id === DISCOVERY_ARTIFACTS_BLOCK_ID);
+      if (artifactsIdx !== -1) {
+        blocks[artifactsIdx] = {
+          ...blocks[artifactsIdx],
+          elements: [
+            {
+              type: "mrkdwn",
+              text: buildArtifactDisplayText(artifacts),
+            },
+          ],
+        };
+      }
+
+      // Include project context in metadata
+      const discoverMeta = {
+        channelId: metadata.createdChannelId || metadata.channelId,
+        projectId: metadata.projectId,
+        projectSlug: metadata.projectSlug,
+      };
+
+      await client.views.push({
+        trigger_id: (body as BlockAction).trigger_id,
+        view: {
+          ...discoverHubModal,
+          blocks,
+          private_metadata: JSON.stringify(discoverMeta),
+        } as View,
+      });
+      return;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error('Failed to open discover hub from project next steps:', message);
+      await client.chat.postEphemeral({
+        channel: body.user.id,
+        user: body.user.id,
+        text: `❌ Could not open discovery hub: ${message}`,
+      });
+      return;
+    }
+  }
+
+  // Library button remains "coming soon" for now
+  if (actionId === 'project_action_library') {
+    await client.chat.postEphemeral({
+      channel: body.user.id,
+      user: body.user.id,
+      text: `*Library import* connects to projects in the next update.`,
+    });
+    return;
+  }
+
+  // Unknown action
   await client.chat.postEphemeral({
     channel: body.user.id,
     user: body.user.id,
-    text: `*${label}* connects to projects in the next update.`,
+    text: `Unknown action: ${actionId}`,
   });
 }
 

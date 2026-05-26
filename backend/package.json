@@ -15,7 +15,7 @@
     "build": "babel src --out-dir dist --extensions '.js,.ts'",
     "start": "node ./dist/bin/www.js",
     "prod": "node --require module-alias/register src/app.js",
-    "dev": "nodemon --ext js,ts --require module-alias/register src/app.js",
+    "dev": "nodemon --ext js,ts --exec babel-node --extensions '.js,.ts' --require module-alias/register src/app.js",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "typecheck": "tsc --noEmit",

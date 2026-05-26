@@ -164,10 +164,11 @@ export async function copyFilesToFolder(
     written.push(data.content!.path!);
   }
 
-  const enc = encodeURIComponent;
-  const encodedPath = [baseFolder, folder, targetFolder].map(enc).join('/');
+  // Filter empty strings to avoid leading slash, then encode each segment
+  const pathSegments = [baseFolder, folder, targetFolder].filter(Boolean);
+  const encodedPath = pathSegments.map(encodeURIComponent).join('/');
   const url = `https://github.com/${owner}/${repo}/tree/main/${encodedPath}`;
-  return { message: `🎉 All ${written.length} files created/updated successfully`, url, path: encodedPath };
+  return { message: `🎉 All ${written.length} files created/updated successfully`, url, path: pathSegments.join('/') };
 }
 
 export async function createOrUpdateFileOnGitHub(
