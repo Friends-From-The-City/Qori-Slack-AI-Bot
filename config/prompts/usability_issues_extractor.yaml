@@ -1,7 +1,7 @@
 # ═══════════════════════════════════════════════════════════
 # IDENTITY
 # ═══════════════════════════════════════════════════════════
-id: usability_issues_extractor
+id: usability_issues
 name: run_usability_issues_extractor
 label: "Usability Issues"
 version: "v7.0"

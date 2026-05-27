@@ -1,7 +1,7 @@
 # ═══════════════════════════════════════════════════════════
 # IDENTITY
 # ═══════════════════════════════════════════════════════════
-id: analyze_notes
+id: session_summary
 name: analyze_session_notes
 label: "Analyze Notes"
 version: "v7.0"

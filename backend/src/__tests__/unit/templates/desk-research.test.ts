@@ -29,8 +29,8 @@ describe('desk_research template', () => {
   it('loads template configuration without error', () => {
     const config = harness.loadTemplate('desk_research');
 
-    // Template file is desk_research.yaml but id is 'desk_research_processor'
-    expect(config.id).toBe('desk_research_processor');
+    // Template file is desk_research.yaml, id matches consumer-side name
+    expect(config.id).toBe('desk_research');
     expect(config.version).toBeDefined();
   });
 

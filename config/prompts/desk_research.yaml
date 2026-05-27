@@ -1,7 +1,7 @@
 # ═══════════════════════════════════════════════════════════
 # IDENTITY
 # ═══════════════════════════════════════════════════════════
-id: desk_research_processor
+id: desk_research
 name: run_desk_research
 label: "Desk Research"
 version: v7.0

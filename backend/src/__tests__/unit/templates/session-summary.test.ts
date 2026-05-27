@@ -29,8 +29,8 @@ describe('session_summary template', () => {
   it('loads template configuration without error', () => {
     const config = harness.loadTemplate('session_summary');
 
-    // Template file is session_summary.yaml but id is 'analyze_notes'
-    expect(config.id).toBe('analyze_notes');
+    // Template file is session_summary.yaml, id matches consumer-side name
+    expect(config.id).toBe('session_summary');
     expect(config.version).toBeDefined();
   });
 

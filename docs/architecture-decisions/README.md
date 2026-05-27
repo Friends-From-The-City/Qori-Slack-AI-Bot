@@ -89,6 +89,7 @@ Start with `0001` and read forward. The history is itself useful — it shows ho
 - [0014 — Sequelize v6 built-in TypeScript generics for model typing](./0014-sequelize-typescript-pattern.md) — Lowest disruption with real type safety; no new dependencies
 - [0015 — Bolt native middleware types for handler signatures](./0015-bolt-native-middleware-types.md) — Framework-aligned typing; eliminates registration boundary casts
 - [0016 — Brief template restructured to v7.0 interleaved Handlebars/AI](./0016-brief-template-v7-restructure.md) — First template restructure; sets the pattern for the remaining 10
+- [0017 — Template ID convention](./0017-template-id-convention.md) — YAML `id` must match consumer-side `consumes.source` exactly; no suffixes
 
 ### Lessons (informal ADRs from failure modes)
 

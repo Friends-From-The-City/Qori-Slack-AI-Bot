@@ -10,6 +10,17 @@ const VARIABLES_DIR = '.variables';
 const VARIABLES_FILE = 'study-variables.json';
 const DISCOVERY_VARIABLES_FILE = 'discovery-variables.json';
 
+/**
+ * Maps YAML template IDs (used in consumes.source) to Postgres discovery_type values.
+ * When a template declares `consumes: [{source: 'desk_research', ...}]`, we need to
+ * look up variables stored under discovery_type 'desk-research'.
+ */
+const TEMPLATE_TO_DISCOVERY_TYPE: Record<string, string> = {
+  'desk_research': 'desk-research',
+  'stakeholder_synthesis': 'stakeholder-interviews',
+  'survey_synthesis': 'survey-synthesis',
+};
+
 // ═══════════════════════════════════════════════════════════
 // TYPE DEFINITIONS
 // ═══════════════════════════════════════════════════════════
@@ -19,6 +30,7 @@ export interface VariableSource {
   version: string | null;
   date?: string;
   dates?: string[];
+  artifact_ids?: string[];  // For aggregated sources from multiple discovery artifacts
 }
 
 export interface StoredVariable {
@@ -647,27 +659,106 @@ export function mergeDiscoveryVariables(
  * Read upstream discovery variables.
  *
  * Phase 2D: Changed from team-based to projectId-based lookup.
- * Uses readDiscoveryVariablesByProject (FK model) instead of deprecated readDiscoveryVariables.
+ * Phase B-0: Fixed source resolution (spec.source → discovery type) and
+ * artifact aggregation (all artifacts in source type, not just one).
+ *
+ * Aggregation semantics:
+ * - Pool variables (arrays): concatenate values from all artifacts
+ * - Non-pool variables (scalars): most recent artifact wins (by source.date)
+ *
+ * See docs/known-limitations.md for non-pool aggregation limitations.
  */
 export async function readUpstreamDiscoveryVariables(
   projectId: number,
   discoveryType: string,
-  discoveryArtifactId: string,
+  _discoveryArtifactId: string,  // Preserved for API compat, no longer used for lookup
   consumesSpec: ConsumeSpec[],
 ): Promise<UpstreamVariables> {
   if (!consumesSpec || consumesSpec.length === 0) return {};
 
   const upstream: UpstreamVariables = {};
-  for (const spec of consumesSpec) {
-    const sourceType = spec.source_discovery_type || discoveryType;
-    const discoveryVars = await readDiscoveryVariablesByProject(projectId, sourceType);
-    const artifactVars = discoveryVars.artifacts?.[discoveryArtifactId] || {};
-    const variable = artifactVars[spec.key];
 
-    if (variable) {
-      upstream[spec.key] = { value: variable.value, source: variable.source };
+  for (const spec of consumesSpec) {
+    // Resolve source template ID to discovery type
+    // spec.source = 'desk_research' → sourceType = 'desk-research'
+    let sourceType: string;
+    if (spec.source) {
+      const mappedType = TEMPLATE_TO_DISCOVERY_TYPE[spec.source];
+      if (mappedType) {
+        sourceType = mappedType;
+      } else {
+        console.warn(`⚠️ Unknown source template "${spec.source}" in consumes spec, using as-is`);
+        sourceType = spec.source;
+      }
+    } else {
+      // No source specified — use current discovery type (same-type reference)
+      sourceType = discoveryType;
+    }
+
+    const discoveryVars = await readDiscoveryVariablesByProject(projectId, sourceType);
+    const artifacts = discoveryVars.artifacts || {};
+
+    // Aggregate across ALL artifacts in this discovery type
+    const aggregatedArray: unknown[] = [];
+    const contributingDates: string[] = [];
+    const contributingArtifactIds: string[] = [];
+    let mostRecentScalar: { value: unknown; source: VariableSource; artifactId: string } | null = null;
+
+    for (const [artifactId, artifactVars] of Object.entries(artifacts)) {
+      const variable = artifactVars[spec.key];
+      if (!variable) continue;
+
+      // Filter by source template to avoid cross-template contamination
+      // e.g., when consuming knowledge_gaps from desk_research, don't include
+      // knowledge_gaps emitted by stakeholder_synthesis
+      if (spec.source && variable.source.template !== spec.source) {
+        continue;
+      }
+
+      contributingArtifactIds.push(artifactId);
+      if (variable.source.date) {
+        contributingDates.push(variable.source.date);
+      }
+
+      if (Array.isArray(variable.value)) {
+        // Pool variable — accumulate all values
+        aggregatedArray.push(...variable.value);
+      } else {
+        // Non-pool variable — track most recent
+        const varDate = variable.source.date || '';
+        const currentDate = mostRecentScalar?.source.date || '';
+        if (!mostRecentScalar || varDate > currentDate) {
+          mostRecentScalar = { value: variable.value, source: variable.source, artifactId };
+        }
+      }
+    }
+
+    // Build result for this variable
+    if (aggregatedArray.length > 0) {
+      // Pool variable — return aggregated array with full provenance
+      upstream[spec.key] = {
+        value: aggregatedArray,
+        source: {
+          template: sourceType,
+          version: `aggregated_from_${contributingArtifactIds.length}_artifacts`,
+          date: contributingDates.length > 0 ? contributingDates.sort().reverse()[0] : undefined,
+          dates: contributingDates.length > 0 ? contributingDates.sort() : undefined,
+          artifact_ids: contributingArtifactIds,
+        },
+      };
+    } else if (mostRecentScalar) {
+      // Non-pool variable — return most recent value
+      upstream[spec.key] = {
+        value: mostRecentScalar.value,
+        source: {
+          ...mostRecentScalar.source,
+          artifact_ids: [mostRecentScalar.artifactId],
+        },
+      };
     } else if (spec.required) {
-      console.warn(`⚠️ Required upstream discovery variable "${spec.key}" not found for artifact ${discoveryArtifactId}`);
+      console.warn(
+        `⚠️ Required upstream variable "${spec.key}" not found in discovery type "${sourceType}" for project ${projectId}`
+      );
     }
   }
 
