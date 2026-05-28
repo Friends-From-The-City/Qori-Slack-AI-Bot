@@ -386,7 +386,7 @@ output_template: |
   | methodology_selection | research_brief | Study methodology context |
 
 output_options:
-  path: "05-reports/"
+  path: "05-readouts/"
   filename: "{{selected_study}}-engineering-readout-{{current_date_iso}}.md"
 
 # ═══════════════════════════════════════════════════════════

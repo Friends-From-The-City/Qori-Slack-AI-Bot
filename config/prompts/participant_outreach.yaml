@@ -281,7 +281,7 @@ output_template: |
   *Saved to 02-participants/outreach/{{participant_id}}_{{message_type}}_{{current_date}}.md*
 
 output_options:
-  path: "02-participants/outreach/"
+  path: "03-fieldwork/outreach/"
   filename: "{{participant_id}}_{{message_type}}_{{current_date}}.md"
 
 # ═══════════════════════════════════════════════════════════════════════════════

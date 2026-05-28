@@ -476,7 +476,7 @@ output_template: |
   {{ai_generated.journey_map_complete}}
 
 output_options:
-  path: "04-analysis/journey-mapping/"
+  path: "04-synthesis/"
   filename: "{{selected_study}}-journey-map-{{current_date_iso}}.md"
 
 # ═══════════════════════════════════════════════════════════

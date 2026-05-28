@@ -281,7 +281,7 @@ github_api:
 
 output_options:
   default_delivery: "slack_and_github_api"
-  path: "07-implementation/"
+  path: "06-tickets/"
   filename: "github_issues_{{study_name}}_{{current_date}}.json"
 
 slack_output:

@@ -611,7 +611,7 @@ output_template: |
   | alignment_gaps | stakeholder_synthesis | Priority gaps |
 
 output_options:
-  path: "05-findings/"
+  path: "05-readouts/"
   filename: "research-readout-{{study_name}}-{{current_date_iso}}.md"
 
 # ═══════════════════════════════════════════════════════════

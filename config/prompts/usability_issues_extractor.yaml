@@ -380,7 +380,7 @@ output_template: |
   | research_questions | research_brief | Question addressing |
 
 output_options:
-  path: "04-analysis/usability-issues/"
+  path: "04-synthesis/"
   filename: "{{selected_study}}-usability-issues-{{current_date_iso}}.md"
 
 # ═══════════════════════════════════════════════════════════
