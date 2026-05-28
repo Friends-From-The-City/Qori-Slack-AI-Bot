@@ -8,6 +8,8 @@
 
 import { readFileSync, readdirSync, statSync } from 'fs';
 import { join, relative } from 'path';
+import { load as loadYaml } from 'js-yaml';
+import { ALL_FOLDERS, PROJECT_FOLDERS, STUDY_FOLDERS } from '../../config/folderStructure';
 
 const SRC_ROOT = join(__dirname, '../..');
 
@@ -471,5 +473,223 @@ describe('pattern: channel context threading', () => {
     // This assertion is informational for 2A
     // Will be enforced strictly in 2B when channel → project binding is required
     expect(violations).toEqual([]);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════
+// Phase B-0.5: Folder structure alignment
+// ═══════════════════════════════════════════════════════════
+
+describe('pattern: folder structure alignment (Phase B-0.5)', () => {
+  const PROMPTS_DIR = join(__dirname, '../../../../config/prompts');
+
+  // Old folder names that should not appear in handler code
+  const OLD_FOLDER_NAMES = [
+    'primary-research',
+    '01-planning',
+    '02-participants',
+    '04-analysis',
+    '05-findings',
+    '05-reports',
+    '07-implementation',
+  ];
+
+  // Files explicitly excluded from migration (deferred/being removed)
+  const MIGRATION_EXCLUSIONS = [
+    'createStudyHandler.ts',      // Phase B-0.6: deferred to project-aware migration
+    'requestResearchHandler.ts',  // Phase B-0.7: being removed entirely
+  ];
+
+  it('no hardcoded old folder names in handlers (enforced)', () => {
+    const commandsDir = join(SRC_ROOT, 'helpers/slack/commands');
+    const files = findTsFiles(commandsDir);
+    const violations: string[] = [];
+
+    for (const file of files) {
+      const content = readFile(file);
+      const rel = relative(SRC_ROOT, file);
+      const filename = rel.split('/').pop() || '';
+
+      // Skip files explicitly excluded (deferred/being removed)
+      if (MIGRATION_EXCLUSIONS.some(excluded => filename === excluded)) continue;
+
+      for (const oldFolder of OLD_FOLDER_NAMES) {
+        // Match string literals containing old folder names
+        const pattern = new RegExp(`['"\`]${oldFolder}['"\`/]`);
+        if (pattern.test(content)) {
+          // Find the line number for better error messages
+          const lines = content.split('\n');
+          for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            // Skip comments
+            if (line.trimStart().startsWith('//')) continue;
+            if (pattern.test(line)) {
+              violations.push(`${rel}:${i + 1}: hardcoded old folder '${oldFolder}'`);
+            }
+          }
+        }
+      }
+    }
+
+    if (violations.length > 0) {
+      console.log(`[Phase B-0.5] Found ${violations.length} violations:`);
+      violations.forEach(v => console.log(`  ${v}`));
+    }
+
+    expect(violations).toEqual([]);
+  });
+
+  it('YAML output_options.path values match folderStructure registry', () => {
+    // This test validates that YAML templates use paths from the structure registry
+    // It's informational until Step 5 (YAML updates) completes
+
+    const violations: string[] = [];
+    let yamlFiles: string[] = [];
+
+    try {
+      yamlFiles = readdirSync(PROMPTS_DIR).filter(f => f.endsWith('.yaml'));
+    } catch {
+      // Config dir may not exist in test environment
+      console.log('[Phase B-0.5] Skipping YAML path validation - config/prompts not found');
+      return;
+    }
+
+    for (const yamlFilename of yamlFiles) {
+      const yamlPath = join(PROMPTS_DIR, yamlFilename);
+      const content = readFileSync(yamlPath, 'utf-8');
+
+      // Parse output_options.path from YAML
+      const pathMatch = content.match(/output_options:\s*\n\s*path:\s*["']([^"']+)["']/);
+      if (!pathMatch) continue;
+
+      const outputPath = pathMatch[1];
+
+      // Skip discovery templates (they use {{project_slug}}/00-discovery/ which is valid)
+      if (outputPath.includes('{{project_slug}}')) {
+        const remainder = outputPath.replace(/^\{\{project_slug\}\}\//, '');
+        if (remainder === '00-discovery/' || remainder === PROJECT_FOLDERS.DISCOVERY + '/') {
+          continue;
+        }
+      }
+
+      // Skip research_request (separate intake flow)
+      if (yamlFilename === 'research_request.yaml') continue;
+
+      // Normalize path (remove trailing slash)
+      const normalizedPath = outputPath.replace(/\/$/, '');
+
+      // Check if the path or its parent folder is in the registry
+      const pathParts = normalizedPath.split('/');
+      const topLevelFolder = pathParts[0];
+
+      // Valid if top-level folder matches a study folder
+      const isValidStudyFolder = Object.values(STUDY_FOLDERS).some(folder => {
+        const folderParts = folder.split('/');
+        return folderParts[0] === topLevelFolder;
+      });
+
+      if (!isValidStudyFolder) {
+        violations.push(`${yamlFilename}: output_options.path '${outputPath}' not in folderStructure registry`);
+      }
+    }
+
+    if (violations.length > 0) {
+      console.log(`[Phase B-0.5] Found ${violations.length} YAML path violations:`);
+      violations.forEach(v => console.log(`  ${v}`));
+    }
+
+    expect(violations).toEqual([]);
+  });
+
+  it('no handler passes primary-research as extraFolder (enforced)', () => {
+    const commandsDir = join(SRC_ROOT, 'helpers/slack/commands');
+    const files = findTsFiles(commandsDir);
+    const violations: string[] = [];
+
+    // Pattern: processYamlTemplate(..., 'primary-research', ...)
+    // or processParticipantYamlTemplate(..., 'primary-research', ...)
+    // or processObserverYamlTemplate(..., 'primary-research', ...)
+    const pattern = /process(?:Yaml|Participant|Observer)YamlTemplate\([^)]*['"]primary-research['"]/;
+
+    for (const file of files) {
+      const content = readFile(file);
+      const rel = relative(SRC_ROOT, file);
+      const filename = rel.split('/').pop() || '';
+
+      // Skip files explicitly excluded (deferred/being removed)
+      if (MIGRATION_EXCLUSIONS.some(excluded => filename === excluded)) continue;
+
+      const lines = content.split('\n');
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        // Skip comments
+        if (line.trimStart().startsWith('//')) continue;
+        if (pattern.test(line)) {
+          violations.push(`${rel}:${i + 1}: passes 'primary-research' as extraFolder`);
+        }
+      }
+    }
+
+    if (violations.length > 0) {
+      console.log(`[Phase B-0.5] Found ${violations.length} extraFolder violations:`);
+      violations.forEach(v => console.log(`  ${v}`));
+    }
+
+    expect(violations).toEqual([]);
+  });
+
+  it('no default extraFolder is primary-research (enforced)', () => {
+    const helpersDir = join(SRC_ROOT, 'helpers');
+    const violations: string[] = [];
+
+    // Check the three processor files
+    const processorFiles = [
+      'yamlProcessor.ts',
+      'observerYamlProcessor.ts',
+      'participantYamlProcessor.ts',
+    ];
+
+    for (const filename of processorFiles) {
+      const filePath = join(helpersDir, filename);
+      try {
+        const content = readFileSync(filePath, 'utf-8');
+        // Pattern: extraFolder = 'primary-research'
+        if (/extraFolder\s*=\s*['"]primary-research['"]/.test(content)) {
+          violations.push(`${filename}: default extraFolder is 'primary-research'`);
+        }
+      } catch {
+        // File doesn't exist in test environment
+      }
+    }
+
+    if (violations.length > 0) {
+      console.log(`[Phase B-0.5] Found ${violations.length} default extraFolder violations:`);
+      violations.forEach(v => console.log(`  ${v}`));
+    }
+
+    expect(violations).toEqual([]);
+  });
+
+  it('folderStructure registry matches Phase 1 spec', () => {
+    // This test validates that the registry itself is correct
+
+    // Project-level: 00-discovery must exist
+    expect(PROJECT_FOLDERS.DISCOVERY).toBe('00-discovery');
+
+    // Study-level: numbered folders 01-06 must exist with correct names
+    expect(STUDY_FOLDERS.BRIEF).toBe('01-brief');
+    expect(STUDY_FOLDERS.PLAN).toBe('02-plan');
+    expect(STUDY_FOLDERS.FIELDWORK).toBe('03-fieldwork');
+    expect(STUDY_FOLDERS.SYNTHESIS).toBe('04-synthesis');
+    expect(STUDY_FOLDERS.READOUTS).toBe('05-readouts');
+    expect(STUDY_FOLDERS.TICKETS).toBe('06-tickets');
+
+    // Subfolders
+    expect(STUDY_FOLDERS.FIELDWORK_SESSIONS).toBe('03-fieldwork/sessions');
+    expect(STUDY_FOLDERS.FIELDWORK_TRANSCRIPTS).toBe('03-fieldwork/transcripts');
+    expect(STUDY_FOLDERS.FIELDWORK_OUTREACH).toBe('03-fieldwork/outreach');
+
+    // Variables folder
+    expect(STUDY_FOLDERS.VARIABLES).toBe('.variables');
   });
 });

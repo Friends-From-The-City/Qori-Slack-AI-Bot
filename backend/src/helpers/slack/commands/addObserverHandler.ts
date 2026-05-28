@@ -41,7 +41,7 @@ async function updateObserverTracker(studyId: number, studyName: string, studyPa
       yamlFile.content,
       { study_id: studyId, study_name: studyName, current_date: new Date().toISOString().split('T')[0] },
       studyPath || '',
-      'primary-research',
+      '',
       // @ts-expect-error — pre-existing type mismatch from require() → import migration
       allObservers,
       allParticipants,

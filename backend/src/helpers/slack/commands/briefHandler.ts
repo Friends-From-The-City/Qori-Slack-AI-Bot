@@ -18,9 +18,10 @@ import type { AllMiddlewareArgs, SlackViewMiddlewareArgs, ViewSubmitAction } fro
 
 import { format, parseISO, differenceInCalendarDays, isValid } from 'date-fns';
 import sequelize from '../../../database';
-import { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo, readFolders, copyFilesToFolder } from '../../github';
+import { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo } from '../../github';
 import { addResearchStudyWithRoles, getStudyByProjectAndName } from '../../../services/research_study.service';
 import { getProjectById } from '../../../services/project.service';
+import { scaffoldStudy } from '../../../services/scaffolding.service';
 import type { VariableContext } from '../../studyVariables';
 import { processYamlTemplate } from '../../yamlProcessor';
 import { executeAiGenerationTasks } from '../../langchain';
@@ -272,16 +273,20 @@ async function handleBriefSubmission({ ack, body, view, client }: SlackViewMiddl
         throw new Error('Project not found');
       }
 
-      // Create study folder in GitHub: {project-slug}/{study-slug}/
-      // No interstitial directory — study folders sit directly inside project
-      const templateFiles = await readFolders('config/templates', getConfigRepo());
-      const folderResult = await copyFilesToFolder(
-        templateFiles,
+      // Scaffold study folder in GitHub: {project-slug}/{study-slug}/
+      // Phase B-0.5: Uses scaffolding service instead of folder template copy
+      const scaffoldResult = await scaffoldStudy(
         project.slug,
         studyName,
-        process.env.GITHUB_REPO || '',
-        ''
+        studyName, // studyName serves as both name and slug
+        project.name,
+        userName,
       );
+
+      // Log any non-fatal scaffolding errors (e.g., observer guide fetch failures)
+      if (scaffoldResult.errors.length > 0) {
+        console.warn('⚠️ Study scaffolding had non-fatal errors:', scaffoldResult.errors);
+      }
 
       // Create study with project_id (Phase 2D: no @ts-expect-error)
       study = await addResearchStudyWithRoles({
@@ -292,8 +297,8 @@ async function handleBriefSubmission({ ack, body, view, client }: SlackViewMiddl
         created_by: body.user.id,
         researcher_name: userName,
         researcher_email: userEmail,
-        link: folderResult.url,
-        path: folderResult.path,
+        link: scaffoldResult.studyReadmeUrl,
+        path: `${project.slug}/${studyName}`,
         channel_name: channelId,
         assignments: [],
       });
@@ -519,7 +524,7 @@ async function handleBriefSubmission({ ack, body, view, client }: SlackViewMiddl
   // ── Process YAML template (prose tasks + rendering + extraction) ──
   const variableContext: VariableContext = { projectId, studyId };
   const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, "research_brief.yaml");
-  const renderedYaml = await processYamlTemplate(file.content, data, study.path ?? '', 'primary-research', false, variableContext);
+  const renderedYaml = await processYamlTemplate(file.content, data, study.path ?? '', '', false, variableContext);
 
   const url: string = renderedYaml.result.url;
 

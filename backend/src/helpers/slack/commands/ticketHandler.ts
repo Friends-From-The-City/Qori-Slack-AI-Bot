@@ -630,7 +630,7 @@ function formatIssueBody(
   if (ticket.addresses_findings?.length) {
     const owner = process.env.GITHUB_OWNER;
     const repo = process.env.GITHUB_REPO;
-    const readoutPath = `${studyName}/primary-research/05-reports/`;
+    const readoutPath = `${studyName}/05-readouts/`;
     const readoutLink = `https://github.com/${owner}/${repo}/tree/main/${readoutPath}`;
 
     const findingLines = ticket.addresses_findings.map(fId => {

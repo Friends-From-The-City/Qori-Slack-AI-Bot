@@ -8,6 +8,10 @@
  * This handler is the DATA ASSEMBLY POINT for the research plan template.
  * The template is dumb — it iterates and interpolates. Computed values
  * (compensation, dates, counts) are calculated here, not by the LLM.
+ *
+ * v7.0 (Phase 2D): Uses projectId from modal metadata. No longer uses
+ * deprecated resolveStudyFromName. Validates study.project_id matches
+ * metadata.projectId before proceeding.
  */
 
 import type { AllMiddlewareArgs, SlackViewMiddlewareArgs, ViewSubmitAction } from '@slack/bolt';
@@ -15,7 +19,7 @@ import { TemplateContractError } from '../../../types/handlers';
 import type { ResearchQuestion, TargetBarrier } from '../../../types/cascade';
 
 import { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo } from '../../github';
-import { resolveStudyFromName } from '../../../services/research_study.service';
+import { getStudyById } from '../../../services/research_study.service';
 import { getProjectById } from '../../../services/project.service';
 import { processYamlTemplate } from '../../yamlProcessor';
 import { addStudyStatus } from '../../../services/study-status.service';
@@ -24,6 +28,7 @@ import { calculatePerPersonCompensation } from '../../../utils/compensationCalcu
 import { buildTimelinePhases, buildTimelineSummary, type TimelinePhase } from '../../../utils/timelineComputation';
 import { readUpstreamVariablesByContext, type VariableContext } from '../../studyVariables';
 import research_planService from '../../../services/research_plan.service';
+import type { StudySetupModalMetadata } from '../ui/studySetupModal';
 
 // ─── Template input contract ──────────────────────────────────────
 
@@ -56,19 +61,59 @@ async function handlePlanSubmission({ ack, body, view, client }: SlackViewMiddle
   await ack();
 
   const values = view.state.values;
-  const { channelId, studyName, userId } = JSON.parse(view.private_metadata || '{}');
 
-  if (!studyName) {
-    throw new Error('No study selected — private_metadata missing studyName');
+  // Phase 2D: Parse typed metadata with projectId from opener
+  let meta: StudySetupModalMetadata;
+  try {
+    meta = JSON.parse(view.private_metadata || '{}') as StudySetupModalMetadata;
+  } catch {
+    console.error('Failed to parse plan modal metadata');
+    return;
   }
 
-  console.log('🚀 ~ Research Plan Generator ~ studyName:', studyName);
+  const { channelId, studyName, studyId, projectId, userId } = meta;
 
-  const resolved = await resolveStudyFromName(studyName);
-  if (!resolved) {
-    throw new Error(`Study "${studyName}" not found`);
+  // Validate required metadata
+  if (!studyName || !studyId || !projectId) {
+    console.error('Missing required metadata in plan submission:', { studyName, studyId, projectId });
+    await client.chat.postEphemeral({
+      channel: channelId || body.user.id,
+      user: body.user.id,
+      text: '❌ Missing study or project context. Please close this modal and try `/qori-plan` again.',
+    });
+    return;
   }
-  const { study, projectId, studyId } = resolved;
+
+  console.log('🚀 ~ Research Plan Generator ~ studyName:', studyName, 'studyId:', studyId, 'projectId:', projectId);
+
+  // Fetch study by ID (not name) — Phase 2D pattern
+  const study = await getStudyById(studyId);
+  if (!study) {
+    console.error(`❌ Plan handler: study ID ${studyId} not found`);
+    await client.chat.postEphemeral({
+      channel: channelId || body.user.id,
+      user: body.user.id,
+      text: `❌ Study "${studyName}" not found. It may have been deleted. Please try again.`,
+    });
+    return;
+  }
+
+  // ── Risk #4 validation: project_id mismatch check ──
+  // If study.project_id doesn't match metadata.projectId, something is wrong.
+  // Do not proceed — log, notify user, return without writing.
+  if (study.project_id !== projectId) {
+    console.error(
+      `❌ Plan handler: project_id mismatch! metadata.projectId=${projectId}, study.project_id=${study.project_id}, studyId=${studyId}, studyName="${studyName}"`
+    );
+    await client.chat.postEphemeral({
+      channel: channelId || body.user.id,
+      user: body.user.id,
+      text: `❌ Project context mismatch detected. The study "${studyName}" belongs to a different project than expected. Please run \`/qori-plan\` from the correct project channel or contact support.`,
+    });
+    return;
+  }
+
+  // Build VariableContext from validated metadata
   const variableContext: VariableContext = { projectId, studyId };
 
   // Resolve target channel: project's bound channel takes priority over trigger channel
@@ -189,7 +234,7 @@ async function handlePlanSubmission({ ack, body, view, client }: SlackViewMiddle
     file.content,
     data,
     studyPath,
-    'primary-research',
+    '',
     false,
     variableContext
   );
@@ -203,15 +248,16 @@ async function handlePlanSubmission({ ack, body, view, client }: SlackViewMiddle
     filename: fileName,
     file_path: renderedYaml.result.path,
     file_url: renderedYaml.result.url,
-    created_by: userId,
+    created_by: userId || body.user.id,
   };
   await research_planService.createResearchPlan(planData);
   const blocks = generateStudyResultBlocks(studyName, study, url, targetChannel, 'plan');
   await sendStudyResultMessage(client, targetChannel, studyName, blocks, 'plan');
 
   // Send DM with next-step suggestion
+  const dmUserId = userId || body.user.id;
   try {
-    const im = await client.conversations.open({ users: userId });
+    const im = await client.conversations.open({ users: dmUserId });
     if (im.channel?.id) {
       await client.chat.postMessage({
         channel: im.channel.id,

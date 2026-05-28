@@ -361,7 +361,7 @@ async function handleDiscussionGuideSubmission({ ack, body, view, client }: Slac
   };
 
   const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, 'discussion_guide.yaml');
-  const renderedYaml = await processYamlTemplate(file.content, guideData, study!.path ?? '', 'primary-research', false, variableContext);
+  const renderedYaml = await processYamlTemplate(file.content, guideData, study!.path ?? '', '', false, variableContext);
 
   const url: string = renderedYaml.result.url;
 

@@ -188,7 +188,7 @@ export async function processYamlTemplate(
   rawYamlContent: string,
   inputValues: Record<string, any>,
   baseFolderEncoded: string,
-  extraFolder = 'primary-research',
+  extraFolder = '',
   aiCheck = false,
   variableContext?: VariableContext,
 ): Promise<ProcessResult> {

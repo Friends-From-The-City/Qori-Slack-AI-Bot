@@ -11,7 +11,7 @@ import type { View } from '@slack/types';
 import type { WebClient } from '@slack/web-api';
 
 import { createProjectFromName, bindProjectToChannel } from '../../../services/project.service';
-import { createOrUpdateFileOnGitHub } from '../../github';
+import { scaffoldProject } from '../../../services/scaffolding.service';
 import { projectCreationModal, type ProjectCreationModalMetadata } from '../ui/projectCreationModal';
 import { projectCreatedNextStepsModal, type ProjectNextStepsModalMetadata } from '../ui/projectCreatedNextStepsModal';
 import { buildBriefEntryModal } from '../ui/researchBriefEntryModal';
@@ -149,30 +149,23 @@ async function handleProjectCreateSubmission({ ack, body, view, client }: SlackV
       status: 'active',
     });
 
-    // Create project folder in GitHub with README
-    const readmeContent = `# ${project.name}
-
-${project.description || 'Research project created via Qori.'}
-
-## Structure
-
-- \`00-discovery/\` — Desk research, stakeholder synthesis, survey synthesis
-- \`{study-slug}/\` — Individual research studies (01-brief → 06-tickets within each)
-
----
-
-*Created ${new Date().toISOString().split('T')[0]} by <@${body.user.id}>*
-`;
-
+    // Scaffold project folder in GitHub with README
+    // Phase B-0.5: Uses scaffolding service instead of inline README creation
     try {
-      await createOrUpdateFileOnGitHub(
-        `${project.slug}/README.md`,
-        readmeContent,
-      );
+      // Get creator's display name for README
+      let creatorName = body.user.id;
+      try {
+        const userInfo = await client.users.info({ user: body.user.id });
+        creatorName = userInfo.user?.real_name || userInfo.user?.profile?.display_name || body.user.id;
+      } catch {
+        // Non-critical — use user ID as fallback
+      }
+
+      await scaffoldProject(project.slug, project.name, creatorName);
     } catch (ghErr) {
       // Log but don't fail — project exists in Postgres, folder can be created later
       const ghMessage = ghErr instanceof Error ? ghErr.message : String(ghErr);
-      console.warn(`GitHub folder creation failed for ${project.slug}:`, ghMessage);
+      console.warn(`GitHub scaffolding failed for ${project.slug}:`, ghMessage);
     }
 
     // Create dedicated Slack channel if toggle is on

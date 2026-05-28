@@ -35,7 +35,7 @@ async function renderPlan(inputOverrides = {}, upstreamOverrides = {}) {
     rawYaml,
     inputs,
     encodeURIComponent('studies/test-study'),
-    'primary-research',
+    '',
     false,
     mockVariableContext,
   );

@@ -410,7 +410,7 @@ const handleSessionNotesSubmission = async ({ ack, body, view, client }: SlackVi
       const study = resolved.study;
       const variableContext: VariableContext = { projectId: resolved.projectId, studyId: resolved.studyId };
       const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, yamlTemplateName!);
-      renderedYaml = await processYamlTemplate(file.content, templateData, study!.path ?? '', 'primary-research', false, variableContext);
+      renderedYaml = await processYamlTemplate(file.content, templateData, study!.path ?? '', '', false, variableContext);
       console.log("🚀 ~ handleSessionNotesSubmission ~ renderedYaml:", renderedYaml);
       result = renderedYaml!.result;
       const urlParts: string[] = result.path.split('/');
@@ -422,7 +422,7 @@ const handleSessionNotesSubmission = async ({ ack, body, view, client }: SlackVi
       // @ts-expect-error — pre-existing type mismatch from require() → import migration
       const baseFolder = decodeURIComponent(study!.path);
       const transcriptFileName = `${templateData.participant_name}-transcript-${new Date().toISOString().split('T')[0]}.md`;
-      const transcriptPath = `${baseFolder}/primary-research/03-fieldwork/transcripts/${transcriptFileName}`;
+      const transcriptPath = `${baseFolder}/03-fieldwork/transcripts/${transcriptFileName}`;
 
       const transcriptContent = `# Session Transcript: ${templateData.participant_name}
 

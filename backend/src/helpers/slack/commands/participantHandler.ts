@@ -352,7 +352,7 @@ async function handleUpdateParticipantSubmission({ ack, body, view, client }: Sl
           };
 
           // @ts-expect-error — pre-existing type mismatch from require() → import migration
-          await processParticipantYamlTemplate(yamlTemplateFile.content, templateData, study.path || '', 'primary-research', allParticipants);
+          await processParticipantYamlTemplate(yamlTemplateFile.content, templateData, study.path || '', '', allParticipants);
           console.log("🚀 ~ Participant tracker updated successfully");
         }
       }

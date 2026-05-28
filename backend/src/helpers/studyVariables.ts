@@ -288,7 +288,7 @@ export async function writeStudyVariablesByContext(
   // Also write GitHub JSON (debugging artifact, not authoritative)
   if (studyBasePath) {
     try {
-      const filePath = `${studyBasePath}/primary-research/${VARIABLES_DIR}/${VARIABLES_FILE}`;
+      const filePath = `${studyBasePath}/${VARIABLES_DIR}/${VARIABLES_FILE}`;
       variablesData.last_updated = new Date().toISOString();
       const content = JSON.stringify(variablesData, null, 2);
       await createOrUpdateFileOnGitHub(filePath, content);
@@ -1068,7 +1068,7 @@ async function writeDiscoveryToPostgresByProject(
 // ═══════════════════════════════════════════════════════════
 
 async function readStudyVariablesFromGitHub(studyBasePath: string): Promise<StudyVariablesStructure> {
-  const filePath = `${studyBasePath}/primary-research/${VARIABLES_DIR}/${VARIABLES_FILE}`;
+  const filePath = `${studyBasePath}/${VARIABLES_DIR}/${VARIABLES_FILE}`;
   try {
     const file = await fetchFileFromRepoByPath(getContentRepo(), filePath);
     return JSON.parse(file.content) as StudyVariablesStructure;

@@ -269,13 +269,21 @@ export async function readFolders(folderPath: string, repo: string): Promise<Rep
   return results;
 }
 
-export async function fetchFileFromRepo(repo: string, folderPath: string, fileName: string): Promise<FetchedFile> {
+export async function fetchFileFromRepo(
+  repo: string,
+  folderPath: string,
+  fileName: string,
+  options?: { ref?: string },
+): Promise<FetchedFile> {
   const { Octokit } = await import('@octokit/rest');
   const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
   const owner = process.env.GITHUB_OWNER!;
   // GITHUB_CONFIG_BRANCH allows fetching from a feature branch for local testing
   // Only apply to config repo operations (YAML templates), not content repo operations
-  const ref = repo === getConfigRepo() ? (process.env.GITHUB_CONFIG_BRANCH || undefined) : undefined;
+  // Callers can override ref explicitly (e.g., scaffolding always fetches from 'main')
+  const ref = options?.ref !== undefined
+    ? (options.ref || undefined) // explicit ref passed (empty string = default branch)
+    : (repo === getConfigRepo() ? (process.env.GITHUB_CONFIG_BRANCH || undefined) : undefined);
 
   const filePath = folderPath
     ? `${folderPath.replace(/\/$/, '')}/${fileName}`

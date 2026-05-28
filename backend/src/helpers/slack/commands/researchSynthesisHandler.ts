@@ -101,15 +101,17 @@ interface SynthesisTemplateInput {
 
 // ─── Constants ──────────────────────────────────────────────────
 
-const ANALYSIS_SCANS: AnalysisScan[] = [
-  { folder: 'affinity-mapping', label: 'Affinity map' },
-  { folder: 'journey-mapping', label: 'Journey map' },
-  { folder: 'personas', label: 'Personas' },
-  { folder: 'usability-issues', label: 'Usability issues' },
-  { folder: 'jobs-to-be-done', label: 'Jobs to be done' },
-  { folder: 'design-opportunities', label: 'Design opportunities' },
-  { folder: 'service-blueprint', label: 'Service blueprint' },
-  { folder: 'survey-synthesis', label: 'Survey synthesis' },
+// Filename patterns for matching synthesis artifacts in flat 04-synthesis/
+// Pattern matches the YAML output filenames (e.g., "study-affinity-map-2026-05-28.md")
+const SYNTHESIS_FILE_PATTERNS: Array<{ pattern: RegExp; label: string }> = [
+  { pattern: /-affinity-map-/, label: 'Affinity map' },
+  { pattern: /-journey-map-/, label: 'Journey map' },
+  { pattern: /-personas-/, label: 'Personas' },
+  { pattern: /-usability-issues-/, label: 'Usability issues' },
+  { pattern: /-jobs-to-be-done-/, label: 'Jobs to be done' },
+  { pattern: /-design-opportunities-/, label: 'Design opportunities' },
+  { pattern: /_service_blueprint_/, label: 'Service blueprint' },
+  { pattern: /-survey-synthesis-/, label: 'Survey synthesis' },
 ];
 
 const ANALYSIS_YAML_MAPPING: Record<string, string> = {
@@ -127,33 +129,40 @@ const NUGGET_REQUIRED_METHODS = [
   'jobs_to_be_done', 'usability_issues', 'design_opportunities', 'service_blueprint',
 ];
 
-// ─── Helper: scan analysis folders ──────────────────────────────
+// ─── Helper: scan synthesis folder ──────────────────────────────
 
 async function scanAnalysisFolders(studyPath: string): Promise<AnalysisFile[]> {
   const analysisFiles: AnalysisFile[] = [];
   const decodedPath = decodeURIComponent(studyPath);
-  const analysisBase = `${decodedPath}/primary-research/04-analysis`;
+  const synthesisPath = `${decodedPath}/04-synthesis`;
 
-  for (const scan of ANALYSIS_SCANS) {
-    try {
-      const scanPath = `${analysisBase}/${scan.folder}`;
-      const files: GithubFile[] = await readFolderContents(scanPath, process.env.GITHUB_REPO!);
-      const validFiles = files.filter((f: GithubFile) => f.name !== 'readme.md' && f.name !== '.gitkeep');
+  try {
+    // Scan the flat 04-synthesis/ folder once
+    const files: GithubFile[] = await readFolderContents(synthesisPath, process.env.GITHUB_REPO!);
+    const validFiles = files.filter((f: GithubFile) =>
+      f.name !== 'readme.md' && f.name !== 'README.md' && f.name !== '.gitkeep'
+    );
 
-      if (validFiles.length > 0) {
-        const sorted = validFiles.sort((a: GithubFile, b: GithubFile) => b.name.localeCompare(a.name));
+    // Group files by type using filename patterns
+    for (const { pattern, label } of SYNTHESIS_FILE_PATTERNS) {
+      const matchingFiles = validFiles.filter((f: GithubFile) => pattern.test(f.name));
+
+      if (matchingFiles.length > 0) {
+        // Sort by name (descending) to get newest first (date is in filename)
+        const sorted = matchingFiles.sort((a: GithubFile, b: GithubFile) => b.name.localeCompare(a.name));
         const newest = sorted[0];
         analysisFiles.push({
           name: newest.name,
           path: newest.path,
-          label: scan.label,
-          relative_path: `04-analysis/${scan.folder}/${newest.name}`,
+          label,
+          relative_path: `04-synthesis/${newest.name}`,
         });
       }
-    } catch {
-      // Folder doesn't exist — skip silently
     }
+  } catch {
+    // Folder doesn't exist — return empty array
   }
+
   return analysisFiles;
 }
 
@@ -828,7 +837,7 @@ const handleResearchSynthesisSubmission = async ({ ack, body, view, client }: Sl
       const decodedStudyPath = decodeURIComponent(study!.path!);
       for (const opt of selectedAnalysisFiles) {
         const relativePath: string = opt.value.replace(/^analysis_\d+_/, '');
-        const fullPath = `${decodedStudyPath}/primary-research/${relativePath}`;
+        const fullPath = `${decodedStudyPath}/${relativePath}`;
         allFiles.push({
           filename: relativePath.split('/').pop(),
           file_type: 'analysis',
@@ -886,8 +895,11 @@ const handleResearchSynthesisSubmission = async ({ ack, body, view, client }: Sl
     const detectedFilesList: string = filesWithContent
       .filter(f => f.file_path)
       .map(f => {
-        if (f.file_path && f.file_path.includes('primary-research/')) {
-          return f.file_path.split('primary-research/')[1];
+        // Extract relative path from study root
+        if (f.file_path) {
+          const parts = (f.file_path).split('/');
+          // Return last 2-3 path segments as relative path
+          return parts.slice(-3).join('/');
         }
         const parts = (f.file_path || '').split('/');
         return parts.slice(-3).join('/');
@@ -921,7 +933,7 @@ const handleResearchSynthesisSubmission = async ({ ack, body, view, client }: Sl
 
     try {
       const yamlTemplateFile = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, yamlFileName);
-      const renderedAnalysis = await processYamlTemplate(yamlTemplateFile.content, analysisData, study?.path ?? '', 'primary-research', false, variableContext);
+      const renderedAnalysis = await processYamlTemplate(yamlTemplateFile.content, analysisData, study?.path ?? '', '', false, variableContext);
       console.log(`✅ Synthesis complete: ${renderedAnalysis.outputTemplate?.length || 0} chars`);
 
       const outputLines: string[] = renderedAnalysis.outputTemplate.split('\n').filter((line: string) => line.trim());

@@ -3,9 +3,18 @@
 
 // ─── Modal metadata contract ─────────────────────────────────────
 
-/** The shape of private_metadata for the plan_study_modal / study-setup-modal-start-research. */
+/**
+ * The shape of private_metadata for the plan_study_modal / study-setup-modal-start-research.
+ *
+ * Phase 2D: studyId and projectId are populated by the modal openers (planModalOpener,
+ * discussionGuideHandler) after the user selects a study. The initial modal only sets channelId.
+ */
 export interface StudySetupModalMetadata {
   channelId: string;
+  studyId?: number;
+  studyName?: string;
+  projectId?: number;
+  userId?: string;
 }
 
 interface StudyOption {

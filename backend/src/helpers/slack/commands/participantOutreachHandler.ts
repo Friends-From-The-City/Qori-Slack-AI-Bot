@@ -1088,7 +1088,7 @@ async function handleAddParticipantSubmit({ ack, body, view, client }: SlackView
 
     // Check if this participant brings the total to 3 and send milestone message
     const milestoneCheck = await studyParticipantService.checkStudyMilestone(study.id);
-    const githubUrl = `https://github.com/${process.env.GITHUB_OWNER}/${process.env.GITHUB_REPO}/tree/main/${study.path}/primary-research/02-participants/${study.name}_participant_tracker.md`;
+    const githubUrl = `https://github.com/${process.env.GITHUB_OWNER}/${process.env.GITHUB_REPO}/tree/main/${study.path}/03-fieldwork/${study.name}_participant_tracker.md`;
     if (milestoneCheck.hasReachedMilestone) {
       // Generate a milestone message for the channel
       const milestoneMessage = {

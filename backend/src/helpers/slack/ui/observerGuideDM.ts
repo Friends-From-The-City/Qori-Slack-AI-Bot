@@ -6,8 +6,8 @@
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type SlackClient = { chat: { postMessage: (args: any) => Promise<any> } };
 
-const OBSERVER_GUIDELINES_URL =
-  'https://github.com/friends-innovation-lab/qori-slack/blob/main/config/templates/primary-research/03-fieldwork/observer_guidelines.md';
+// Observer guidelines now live in qori-studies/_content/ (Phase B-0.5)
+const OBSERVER_GUIDELINES_URL = `https://github.com/${process.env.GITHUB_OWNER}/${process.env.GITHUB_REPO}/blob/main/_content/observer-guidelines.md`;
 
 /**
  * Send the observer guide DM to a user.

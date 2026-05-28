@@ -560,7 +560,7 @@ export async function processParticipantYamlTemplate(
   rawYamlContent: string,
   inputValues: ParticipantInputValues,
   baseFolderEncoded: string,
-  extraFolder = 'primary-research',
+  extraFolder = '',
   allParticipants: ParticipantRecord[] | null = null,
 ): Promise<ProcessParticipantResult> {
   // 1. Parse the raw YAML content first

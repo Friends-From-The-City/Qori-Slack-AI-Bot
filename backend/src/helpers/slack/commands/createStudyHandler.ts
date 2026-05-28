@@ -1,3 +1,9 @@
+// LEGACY: This handler uses pre-Phase-2 channel_config-based folder paths
+// via copyFilesToFolder. Phase B-0.6 migrates to project-aware scaffolding.
+// Until then, studies created via this flow get the old
+// {sub_folder_name}/research/{studyName}/ structure. See
+// docs/phase-2d-phase-b-06-stub.md.
+
 import type { AllMiddlewareArgs, SlackCommandMiddlewareArgs, SlackActionMiddlewareArgs, SlackViewMiddlewareArgs, BlockAction, ViewSubmitAction } from '@slack/bolt';
 
 import { createStudyModal } from '../ui/createStudyModal';
