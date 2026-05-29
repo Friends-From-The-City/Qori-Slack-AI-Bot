@@ -69,7 +69,11 @@ export async function loadDiscoveryArtifacts(projectId: number): Promise<Discove
         } else {
           const firstVar = variables[variableKeys[0]];
           if (firstVar?.source?.date) {
-            date = firstVar.source.date.split('T')[0];
+            // source.date may be a Date object (from Sequelize) or string at runtime
+            // despite the type saying string — Sequelize returns Date for date columns
+            const dateValue = firstVar.source.date as unknown;
+            const dateStr = dateValue instanceof Date ? dateValue.toISOString() : String(dateValue);
+            date = dateStr.split('T')[0];
           }
         }
 
