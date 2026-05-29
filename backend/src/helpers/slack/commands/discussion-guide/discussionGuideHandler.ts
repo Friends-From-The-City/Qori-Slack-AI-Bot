@@ -16,7 +16,7 @@ import type { AllMiddlewareArgs, SlackActionMiddlewareArgs, SlackViewMiddlewareA
 import type { View } from '@slack/types';
 
 import { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo } from '../../../github';
-import { resolveStudyFromName } from '../../../../services/research_study.service';
+import { getStudyById } from '../../../../services/research_study.service';
 import { getProjectById } from '../../../../services/project.service';
 import { processYamlTemplate } from '../../../yamlProcessor';
 import { addStudyStatus } from '../../../../services/study-status.service';
@@ -29,6 +29,7 @@ import {
   METHODOLOGY_LABEL_TO_VALUE,
   METHODOLOGY_VALUE_TO_TEXT,
 } from '../../ui/discussionGuideModal';
+import type { StudySetupModalMetadata } from '../../ui/studySetupModal';
 
 // ─── Block Kit manipulation type ──────────────────────────────────
 
@@ -104,10 +105,11 @@ async function openDiscussionGuideModal({ ack, body, client }: SlackActionMiddle
   try {
     const meta = JSON.parse(body.view.private_metadata || '{}');
     const selectedFromView = body.view.state?.values?.study_selection?.study_select?.selected_option || null;
-    const studyName: string = selectedFromView?.text?.text || meta.studyName || meta.selectedStudy || meta.study_name || '';
-    const studyId: string | null = selectedFromView?.value || meta.studyId || null;
+    const preselectStudyName: string = selectedFromView?.text?.text || meta.studyName || meta.selectedStudy || meta.study_name || '';
+    const preselectStudyIdStr: string | null = selectedFromView?.value || meta.studyId || null;
 
-    if (!studyName || studyId === 'loading' || studyId === 'no_studies') {
+    // Validate study selection
+    if (!preselectStudyName || !preselectStudyIdStr || preselectStudyIdStr === 'loading' || preselectStudyIdStr === 'no_studies' || preselectStudyIdStr === 'none') {
       await client.chat.postEphemeral({
         channel: meta.channelId || body.user.id,
         user: body.user.id,
@@ -116,21 +118,50 @@ async function openDiscussionGuideModal({ ack, body, client }: SlackActionMiddle
       return;
     }
 
+    // ── Guard rail #1: Parse studyId ──
+    const studyId = parseInt(preselectStudyIdStr, 10);
+    if (Number.isNaN(studyId)) {
+      console.error(`❌ Discussion guide opener: invalid studyId "${preselectStudyIdStr}" — not a number`);
+      await client.chat.postEphemeral({
+        channel: meta.channelId || body.user.id,
+        user: body.user.id,
+        text: '❌ Invalid study selection. Please try again or contact support.',
+      });
+      return;
+    }
+
     const userId = body.user.id;
 
-    // ── Single study fetch for all downstream uses ──
-    let studyPath: string | null = null;
-    let leadModeratorUserId: string = userId;
-    let variableContext: VariableContext | null = null;
-    try {
-      const resolved = await resolveStudyFromName(studyName);
-      if (resolved) {
-        const study = resolved.study;
-        variableContext = { projectId: resolved.projectId, studyId: resolved.studyId };
-        if (study.created_by) leadModeratorUserId = study.created_by;
-        if (study.path) studyPath = decodeURIComponent(study.path);
-      }
-    } catch (_err) { /* ignore — defaults are safe */ }
+    // ── Guard rail #2: Fetch study by ID ──
+    const study = await getStudyById(studyId);
+    if (!study) {
+      console.error(`❌ Discussion guide opener: study ID ${studyId} not found`);
+      await client.chat.postEphemeral({
+        channel: meta.channelId || body.user.id,
+        user: body.user.id,
+        text: `❌ Study "${preselectStudyName}" not found. It may have been deleted. Please refresh and try again.`,
+      });
+      return;
+    }
+
+    // ── Guard rail #3: Validate study belongs to a project ──
+    const projectId = study.project_id;
+    if (!projectId) {
+      console.error(`❌ Discussion guide opener: study ID ${studyId} has no project_id — orphaned study`);
+      await client.chat.postEphemeral({
+        channel: meta.channelId || body.user.id,
+        user: body.user.id,
+        text: `❌ Study "${preselectStudyName}" is not linked to a project. Please run \`/qori-start\` to create a project first, then use \`/qori-brief\` to create a new study within it.`,
+      });
+      return;
+    }
+
+    // Extract study data for downstream use
+    const leadModeratorUserId: string = study.created_by || userId;
+    const studyPath: string | null = study.path ? decodeURIComponent(study.path) : null;
+    const variableContext: VariableContext = { projectId, studyId };
+
+    console.log(`✅ Discussion guide opener: study=${studyId}, project=${projectId}, name="${preselectStudyName}"`);
 
     // ── Load study variables for cascade pre-fill + readiness ──
     let cascadeBlocks: MutableBlock[] = [];
@@ -140,7 +171,7 @@ async function openDiscussionGuideModal({ ack, body, client }: SlackActionMiddle
     let methodologyValue: string | null = null;
 
     try {
-      if (studyPath && variableContext) {
+      if (studyPath) {
         const studyVars = await readStudyVariablesByContext(variableContext);
 
         // Cascade readiness check
@@ -168,12 +199,14 @@ async function openDiscussionGuideModal({ ack, body, client }: SlackActionMiddle
       console.warn('⚠️ Cascade readiness/prefill failed for discussion guide:', message);
     }
 
+    // Phase 2D: Include projectId in metadata for FK-based cascade operations
     const privateMetadata = JSON.stringify({
-      ...(meta || {}),
-      studyName,
+      channelId: meta.channelId,
+      studyName: preselectStudyName,
       studyId,
+      projectId,
       userId,
-    });
+    } satisfies StudySetupModalMetadata);
 
     // ── Cascade gate: warning-only view when required vars missing ──
     if (cascadeGate) {
@@ -184,7 +217,7 @@ async function openDiscussionGuideModal({ ack, body, client }: SlackActionMiddle
           elements: [
             {
               type: "mrkdwn",
-              text: `:speech_balloon: *${studyName}*`,
+              text: `:speech_balloon: *${preselectStudyName}*`,
             },
           ],
         },
@@ -216,7 +249,7 @@ async function openDiscussionGuideModal({ ack, body, client }: SlackActionMiddle
         elements: [
           {
             type: "mrkdwn",
-            text: `:speech_balloon: *${studyName}*\nBuilding a session guide from your approved brief.`,
+            text: `:speech_balloon: *${preselectStudyName}*\nBuilding a session guide from your approved brief.`,
           },
         ],
       };
@@ -291,23 +324,65 @@ async function handleDiscussionGuideSubmission({ ack, body, view, client }: Slac
   await ack();
 
   const values = view.state.values;
-  const meta = JSON.parse(view.private_metadata || '{}');
-  const { channelId, studyName } = meta;
 
-  if (!studyName) {
-    throw new Error('No study selected — private_metadata missing studyName');
+  // Phase 2D: Parse typed metadata with projectId from opener
+  let meta: StudySetupModalMetadata;
+  try {
+    meta = JSON.parse(view.private_metadata || '{}') as StudySetupModalMetadata;
+  } catch {
+    console.error('Failed to parse discussion guide modal metadata');
+    return;
   }
 
-  // Resolve study first so we can determine the target channel for messages
-  const resolved = await resolveStudyFromName(studyName);
-  if (!resolved) throw new Error(`Study "${studyName}" not found`);
-  const study = resolved.study;
-  const variableContext: VariableContext = { projectId: resolved.projectId, studyId: resolved.studyId };
+  const { channelId, studyName, studyId, projectId } = meta;
+
+  // Validate required metadata
+  if (!studyName || !studyId || !projectId) {
+    console.error('Missing required metadata in discussion guide submission:', { studyName, studyId, projectId });
+    await client.chat.postEphemeral({
+      channel: channelId || body.user.id,
+      user: body.user.id,
+      text: '❌ Missing study or project context. Please close this modal and try `/qori-plan` again.',
+    });
+    return;
+  }
+
+  console.log('🚀 ~ Discussion Guide Generator ~ studyName:', studyName, 'studyId:', studyId, 'projectId:', projectId);
+
+  // Fetch study by ID (not name) — Phase 2D pattern
+  const study = await getStudyById(studyId);
+  if (!study) {
+    console.error(`❌ Discussion guide handler: study ID ${studyId} not found`);
+    await client.chat.postEphemeral({
+      channel: channelId || body.user.id,
+      user: body.user.id,
+      text: `❌ Study "${studyName}" not found. It may have been deleted. Please try again.`,
+    });
+    return;
+  }
+
+  // ── Risk #4 validation: project_id mismatch check ──
+  // If study.project_id doesn't match metadata.projectId, something is wrong.
+  // Do not proceed — log, notify user, return without writing.
+  if (study.project_id !== projectId) {
+    console.error(
+      `❌ Discussion guide handler: project_id mismatch! metadata.projectId=${projectId}, study.project_id=${study.project_id}, studyId=${studyId}, studyName="${studyName}"`
+    );
+    await client.chat.postEphemeral({
+      channel: channelId || body.user.id,
+      user: body.user.id,
+      text: `❌ Project context mismatch detected. The study "${studyName}" belongs to a different project than expected. Please run \`/qori-plan\` from the correct project channel or contact support.`,
+    });
+    return;
+  }
+
+  // Build VariableContext from validated metadata
+  const variableContext: VariableContext = { projectId, studyId };
 
   // Resolve target channel: project's bound channel takes priority over trigger channel
   // This ensures success messages land in the project's dedicated channel, not where
   // the modal was triggered from (which may be a different project's channel).
-  const projectForChannel = await getProjectById(resolved.projectId);
+  const projectForChannel = await getProjectById(projectId);
   const targetChannel = projectForChannel?.channel_id || channelId;
 
   const extract = (blockId: string, actionId: string): string | null => {
