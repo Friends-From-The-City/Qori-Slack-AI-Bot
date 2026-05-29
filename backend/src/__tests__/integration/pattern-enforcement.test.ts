@@ -494,10 +494,8 @@ describe('pattern: folder structure alignment (Phase B-0.5)', () => {
     '07-implementation',
   ];
 
-  // Files explicitly excluded from migration (deferred/being removed)
-  const MIGRATION_EXCLUSIONS = [
-    'createStudyHandler.ts',      // Phase B-0.6: deferred to project-aware migration
-  ];
+  // Files explicitly excluded from migration (none currently — all handlers migrated)
+  const MIGRATION_EXCLUSIONS: string[] = [];
 
   it('no hardcoded old folder names in handlers (enforced)', () => {
     const commandsDir = join(SRC_ROOT, 'helpers/slack/commands');

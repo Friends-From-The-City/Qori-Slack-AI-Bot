@@ -17,9 +17,6 @@ import type { View } from '@slack/types';
 // Main /qori command
 import { qoriMainCommand, handleStudySelect } from './commands/qoriMainHandler';
 
-// Study creation
-import { startResearchHandler, handleAddTeamMember, handleCreateStudySubmission } from './commands/createStudyHandler';
-
 // Project creation (Phase 2C)
 import { projectStartCommand, handleProjectCreateSubmission, handleProjectActionButton } from './commands/projectStartHandler';
 import { handleViewClosed, handlePlanStudyNoop, handleStudySetupSkip, handleUserSelectOptions } from './commands/study/studyLifecycleHandler';
@@ -34,7 +31,7 @@ import { openResearchPlanModal } from './commands/modal-openers/planModalOpener'
 import { handlePlanSubmission } from './commands/planHandler';
 
 // Brief → plan/study transitions
-import { openPlanFromBrief, openStudyFromBrief } from './commands/modal-openers/briefToStudyHandler';
+import { openPlanFromBrief } from './commands/modal-openers/briefToStudyHandler';
 
 // Approval flows
 import { handleApprovePlan as approvePlan, handleConfirmApprovePlan as confirmApprovePlan, handleRequestChangesPlan as requestChangesPlan, handleRequestChangesPlanModal as requestChangesPlanSubmission, handleApproveBrief as approveBrief, handleConfirmApproveBrief as confirmApproveBrief, handleRequestChangesBrief as requestChangesBrief, handleRequestChangesBriefModal as requestChangesBriefSubmission } from './commands/approval/approvalFlowHandler';
@@ -237,9 +234,7 @@ slackApp.command('/run-template', runTemplateCommand);
 
 // ─── Study creation & lifecycle ─────────────────────────────────
 
-slackApp.action('add_user', handleAddTeamMember);
 slackApp.options('user_select', handleUserSelectOptions);
-slackApp.view('create_study_modal', handleCreateStudySubmission);
 slackApp.view('plan_study_modal', handlePlanStudyNoop);
 slackApp.view('study-setup-modal-start-research', handleStudySetupSkip);
 slackApp.view('delete-study-modal', handleDeleteStudySubmission);
@@ -266,10 +261,9 @@ slackApp.action('study_select', handleStudySelect);
 slackApp.action('create_research_plan', openResearchPlanModal);
 slackApp.view('research_plan_modal', handlePlanSubmission);
 
-// ─── Brief → plan/study transitions ────────────────────────────
+// ─── Brief → plan transition ─────────────────────────────────────
 
 slackApp.action('create_research_plan_from_brief', openPlanFromBrief);
-slackApp.action('create_study_from_brief', openStudyFromBrief);
 
 // ─── Approval flows ────────────────────────────────────────────
 

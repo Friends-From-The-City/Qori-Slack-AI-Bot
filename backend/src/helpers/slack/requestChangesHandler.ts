@@ -132,36 +132,26 @@ export async function handleApproveSubmission(
   if (type === 'brief') {
     const researchTeamChannelId = process.env.RESEARCH_TEAM_CHANNEL_ID || channelId;
 
-    const studyExists = !!(existingStudy && existingStudy.path);
-
-    let ctaButton;
-    if (studyExists && studyId && projectId) {
-      ctaButton = {
-        type: 'button',
-        text: { type: 'plain_text', text: 'Create Research Plan', emoji: true },
-        style: 'primary',
-        action_id: 'create_research_plan_from_brief',
-        value: JSON.stringify({ studyName, studyId, projectId, briefUrl: url, channelId: researchTeamChannelId }),
-      };
-    } else {
-      const briefDataForStudy = briefData || { project_title: studyName, brief_url: url };
-      ctaButton = {
-        type: 'button',
-        text: { type: 'plain_text', text: 'Create Research Study', emoji: true },
-        style: 'primary',
-        action_id: 'create_study_from_brief',
-        value: JSON.stringify({
-          studyName,
-          briefUrl: url,
-          briefData: briefDataForStudy,
-          channelId: researchTeamChannelId,
-        }),
-      };
+    // Study always exists at brief-approval time (created via /qori-start).
+    // Guard against missing context (edge case: old brief buttons before Phase 2D).
+    if (!studyId || !projectId) {
+      console.error(`❌ Brief approval missing context: studyId=${studyId}, projectId=${projectId}`);
+      await client.chat.postMessage({
+        channel: researchTeamChannelId,
+        text: `✅ *${studyName}* brief approved by <@${user}>.\n\n⚠️ Cannot offer "Create Research Plan" button — study context missing. Run \`/qori-plan\` manually.`,
+      });
+      return;
     }
 
-    const nextStepText = studyExists
-      ? 'The research brief has been approved. Next step: create the research plan.'
-      : 'The research brief has been approved. Next step: create the research study.';
+    const ctaButton = {
+      type: 'button',
+      text: { type: 'plain_text', text: 'Create Research Plan', emoji: true },
+      style: 'primary',
+      action_id: 'create_research_plan_from_brief',
+      value: JSON.stringify({ studyName, studyId, projectId, briefUrl: url, channelId: researchTeamChannelId }),
+    };
+
+    const nextStepText = 'The research brief has been approved. Next step: create the research plan.';
 
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -206,12 +196,9 @@ export async function handleApproveSubmission(
     if (existingStudy && existingStudy.created_by) {
       try {
         const im = await client.conversations.open({ users: existingStudy.created_by });
-        const dmText = studyExists
-          ? `*${studyName}* research brief approved by <@${user}>! You can now create the research plan.`
-          : `*${studyName}* research brief approved by <@${user}>! The research team has been notified to create the study.`;
         await client.chat.postMessage({
           channel: (im.channel as { id: string }).id,
-          text: dmText,
+          text: `*${studyName}* research brief approved by <@${user}>! You can now create the research plan.`,
         });
       } catch (err: unknown) {
         console.error('Failed to send DM to study creator:', err);

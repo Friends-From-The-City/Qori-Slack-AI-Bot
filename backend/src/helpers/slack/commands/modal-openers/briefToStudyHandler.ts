@@ -1,10 +1,9 @@
 /**
- * briefToStudyHandler.ts — Post-brief-approval modal openers
+ * briefToStudyHandler.ts — Post-brief-approval modal opener
  *
- * Extracted from events.js. Contains two handlers for actions triggered
- * after a brief is approved:
- * - create_research_plan_from_brief: opens plan modal with brief data pre-filled
- * - create_study_from_brief: resolves user, opens create study modal with brief data
+ * Opens the research plan modal from a brief approval button.
+ * The study already exists at brief-approval time (created via /qori-start),
+ * so this handler receives studyId and projectId in the button value.
  */
 
 import type { AllMiddlewareArgs, SlackActionMiddlewareArgs, BlockAction } from '@slack/bolt';
@@ -12,7 +11,6 @@ import type { View } from '@slack/types';
 
 import { getStudyById } from '../../../../services/research_study.service';
 import { researchPlanGeneratorModal, STUDY_DISPLAY_BLOCK_ID } from '../../ui/researchPlanGeneratorModal';
-import { createStudyModal } from '../../ui/createStudyModal';
 import { readStudyVariablesByContext, type VariableContext } from '../../../studyVariables';
 import { buildCascadeReadiness, buildCascadeBlocks } from '../../ui/cascadeReadinessBlocks';
 import type { StudySetupModalMetadata } from '../../ui/studySetupModal';
@@ -208,83 +206,4 @@ async function openPlanFromBrief({ ack, body, client }: SlackActionMiddlewareArg
   }
 }
 
-// ─── create_study_from_brief ─────────────────────────────────────
-
-async function openStudyFromBrief({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
-  await ack();
-
-  try {
-    const actionValue = (body as unknown as { actions: Array<{ value: string }> }).actions[0].value;
-    const { studyName, briefUrl, briefData, channelId } = JSON.parse(actionValue);
-
-    // If we have a requestedBy user ID, fetch user info to get display name
-    // Otherwise, try to look up user by requestor_name
-    let userDisplayName: string = briefData.requestor_name;
-    let requestedByUserId: string | null = briefData.requestedBy;
-
-    // If we don't have requestedBy but we have requestor_name, try to look it up
-    if (!requestedByUserId && briefData.requestor_name) {
-      try {
-        const usersList = await client.users.list({});
-        const members = usersList.members as Array<Record<string, any>>;
-        const foundUser = members.find(u =>
-          !u.is_bot && u.id !== 'USLACKBOT' && (
-            (u.profile?.real_name && u.profile.real_name.toLowerCase().includes(briefData.requestor_name.toLowerCase())) ||
-            (u.name && u.name.toLowerCase().includes(briefData.requestor_name.toLowerCase()))
-          ),
-        );
-        if (foundUser) {
-          requestedByUserId = foundUser.id;
-          userDisplayName = foundUser.profile?.real_name || foundUser.name || briefData.requestor_name;
-        }
-      } catch (error) {
-        console.error('Error looking up user by name:', error);
-      }
-    }
-
-    // If we have a requestedBy user ID, fetch user info to get display name
-    // IMPORTANT: The display name must match exactly what the user_select options handler returns
-    if (requestedByUserId) {
-      try {
-        const userInfo = await client.users.info({ user: requestedByUserId });
-        const user = userInfo.user as Record<string, any> | undefined;
-        userDisplayName = user?.profile?.real_name || user?.name || briefData.requestor_name;
-      } catch (error) {
-        console.error('Error fetching user info:', error);
-      }
-    }
-
-    // views.open DOES take trigger_id
-    await client.views.open({
-      trigger_id: body.trigger_id,
-      view: {
-        ...createStudyModal({
-          briefData: {
-            ...briefData,
-            briefUrl,
-            studyName,
-            requestedBy: requestedByUserId,
-            userDisplayName,
-          },
-        }),
-        private_metadata: JSON.stringify({
-          channelId,
-          userId: body.user.id,
-          isFromBrief: true,
-          briefData: {
-            ...briefData,
-            briefUrl,
-            studyName,
-            requestedBy: requestedByUserId,
-            userDisplayName,
-          },
-        }),
-      } as unknown as View,
-    });
-  } catch (error) {
-    const detail = (error as Record<string, unknown>)?.data ?? error;
-    console.error('Error opening create study modal from brief:', detail);
-  }
-}
-
-export { openPlanFromBrief, openStudyFromBrief };
+export { openPlanFromBrief };

@@ -13,7 +13,6 @@
  * Called by:
  * - projectStartHandler.ts → scaffoldProject()
  * - briefHandler.ts → scaffoldStudy()
- * - createStudyHandler.ts → scaffoldStudy()
  */
 
 import Handlebars from 'handlebars';
@@ -140,7 +139,7 @@ export async function scaffoldProject(
  * - {project-slug}/{study-slug}/03-fieldwork/observer-guidelines.md
  * - {project-slug}/{study-slug}/03-fieldwork/observer-guide-expanded.md
  *
- * Called by briefHandler.ts and createStudyHandler.ts when a study is created.
+ * Called by briefHandler.ts when a study is created.
  *
  * Partial failure semantics:
  * - README write failure = hard fail (throw)
