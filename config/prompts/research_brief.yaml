@@ -540,7 +540,7 @@ output_template: |
   {{/if}}
 
 output_options:
-  path: "01-planning/"
+  path: "01-brief/"
   filename: "{{selected_study}}-research-brief-{{current_date_iso}}.md"
 
 # ═══════════════════════════════════════════════════════════

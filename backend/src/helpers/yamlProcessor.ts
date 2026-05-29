@@ -7,17 +7,18 @@ import { createOrUpdateFileOnGitHub, type GitHubWriteResult } from './github';
 import { executeAiGenerationTasks } from './langchain';
 import { extractVariables, type EmitSpec, type ExtractionResult } from './variableExtractor';
 import {
-  readStudyVariables,
-  writeStudyVariables,
-  mergeVariables,
-  readUpstreamVariables,
-  readDiscoveryVariables,
-  writeDiscoveryVariables,
+  readStudyVariablesByContext,
+  writeStudyVariablesByContext,
+  mergeVariablesByContext,
+  readUpstreamVariablesByContext,
+  readDiscoveryVariablesByProject,
+  writeDiscoveryVariablesByProject,
   mergeDiscoveryVariables,
   readUpstreamDiscoveryVariables,
   type ConsumeSpec,
   type UpstreamVariables,
   type DiscoveryVariablesStructure,
+  type VariableContext,
 } from './studyVariables';
 
 // ---------------------------------------------------------------------------
@@ -187,8 +188,9 @@ export async function processYamlTemplate(
   rawYamlContent: string,
   inputValues: Record<string, any>,
   baseFolderEncoded: string,
-  extraFolder = 'primary-research',
+  extraFolder = '',
   aiCheck = false,
+  variableContext?: VariableContext,
 ): Promise<ProcessResult> {
   // 1. Parse the raw YAML content first
   const yamlConfig = yaml.load(rawYamlContent) as YamlConfig | null;
@@ -207,15 +209,23 @@ export async function processYamlTemplate(
   // 3.5 TRANSFORM PHASE: Read upstream variables if consumes spec exists
   const isDiscoveryScope = yamlConfig.discovery_scope === true;
   if (yamlConfig.consumes && yamlConfig.consumes.length > 0) {
+    // Require variableContext for ALL templates with consumes blocks (Phase 2D)
+    if (!variableContext) {
+      throw new Error(
+        `processYamlTemplate requires variableContext for template '${yamlConfig.id}' with consumes block. ` +
+        `Caller must resolve projectId/studyId and pass context.`
+      );
+    }
+
     try {
       const upstream: UpstreamVariables = isDiscoveryScope
         ? await readUpstreamDiscoveryVariables(
-            (inputValues._discovery_team as string) || '',
+            variableContext.projectId,
             (inputValues._discovery_type as string) || '',
             (inputValues.topic_slug as string) || '',
             yamlConfig.consumes,
           )
-        : await readUpstreamVariables(baseFolder, yamlConfig.consumes);
+        : await readUpstreamVariablesByContext(variableContext, yamlConfig.consumes);
 
       // Enforce cascade contracts: required variables must be present
       for (const spec of yamlConfig.consumes) {
@@ -336,6 +346,7 @@ export async function processYamlTemplate(
   const footer = buildTraceabilityFooter(yamlConfig, inputValues);
   const fullContent = outputTemplate + footer;
   const fullPath = path.posix.join(baseFolder, extraFolder, filePath, filename);
+
   const result = await createOrUpdateFileOnGitHub(fullPath, fullContent);
 
   // 8. EXTRACT PHASE: Runs AFTER document is written — non-blocking but trackable.
@@ -362,34 +373,50 @@ export async function processYamlTemplate(
         isDiscoveryScope &&
         inputValues.topic_slug &&
         inputValues._discovery_type &&
-        inputValues._discovery_team
+        inputValues.project_slug
       ) {
-        const team = inputValues._discovery_team as string;
-        const discoveryVars: DiscoveryVariablesStructure = await readDiscoveryVariables(
-          team,
-          inputValues._discovery_type as string,
-        );
-        const merged = mergeDiscoveryVariables(
-          discoveryVars,
-          extractionResult,
-          inputValues.topic_slug as string,
-          yamlConfig.id,
-          yamlConfig.version || '',
-        );
-        await writeDiscoveryVariables(team, inputValues._discovery_type as string, merged);
-        console.log(
-          `Extract: Wrote discovery variables for ${yamlConfig.id} to ${team}/_discovery/${inputValues._discovery_type}`,
-        );
+        // Discovery scope uses project-level storage (study_id = NULL)
+        if (!variableContext) {
+          console.warn(`Extract: Discovery scope but no variableContext - skipping Postgres write`);
+        } else {
+          const discoveryVars: DiscoveryVariablesStructure = await readDiscoveryVariablesByProject(
+            variableContext.projectId,
+            inputValues._discovery_type as string,
+          );
+          const merged = mergeDiscoveryVariables(
+            discoveryVars,
+            extractionResult,
+            inputValues.topic_slug as string,
+            yamlConfig.id,
+            yamlConfig.version || '',
+          );
+          await writeDiscoveryVariablesByProject(
+            variableContext.projectId,
+            inputValues._discovery_type as string,
+            merged,
+            inputValues.project_slug as string,
+          );
+          console.log(
+            `Extract: Wrote discovery variables for ${yamlConfig.id} to project:${variableContext.projectId}`,
+          );
+        }
       } else {
-        const studyVars = await readStudyVariables(baseFolder);
-        const merged = await mergeVariables(
+        // Study scope requires variableContext
+        if (!variableContext) {
+          throw new Error(
+            `Extract phase requires variableContext for study-scoped template '${yamlConfig.id}'.`
+          );
+        }
+        const studyVars = await readStudyVariablesByContext(variableContext);
+        const merged = await mergeVariablesByContext(
+          variableContext,
           studyVars,
           extractionResult,
           yamlConfig.id,
           yamlConfig.version || '',
         );
-        await writeStudyVariables(baseFolder, merged);
-        console.log(`Extract: Wrote variables for ${yamlConfig.id} to study-variables.json`);
+        await writeStudyVariablesByContext(variableContext, merged, baseFolder);
+        console.log(`Extract: Wrote variables for ${yamlConfig.id} to project:${variableContext.projectId}/study:${variableContext.studyId}`);
       }
 
       const variableCount = Object.values(extractionResult).reduce((sum, v) => {

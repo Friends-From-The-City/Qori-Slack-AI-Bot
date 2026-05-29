@@ -10,31 +10,30 @@ import type { AllMiddlewareArgs, SlackCommandMiddlewareArgs, SlackActionMiddlewa
 import type { ResearchQuestion, TargetBarrier } from '../../../types/cascade';
 
 import { analyzeNotesModal } from "../ui/analyzeNotesModal";
-import { getStudiesByUser, getResearchStudyWithRoles } from "../../../services/research_study.service";
+import { getStudiesByUser, resolveStudyFromName } from "../../../services/research_study.service";
 import { getActiveStudy, setActiveStudy } from "../../../services/slack-user-state.service";
 import { studyNotesService } from "../../../services";
 import sessionSummaryService from "../../../services/session-summary.service";
-import sessionObserverService from "../../../services/session_observer.service";
+import studyParticipantService from "../../../services/study_participant.service";
 import { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepoByPath, fetchFileFromRepo } from "../../../helpers/github";
 import { processYamlTemplate } from "../../../helpers/yamlProcessor";
-import { readStudyVariables } from '../../studyVariables';
+import { readStudyVariablesByContext, type VariableContext } from '../../studyVariables';
 
 // ─── Cascade context ─────────────────────────────────────────────
 
 interface CascadeContext {
   barrierCount: number;
   questionCount: number;
-  methodology: string | null;
+  methodology?: string;
 }
 
 /**
  * Read cascade context from study variables (brief-emitted vars).
  * Non-blocking: returns null if variables are unavailable.
  */
-const getCascadeContext = async (studyPath: string): Promise<CascadeContext | null> => {
-  if (!studyPath) return null;
+const getCascadeContext = async (variableContext: VariableContext): Promise<CascadeContext | null> => {
   try {
-    const studyVars = await readStudyVariables(decodeURIComponent(studyPath));
+    const studyVars = await readStudyVariablesByContext(variableContext);
     if (!studyVars || !studyVars.variables) return null;
 
     const vars = studyVars.variables;
@@ -49,7 +48,7 @@ const getCascadeContext = async (studyPath: string): Promise<CascadeContext | nu
 
     if (barrierCount === 0 && questionCount === 0 && !methodology) return null;
 
-    return { barrierCount, questionCount, methodology: methodology || null };
+    return { barrierCount, questionCount, methodology: methodology || undefined };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.warn("Could not read cascade context for study:", message);
@@ -102,6 +101,36 @@ interface NoteFile {
   file_url: string | null;
 }
 
+// ─── Session mapping (participants → modal sessions) ────────────
+
+/** Map participants to the Session shape expected by analyzeNotesModal. */
+interface MappedSession {
+  id: number | string;
+  participant?: {
+    participant_name?: string;
+    scheduled_date?: string;
+    scheduled_time?: string;
+  };
+}
+
+interface ParticipantRecord {
+  id: number;
+  participant_name?: string;
+  scheduled_date?: string | null;
+  scheduled_time?: string | null;
+}
+
+const mapParticipantsToSessions = (participants: ParticipantRecord[]): MappedSession[] => {
+  return participants.map(p => ({
+    id: p.id,
+    participant: {
+      participant_name: p.participant_name,
+      scheduled_date: p.scheduled_date || undefined,
+      scheduled_time: p.scheduled_time || undefined,
+    }
+  }));
+};
+
 // ─── Command handler ────────────────────────────────────────────
 
 const analyzeNotesHandler = async ({ ack, body, client }: SlackCommandMiddlewareArgs & AllMiddlewareArgs): Promise<void> => {
@@ -111,13 +140,43 @@ const analyzeNotesHandler = async ({ ack, body, client }: SlackCommandMiddleware
     const studies = await getStudiesByUser(body.user_id);
     const activeStudyId: number | null = await getActiveStudy(body.user_id);
 
+    // Pre-load sessions if there's an active study (avoids "no sessions" on pre-selected study)
+    let sessions: unknown[] = [];
+    let cascadeContext: CascadeContext | null = null;
+    if (activeStudyId) {
+      try {
+        // Find the study name for cascade context lookup
+        const activeStudy = studies.find((s: { id: number }) => s.id === activeStudyId);
+        const studyName = activeStudy?.name;
+
+        const [participantsResult, cascadeResult] = await Promise.all([
+          studyParticipantService.getParticipantsByStudy(activeStudyId).catch((err) => {
+            const message = err instanceof Error ? err.message : String(err);
+            console.warn("Warning: Could not pre-load participants:", message);
+            return [];
+          }),
+          studyName ? resolveStudyFromName(studyName).then(resolved =>
+            resolved ? getCascadeContext({ projectId: resolved.projectId, studyId: resolved.studyId }) : null
+          ).catch(() => null) : Promise.resolve(null),
+        ]);
+        sessions = mapParticipantsToSessions(participantsResult as ParticipantRecord[]);
+        cascadeContext = cascadeResult;
+        console.log(`✅ Pre-loaded ${sessions.length} sessions for active study ID ${activeStudyId}`);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.warn("Warning: Could not pre-load sessions for active study:", message);
+      }
+    }
+
     await client.views.open({
       trigger_id: body.trigger_id,
-      view: analyzeNotesModal(studies, [], [], {
+      // @ts-expect-error — pre-existing type mismatch from require() → import migration
+      view: analyzeNotesModal(studies, [], sessions, {
         showStudy: true,
-        showSession: false,
+        showSession: activeStudyId ? true : false,
         showNotes: false,
         selectedStudy: activeStudyId,
+        cascadeContext,
       })
     });
 
@@ -198,7 +257,12 @@ const handleAnalyzeNotesSubmission = async ({ ack, body, view, client }: SlackVi
       console.warn("Warning: Could not fetch some observer notes:", message);
     }
 
-    const study = await getResearchStudyWithRoles(studyName);
+    const resolved = await resolveStudyFromName(studyName);
+    if (!resolved) {
+      throw new Error(`Study "${studyName}" not found`);
+    }
+    const { study, projectId, studyId: resolvedStudyId } = resolved;
+    const variableContext: VariableContext = { projectId, studyId: resolvedStudyId };
 
     // Fetch GitHub content for each note file in parallel
     const noteContentPromises = noteDetails.map(async (note: NoteDetail) => {
@@ -276,8 +340,17 @@ const handleAnalyzeNotesSubmission = async ({ ack, body, view, client }: SlackVi
 
     const yamlTemplateFile = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, "session_summary.yaml");
 
-    // @ts-expect-error — pre-existing type mismatch from require() → import migration
-    const renderedYaml = await processYamlTemplate(yamlTemplateFile.content, templateData, study?.path);
+    const studyPath = study?.path;
+    if (!studyPath) throw new Error('Unexpected: study.path missing after resolution');
+
+    const renderedYaml = await processYamlTemplate(
+      yamlTemplateFile.content,
+      templateData,
+      studyPath,
+      '',
+      false,
+      variableContext
+    );
 
     const { result } = renderedYaml;
     const urlParts: string[] = result.path.split('/');
@@ -380,24 +453,24 @@ const handleStudySelectionChange = async ({ ack, body, client }: SlackActionMidd
     const studyId = parseInt(selectedStudyOption.value);
     const studyName: string = selectedStudyOption.text.text;
 
-    let sessions: unknown[] = [];
+    let sessions: MappedSession[] = [];
     let cascadeContext: CascadeContext | null = null;
     try {
-      const study = await getResearchStudyWithRoles(studyName);
-      const [sessionsResult, cascadeResult] = await Promise.all([
-        sessionObserverService.getObserverRequestsByStudy(studyId).catch((err) => {
+      const resolved = await resolveStudyFromName(studyName);
+      const [participantsResult, cascadeResult] = await Promise.all([
+        studyParticipantService.getParticipantsByStudy(studyId).catch((err) => {
           const message = err instanceof Error ? err.message : String(err);
-          console.warn("Warning: Could not fetch sessions:", message);
+          console.warn("Warning: Could not fetch participants:", message);
           return [];
         }),
-        study?.path ? getCascadeContext(study.path) : Promise.resolve(null),
+        resolved ? getCascadeContext({ projectId: resolved.projectId, studyId: resolved.studyId }) : Promise.resolve(null),
       ]);
-      sessions = sessionsResult;
+      sessions = mapParticipantsToSessions(participantsResult as ParticipantRecord[]);
       cascadeContext = cascadeResult;
-      console.log(`✅ Loaded ${sessions.length} sessions for study "${studyName}"${cascadeContext ? ` (cascade: ${cascadeContext.barrierCount} barriers, ${cascadeContext.questionCount} questions)` : ''}`);
+      console.log(`✅ Loaded ${sessions.length} participants for study "${studyName}"${cascadeContext ? ` (cascade: ${cascadeContext.barrierCount} barriers, ${cascadeContext.questionCount} questions)` : ''}`);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      console.warn("Warning: Could not fetch sessions:", message);
+      console.warn("Warning: Could not fetch participants:", message);
     }
 
     const studies = await getStudiesByUser(body.user.id);
@@ -405,7 +478,6 @@ const handleStudySelectionChange = async ({ ack, body, client }: SlackActionMidd
     await client.views.update({
       view_id: view.id,
       hash: view.hash,
-      // @ts-expect-error — pre-existing type mismatch from require() → import migration
       view: analyzeNotesModal(studies, [], sessions, {
         showStudy: true,
         showSession: true,
@@ -444,23 +516,23 @@ const handleSessionSelectionChange = async ({ ack, body, client }: SlackActionMi
     const studyId = parseInt(selectedStudyOption.value);
     const studyName: string = selectedStudyOption.text.text;
 
-    const study = await getResearchStudyWithRoles(studyName);
-    const [studies, sessions, cascadeContext] = await Promise.all([
+    const resolved = await resolveStudyFromName(studyName);
+    const [studies, participantsResult, cascadeContext] = await Promise.all([
       getStudiesByUser(body.user.id),
-      sessionObserverService.getObserverRequestsByStudy(studyId).catch((err) => {
+      studyParticipantService.getParticipantsByStudy(studyId).catch((err: Error) => {
         const message = err instanceof Error ? err.message : String(err);
-        console.warn("Warning: Could not fetch sessions:", message);
+        console.warn("Warning: Could not fetch participants:", message);
         return [];
       }),
-      study?.path ? getCascadeContext(study.path) : Promise.resolve(null),
+      resolved ? getCascadeContext({ projectId: resolved.projectId, studyId: resolved.studyId }) : Promise.resolve(null),
     ]);
+    const sessions = mapParticipantsToSessions(participantsResult as ParticipantRecord[]);
 
     if (!selectedSessionOption || selectedSessionOption.value === "no_sessions") {
       console.log("🚀 ~ No session selected, showing sessions only");
       await client.views.update({
         view_id: view.id,
         hash: view.hash,
-        // @ts-expect-error — pre-existing type mismatch from require() → import migration
         view: analyzeNotesModal(studies, [], sessions, {
           showStudy: true,
           showSession: true,
@@ -475,28 +547,26 @@ const handleSessionSelectionChange = async ({ ack, body, client }: SlackActionMi
     const sessionId = parseInt(selectedSessionOption.value);
     const sessionName: string = selectedSessionOption.text.text;
 
-    // Get the session object to extract session_id
-    let sessionObject: Record<string, unknown> | null = null;
+    // Get the participant to extract participant_name
+    let participantName: string | null = null;
     try {
-      const allSessions = await sessionObserverService.getObserverRequestsByStudy(studyId);
-      // @ts-expect-error — pre-existing type mismatch from require() → import migration
-      sessionObject = allSessions.find((s: { id: number | string }) => s.id.toString() === selectedSessionOption.value) || null;
+      const allParticipants = await studyParticipantService.getParticipantsByStudy(studyId);
+      const participant = allParticipants.find((p) => p.id.toString() === selectedSessionOption.value);
+      participantName = participant?.participant_name || null;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      console.warn("Warning: Could not fetch session details:", message);
+      console.warn("Warning: Could not fetch participant details:", message);
     }
 
-    // Fetch notes for the specific session using session_id as participant_name
+    // Fetch notes for the specific participant
     let studyNotes: NoteDetail[] = [];
     try {
-      if (sessionObject && sessionObject.session_id) {
-        // @ts-expect-error — pre-existing type mismatch from require() → import migration
-        studyNotes = await studyNotesService.getStudyNotesByParticipantName(sessionObject.session_id);
-        console.log(`✅ Loaded ${studyNotes.length} notes for session_id "${sessionObject.session_id}" (session: "${sessionName}")`);
+      if (participantName) {
+        studyNotes = await studyNotesService.getStudyNotesByParticipantName(participantName);
+        console.log(`✅ Loaded ${studyNotes.length} notes for participant "${participantName}" (session: "${sessionName}")`);
       } else {
-        // No session_id means notes can't be scoped — show empty list rather than
-        // silently returning all study notes (which would display wrong items).
-        console.warn(`No session_id found for session "${sessionName}" — notes dropdown will be empty`);
+        // No participant_name means notes can't be scoped — show empty list
+        console.warn(`No participant_name found for session "${sessionName}" — notes dropdown will be empty`);
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

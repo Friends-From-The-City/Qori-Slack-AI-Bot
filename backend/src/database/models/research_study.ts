@@ -6,12 +6,15 @@ import {
   type InferAttributes,
   type InferCreationAttributes,
   type CreationOptional,
+  type ForeignKey,
   type NonAttribute,
   type HasManyGetAssociationsMixin,
   type HasManyAddAssociationMixin,
   type HasManyCountAssociationsMixin,
+  type BelongsToGetAssociationMixin,
   type Sequelize,
 } from 'sequelize';
+import type { Project } from './project';
 import type { StudyParticipant } from './study_participant';
 import type { ResearchStudyUserRole } from './research_study_user_role';
 import type { StudyNotes } from './study_notes';
@@ -24,7 +27,9 @@ class ResearchStudy extends Model<
 > {
   // — Attributes —
   declare id: CreationOptional<number>;
+  declare project_id: ForeignKey<number>;
   declare name: string;
+  declare slug: string | null;
   declare channel_name: string;
   declare description: string | null;
   declare link: string | null;
@@ -46,6 +51,10 @@ class ResearchStudy extends Model<
   declare countParticipants: HasManyCountAssociationsMixin;
   declare participants?: NonAttribute<StudyParticipant[]>;
 
+  // — Association mixins (project) —
+  declare getProject: BelongsToGetAssociationMixin<Project>;
+  declare project?: NonAttribute<Project>;
+
   // — Association mixins (other associations) —
   declare getUserRoles: HasManyGetAssociationsMixin<ResearchStudyUserRole>;
   declare userRoles?: NonAttribute<ResearchStudyUserRole[]>;
@@ -55,6 +64,12 @@ class ResearchStudy extends Model<
 
   // — Associations —
   static associate(models: Record<string, any>) {
+    this.belongsTo(models.Project, {
+      foreignKey: 'project_id',
+      as: 'project',
+      onDelete: 'CASCADE',
+    });
+
     this.hasMany(models.ResearchStudyUserRole, {
       foreignKey: 'research_id',
       as: 'userRoles',
@@ -95,9 +110,21 @@ export default (sequelize: Sequelize) => {
         primaryKey: true,
         autoIncrement: true,
       },
+      project_id: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        references: {
+          model: 'projects',
+          key: 'id',
+        },
+      },
       name: {
         type: DataTypes.STRING,
         allowNull: false,
+      },
+      slug: {
+        type: DataTypes.STRING(255),
+        allowNull: true,
       },
       channel_name: {
         type: DataTypes.STRING,

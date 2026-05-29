@@ -1,3 +1,9 @@
+// LEGACY: This handler uses pre-Phase-2 channel_config-based folder paths
+// via copyFilesToFolder. Phase B-0.6 migrates to project-aware scaffolding.
+// Until then, studies created via this flow get the old
+// {sub_folder_name}/research/{studyName}/ structure. See
+// docs/phase-2d-phase-b-06-stub.md.
+
 import type { AllMiddlewareArgs, SlackCommandMiddlewareArgs, SlackActionMiddlewareArgs, SlackViewMiddlewareArgs, BlockAction, ViewSubmitAction } from '@slack/bolt';
 
 import { createStudyModal } from '../ui/createStudyModal';
@@ -16,12 +22,6 @@ interface UserRolePair {
 interface CreateStudyMetadata {
   channelId: string;
   userId: string;
-  isFromRequest: boolean;
-  requestData?: {
-    project_title: string;
-    prepared_by: string;
-    requestedBy?: string;
-  };
 }
 
 // ─── Handlers ───────────────────────────────────────────────────────
@@ -131,9 +131,9 @@ async function handleCreateStudySubmission({ ack, body, view, client }: SlackVie
   try {
     const values = view.state.values;
     const metadata: CreateStudyMetadata = JSON.parse(view.private_metadata || '{}');
-    const { channelId, userId, isFromRequest, requestData } = metadata;
+    const { channelId, userId } = metadata;
 
-    console.log('📊 Parsed metadata:', { channelId, userId, isFromRequest, hasRequestData: !!requestData });
+    console.log('📊 Parsed metadata:', { channelId, userId });
 
     // Extract form values — Bolt view state values are loosely typed
     const studyName = values.study_name.value.value as string;
@@ -175,9 +175,7 @@ async function handleCreateStudySubmission({ ack, body, view, client }: SlackVie
     // Prepare payload for database
     const payload: Record<string, any> = {
       name: studyName,
-      description: isFromRequest
-        ? `Created from research request: ${requestData!.project_title}`
-        : `Research study created by ${user.real_name}`,
+      description: `Research study created by ${user.real_name}`,
       created_by: body.user.id,
       researcher_name: user.real_name,
       researcher_email: userEmail,
@@ -189,10 +187,6 @@ async function handleCreateStudySubmission({ ack, body, view, client }: SlackVie
       end_date: endDate,
       assignments: pairs,
     };
-
-    if (isFromRequest && requestData) {
-      payload.source_request = requestData;
-    }
 
     // @ts-expect-error — pre-existing type mismatch from require() → import migration
     await addResearchStudyWithRoles(payload);
@@ -210,19 +204,11 @@ async function handleCreateStudySubmission({ ack, body, view, client }: SlackVie
             type: 'section',
             text: { type: 'mrkdwn', text: `🔔 Hey <@${memberId}>, *${studyName}* has been created!` },
           },
-        ];
-
-        if (isFromRequest && requestData) {
-          notificationBlocks.push({
+          {
             type: 'section',
-            text: { type: 'mrkdwn', text: `*Original Request:* ${requestData.project_title}\n*Submitted by:* ${requestData.prepared_by}` },
-          });
-        }
-
-        notificationBlocks.push({
-          type: 'section',
-          text: { type: 'mrkdwn', text: `<${result.url}|:github: View on GitHub>` },
-        });
+            text: { type: 'mrkdwn', text: `<${result.url}|:github: View on GitHub>` },
+          },
+        ];
 
         await client.chat.postMessage({
           channel: memberId,
@@ -237,24 +223,8 @@ async function handleCreateStudySubmission({ ack, body, view, client }: SlackVie
       }
     }
 
-    // Notify the original requester if from request
-    if (isFromRequest && requestData?.requestedBy) {
-      try {
-        await client.chat.postMessage({
-          channel: requestData.requestedBy,
-          text: `✅ Great news! Your research request has been approved and a study has been created.\n\n*Study Name:* ${studyName}\n*Project:* ${requestData.project_title}\n\nThe research team will be in touch soon with next steps.`,
-        });
-        console.log(`✅ Requester notification sent to ${requestData.requestedBy}`);
-      } catch (requesterError) {
-        const requesterMessage = requesterError instanceof Error ? requesterError.message : String(requesterError);
-        console.error('⚠️ Failed to notify requester:', requesterMessage);
-      }
-    }
-
     // Send success message to channel
-    const successMessage = isFromRequest
-      ? `✅ Study *${studyName}* has been created from the research request!`
-      : `✅ Study *${studyName}* has been created successfully!`;
+    const successMessage = `✅ Study *${studyName}* has been created successfully!`;
 
     try {
       await client.chat.postMessage({

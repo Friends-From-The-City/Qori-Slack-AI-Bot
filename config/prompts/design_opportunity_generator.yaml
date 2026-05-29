@@ -405,7 +405,7 @@ output_template: |
   | research_questions | research_brief | Question addressing |
 
 output_options:
-  path: "04-analysis/design-opportunities/"
+  path: "04-synthesis/"
   filename: "{{selected_study}}-design-opportunities-{{current_date_iso}}.md"
 
 # ═══════════════════════════════════════════════════════════

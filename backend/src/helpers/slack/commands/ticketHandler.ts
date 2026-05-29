@@ -8,7 +8,7 @@
 
 import type { AllMiddlewareArgs, SlackCommandMiddlewareArgs, SlackViewMiddlewareArgs, ViewSubmitAction, SlashCommand } from '@slack/bolt';
 
-import { getStudiesByUser, getResearchStudyWithRoles } from '../../../services/research_study.service';
+import { getStudiesByUser } from '../../../services/research_study.service';
 import { getActiveStudy, setActiveStudy } from '../../../services/slack-user-state.service';
 import sequelize from '../../../database';
 import type { StudyVariableAttributes } from '../../../types/models';
@@ -254,7 +254,7 @@ const handleStep1Submit = async ({ ack, body, view, client }: SlackViewMiddlewar
   try {
     const row = await StudyVariable.findOne({
       where: {
-        study_name: study.name,
+        study_id: study.id,
         variable_key: config.variableKey,
         scope: 'study',
       },
@@ -284,7 +284,7 @@ const handleStep1Submit = async ({ ack, body, view, client }: SlackViewMiddlewar
     try {
       // @ts-expect-error — pre-existing type mismatch from require() → import migration
       existingIssues = await CreatedIssue.findAll({
-        where: { study_name: study.name, audience },
+        where: { study_id: study.id, audience },
         attributes: ['ticket_id', 'github_issue_number', 'github_url'],
       });
     } catch (err) {
@@ -370,7 +370,7 @@ const handleStep2Submit = async ({ ack, body, view, client }: SlackViewMiddlewar
 
   const values = view.state.values;
   const meta = JSON.parse(view.private_metadata || '{}');
-  const { studyName, audience } = meta as { studyName: string; audience: AudienceKey };
+  const { studyId, studyName, audience } = meta as { studyId: number; studyName: string; audience: AudienceKey };
   const userId = body.user.id;
 
   const selectedTicketIds: string[] = values.ticket_selection?.ticket_checkboxes?.selected_options?.map((o: any) => o.value) || [];
@@ -395,21 +395,21 @@ const handleStep2Submit = async ({ ack, body, view, client }: SlackViewMiddlewar
   const nuggetDetails: Record<string, NuggetDetail> = {};
   try {
     const ticketRow = await StudyVariable.findOne({
-      where: { study_name: studyName, variable_key: config.variableKey, scope: 'study' },
+      where: { study_id: studyId, variable_key: config.variableKey, scope: 'study' },
       attributes: ['value'],
     });
     const typedTicketRow = ticketRow as unknown as StudyVariableAttributes | null;
     tickets = ((typedTicketRow?.value || []) as TicketCandidate[]).filter(t => selectedTicketIds.includes(t.id));
 
     const findingsRow = await StudyVariable.findOne({
-      where: { study_name: studyName, variable_key: 'prioritized_findings', scope: 'study' },
+      where: { study_id: studyId, variable_key: 'prioritized_findings', scope: 'study' },
       attributes: ['value'],
     });
     const typedFindingsRow = findingsRow as unknown as StudyVariableAttributes | null;
     findings = (typedFindingsRow?.value || []) as PrioritizedFinding[];
 
     const detailRows = await StudyVariable.findAll({
-      where: { study_name: studyName, variable_key: 'atomic_nugget_detail', scope: 'study' },
+      where: { study_id: studyId, variable_key: 'atomic_nugget_detail', scope: 'study' },
       attributes: ['item_key', 'value'],
     });
     const typedDetailRows = detailRows as unknown as StudyVariableAttributes[];
@@ -466,7 +466,7 @@ const handleStep2Submit = async ({ ack, body, view, client }: SlackViewMiddlewar
       if (CreatedIssue) {
         try {
           await CreatedIssue.create({
-            study_name: studyName,
+            study_id: studyId,
             audience,
             ticket_id: ticket.id,
             github_issue_number: data.number,
@@ -630,7 +630,7 @@ function formatIssueBody(
   if (ticket.addresses_findings?.length) {
     const owner = process.env.GITHUB_OWNER;
     const repo = process.env.GITHUB_REPO;
-    const readoutPath = `${studyName}/primary-research/05-reports/`;
+    const readoutPath = `${studyName}/05-readouts/`;
     const readoutLink = `https://github.com/${owner}/${repo}/tree/main/${readoutPath}`;
 
     const findingLines = ticket.addresses_findings.map(fId => {

@@ -1,7 +1,7 @@
 # ═══════════════════════════════════════════════════════════
 # IDENTITY
 # ═══════════════════════════════════════════════════════════
-id: analyze_notes
+id: session_summary
 name: analyze_session_notes
 label: "Analyze Notes"
 version: "v7.0"
@@ -513,7 +513,7 @@ output_template: |
   | methodology_selection | research_brief | Observation framing |
 
 output_options:
-  path: "03-fieldwork/session-summaries/"
+  path: "03-fieldwork/sessions/"
   filename: "{{participant_id}}-session-summary-{{current_date_iso}}.md"
 
 # ═══════════════════════════════════════════════════════════

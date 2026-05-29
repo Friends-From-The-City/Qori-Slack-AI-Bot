@@ -1,8 +1,11 @@
+// Load .env FIRST, before any other imports that might read env vars
+const dotenv = require("dotenv");
+dotenv.config();
+
 const Sentry = require("@sentry/node");
 const compression = require("compression");
 const cookieParser = require("cookie-parser");
 const cors = require("cors");
-const dotenv = require("dotenv");
 const express = require("express");
 const createError = require("http-errors");
 const logger = require("morgan");
@@ -12,11 +15,6 @@ const { authenticationMiddleware, sentryMiddleware } = require("./middleware"); 
 const { slackApp, slackExpressRouter } = require('./helpers/slack/events');
 const { createFolderWithDummyData, readFolderContents, listOrgRepos, listAllTopLevelFolders, readFolders } = require("./helpers/github");
 const { runRAG } = require("./helpers/rag");
-
-
-
-// load .env
-dotenv.config();
 
 const { NODE_ENV, DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT, PORT, DB_DIALECT } = process.env;
 

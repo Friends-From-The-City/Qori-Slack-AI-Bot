@@ -1,7 +1,7 @@
 # ═══════════════════════════════════════════════════════════
 # IDENTITY
 # ═══════════════════════════════════════════════════════════
-id: desk_research_processor
+id: desk_research
 name: run_desk_research
 label: "Desk Research"
 version: v7.0
@@ -374,7 +374,7 @@ output_template: |
 
 output_options:
   filename: "{{topic_slug}}-desk-research-{{current_date_iso}}.md"
-  path: "{{team}}/_discovery/desk-research/"
+  path: "{{project_slug}}/00-discovery/"
 
   delivery:
     github:

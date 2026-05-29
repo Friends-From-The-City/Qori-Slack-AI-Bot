@@ -83,7 +83,7 @@ class StudyParticipantService {
             // @ts-expect-error — pre-existing type mismatch from require() → import migration
             inputData,
             fileData.study_path,
-            'primary-research',
+            '',
             allParticipants,
           );
 

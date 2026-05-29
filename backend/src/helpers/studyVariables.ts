@@ -1,4 +1,5 @@
 // studyVariables.ts — Authoritative variable store backed by Postgres
+// Phase 2B refactor: Uses project_id + study_id FKs instead of study_name string.
 // Fallback: reads from GitHub study-variables.json if Postgres has no data (migration period)
 
 import { Op, literal } from 'sequelize';
@@ -9,6 +10,17 @@ const VARIABLES_DIR = '.variables';
 const VARIABLES_FILE = 'study-variables.json';
 const DISCOVERY_VARIABLES_FILE = 'discovery-variables.json';
 
+/**
+ * Maps YAML template IDs (used in consumes.source) to Postgres discovery_type values.
+ * When a template declares `consumes: [{source: 'desk_research', ...}]`, we need to
+ * look up variables stored under discovery_type 'desk-research'.
+ */
+const TEMPLATE_TO_DISCOVERY_TYPE: Record<string, string> = {
+  'desk_research': 'desk-research',
+  'stakeholder_synthesis': 'stakeholder-interviews',
+  'survey_synthesis': 'survey-synthesis',
+};
+
 // ═══════════════════════════════════════════════════════════
 // TYPE DEFINITIONS
 // ═══════════════════════════════════════════════════════════
@@ -18,6 +30,7 @@ export interface VariableSource {
   version: string | null;
   date?: string;
   dates?: string[];
+  artifact_ids?: string[];  // For aggregated sources from multiple discovery artifacts
 }
 
 export interface StoredVariable {
@@ -80,6 +93,8 @@ interface ExtractedVariable {
 
 interface SearchOptions {
   studyName?: string;
+  projectId?: number;
+  studyId?: number | null;
   limit?: number;
   offset?: number;
 }
@@ -87,6 +102,16 @@ interface SearchOptions {
 interface SearchResult {
   rows: unknown[];
   total: number;
+}
+
+/**
+ * Context for variable operations. Prefer using this over path-based lookups.
+ */
+export interface VariableContext {
+  projectId: number;
+  studyId?: number | null;
+  projectSlug?: string;
+  studySlug?: string;
 }
 
 // Sequelize model type alias — we access it dynamically so we use a loose type
@@ -178,7 +203,7 @@ function getStudyVariableModel(): StudyVariableModel | null {
   try {
     // Dynamic import to avoid circular dependencies and handle missing DB gracefully
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const sequelize = require('../database').default as Sequelize;
+    const sequelize = require('../database') as Sequelize;
     return (sequelize.models.StudyVariable as StudyVariableModel) || null;
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
@@ -189,7 +214,7 @@ function getStudyVariableModel(): StudyVariableModel | null {
 
 function getSequelizeInstance(): Sequelize {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  return require('../database').default as Sequelize;
+  return require('../database') as Sequelize;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -197,17 +222,21 @@ function getSequelizeInstance(): Sequelize {
 // ═══════════════════════════════════════════════════════════
 
 /**
- * Read study variables from Postgres. Falls back to GitHub JSON during migration.
- * Returns a structure compatible with the old JSON format for backward compat.
+ * Read study variables from Postgres using FK-based lookup.
+ * Preferred method for new code.
  */
-export async function readStudyVariables(studyBasePath: string): Promise<StudyVariablesStructure> {
-  const studySlug = extractStudySlug(studyBasePath);
+export async function readStudyVariablesByContext(ctx: VariableContext): Promise<StudyVariablesStructure> {
   const StudyVariable = getStudyVariableModel();
+  const studySlug = ctx.studySlug || `study-${ctx.studyId}`;
 
   if (StudyVariable) {
     try {
       const rows = await StudyVariable.findAll({
-        where: { study_name: studySlug, scope: 'study' },
+        where: {
+          project_id: ctx.projectId,
+          study_id: ctx.studyId ?? null,
+          scope: 'study',
+        },
       });
 
       if (rows.length > 0) {
@@ -215,50 +244,79 @@ export async function readStudyVariables(studyBasePath: string): Promise<StudyVa
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
-      console.warn('⚠️ Postgres read failed, falling back to GitHub:', message);
+      console.warn('⚠️ Postgres read failed:', message);
     }
   }
 
-  // Fallback: read from GitHub (migration period or Postgres unavailable)
-  return readStudyVariablesFromGitHub(studyBasePath);
+  // No data found — return empty structure
+  return createEmptyVariablesFile(studySlug);
 }
 
 /**
- * Write study variables to Postgres. Also writes GitHub JSON as debugging artifact.
+ * @deprecated REMOVED in Phase 2B. Use readStudyVariablesByContext instead.
+ * @throws Always throws — path-based lookups are no longer supported.
  */
-export async function writeStudyVariables(studyBasePath: string, variablesData: StudyVariablesStructure): Promise<void> {
-  const studySlug = extractStudySlug(studyBasePath);
+export async function readStudyVariables(_studyBasePath: string): Promise<StudyVariablesStructure> {
+  throw new Error(
+    'readStudyVariables(path) removed in Phase 2B. ' +
+    'Use readStudyVariablesByContext({ projectId, studyId }) instead.'
+  );
+}
+
+/**
+ * Write study variables to Postgres using FK-based context.
+ * Preferred method for new code.
+ */
+export async function writeStudyVariablesByContext(
+  ctx: VariableContext,
+  variablesData: StudyVariablesStructure,
+  studyBasePath?: string
+): Promise<void> {
   const StudyVariable = getStudyVariableModel();
+  const studySlug = ctx.studySlug || variablesData.study || `study-${ctx.studyId}`;
 
   if (StudyVariable) {
     try {
-      await writeVariablesToPostgres(StudyVariable, studySlug, 'study', variablesData);
-      console.log(`✅ Variables written to Postgres for ${studySlug}`);
+      await writeVariablesToPostgresByContext(StudyVariable, ctx, variablesData);
+      console.log(`✅ Variables written to Postgres for project:${ctx.projectId}/study:${ctx.studyId}`);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
-      console.error(`❌ Postgres write failed for ${studySlug}:`, message);
-      // Fall through to GitHub write as safety net
+      console.error(`❌ Postgres write failed:`, message);
     }
   }
 
   // Also write GitHub JSON (debugging artifact, not authoritative)
-  try {
-    const filePath = `${studyBasePath}/primary-research/${VARIABLES_DIR}/${VARIABLES_FILE}`;
-    variablesData.last_updated = new Date().toISOString();
-    const content = JSON.stringify(variablesData, null, 2);
-    await createOrUpdateFileOnGitHub(filePath, content);
-  } catch (err: unknown) {
-    // Non-blocking: GitHub write failure doesn't affect cascade
-    const message = err instanceof Error ? err.message : String(err);
-    console.warn(`⚠️ GitHub variables artifact write failed (non-blocking): ${message}`);
+  if (studyBasePath) {
+    try {
+      const filePath = `${studyBasePath}/${VARIABLES_DIR}/${VARIABLES_FILE}`;
+      variablesData.last_updated = new Date().toISOString();
+      const content = JSON.stringify(variablesData, null, 2);
+      await createOrUpdateFileOnGitHub(filePath, content);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn(`⚠️ GitHub variables artifact write failed (non-blocking): ${message}`);
+    }
   }
 }
 
 /**
- * Merge extracted variables into Postgres using proper transactions.
- * Implements append_or_replace_per_participant atomically.
+ * @deprecated REMOVED in Phase 2B. Use writeStudyVariablesByContext instead.
+ * @throws Always throws — path-based lookups are no longer supported.
  */
-export async function mergeVariables(
+export async function writeStudyVariables(_studyBasePath: string, _variablesData: StudyVariablesStructure): Promise<void> {
+  throw new Error(
+    'writeStudyVariables(path, data) removed in Phase 2B. ' +
+    'Use writeStudyVariablesByContext(ctx, data) instead.'
+  );
+}
+
+/**
+ * Merge extracted variables into Postgres using FK-based context.
+ * Implements append_or_replace_per_participant atomically.
+ * Preferred method for new code.
+ */
+export async function mergeVariablesByContext(
+  ctx: VariableContext,
   existing: StudyVariablesStructure,
   extracted: Record<string, ExtractedVariable>,
   sourceTemplate: string,
@@ -267,12 +325,10 @@ export async function mergeVariables(
   const StudyVariable = getStudyVariableModel();
   const now = new Date().toISOString();
 
-  // If Postgres is unavailable, fall back to in-memory merge (old behavior)
   if (!StudyVariable) {
     return mergeVariablesInMemory(existing, extracted, sourceTemplate, sourceVersion);
   }
 
-  const studySlug = existing.study || 'unknown';
   const sequelize = getSequelizeInstance();
 
   try {
@@ -284,15 +340,15 @@ export async function mergeVariables(
         const values = extractedVar.value;
 
         if (isPool && Array.isArray(values)) {
-          // Determine participant for per-participant pools
           const firstItem = values[0] as Record<string, unknown> | undefined;
           const participantId = (firstItem?.participant || firstItem?.participant_id || null) as string | null;
 
-          // Delete existing entries for this variable + participant (replace per participant)
+          // Delete existing entries based on strategy
           if (poolStrategy === 'append_or_replace_per_participant' && participantId) {
             await StudyVariable.destroy({
               where: {
-                study_name: studySlug,
+                project_id: ctx.projectId,
+                study_id: ctx.studyId ?? null,
                 variable_key: key,
                 participant_id: participantId,
                 scope: 'study',
@@ -300,10 +356,10 @@ export async function mergeVariables(
               transaction: t,
             });
           } else if (poolStrategy === 'append' && participantId) {
-            // Same behavior: replace this participant's entries
             await StudyVariable.destroy({
               where: {
-                study_name: studySlug,
+                project_id: ctx.projectId,
+                study_id: ctx.studyId ?? null,
                 variable_key: key,
                 participant_id: participantId,
                 scope: 'study',
@@ -311,10 +367,10 @@ export async function mergeVariables(
               transaction: t,
             });
           } else if (poolStrategy === 'replace') {
-            // Full replace: delete all entries for this variable
             await StudyVariable.destroy({
               where: {
-                study_name: studySlug,
+                project_id: ctx.projectId,
+                study_id: ctx.studyId ?? null,
                 variable_key: key,
                 scope: 'study',
               },
@@ -329,7 +385,8 @@ export async function mergeVariables(
             const itemParticipant = (itemObj.participant || itemObj.participant_id || participantId) as string | null;
 
             await StudyVariable.create({
-              study_name: studySlug,
+              project_id: ctx.projectId,
+              study_id: ctx.studyId ?? null,
               variable_key: key,
               variable_type: 'pool',
               item_key: itemKey,
@@ -350,7 +407,8 @@ export async function mergeVariables(
           // Singleton: upsert single row
           await StudyVariable.destroy({
             where: {
-              study_name: studySlug,
+              project_id: ctx.projectId,
+              study_id: ctx.studyId ?? null,
               variable_key: key,
               scope: 'study',
             },
@@ -358,7 +416,8 @@ export async function mergeVariables(
           });
 
           await StudyVariable.create({
-            study_name: studySlug,
+            project_id: ctx.projectId,
+            study_id: ctx.studyId ?? null,
             variable_key: key,
             variable_type: 'singleton',
             item_key: null,
@@ -377,25 +436,39 @@ export async function mergeVariables(
       }
     });
 
-    console.log(`✅ mergeVariables: Transaction committed for ${studySlug} (${Object.keys(extracted).length} variables)`);
+    console.log(`✅ mergeVariablesByContext: Transaction committed for project:${ctx.projectId}/study:${ctx.studyId} (${Object.keys(extracted).length} variables)`);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error('❌ mergeVariables transaction failed:', message);
-    // Fall back to in-memory merge
+    console.error('❌ mergeVariablesByContext transaction failed:', message);
     return mergeVariablesInMemory(existing, extracted, sourceTemplate, sourceVersion);
   }
 
-  // Also update in-memory structure (for GitHub artifact write)
   return mergeVariablesInMemory(existing, extracted, sourceTemplate, sourceVersion);
 }
 
 /**
- * Read specific upstream variables for a template's consumes spec.
+ * @deprecated REMOVED in Phase 2B. Use mergeVariablesByContext instead.
+ * @throws Always throws — path-based lookups are no longer supported.
  */
-export async function readUpstreamVariables(studyBasePath: string, consumesSpec: ConsumeSpec[]): Promise<UpstreamVariables> {
+export async function mergeVariables(
+  _existing: StudyVariablesStructure,
+  _extracted: Record<string, ExtractedVariable>,
+  _sourceTemplate: string,
+  _sourceVersion: string,
+): Promise<StudyVariablesStructure> {
+  throw new Error(
+    'mergeVariables(existing, extracted, ...) removed in Phase 2B. ' +
+    'Use mergeVariablesByContext(ctx, existing, extracted, ...) instead.'
+  );
+}
+
+/**
+ * Read specific upstream variables using FK-based context.
+ * Preferred method for new code.
+ */
+export async function readUpstreamVariablesByContext(ctx: VariableContext, consumesSpec: ConsumeSpec[]): Promise<UpstreamVariables> {
   if (!consumesSpec || consumesSpec.length === 0) return {};
 
-  const studySlug = extractStudySlug(studyBasePath);
   const StudyVariable = getStudyVariableModel();
   const upstream: UpstreamVariables = {};
 
@@ -404,7 +477,8 @@ export async function readUpstreamVariables(studyBasePath: string, consumesSpec:
       for (const spec of consumesSpec) {
         const rows = await StudyVariable.findAll({
           where: {
-            study_name: studySlug,
+            project_id: ctx.projectId,
+            study_id: ctx.studyId ?? null,
             variable_key: spec.key,
             scope: 'study',
           },
@@ -424,33 +498,27 @@ export async function readUpstreamVariables(studyBasePath: string, consumesSpec:
             },
           };
         } else if (spec.required) {
-          console.warn(`⚠️ Required upstream variable "${spec.key}" not found for study ${studySlug}`);
+          console.warn(`⚠️ Required upstream variable "${spec.key}" not found for project:${ctx.projectId}/study:${ctx.studyId}`);
         }
       }
-
-      if (Object.keys(upstream).length > 0) return upstream;
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
-      console.warn('⚠️ Postgres upstream read failed, falling back to GitHub:', message);
-    }
-  }
-
-  // Fallback: read from GitHub
-  const studyVars = await readStudyVariablesFromGitHub(studyBasePath);
-  for (const spec of consumesSpec) {
-    const variable = studyVars.variables[spec.key];
-    if (variable) {
-      upstream[spec.key] = {
-        value: normalizeVariableFields(spec.key, variable.value),
-        source: variable.source,
-        confidence: variable.confidence,
-      };
-    } else if (spec.required) {
-      console.warn(`⚠️ Required upstream variable "${spec.key}" not found for study ${studyBasePath}`);
+      console.warn('⚠️ Postgres upstream read failed:', message);
     }
   }
 
   return upstream;
+}
+
+/**
+ * @deprecated REMOVED in Phase 2B. Use readUpstreamVariablesByContext instead.
+ * @throws Always throws — path-based lookups are no longer supported.
+ */
+export async function readUpstreamVariables(_studyBasePath: string, _consumesSpec: ConsumeSpec[]): Promise<UpstreamVariables> {
+  throw new Error(
+    'readUpstreamVariables(path, consumesSpec) removed in Phase 2B. ' +
+    'Use readUpstreamVariablesByContext(ctx, consumesSpec) instead.'
+  );
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -458,58 +526,93 @@ export async function readUpstreamVariables(studyBasePath: string, consumesSpec:
 // ═══════════════════════════════════════════════════════════
 
 /**
- * Read discovery variables from Postgres. Falls back to GitHub.
+ * Read discovery variables by project ID (study_id = NULL for discovery scope).
+ * Preferred method for new code.
  */
-export async function readDiscoveryVariables(team: string, discoveryType: string): Promise<DiscoveryVariablesStructure> {
+export async function readDiscoveryVariablesByProject(projectId: number, discoveryType: string): Promise<DiscoveryVariablesStructure> {
   const StudyVariable = getStudyVariableModel();
-  const discoveryStudyId = `discovery:${team}:${discoveryType}`;
 
   if (StudyVariable) {
     try {
       const rows = await StudyVariable.findAll({
-        where: { study_name: discoveryStudyId, scope: 'discovery' },
+        where: {
+          project_id: projectId,
+          study_id: null,
+          scope: 'discovery',
+        },
       });
 
       if (rows.length > 0) {
-        return rowsToDiscoveryStructure(rows, team, discoveryType);
+        return rowsToDiscoveryStructure(rows, `project-${projectId}`, discoveryType);
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
-      console.warn('⚠️ Postgres discovery read failed, falling back to GitHub:', message);
+      console.warn('⚠️ Postgres discovery read failed:', message);
     }
   }
 
-  // Fallback: GitHub
-  return readDiscoveryVariablesFromGitHub(team, discoveryType);
+  // Return empty structure if no data
+  return createEmptyDiscoveryVariablesFile(`project-${projectId}`, discoveryType);
 }
 
 /**
- * Write discovery variables to Postgres. Also writes GitHub artifact.
+ * @deprecated REMOVED in Phase 2B. Use readDiscoveryVariablesByProject instead.
+ * @throws Always throws — team-based lookups are no longer supported.
  */
-export async function writeDiscoveryVariables(team: string, discoveryType: string, variablesData: DiscoveryVariablesStructure): Promise<void> {
+export async function readDiscoveryVariables(_team: string, _discoveryType: string): Promise<DiscoveryVariablesStructure> {
+  throw new Error(
+    'readDiscoveryVariables(team, type) removed in Phase 2B. ' +
+    'Use readDiscoveryVariablesByProject(projectId, type) instead.'
+  );
+}
+
+/**
+ * Write discovery variables by project ID.
+ * Preferred method for new code.
+ */
+export async function writeDiscoveryVariablesByProject(
+  projectId: number,
+  discoveryType: string,
+  variablesData: DiscoveryVariablesStructure,
+  projectPath?: string
+): Promise<void> {
   const StudyVariable = getStudyVariableModel();
-  const discoveryStudyId = `discovery:${team}:${discoveryType}`;
 
   if (StudyVariable) {
     try {
-      await writeDiscoveryToPostgres(StudyVariable, discoveryStudyId, variablesData);
-      console.log(`✅ Discovery variables written to Postgres for ${discoveryStudyId}`);
+      await writeDiscoveryToPostgresByProject(StudyVariable, projectId, variablesData);
+      console.log(`✅ Discovery variables written to Postgres for project:${projectId}`);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       console.error('❌ Postgres discovery write failed:', message);
     }
   }
 
-  // Also write GitHub artifact
-  try {
-    const filePath = `${team}/_discovery/${discoveryType}/${VARIABLES_DIR}/${DISCOVERY_VARIABLES_FILE}`;
-    variablesData.last_updated = new Date().toISOString();
-    const content = JSON.stringify(variablesData, null, 2);
-    await createOrUpdateFileOnGitHub(filePath, content);
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.warn(`⚠️ GitHub discovery artifact write failed (non-blocking): ${message}`);
+  // Also write GitHub artifact if path provided
+  // Note: discoveryType is used for Postgres queries but NOT for file paths
+  // All discovery variables go to a single flat .variables/ folder
+  if (projectPath) {
+    try {
+      const filePath = `${projectPath}/00-discovery/${VARIABLES_DIR}/${DISCOVERY_VARIABLES_FILE}`;
+      variablesData.last_updated = new Date().toISOString();
+      const content = JSON.stringify(variablesData, null, 2);
+      await createOrUpdateFileOnGitHub(filePath, content);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn(`⚠️ GitHub discovery artifact write failed (non-blocking): ${message}`);
+    }
   }
+}
+
+/**
+ * @deprecated REMOVED in Phase 2B. Use writeDiscoveryVariablesByProject instead.
+ * @throws Always throws — team-based lookups are no longer supported.
+ */
+export async function writeDiscoveryVariables(_team: string, _discoveryType: string, _variablesData: DiscoveryVariablesStructure): Promise<void> {
+  throw new Error(
+    'writeDiscoveryVariables(team, type, data) removed in Phase 2B. ' +
+    'Use writeDiscoveryVariablesByProject(projectId, type, data) instead.'
+  );
 }
 
 /**
@@ -554,26 +657,108 @@ export function mergeDiscoveryVariables(
 
 /**
  * Read upstream discovery variables.
+ *
+ * Phase 2D: Changed from team-based to projectId-based lookup.
+ * Phase B-0: Fixed source resolution (spec.source → discovery type) and
+ * artifact aggregation (all artifacts in source type, not just one).
+ *
+ * Aggregation semantics:
+ * - Pool variables (arrays): concatenate values from all artifacts
+ * - Non-pool variables (scalars): most recent artifact wins (by source.date)
+ *
+ * See docs/known-limitations.md for non-pool aggregation limitations.
  */
 export async function readUpstreamDiscoveryVariables(
-  team: string,
+  projectId: number,
   discoveryType: string,
-  discoveryArtifactId: string,
+  _discoveryArtifactId: string,  // Preserved for API compat, no longer used for lookup
   consumesSpec: ConsumeSpec[],
 ): Promise<UpstreamVariables> {
   if (!consumesSpec || consumesSpec.length === 0) return {};
 
   const upstream: UpstreamVariables = {};
-  for (const spec of consumesSpec) {
-    const sourceType = spec.source_discovery_type || discoveryType;
-    const discoveryVars = await readDiscoveryVariables(team, sourceType);
-    const artifactVars = discoveryVars.artifacts?.[discoveryArtifactId] || {};
-    const variable = artifactVars[spec.key];
 
-    if (variable) {
-      upstream[spec.key] = { value: variable.value, source: variable.source };
+  for (const spec of consumesSpec) {
+    // Resolve source template ID to discovery type
+    // spec.source = 'desk_research' → sourceType = 'desk-research'
+    let sourceType: string;
+    if (spec.source) {
+      const mappedType = TEMPLATE_TO_DISCOVERY_TYPE[spec.source];
+      if (mappedType) {
+        sourceType = mappedType;
+      } else {
+        console.warn(`⚠️ Unknown source template "${spec.source}" in consumes spec, using as-is`);
+        sourceType = spec.source;
+      }
+    } else {
+      // No source specified — use current discovery type (same-type reference)
+      sourceType = discoveryType;
+    }
+
+    const discoveryVars = await readDiscoveryVariablesByProject(projectId, sourceType);
+    const artifacts = discoveryVars.artifacts || {};
+
+    // Aggregate across ALL artifacts in this discovery type
+    const aggregatedArray: unknown[] = [];
+    const contributingDates: string[] = [];
+    const contributingArtifactIds: string[] = [];
+    let mostRecentScalar: { value: unknown; source: VariableSource; artifactId: string } | null = null;
+
+    for (const [artifactId, artifactVars] of Object.entries(artifacts)) {
+      const variable = artifactVars[spec.key];
+      if (!variable) continue;
+
+      // Filter by source template to avoid cross-template contamination
+      // e.g., when consuming knowledge_gaps from desk_research, don't include
+      // knowledge_gaps emitted by stakeholder_synthesis
+      if (spec.source && variable.source.template !== spec.source) {
+        continue;
+      }
+
+      contributingArtifactIds.push(artifactId);
+      if (variable.source.date) {
+        contributingDates.push(variable.source.date);
+      }
+
+      if (Array.isArray(variable.value)) {
+        // Pool variable — accumulate all values
+        aggregatedArray.push(...variable.value);
+      } else {
+        // Non-pool variable — track most recent
+        const varDate = variable.source.date || '';
+        const currentDate = mostRecentScalar?.source.date || '';
+        if (!mostRecentScalar || varDate > currentDate) {
+          mostRecentScalar = { value: variable.value, source: variable.source, artifactId };
+        }
+      }
+    }
+
+    // Build result for this variable
+    if (aggregatedArray.length > 0) {
+      // Pool variable — return aggregated array with full provenance
+      upstream[spec.key] = {
+        value: aggregatedArray,
+        source: {
+          template: sourceType,
+          version: `aggregated_from_${contributingArtifactIds.length}_artifacts`,
+          date: contributingDates.length > 0 ? contributingDates.sort().reverse()[0] : undefined,
+          dates: contributingDates.length > 0 ? contributingDates.sort() : undefined,
+          artifact_ids: contributingArtifactIds,
+        },
+      };
+    } else if (mostRecentScalar) {
+      // Non-pool variable — return most recent value
+      upstream[spec.key] = {
+        value: mostRecentScalar.value,
+        source: {
+          ...mostRecentScalar.source,
+          artifact_ids: [mostRecentScalar.artifactId],
+        },
+      };
     } else if (spec.required) {
-      console.warn(`⚠️ Required upstream discovery variable "${spec.key}" not found for artifact ${discoveryArtifactId}`);
+      console.warn(
+        `⚠️ Required upstream variable "${spec.key}" not found in discovery type "${sourceType}" for project ${projectId}`
+      );
     }
   }
 
@@ -587,23 +772,41 @@ export async function readUpstreamDiscoveryVariables(
 /**
  * Search variables across all studies (or one study) by variable keys and text terms.
  * Returns up to `limit` rows, sorted by source_date DESC.
+ * Now uses FK-based filtering when projectId/studyId are provided.
  */
 export async function searchVariablesAcrossStudies(
   variableKeys: string[],
   searchTerms: string[],
   options: SearchOptions = {},
 ): Promise<SearchResult> {
-  const { studyName, limit = 30, offset = 0 } = options;
+  const { studyName, projectId, studyId, limit = 30, offset = 0 } = options;
   const StudyVariable = getStudyVariableModel();
   if (!StudyVariable) return { rows: [], total: 0 };
 
-  // Build WHERE clause
+  // Build WHERE clause using FKs if provided
   const where: Record<string, unknown> = {
     variable_key: { [Op.in]: variableKeys },
     scope: 'study',
   };
-  if (studyName) {
-    where.study_name = studyName;
+
+  if (projectId !== undefined) {
+    where.project_id = projectId;
+  }
+  if (studyId !== undefined) {
+    where.study_id = studyId;
+  }
+
+  // Legacy: support studyName via join (deprecated path)
+  // Note: This path is deprecated and will be removed in Phase 2D
+  type IncludeOption = { association: string; where: Record<string, unknown>; required: boolean; attributes: string[] };
+  let include: IncludeOption[] | undefined;
+  if (studyName && !projectId && studyId === undefined) {
+    include = [{
+      association: 'study',
+      where: { slug: studyName },
+      required: true,
+      attributes: [],
+    }];
   }
 
   // Text matching: any search term matches against value::text
@@ -615,15 +818,26 @@ export async function searchVariablesAcrossStudies(
     ];
   }
 
-  const [rows, total] = await Promise.all([
-    StudyVariable.findAll({
-      where,
-      order: [['source_date', 'DESC'], ['id', 'DESC']],
-      limit,
-      offset,
-    }),
-    StudyVariable.count({ where }),
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const findOptions: any = {
+    where,
+    order: [['source_date', 'DESC'], ['id', 'DESC']],
+    limit,
+    offset,
+  };
+  if (include) findOptions.include = include;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const countOptions: any = { where };
+  if (include) countOptions.include = include;
+
+  const [rows, countResult] = await Promise.all([
+    StudyVariable.findAll(findOptions),
+    StudyVariable.count(countOptions),
   ]);
+
+  // count() may return a grouped result when include is used; extract total
+  const total = typeof countResult === 'number' ? countResult : (countResult as unknown as { count: number }[]).reduce((sum, g) => sum + g.count, 0);
 
   return { rows, total };
 }
@@ -636,6 +850,9 @@ function extractStudySlug(studyBasePath: string): string {
   if (!studyBasePath) return 'unknown';
   return decodeURIComponent(studyBasePath).split('/').pop() || 'unknown';
 }
+
+// NOTE: resolveProjectFromTeam and resolveContextFromSlug were removed in Phase 2B.
+// All callers must use FK-based APIs with explicit projectId/studyId.
 
 /**
  * Convert Postgres rows back to the old JSON structure (backward compat).
@@ -720,10 +937,12 @@ function rowsToDiscoveryStructure(rows: Model[], team: string, discoveryType: st
   };
 }
 
-async function writeVariablesToPostgres(
+/**
+ * Write variables to Postgres using FK-based context.
+ */
+async function writeVariablesToPostgresByContext(
   StudyVariable: StudyVariableModel,
-  studySlug: string,
-  scope: string,
+  ctx: VariableContext,
   variablesData: StudyVariablesStructure,
 ): Promise<void> {
   const sequelize = getSequelizeInstance();
@@ -731,9 +950,14 @@ async function writeVariablesToPostgres(
 
   await sequelize.transaction(async (t) => {
     for (const [key, variable] of Object.entries(variablesData.variables || {})) {
-      // Clear existing for this key
+      // Clear existing for this key using FK-based lookup
       await StudyVariable.destroy({
-        where: { study_name: studySlug, variable_key: key, scope },
+        where: {
+          project_id: ctx.projectId,
+          study_id: ctx.studyId ?? null,
+          variable_key: key,
+          scope: 'study',
+        },
         transaction: t,
       });
 
@@ -741,7 +965,8 @@ async function writeVariablesToPostgres(
         for (const item of variable.value) {
           const itemObj = item as Record<string, unknown>;
           await StudyVariable.create({
-            study_name: studySlug,
+            project_id: ctx.projectId,
+            study_id: ctx.studyId ?? null,
             variable_key: key,
             variable_type: 'pool',
             item_key: (itemObj.id as string) || null,
@@ -751,7 +976,7 @@ async function writeVariablesToPostgres(
             source_version: variable.source?.version || null,
             source_date: variable.source?.date || now,
             is_pool: true,
-            scope,
+            scope: 'study',
             stale: false,
             extracted_at: now,
             updated_at: now,
@@ -759,7 +984,8 @@ async function writeVariablesToPostgres(
         }
       } else {
         await StudyVariable.create({
-          study_name: studySlug,
+          project_id: ctx.projectId,
+          study_id: ctx.studyId ?? null,
           variable_key: key,
           variable_type: 'singleton',
           item_key: null,
@@ -769,7 +995,7 @@ async function writeVariablesToPostgres(
           source_version: variable.source?.version || null,
           source_date: variable.source?.date || now,
           is_pool: false,
-          scope,
+          scope: 'study',
           stale: false,
           extracted_at: now,
           updated_at: now,
@@ -779,18 +1005,28 @@ async function writeVariablesToPostgres(
   });
 }
 
-async function writeDiscoveryToPostgres(
+// NOTE: writeVariablesToPostgres(slug) removed in Phase 2B.
+// Use writeVariablesToPostgresByContext(ctx) instead.
+
+/**
+ * Write discovery variables to Postgres using project_id.
+ */
+async function writeDiscoveryToPostgresByProject(
   StudyVariable: StudyVariableModel,
-  discoveryStudyId: string,
+  projectId: number,
   variablesData: DiscoveryVariablesStructure,
 ): Promise<void> {
   const sequelize = getSequelizeInstance();
   const now = new Date().toISOString();
 
   await sequelize.transaction(async (t) => {
-    // Clear all existing for this discovery scope
+    // Clear all existing discovery variables for this project (study_id = NULL)
     await StudyVariable.destroy({
-      where: { study_name: discoveryStudyId, scope: 'discovery' },
+      where: {
+        project_id: projectId,
+        study_id: null,
+        scope: 'discovery',
+      },
       transaction: t,
     });
 
@@ -801,7 +1037,8 @@ async function writeDiscoveryToPostgres(
 
         for (const item of values) {
           await StudyVariable.create({
-            study_name: discoveryStudyId,
+            project_id: projectId,
+            study_id: null,
             variable_key: key,
             variable_type: isPool ? 'pool' : 'singleton',
             item_key: (typeof item === 'object' && item !== null && (item as Record<string, unknown>).id as string) || null,
@@ -823,12 +1060,15 @@ async function writeDiscoveryToPostgres(
   });
 }
 
+// NOTE: writeDiscoveryToPostgres(discoveryStudyId) removed in Phase 2B.
+// Use writeDiscoveryToPostgresByProject(projectId) instead.
+
 // ═══════════════════════════════════════════════════════════
 // GITHUB FALLBACK (migration period)
 // ═══════════════════════════════════════════════════════════
 
 async function readStudyVariablesFromGitHub(studyBasePath: string): Promise<StudyVariablesStructure> {
-  const filePath = `${studyBasePath}/primary-research/${VARIABLES_DIR}/${VARIABLES_FILE}`;
+  const filePath = `${studyBasePath}/${VARIABLES_DIR}/${VARIABLES_FILE}`;
   try {
     const file = await fetchFileFromRepoByPath(getContentRepo(), filePath);
     return JSON.parse(file.content) as StudyVariablesStructure;
@@ -841,19 +1081,8 @@ async function readStudyVariablesFromGitHub(studyBasePath: string): Promise<Stud
   }
 }
 
-async function readDiscoveryVariablesFromGitHub(team: string, discoveryType: string): Promise<DiscoveryVariablesStructure> {
-  const filePath = `${team}/_discovery/${discoveryType}/${VARIABLES_DIR}/${DISCOVERY_VARIABLES_FILE}`;
-  try {
-    const file = await fetchFileFromRepoByPath(getContentRepo(), filePath);
-    return JSON.parse(file.content) as DiscoveryVariablesStructure;
-  } catch (error: unknown) {
-    const err = error as { status?: number; message?: string };
-    if (err.status === 404 || err.message?.includes('Not Found') || err.message?.includes('Could not fetch file')) {
-      return createEmptyDiscoveryVariablesFile(team, discoveryType);
-    }
-    throw error;
-  }
-}
+// readDiscoveryVariablesFromGitHub DELETED in Phase 2D — dead code using old _discovery path pattern.
+// Discovery variables are now read via readDiscoveryVariablesByProject (Postgres-backed).
 
 // ═══════════════════════════════════════════════════════════
 // IN-MEMORY MERGE (fallback when Postgres unavailable)

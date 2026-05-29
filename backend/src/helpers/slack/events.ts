@@ -19,6 +19,9 @@ import { qoriMainCommand, handleStudySelect } from './commands/qoriMainHandler';
 
 // Study creation
 import { startResearchHandler, handleAddTeamMember, handleCreateStudySubmission } from './commands/createStudyHandler';
+
+// Project creation (Phase 2C)
+import { projectStartCommand, handleProjectCreateSubmission, handleProjectActionButton } from './commands/projectStartHandler';
 import { handleViewClosed, handlePlanStudyNoop, handleStudySetupSkip, handleUserSelectOptions } from './commands/study/studyLifecycleHandler';
 import { deleteStudyCommand, handleDeleteStudySubmission } from './commands/study/deleteStudyHandler';
 
@@ -82,6 +85,7 @@ import { handleMessageEvent } from './commands/messageEventHandler';
 import { studySetupModalPlanStudy } from './ui/studySetupModal';
 import { buildBriefEntryModal } from './ui/researchBriefEntryModal';
 import { getStudiesByUser } from '../../services/research_study.service';
+import { getProjectByChannelId } from '../../services/project.service';
 
 // ── Express router for Slack routes ─────────────────────────────
 
@@ -176,18 +180,38 @@ slackExpressRouter.post('/commands', (req: any, res: any) => {
 // ─── Slash commands (entry points) ──────────────────────────────
 
 slackApp.command('/qori', qoriMainCommand);
-slackApp.command('/qori-start', startResearchHandler);
+slackApp.command('/qori-start', projectStartCommand);
 slackApp.command('/qori-brief', async ({ ack, client, command }) => {
   await ack();
-  let leadResearcher = '';
+
+  // Phase 2D: Check if channel is bound to a project
+  const project = await getProjectByChannelId(command.channel_id);
+  if (!project) {
+    await client.chat.postEphemeral({
+      channel: command.channel_id,
+      user: command.user_id,
+      text: `This channel isn't linked to a project yet.\n\n*Option 1:* Run \`/qori-start\` to create a new project with a dedicated channel.\n*Option 2:* Use the brief button from a project's next-steps modal after creating one.`,
+    });
+    return;
+  }
+
+  let leadResearcher: string | null = null;
   try {
     const userInfo = await client.users.info({ user: command.user_id });
-    leadResearcher = userInfo.user?.real_name || userInfo.user?.profile?.display_name || '';
+    leadResearcher = userInfo.user?.real_name || userInfo.user?.profile?.display_name || null;
   } catch (err) {
     const errMessage = err instanceof Error ? err.message : String(err);
     console.warn('Could not fetch Slack profile for brief modal:', errMessage);
   }
-  const modal = await buildBriefEntryModal(leadResearcher, command.channel_id);
+
+  const modal = await buildBriefEntryModal({
+    leadResearcher,
+    channelId: command.channel_id,
+    projectId: project.id,
+    projectName: project.name,
+    projectSlug: project.slug,
+    source: 'qori_brief_command',
+  });
   // @ts-expect-error — modal blocks are Record<string,unknown>[] from JSON.parse; structurally valid at runtime
   await client.views.open({ trigger_id: command.trigger_id, view: modal });
 });
@@ -223,6 +247,13 @@ slackApp.view('delete-study-modal', handleDeleteStudySubmission);
 // EventFromType<'view_closed'> resolves to BaseSlackEvent which lacks .view.
 // The handler uses an inline type with { event: { view: { callback_id } } }.
 slackApp.event('view_closed', handleViewClosed as any);
+
+// ─── Project creation (Phase 2C) ─────────────────────────────────
+
+slackApp.view('project_create_modal', handleProjectCreateSubmission);
+slackApp.action('project_action_discovery', handleProjectActionButton);
+slackApp.action('project_action_brief', handleProjectActionButton);
+slackApp.action('project_action_library', handleProjectActionButton);
 
 // ─── Research brief ─────────────────────────────────────────────
 

@@ -378,7 +378,7 @@ output_template: |
   | target_barriers | research_brief | Barrier context |
 
 output_options:
-  path: "05-reports/"
+  path: "05-readouts/"
   filename: "{{selected_study}}-designer-readout-{{current_date_iso}}.md"
 
 # ═══════════════════════════════════════════════════════════

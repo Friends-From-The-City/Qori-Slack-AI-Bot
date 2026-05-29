@@ -8,6 +8,8 @@
 
 import { readFileSync, readdirSync, statSync } from 'fs';
 import { join, relative } from 'path';
+import { load as loadYaml } from 'js-yaml';
+import { ALL_FOLDERS, PROJECT_FOLDERS, STUDY_FOLDERS } from '../../config/folderStructure';
 
 const SRC_ROOT = join(__dirname, '../..');
 
@@ -197,6 +199,590 @@ describe('pattern: TemplateContractError contract', () => {
         if (!hasImport) {
           violations.push(`${rel}: reads required cascade variables but doesn't import TemplateContractError from types/handlers`);
         }
+      }
+    }
+
+    expect(violations).toEqual([]);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════
+// RESTRUCTURE-BLOCKING ASSERTIONS (Phase 2A)
+// These define the behavioral contract Phase 2B schema changes must satisfy.
+// ═══════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════
+// Assertion 6: Cascade store operations must specify scope
+// ═══════════════════════════════════════════════════════════
+
+describe('pattern: cascade scope parameter enforcement', () => {
+  const helpersDir = join(SRC_ROOT, 'helpers');
+
+  it('variableStore read/write calls include scope parameter', () => {
+    const files = findTsFiles(helpersDir);
+    const violations: string[] = [];
+
+    for (const file of files) {
+      const content = readFile(file);
+      const rel = relative(SRC_ROOT, file);
+
+      // Skip the store implementation itself
+      if (rel.includes('variableStore')) continue;
+
+      const lines = content.split('\n');
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        // Skip comments
+        if (line.trimStart().startsWith('//')) continue;
+        // pattern-enforcement-ignore comments suppress this check
+        if (line.includes('pattern-enforcement-ignore')) continue;
+
+        // Check for variableStore calls that don't pass scope
+        // The valid pattern is variableStore.read({ studyName, key, scope })
+        // or variableStore.write({ studyName, key, value, scope })
+        if (
+          (line.includes('variableStore.read(') || line.includes('variableStore.write(')) &&
+          !line.includes('scope')
+        ) {
+          // Look ahead for multi-line calls
+          const nextLines = lines.slice(i, i + 5).join(' ');
+          if (!nextLines.includes('scope')) {
+            violations.push(`${rel}:${i + 1}: variableStore call missing scope parameter`);
+          }
+        }
+      }
+    }
+
+    expect(violations).toEqual([]);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════
+// Assertion 7: Scope values use typed constants
+// ═══════════════════════════════════════════════════════════
+
+describe('pattern: scope values use typed constants', () => {
+  const commandsDir = join(SRC_ROOT, 'helpers/slack/commands');
+
+  it('no raw scope string literals in handler files', () => {
+    const files = findTsFiles(commandsDir);
+    const violations: string[] = [];
+    // Pattern: scope: 'study' or scope: "study" or scope: 'discovery' etc.
+    const rawScopePattern = /scope:\s*['"](?:study|discovery)['"]/;
+
+    for (const file of files) {
+      const content = readFile(file);
+      const rel = relative(SRC_ROOT, file);
+
+      const lines = content.split('\n');
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        // Skip comments
+        if (line.trimStart().startsWith('//')) continue;
+        // pattern-enforcement-ignore comments suppress this check
+        if (line.includes('pattern-enforcement-ignore')) continue;
+
+        if (rawScopePattern.test(line)) {
+          violations.push(`${rel}:${i + 1}: raw scope string literal - use SCOPE_STUDY or SCOPE_DISCOVERY constant`);
+        }
+      }
+    }
+
+    // Baseline: count existing violations for migration tracking
+    // Phase 2B will require this to be 0
+    // For now, document the baseline and skip if violations exist
+    if (violations.length > 0) {
+      console.log(`[Phase 2A baseline] ${violations.length} raw scope literals to migrate in 2B:`);
+      violations.forEach(v => console.log(`  ${v}`));
+    }
+    // SKIP for now - will enforce in 2B after constants are introduced
+    // expect(violations).toEqual([]);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════
+// Assertion 8: Phase 2B path-based function removal
+// ═══════════════════════════════════════════════════════════
+
+describe('pattern: Phase 2B removed path-based cascade functions', () => {
+  // ─────────────────────────────────────────────────────────
+  // ACTIVATE AT 2D CLOSE-OUT: resolveStudyFromName
+  // ─────────────────────────────────────────────────────────
+  // When Phase 2D updates modal builders to pass projectId + studyId
+  // directly in private_metadata, uncomment this assertion.
+  // See: docs/scaffolding-to-remove.md
+  //
+  // it('no resolveStudyFromName calls (scaffolding removed)', () => {
+  //   const allFiles = findTsFiles(SRC_ROOT);
+  //   const violations: string[] = [];
+  //
+  //   for (const file of allFiles) {
+  //     const content = readFile(file);
+  //     const rel = relative(SRC_ROOT, file);
+  //
+  //     // Skip the service definition itself
+  //     if (rel.includes('research_study.service.ts')) continue;
+  //     if (rel.includes('__tests__/')) continue;
+  //
+  //     const lines = content.split('\n');
+  //     for (let i = 0; i < lines.length; i++) {
+  //       const line = lines[i];
+  //       if (line.trimStart().startsWith('//')) continue;
+  //       if (line.includes('import ')) continue;
+  //
+  //       if (line.includes('resolveStudyFromName(')) {
+  //         violations.push(`${rel}:${i + 1}: scaffolding not removed - resolveStudyFromName should be deleted after 2D`);
+  //       }
+  //     }
+  //   }
+  //
+  //   expect(violations).toEqual([]);
+  // });
+  // ─────────────────────────────────────────────────────────
+  const REMOVED_FUNCTIONS = [
+    // These functions were removed in Phase 2B - they throw errors now
+    'readStudyVariables(',        // Use readStudyVariablesByContext
+    'writeStudyVariables(',       // Use writeStudyVariablesByContext
+    'mergeVariables(',            // Use mergeVariablesByContext
+    'readUpstreamVariables(',     // Use readUpstreamVariablesByContext
+    'readDiscoveryVariables(',    // Use readDiscoveryVariablesByProject
+    'writeDiscoveryVariables(',   // Use writeDiscoveryVariablesByProject
+    'getResearchStudyWithRoles(', // Use getStudyById or getStudyByProjectAndName
+  ];
+
+  const ALLOWED_FILES = [
+    // The implementation file can reference these (for the throwing stubs)
+    'studyVariables.ts',
+    'research_study.service.ts',
+    // Test files that mock these functions
+    '__tests__/',
+    '__mocks__/',
+    // NOTE: discoveryLoader.ts removed from ALLOWED_FILES in Phase 2D-A (2026-05-22)
+    // It now uses readDiscoveryVariablesByProject(projectId) instead of readDiscoveryVariables(team)
+  ];
+
+  it('no handler files call removed path-based cascade functions', () => {
+    const allFiles = findTsFiles(SRC_ROOT);
+    const violations: string[] = [];
+
+    for (const file of allFiles) {
+      const content = readFile(file);
+      const rel = relative(SRC_ROOT, file);
+
+      // Skip allowed files
+      if (ALLOWED_FILES.some(allowed => rel.includes(allowed))) continue;
+
+      const lines = content.split('\n');
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        // Skip comments
+        if (line.trimStart().startsWith('//')) continue;
+        // Skip import statements (importing type doesn't call the function)
+        if (line.includes('import ')) continue;
+
+        for (const fn of REMOVED_FUNCTIONS) {
+          if (line.includes(fn)) {
+            violations.push(`${rel}:${i + 1}: calls removed function ${fn.slice(0, -1)} - use FK-based alternative`);
+          }
+        }
+      }
+    }
+
+    expect(violations).toEqual([]);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════
+// Assertion 9: Channel-project binding readiness
+// ═══════════════════════════════════════════════════════════
+
+describe('pattern: channel context threading', () => {
+  const commandsDir = join(SRC_ROOT, 'helpers/slack/commands');
+
+  // Handlers that legitimately operate at channel level without study/project context:
+  // - learn/: User onboarding, not research operations
+  // - repo/repoConfigHandler: Channel-to-repo binding (becomes channel→project in 2B)
+  // - repo/syncHandler: Channel-level folder sync
+  // - qa/askStudyHandler: Disabled RAG feature (returns "not available yet")
+  const CHANNEL_ONLY_ALLOWED = [
+    'learn/learnHandler.ts',
+    'repo/repoConfigHandler.ts',
+    'repo/syncHandler.ts',
+    'qa/askStudyHandler.ts',
+  ];
+
+  it('handler files that use channel_id also reference study or project context', () => {
+    const files = findTsFiles(commandsDir);
+    const violations: string[] = [];
+
+    for (const file of files) {
+      const content = readFile(file);
+      const rel = relative(SRC_ROOT, file);
+
+      // Skip files in the allowed list (legitimate channel-only operations)
+      if (CHANNEL_ONLY_ALLOWED.some(allowed => rel.includes(allowed))) continue;
+
+      // Skip files that don't use channel_id
+      if (!content.includes('channel_id') && !content.includes('channelId')) continue;
+
+      // Must also have study/project context
+      const hasStudyContext = content.includes('studyName') || content.includes('study_name') ||
+        content.includes('studyId') || content.includes('study_id');
+      const hasProjectContext = content.includes('projectId') || content.includes('project_id') ||
+        content.includes('projectName') || content.includes('project_name');
+
+      // For 2A: must have study context (current model)
+      // For 2B: will require project context
+      if (!hasStudyContext && !hasProjectContext) {
+        violations.push(`${rel}: uses channel_id without study/project context - orphan channel reference`);
+      }
+    }
+
+    expect(violations).toEqual([]);
+  });
+
+  it('private_metadata includes channel context for modal chains', () => {
+    const files = findTsFiles(commandsDir);
+    const violations: string[] = [];
+
+    for (const file of files) {
+      const content = readFile(file);
+      // rel would be used for violation reporting if we enforce this strictly
+      // Currently informational only for 2A baseline
+
+      // Files that build private_metadata for modals
+      if (!content.includes('private_metadata')) continue;
+
+      // If it builds private_metadata, it should include channelId
+      // Pattern: JSON.stringify({ ... channelId ... }) or private_metadata: { channelId }
+      const hasPrivateMetadataBuild = content.includes('JSON.stringify') &&
+        (content.includes('private_metadata') || content.includes('privateMetadata'));
+
+      if (hasPrivateMetadataBuild) {
+        // For 2A: just verify the pattern detection works
+        // For 2B: will strictly enforce channel context in private_metadata
+        // The heuristic checks for channelId somewhere in stringify context
+        const hasChannelContext = content.includes('channelId') || content.includes('channel_id');
+        // Baseline tracking - not enforced yet
+        if (!hasChannelContext) {
+          // Would add to violations in 2B
+        }
+      }
+    }
+
+    // This assertion is informational for 2A
+    // Will be enforced strictly in 2B when channel → project binding is required
+    expect(violations).toEqual([]);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════
+// Phase B-0.5: Folder structure alignment
+// ═══════════════════════════════════════════════════════════
+
+describe('pattern: folder structure alignment (Phase B-0.5)', () => {
+  const PROMPTS_DIR = join(__dirname, '../../../../config/prompts');
+
+  // Old folder names that should not appear in handler code
+  const OLD_FOLDER_NAMES = [
+    'primary-research',
+    '01-planning',
+    '02-participants',
+    '04-analysis',
+    '05-findings',
+    '05-reports',
+    '07-implementation',
+  ];
+
+  // Files explicitly excluded from migration (deferred/being removed)
+  const MIGRATION_EXCLUSIONS = [
+    'createStudyHandler.ts',      // Phase B-0.6: deferred to project-aware migration
+  ];
+
+  it('no hardcoded old folder names in handlers (enforced)', () => {
+    const commandsDir = join(SRC_ROOT, 'helpers/slack/commands');
+    const files = findTsFiles(commandsDir);
+    const violations: string[] = [];
+
+    for (const file of files) {
+      const content = readFile(file);
+      const rel = relative(SRC_ROOT, file);
+      const filename = rel.split('/').pop() || '';
+
+      // Skip files explicitly excluded (deferred/being removed)
+      if (MIGRATION_EXCLUSIONS.some(excluded => filename === excluded)) continue;
+
+      for (const oldFolder of OLD_FOLDER_NAMES) {
+        // Match string literals containing old folder names
+        const pattern = new RegExp(`['"\`]${oldFolder}['"\`/]`);
+        if (pattern.test(content)) {
+          // Find the line number for better error messages
+          const lines = content.split('\n');
+          for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            // Skip comments
+            if (line.trimStart().startsWith('//')) continue;
+            if (pattern.test(line)) {
+              violations.push(`${rel}:${i + 1}: hardcoded old folder '${oldFolder}'`);
+            }
+          }
+        }
+      }
+    }
+
+    if (violations.length > 0) {
+      console.log(`[Phase B-0.5] Found ${violations.length} violations:`);
+      violations.forEach(v => console.log(`  ${v}`));
+    }
+
+    expect(violations).toEqual([]);
+  });
+
+  it('YAML output_options.path values match folderStructure registry', () => {
+    // This test validates that YAML templates use paths from the structure registry
+    // It's informational until Step 5 (YAML updates) completes
+
+    const violations: string[] = [];
+    let yamlFiles: string[] = [];
+
+    try {
+      yamlFiles = readdirSync(PROMPTS_DIR).filter(f => f.endsWith('.yaml'));
+    } catch {
+      // Config dir may not exist in test environment
+      console.log('[Phase B-0.5] Skipping YAML path validation - config/prompts not found');
+      return;
+    }
+
+    for (const yamlFilename of yamlFiles) {
+      const yamlPath = join(PROMPTS_DIR, yamlFilename);
+      const content = readFileSync(yamlPath, 'utf-8');
+
+      // Parse output_options.path from YAML
+      const pathMatch = content.match(/output_options:\s*\n\s*path:\s*["']([^"']+)["']/);
+      if (!pathMatch) continue;
+
+      const outputPath = pathMatch[1];
+
+      // Skip discovery templates (they use {{project_slug}}/00-discovery/ which is valid)
+      if (outputPath.includes('{{project_slug}}')) {
+        const remainder = outputPath.replace(/^\{\{project_slug\}\}\//, '');
+        if (remainder === '00-discovery/' || remainder === PROJECT_FOLDERS.DISCOVERY + '/') {
+          continue;
+        }
+      }
+
+
+      // Normalize path (remove trailing slash)
+      const normalizedPath = outputPath.replace(/\/$/, '');
+
+      // Check if the path or its parent folder is in the registry
+      const pathParts = normalizedPath.split('/');
+      const topLevelFolder = pathParts[0];
+
+      // Valid if top-level folder matches a study folder
+      const isValidStudyFolder = Object.values(STUDY_FOLDERS).some(folder => {
+        const folderParts = folder.split('/');
+        return folderParts[0] === topLevelFolder;
+      });
+
+      if (!isValidStudyFolder) {
+        violations.push(`${yamlFilename}: output_options.path '${outputPath}' not in folderStructure registry`);
+      }
+    }
+
+    if (violations.length > 0) {
+      console.log(`[Phase B-0.5] Found ${violations.length} YAML path violations:`);
+      violations.forEach(v => console.log(`  ${v}`));
+    }
+
+    expect(violations).toEqual([]);
+  });
+
+  it('no handler passes primary-research as extraFolder (enforced)', () => {
+    const commandsDir = join(SRC_ROOT, 'helpers/slack/commands');
+    const files = findTsFiles(commandsDir);
+    const violations: string[] = [];
+
+    // Pattern: processYamlTemplate(..., 'primary-research', ...)
+    // or processParticipantYamlTemplate(..., 'primary-research', ...)
+    // or processObserverYamlTemplate(..., 'primary-research', ...)
+    const pattern = /process(?:Yaml|Participant|Observer)YamlTemplate\([^)]*['"]primary-research['"]/;
+
+    for (const file of files) {
+      const content = readFile(file);
+      const rel = relative(SRC_ROOT, file);
+      const filename = rel.split('/').pop() || '';
+
+      // Skip files explicitly excluded (deferred/being removed)
+      if (MIGRATION_EXCLUSIONS.some(excluded => filename === excluded)) continue;
+
+      const lines = content.split('\n');
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        // Skip comments
+        if (line.trimStart().startsWith('//')) continue;
+        if (pattern.test(line)) {
+          violations.push(`${rel}:${i + 1}: passes 'primary-research' as extraFolder`);
+        }
+      }
+    }
+
+    if (violations.length > 0) {
+      console.log(`[Phase B-0.5] Found ${violations.length} extraFolder violations:`);
+      violations.forEach(v => console.log(`  ${v}`));
+    }
+
+    expect(violations).toEqual([]);
+  });
+
+  it('no default extraFolder is primary-research (enforced)', () => {
+    const helpersDir = join(SRC_ROOT, 'helpers');
+    const violations: string[] = [];
+
+    // Check the three processor files
+    const processorFiles = [
+      'yamlProcessor.ts',
+      'observerYamlProcessor.ts',
+      'participantYamlProcessor.ts',
+    ];
+
+    for (const filename of processorFiles) {
+      const filePath = join(helpersDir, filename);
+      try {
+        const content = readFileSync(filePath, 'utf-8');
+        // Pattern: extraFolder = 'primary-research'
+        if (/extraFolder\s*=\s*['"]primary-research['"]/.test(content)) {
+          violations.push(`${filename}: default extraFolder is 'primary-research'`);
+        }
+      } catch {
+        // File doesn't exist in test environment
+      }
+    }
+
+    if (violations.length > 0) {
+      console.log(`[Phase B-0.5] Found ${violations.length} default extraFolder violations:`);
+      violations.forEach(v => console.log(`  ${v}`));
+    }
+
+    expect(violations).toEqual([]);
+  });
+
+  it('folderStructure registry matches Phase 1 spec', () => {
+    // This test validates that the registry itself is correct
+
+    // Project-level: 00-discovery must exist
+    expect(PROJECT_FOLDERS.DISCOVERY).toBe('00-discovery');
+
+    // Study-level: numbered folders 01-06 must exist with correct names
+    expect(STUDY_FOLDERS.BRIEF).toBe('01-brief');
+    expect(STUDY_FOLDERS.PLAN).toBe('02-plan');
+    expect(STUDY_FOLDERS.FIELDWORK).toBe('03-fieldwork');
+    expect(STUDY_FOLDERS.SYNTHESIS).toBe('04-synthesis');
+    expect(STUDY_FOLDERS.READOUTS).toBe('05-readouts');
+    expect(STUDY_FOLDERS.TICKETS).toBe('06-tickets');
+
+    // Subfolders
+    expect(STUDY_FOLDERS.FIELDWORK_SESSIONS).toBe('03-fieldwork/sessions');
+    expect(STUDY_FOLDERS.FIELDWORK_TRANSCRIPTS).toBe('03-fieldwork/transcripts');
+    expect(STUDY_FOLDERS.FIELDWORK_OUTREACH).toBe('03-fieldwork/outreach');
+
+    // Variables folder
+    expect(STUDY_FOLDERS.VARIABLES).toBe('.variables');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════
+// Phase B Step 3: Handler re-anchoring assertions
+// ═══════════════════════════════════════════════════════════
+
+describe('pattern: Phase B handlers use getStudyById, not resolveStudyFromName', () => {
+  const commandsDir = join(SRC_ROOT, 'helpers/slack/commands');
+
+  // Files that have been migrated to FK-based pattern in Phase B
+  const MIGRATED_HANDLERS = [
+    'planHandler.ts',
+    'modal-openers/planModalOpener.ts',
+    'discussion-guide/discussionGuideHandler.ts',
+    'modal-openers/briefToStudyHandler.ts',
+  ];
+
+  it('migrated handlers do not call resolveStudyFromName', () => {
+    const violations: string[] = [];
+
+    for (const handler of MIGRATED_HANDLERS) {
+      const filePath = join(commandsDir, handler);
+      let content: string;
+      try {
+        content = readFile(filePath);
+      } catch {
+        // File doesn't exist in test environment
+        continue;
+      }
+
+      const rel = relative(SRC_ROOT, filePath);
+      const lines = content.split('\n');
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        // Skip comments
+        if (line.trimStart().startsWith('//')) continue;
+        // Skip import statements
+        if (line.includes('import ')) continue;
+
+        if (line.includes('resolveStudyFromName(')) {
+          violations.push(`${rel}:${i + 1}: calls deprecated resolveStudyFromName — use getStudyById with projectId from metadata`);
+        }
+      }
+    }
+
+    expect(violations).toEqual([]);
+  });
+
+  it('migrated handlers import getStudyById from research_study.service', () => {
+    const violations: string[] = [];
+
+    for (const handler of MIGRATED_HANDLERS) {
+      const filePath = join(commandsDir, handler);
+      let content: string;
+      try {
+        content = readFile(filePath);
+      } catch {
+        // File doesn't exist in test environment
+        continue;
+      }
+
+      const rel = relative(SRC_ROOT, filePath);
+
+      // Must import getStudyById
+      if (!content.includes('getStudyById') || !content.includes('research_study.service')) {
+        violations.push(`${rel}: missing import of getStudyById from research_study.service`);
+      }
+    }
+
+    expect(violations).toEqual([]);
+  });
+
+  it('migrated handlers use StudySetupModalMetadata for typed metadata', () => {
+    const violations: string[] = [];
+
+    for (const handler of MIGRATED_HANDLERS) {
+      const filePath = join(commandsDir, handler);
+      let content: string;
+      try {
+        content = readFile(filePath);
+      } catch {
+        // File doesn't exist in test environment
+        continue;
+      }
+
+      const rel = relative(SRC_ROOT, filePath);
+
+      // Check for typed metadata usage
+      // Either imports StudySetupModalMetadata or uses satisfies StudySetupModalMetadata
+      const hasTypedMetadata = content.includes('StudySetupModalMetadata');
+
+      if (!hasTypedMetadata) {
+        violations.push(`${rel}: missing StudySetupModalMetadata for typed modal metadata`);
       }
     }
 

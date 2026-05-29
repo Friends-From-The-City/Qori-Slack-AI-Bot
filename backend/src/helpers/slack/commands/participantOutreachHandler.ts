@@ -10,7 +10,7 @@ import { sessionConfirmationModal } from "../ui/outreach/sessionConfirmationModa
 import { sessionReminderModal } from "../ui/outreach/sessionReminderModal";
 import { thankyouModal } from "../ui/outreach/thankyouModal";
 import { basinInfoBlocks } from "../ui/outreach/basicInfoBlock";
-import { getResearchStudyWithRoles, getStudiesByUser } from "../../../services/research_study.service";
+import { resolveStudyFromName, getStudiesByUser } from "../../../services/research_study.service";
 import { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo } from "../../github";
 import { processYamlTemplate } from "../../yamlProcessor";
 import studyParticipantService from "../../../services/study_participant.service";
@@ -122,7 +122,9 @@ async function handleParticipantOutreachSubmit({ ack, body, view, client }: Slac
     return;
   }
 
-  const study = (await getResearchStudyWithRoles(finalSelectedStudy))!;
+  const resolved = await resolveStudyFromName(finalSelectedStudy);
+  if (!resolved) throw new Error(`Study "${finalSelectedStudy}" not found`);
+  const study = resolved.study;
 
   let nextModal;
 
@@ -239,7 +241,9 @@ async function handleInitialRecruitmentSubmit({ ack, body, view, client }: Slack
     const study_id = meta.studyId || "";
 
     // Get researcher info from study object (since it's no longer in the modal)
-    const study = (await getResearchStudyWithRoles(study_name))!;
+    const resolved = await resolveStudyFromName(study_name);
+    if (!resolved) throw new Error(`Study "${study_name}" not found`);
+    const study = resolved.study;
     const researcher_name = study?.researcher_name || meta.researcher_name || "";
     const researcher_email = study?.researcher_email || meta.researcher_email || "";
 
@@ -381,7 +385,9 @@ async function handleReschedulingRequestSubmit({ ack, body, view, client }: Slac
     const study_id = meta.studyId || "";
 
     // Get researcher info from study object (since it's no longer in the modal)
-    const study = (await getResearchStudyWithRoles(study_name))!;
+    const resolved = await resolveStudyFromName(study_name);
+    if (!resolved) throw new Error(`Study "${study_name}" not found`);
+    const study = resolved.study;
     const researcher_name = study?.researcher_name || meta.researcher_name || "";
     const researcher_email = study?.researcher_email || meta.researcher_email || "";
 
@@ -511,7 +517,9 @@ async function handleSessionConfirmationSubmit({ ack, body, view, client }: Slac
     const study_id = meta.studyId || "";
 
     // Get researcher info from study object (since it's no longer in the modal)
-    const study = (await getResearchStudyWithRoles(study_name))!;
+    const resolved = await resolveStudyFromName(study_name);
+    if (!resolved) throw new Error(`Study "${study_name}" not found`);
+    const study = resolved.study;
     const researcher_name = study?.researcher_name || meta.researcher_name || "";
     const researcher_email = study?.researcher_email || meta.researcher_email || "";
 
@@ -643,7 +651,9 @@ async function handleThankYouSubmit({ ack, body, view, client }: SlackViewMiddle
     const study_id = meta.studyId || "";
 
     // Get researcher info from study object (since it's no longer in the modal)
-    const study = (await getResearchStudyWithRoles(study_name))!;
+    const resolved = await resolveStudyFromName(study_name);
+    if (!resolved) throw new Error(`Study "${study_name}" not found`);
+    const study = resolved.study;
     const researcher_name = study?.researcher_name || meta.researcher_name || "";
     const researcher_email = study?.researcher_email || meta.researcher_email || "";
 
@@ -769,7 +779,9 @@ async function handleFollowUpSubmit({ ack, body, view, client }: SlackViewMiddle
     const study_id = meta.studyId || "";
 
     // Get researcher info from study object (since it's no longer in the modal)
-    const study = (await getResearchStudyWithRoles(study_name))!;
+    const resolved = await resolveStudyFromName(study_name);
+    if (!resolved) throw new Error(`Study "${study_name}" not found`);
+    const study = resolved.study;
     const researcher_name = study?.researcher_name || meta.researcher_name || "";
     const researcher_email = study?.researcher_email || meta.researcher_email || "";
 
@@ -891,7 +903,9 @@ async function handleSessionReminderSubmit({ ack, body, view, client }: SlackVie
     const study_id = meta.studyId || "";
 
     // Get researcher info from study object (since it's no longer in the modal)
-    const study = (await getResearchStudyWithRoles(study_name))!;
+    const resolved = await resolveStudyFromName(study_name);
+    if (!resolved) throw new Error(`Study "${study_name}" not found`);
+    const study = resolved.study;
     const researcher_name = study?.researcher_name || meta.researcher_name || "";
     const researcher_email = study?.researcher_email || meta.researcher_email || "";
 
@@ -1042,7 +1056,9 @@ async function handleAddParticipantSubmit({ ack, body, view, client }: SlackView
     }
     console.log(`🚀 ~ handleAddParticipantSubmit: study=${data.study_name}, participant=${(data as any).participant_id}`);
 
-    const study = (await getResearchStudyWithRoles(study_name))!;
+    const resolved = await resolveStudyFromName(study_name);
+    if (!resolved) throw new Error(`Study "${study_name}" not found`);
+    const study = resolved.study;
 
     // Snapshot per-person compensation from study budget
     const compensation = calculatePerPersonCompensation(study);
@@ -1072,7 +1088,7 @@ async function handleAddParticipantSubmit({ ack, body, view, client }: SlackView
 
     // Check if this participant brings the total to 3 and send milestone message
     const milestoneCheck = await studyParticipantService.checkStudyMilestone(study.id);
-    const githubUrl = `https://github.com/${process.env.GITHUB_OWNER}/${process.env.GITHUB_REPO}/tree/main/${study.path}/primary-research/02-participants/${study.name}_participant_tracker.md`;
+    const githubUrl = `https://github.com/${process.env.GITHUB_OWNER}/${process.env.GITHUB_REPO}/tree/main/${study.path}/03-fieldwork/${study.name}_participant_tracker.md`;
     if (milestoneCheck.hasReachedMilestone) {
       // Generate a milestone message for the channel
       const milestoneMessage = {

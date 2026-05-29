@@ -550,10 +550,15 @@ export interface EngineeringTicketCandidate {
  * Represents a row in the study_variables table. This is the storage format,
  * not the domain type — the `value` field contains one of the interfaces above
  * as JSONB.
+ *
+ * Phase 2B schema: Uses project_id + study_id FKs instead of study_name string.
+ * - project_id: Required. The project this variable belongs to.
+ * - study_id: NULL for discovery-scoped variables, set for study-scoped variables.
  */
 export interface StudyVariableRow {
   id: number;
-  study_name: string;
+  project_id: number;
+  study_id: number | null;
   variable_key: string;
   variable_type: string | null;
   item_key: string | null;
@@ -566,7 +571,7 @@ export interface StudyVariableRow {
   entry_count: number | null;
   is_pool: boolean;
   confidence: string | null;
-  scope: string | null;
+  scope: 'study' | 'discovery' | null;
   discovery_artifact_id: string | null;
   stale: boolean;
   extracted_at: Date;

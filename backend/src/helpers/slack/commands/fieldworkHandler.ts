@@ -7,7 +7,7 @@
 
 import type { AllMiddlewareArgs, SlackCommandMiddlewareArgs, SlackActionMiddlewareArgs, SlackViewMiddlewareArgs, BlockAction, ViewSubmitAction, ButtonAction } from '@slack/bolt';
 
-import { getStudiesByUser, getResearchStudyWithRoles } from '../../../services/research_study.service';
+import { getStudiesByUser } from '../../../services/research_study.service';
 import studyParticipantService from '../../../services/study_participant.service';
 import sessionObserverService from '../../../services/session_observer.service';
 import { getActiveStudy, setActiveStudy } from '../../../services/slack-user-state.service';

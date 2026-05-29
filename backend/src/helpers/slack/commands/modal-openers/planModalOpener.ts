@@ -6,6 +6,10 @@
  * fallback), injects cascade readiness blocks, and opens the plan modal
  * via views.update.
  *
+ * v7.0 (Phase 2D): Uses getStudyById + projectId from study record.
+ * Passes projectId in metadata for FK-based cascade operations.
+ * No longer uses deprecated resolveStudyFromName.
+ *
  * v6.1: Lead researcher changed to users_select. Pre-fills with study's
  * created_by (Slack user ID) or falls back to the opener's user ID.
  *
@@ -17,10 +21,11 @@
 import type { AllMiddlewareArgs, SlackActionMiddlewareArgs, BlockAction } from '@slack/bolt';
 import type { View } from '@slack/types';
 
-import { getResearchStudyWithRoles } from '../../../../services/research_study.service';
+import { getStudyById } from '../../../../services/research_study.service';
 import { researchPlanGeneratorModal, STUDY_DISPLAY_BLOCK_ID } from '../../ui/researchPlanGeneratorModal';
-import { readStudyVariables } from '../../../studyVariables';
+import { readStudyVariablesByContext, type VariableContext } from '../../../studyVariables';
 import { buildCascadeReadiness, buildCascadeBlocks } from '../../ui/cascadeReadinessBlocks';
+import type { StudySetupModalMetadata } from '../../ui/studySetupModal';
 
 // ─── Block Kit manipulation type ──────────────────────────────────
 
@@ -50,10 +55,10 @@ async function openResearchPlanModal({ ack, body, client }: SlackActionMiddlewar
     // Get selected study from the input block
     const selectedFromView = body.view.state?.values?.study_selection?.study_select?.selected_option || null;
     const preselectStudyName: string | null = selectedFromView?.text?.text || meta.studyName || null;
-    const preselectStudyId: string | null = selectedFromView?.value || meta.studyId || null;
+    const preselectStudyIdStr: string | null = selectedFromView?.value || meta.studyId || null;
 
     // Validate that study is selected
-    if (!preselectStudyName || preselectStudyId === 'loading' || preselectStudyId === 'no_studies') {
+    if (!preselectStudyName || !preselectStudyIdStr || preselectStudyIdStr === 'loading' || preselectStudyIdStr === 'no_studies' || preselectStudyIdStr === 'none') {
       await client.chat.postEphemeral({
         channel: meta.channelId || body.user.id,
         user: body.user.id,
@@ -62,29 +67,59 @@ async function openResearchPlanModal({ ack, body, client }: SlackActionMiddlewar
       return;
     }
 
+    // ── Guard rail #1: Parse studyId ──
+    // After validation above, preselectStudyIdStr is guaranteed to be a non-null string
+    const studyId = parseInt(preselectStudyIdStr, 10);
+    if (Number.isNaN(studyId)) {
+      console.error(`❌ Plan opener: invalid studyId "${preselectStudyIdStr}" — not a number`);
+      await client.chat.postEphemeral({
+        channel: meta.channelId || body.user.id,
+        user: body.user.id,
+        text: '❌ Invalid study selection. Please try again or contact support.',
+      });
+      return;
+    }
+
     const userId = body.user.id;
 
-    // Fetch study for lead researcher ID and path
-    let leadResearcherUserId: string = userId; // default: whoever opened the modal
-    let studyPath: string | null = null;
-    try {
-      const study = await getResearchStudyWithRoles(preselectStudyName);
-      if (study) {
-        if (study.created_by) leadResearcherUserId = study.created_by;
-        if (study.path) studyPath = decodeURIComponent(study.path);
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.warn('Could not fetch study record:', message);
+    // ── Guard rail #2: Fetch study by ID ──
+    const study = await getStudyById(studyId);
+    if (!study) {
+      console.error(`❌ Plan opener: study ID ${studyId} not found`);
+      await client.chat.postEphemeral({
+        channel: meta.channelId || body.user.id,
+        user: body.user.id,
+        text: `❌ Study "${preselectStudyName}" not found. It may have been deleted. Please refresh and try again.`,
+      });
+      return;
     }
+
+    // ── Guard rail #3: Validate study belongs to a project ──
+    const projectId = study.project_id;
+    if (!projectId) {
+      console.error(`❌ Plan opener: study ID ${studyId} has no project_id — orphaned study`);
+      await client.chat.postEphemeral({
+        channel: meta.channelId || body.user.id,
+        user: body.user.id,
+        text: `❌ Study "${preselectStudyName}" is not linked to a project. Please run \`/qori-start\` to create a project first, then use \`/qori-brief\` to create a new study within it.`,
+      });
+      return;
+    }
+
+    // Extract study data for downstream use
+    const leadResearcherUserId: string = study.created_by || userId;
+    const studyPath: string | null = study.path ? decodeURIComponent(study.path) : null;
+
+    console.log(`✅ Plan opener: study=${studyId}, project=${projectId}, name="${preselectStudyName}"`);
 
     // ── Cascade readiness check ──
     // When required variables are missing, show warning-only view (no form, no submit).
+    const variableContext: VariableContext = { projectId, studyId };
     let cascadeBlocks: MutableBlock[] = [];
     let cascadeGate = false;
     try {
       if (studyPath) {
-        const studyVars = await readStudyVariables(studyPath);
+        const studyVars = await readStudyVariablesByContext(variableContext);
         const cascadeData = buildCascadeReadiness(studyVars, 'research_plan');
         const rawBlocks = buildCascadeBlocks(cascadeData);
         if (rawBlocks.length > 0) {
@@ -97,12 +132,14 @@ async function openResearchPlanModal({ ack, body, client }: SlackActionMiddlewar
       console.warn('⚠️ Cascade readiness failed for research plan:', message);
     }
 
+    // Phase 2D: Include projectId in metadata for FK-based cascade operations
     const privateMetadata = JSON.stringify({
-      ...(meta || {}),
+      channelId: meta.channelId,
       studyName: preselectStudyName,
-      studyId: preselectStudyId,
+      studyId,
+      projectId,
       userId,
-    });
+    } satisfies StudySetupModalMetadata);
 
     if (cascadeGate) {
       // ── Warning-only view: no form fields, no submit ──

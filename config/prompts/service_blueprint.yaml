@@ -265,7 +265,7 @@ output_template: |
   {{ai_generated.service_blueprint_complete}}
 
 output_options:
-  path: "04-analysis/service-blueprint/"
+  path: "04-synthesis/"
   filename: "{{selected_study}}_service_blueprint_{{current_date}}.md"
 
 # ═══════════════════════════════════════════════════════════

@@ -9,7 +9,8 @@
 import type { AllMiddlewareArgs, SlackCommandMiddlewareArgs, SlackActionMiddlewareArgs, SlackViewMiddlewareArgs, BlockAction, ViewSubmitAction } from '@slack/bolt';
 
 import { buildReadoutModal } from '../ui/readoutModal';
-import { getResearchStudyWithRoles, getStudiesByUser } from '../../../services/research_study.service';
+import { resolveStudyFromName, getStudiesByUser } from '../../../services/research_study.service';
+import type { VariableContext } from '../../studyVariables';
 import { getActiveStudy, setActiveStudy } from '../../../services/slack-user-state.service';
 import { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo, fetchFileFromRepoByPath, readFolders, readFolderContents } from '../../github';
 import { processYamlTemplate } from '../../yamlProcessor';
@@ -85,12 +86,22 @@ interface ReadoutTemplateInput {
 async function checkReadoutExists(studyPath: string): Promise<ReadoutExistenceCheck | false> {
   try {
     const StudyVariable = sequelize.models?.StudyVariable;
-    if (!StudyVariable) return false;
+    const ResearchStudy = sequelize.models?.ResearchStudy;
+    if (!StudyVariable || !ResearchStudy) return false;
 
+    // Find the study by path to get its ID
     const studySlug: string = studyPath.split('/').pop() || studyPath;
+    const study = await ResearchStudy.findOne({
+      where: { name: studySlug },
+      attributes: ['id'],
+    });
+
+    if (!study) return false;
+    const studyId = (study as unknown as { id: number }).id;
+
     const row = await StudyVariable.findOne({
       where: {
-        study_name: studySlug,
+        study_id: studyId,
         variable_key: 'prioritized_findings',
         scope: 'study',
       },
@@ -111,14 +122,8 @@ async function checkReadoutExists(studyPath: string): Promise<ReadoutExistenceCh
 
 const ANALYSIS_SCANS: AnalysisScan[] = [
   { folder: '03-fieldwork/transcripts', label: 'transcripts' },
-  { folder: '03-fieldwork/coded-transcript-analysis', label: 'coded transcripts' },
-  { folder: '04-analysis/affinity-mapping', label: 'affinity mapping' },
-  { folder: '04-analysis/journey-mapping', label: 'journey mapping' },
-  { folder: '04-analysis/personas', label: 'personas' },
-  { folder: '04-analysis/usability-issues', label: 'usability issues' },
-  { folder: '04-analysis/jobs-to-be-done', label: 'jobs to be done' },
-  { folder: '04-analysis/design-opportunities', label: 'design opportunities' },
-  { folder: '04-analysis/service-blueprint', label: 'service blueprint' },
+  { folder: '03-fieldwork/sessions', label: 'session summaries' },
+  { folder: '04-synthesis', label: 'synthesis artifacts' },
 ];
 
 // ─── Open modal handler ─────────────────────────────────────────
@@ -259,7 +264,12 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }: SlackVi
       return;
     }
 
-    const selectedStudy = (await getResearchStudyWithRoles(selectedStudyName))!;
+    const resolved = await resolveStudyFromName(selectedStudyName);
+    if (!resolved) {
+      throw new Error(`Study "${selectedStudyName}" not found`);
+    }
+    const selectedStudy = resolved.study;
+    const variableContext: VariableContext = { projectId: resolved.projectId, studyId: resolved.studyId };
     if (selectedStudy) await setActiveStudy(body.user.id, selectedStudy.id);
     const folderPath: string = selectedStudy.path ?? '';
     const reportType: string = state.reportType;
@@ -273,7 +283,7 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }: SlackVi
     let readoutLink = '';
     if (reportType === 'github_issues') {
       const decodedFolderPath = decodeURIComponent(folderPath);
-      const findingsPath = `${decodedFolderPath}/primary-research/05-findings`;
+      const findingsPath = `${decodedFolderPath}/05-readouts`;
       readoutLink = `https://github.com/${process.env.GITHUB_OWNER}/${process.env.GITHUB_REPO}/tree/main/${findingsPath}`;
       console.log(`Fetching files from findings folder: ${findingsPath}`);
 
@@ -348,7 +358,7 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }: SlackVi
       // Fetch participant tracker file
       try {
         const decodedFolderPath = decodeURIComponent(folderPath);
-        const participantTrackerPath = `${decodedFolderPath}/primary-research/02-participants/${selectedStudyName}_participant_tracker.md`;
+        const participantTrackerPath = `${decodedFolderPath}/03-fieldwork/${selectedStudyName}_participant_tracker.md`;
         const participantTrackerFilename = `${selectedStudyName}_participant_tracker.md`;
 
         console.log(`Fetching participant tracker from: ${participantTrackerPath}`);
@@ -375,14 +385,15 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }: SlackVi
 
       // Build detected files list with relative paths
       const decodedPath = decodeURIComponent(folderPath);
-      const primaryResearchBase = `${decodedPath}/primary-research/`;
+      const studyBase = `${decodedPath}/`;
 
       // Deduplicate research plans — keep only the latest version by date
       const plansByBase: Record<string, string> = {};
       researchPlans.forEach((plan: { file_path: string | null; filename: string }) => {
         if (plan.file_path) {
-          const relativePath = plan.file_path.includes('primary-research/')
-            ? plan.file_path.split('primary-research/')[1]
+          // Extract relative path from study root
+          const relativePath = plan.file_path.startsWith(decodedPath)
+            ? plan.file_path.slice(decodedPath.length + 1)
             : plan.filename;
           const base = relativePath.replace(/_[A-Z][a-z]+ \d{1,2},? \d{4}/, '');
           if (!plansByBase[base] || relativePath > plansByBase[base]) {
@@ -393,8 +404,9 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }: SlackVi
       Object.values(plansByBase).forEach((p: string) => detectedFiles.push(p));
       sessionSummaries.forEach((summary: { file_path: string | null; filename: string }) => {
         if (summary.file_path) {
-          const relativePath = summary.file_path.includes('primary-research/')
-            ? summary.file_path.split('primary-research/')[1]
+          // Extract relative path from study root
+          const relativePath = summary.file_path.startsWith(decodedPath)
+            ? summary.file_path.slice(decodedPath.length + 1)
             : summary.filename;
           detectedFiles.push(relativePath);
         }
@@ -403,7 +415,7 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }: SlackVi
       // Scan analysis-layer folders for additional artifacts
       for (const scan of ANALYSIS_SCANS) {
         try {
-          const scanPath = `${primaryResearchBase}${scan.folder}`;
+          const scanPath = `${studyBase}${scan.folder}`;
           const files = await readFolderContents(scanPath, process.env.GITHUB_REPO!);
           const validFiles = files.filter((f: { name: string }) => f.name !== 'README.md' && f.name !== '.gitkeep');
 
@@ -548,7 +560,7 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }: SlackVi
           try {
             const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, templateName);
             const audienceReportData: ReadoutTemplateInput = { ...reportData, target_audience: audience };
-            const rendered = await processYamlTemplate(file.content, audienceReportData, selectedStudy.path ?? '', 'primary-research');
+            const rendered = await processYamlTemplate(file.content, audienceReportData, selectedStudy.path ?? '', '', false, variableContext);
 
             results.push({ audience, url: rendered.result.url, success: true });
 
@@ -602,7 +614,7 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }: SlackVi
       // Research readout (existing flow)
       const yamlTemplateName = 'research_readout.yaml';
       const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, yamlTemplateName);
-      const renderedYaml = await processYamlTemplate(file.content, reportData, selectedStudy.path ?? '', 'primary-research');
+      const renderedYaml = await processYamlTemplate(file.content, reportData, selectedStudy.path ?? '', '', false, variableContext);
 
       await client.chat.postMessage({
         channel: body.user.id,

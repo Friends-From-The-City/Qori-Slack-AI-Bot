@@ -996,7 +996,7 @@ output_template: |
   {{ai_generated.targeted_readout_complete}}
 
 output_options:
-  path: "05-findings/"
+  path: "05-readouts/"
   filename: "{{target_audience}}_readout_{{study_name}}_{{current_date}}.md"
 
 # ═══════════════════════════════════════════════════════════

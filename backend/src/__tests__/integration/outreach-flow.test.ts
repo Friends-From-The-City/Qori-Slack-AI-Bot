@@ -4,6 +4,8 @@
  * Tests the participant outreach tracking: recordOutreachSent(),
  * outreach_count incrementing, outreach_method recording, and
  * automatic status transition from not_contacted → contacted.
+ *
+ * Phase 2B: Updated to create Project before ResearchStudy (FK required).
  */
 
 import { getTestDb, truncateAll } from './setup/testDb';
@@ -12,12 +14,28 @@ import type { OutreachMethod } from '../../types/common';
 
 const sequelize = getTestDb();
 
-beforeEach(() => truncateAll());
+let testProjectId: number;
+
+beforeEach(async () => {
+  await truncateAll();
+
+  const Project = sequelize.models.Project;
+  const project = await Project.create({
+    name: 'Outreach Test Project',
+    slug: 'outreach-test-project',
+    status: 'active',
+    created_by: 'U_TEST',
+  });
+  testProjectId = (project as unknown as { id: number }).id;
+});
+
 afterAll(() => sequelize.close());
 
 async function createParticipant(status: string = PARTICIPANT_STATUS.NOT_CONTACTED) {
   const study = await sequelize.models.ResearchStudy.create({
+    project_id: testProjectId,
     name: 'outreach-test',
+    slug: 'outreach-test',
     channel_name: 'test',
     created_by: 'U_TEST',
     researcher_name: 'R',
@@ -92,7 +110,9 @@ describe('outreach flow', () => {
 
   it('outreach data survives round-trip through participant query', async () => {
     const study = await sequelize.models.ResearchStudy.create({
+      project_id: testProjectId,
       name: 'outreach-query-test',
+      slug: 'outreach-query-test',
       channel_name: 'test',
       created_by: 'U_TEST',
       researcher_name: 'R',

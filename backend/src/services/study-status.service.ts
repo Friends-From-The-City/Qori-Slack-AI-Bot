@@ -9,7 +9,7 @@ const StudyStatusModel = sequelize.models.StudyStatus as typeof StudyStatus;
 interface StudyStatusInput {
   file_name?: string;
   path?: string;
-  study_name?: string;
+  study_id?: number;
   status?: string;
   reason?: string | null;
   requested_by?: string | null;
@@ -35,7 +35,7 @@ const addStudyStatus = async (data: StudyStatusInput): Promise<StudyStatus> => {
     if (existingRecord) {
       // Update existing record
       const updateData: Record<string, unknown> = {
-        study_name: data.study_name,
+        study_id: data.study_id,
         path: data.path,
         status: data.status,
         updated_at: new Date(),
@@ -72,16 +72,16 @@ const addStudyStatus = async (data: StudyStatusInput): Promise<StudyStatus> => {
   }
 };
 
-const getStudyStatusByStudyName = async (studyName: string): Promise<StudyStatus[]> => {
+const getStudyStatusByStudyId = async (studyId: number): Promise<StudyStatus[]> => {
   try {
     const records = await StudyStatusModel.findAll({
-      where: { study_name: studyName },
+      where: { study_id: studyId },
       order: [['updated_at', 'DESC']], // Most recent first
     });
 
     return records;
   } catch (err) {
-    console.error('getStudyStatusByStudyName error:', err);
+    console.error('getStudyStatusByStudyId error:', err);
     throw new Error('Failed to fetch study status records');
   }
 };
@@ -109,7 +109,7 @@ const getStudyStatusById = async (id: number): Promise<StudyStatus | null> => {
   }
 };
 
-const getStudyStakeholderGuide = async (studyName?: string): Promise<StudyStatus[]> => {
+const getStudyStakeholderGuide = async (studyId?: number): Promise<StudyStatus[]> => {
   try {
     const whereClause: Record<string, unknown> = {
       file_name: {
@@ -117,9 +117,9 @@ const getStudyStakeholderGuide = async (studyName?: string): Promise<StudyStatus
       }
     };
 
-    // Add study_name filter if provided
-    if (studyName) {
-      whereClause.study_name = studyName;
+    // Add study_id filter if provided
+    if (studyId !== undefined) {
+      whereClause.study_id = studyId;
     }
 
     const records = await StudyStatusModel.findAll({
@@ -134,4 +134,4 @@ const getStudyStakeholderGuide = async (studyName?: string): Promise<StudyStatus
   }
 };
 
-export { addStudyStatus, getStudyStatusByStudyName, getStudyStatusByFileName, getStudyStatusById, getStudyStakeholderGuide };
+export { addStudyStatus, getStudyStatusByStudyId, getStudyStatusByFileName, getStudyStatusById, getStudyStakeholderGuide };

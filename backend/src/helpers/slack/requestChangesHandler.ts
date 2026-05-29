@@ -2,9 +2,12 @@ import type { WebClient } from '@slack/web-api';
 import type { BlockAction, ViewSubmitAction, ViewResponseAction, AckFn } from '@slack/bolt';
 import type { View } from '@slack/types';
 import { requestStudyChangesModal } from './ui/requestStudyChangesModal';
-import { getResearchStudyWithRoles } from '../../services/research_study.service';
+// Phase B Step 3: getStudyByProjectAndName for FK-based study lookup in brief approval
+// resolveStudyFromName retained for other flows (request changes, non-brief approvals) — migrate in future step
+import { getStudyByProjectAndName, resolveStudyFromName } from '../../services/research_study.service';
+import { getProjectByChannelId } from '../../services/project.service';
 
-import { addStudyStatus, getStudyStatusByStudyName } from '../../services/study-status.service';
+import { addStudyStatus, getStudyStatusByStudyId } from '../../services/study-status.service';
 
 type DocumentType = 'plan' | 'brief' | 'discussion';
 
@@ -94,8 +97,33 @@ export async function handleApproveSubmission(
     discussion: 'discussion guide',
   };
 
+  // Look up study first to get study_id for addStudyStatus (required by NOT NULL constraint)
+  let studyId: number | null = null;
+  let existingStudy: ResearchStudy | null = null;
+  let projectId: number | null = null;
+
+  if (type === 'brief') {
+    // Brief approval: use project-based lookup
+    const project = await getProjectByChannelId(channelId);
+    projectId = project?.id ?? null;
+    if (project) {
+      const study = await getStudyByProjectAndName(project.id, studyName);
+      if (study && study.path) {
+        existingStudy = study as unknown as ResearchStudy;
+        studyId = study.id;
+      }
+    }
+  } else {
+    // Plan/discussion approval: use name-based lookup
+    const resolved = await resolveStudyFromName(studyName);
+    if (resolved) {
+      studyId = resolved.studyId;
+      existingStudy = resolved.study as unknown as ResearchStudy;
+    }
+  }
+
   await addStudyStatus({
-    study_name: studyName,
+    study_id: studyId ?? undefined,
     path: url,
     approved_by: user,
     status: 'approve',
@@ -104,17 +132,16 @@ export async function handleApproveSubmission(
   if (type === 'brief') {
     const researchTeamChannelId = process.env.RESEARCH_TEAM_CHANNEL_ID || channelId;
 
-    const existingStudy = (await getResearchStudyWithRoles(studyName)) as ResearchStudy | null;
     const studyExists = !!(existingStudy && existingStudy.path);
 
     let ctaButton;
-    if (studyExists) {
+    if (studyExists && studyId && projectId) {
       ctaButton = {
         type: 'button',
         text: { type: 'plain_text', text: 'Create Research Plan', emoji: true },
         style: 'primary',
         action_id: 'create_research_plan_from_brief',
-        value: JSON.stringify({ studyName, briefUrl: url, channelId: researchTeamChannelId }),
+        value: JSON.stringify({ studyName, studyId, projectId, briefUrl: url, channelId: researchTeamChannelId }),
       };
     } else {
       const briefDataForStudy = briefData || { project_title: studyName, brief_url: url };
@@ -191,7 +218,8 @@ export async function handleApproveSubmission(
       }
     }
   } else {
-    const study = (await getResearchStudyWithRoles(studyName)) as ResearchStudy | null;
+    const resolvedStudy = await resolveStudyFromName(studyName);
+    const study = resolvedStudy?.study as unknown as ResearchStudy | null;
 
     if (study?.created_by) {
       try {
@@ -221,7 +249,11 @@ export async function handleRequestChanges(
 
   let fileOptions: FileOption[] = [];
   try {
-    const studyFiles = (await getStudyStatusByStudyName(studyName)) as unknown as StudyStatus[];
+    // Resolve study name to ID for FK-based lookup
+    const resolved = await resolveStudyFromName(studyName);
+    const studyFiles = resolved
+      ? ((await getStudyStatusByStudyId(resolved.studyId)) as unknown as StudyStatus[])
+      : [];
 
     fileOptions = studyFiles.map((file) => ({
       key: file.file_name || '',
@@ -317,7 +349,8 @@ export async function handleRequestChangesSubmission(
     path: url,
   });
 
-  const study = (await getResearchStudyWithRoles(studyName)) as ResearchStudy | null;
+  const resolvedForChanges = await resolveStudyFromName(studyName);
+  const study = resolvedForChanges?.study as unknown as ResearchStudy | null;
 
   if (study?.created_by) {
     try {

@@ -9,7 +9,7 @@
  *   const writtenContent = mockCreateOrUpdate.mock.calls[0][1];
  */
 const mockCreateOrUpdate = jest.fn().mockResolvedValue({
-  path: 'studies/test-study/primary-research/01-planning/test-study-research-plan-2026-05-12.md',
+  path: 'test-project/test-study/02-plan/test-study-research-plan-2026-05-12.md',
   sha: 'abc123fake',
   url: 'https://github.com/test/repo/blob/main/test-plan.md',
 });

@@ -692,7 +692,7 @@ output_template: |
   {{ai_generated.transcript_coding_markdown}}
 
 output_options:
-  path: "03-fieldwork/coded-transcript-analysis/"
+  path: "03-fieldwork/transcripts/"
   filename: "{{ai_generated.transcript_coding_filename}}"
 
 # ═══════════════════════════════════════════════════════════════════════════════

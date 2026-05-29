@@ -1,7 +1,7 @@
 import type { KnownBlock } from '@slack/types';
 import type { WebClient } from '@slack/web-api';
 import type { ResearchStudyUserRole } from '../../../database/models/research_study_user_role';
-import { getResearchStudyWithRoles } from '../../../services/research_study.service';
+import { resolveStudyFromName } from '../../../services/research_study.service';
 
 interface UserRole {
   user_id: string;
@@ -197,7 +197,8 @@ export const sendStudyResultMessage = async (
     // Get the study object first (may be null for briefs from requests)
     let study: StudyWithRoles | null = null;
     try {
-      study = await getResearchStudyWithRoles(studyName) as StudyWithRoles | null;
+      const resolved = await resolveStudyFromName(studyName);
+      study = resolved?.study as StudyWithRoles | null;
       console.log("🚀 ~ sendStudyResultMessage ~ study:", study);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);

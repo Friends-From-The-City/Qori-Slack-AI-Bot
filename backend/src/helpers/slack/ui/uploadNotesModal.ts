@@ -131,7 +131,7 @@ export const uploadNotesModal = (participants: Participant[] = []) => {
         "block_id": "destination_preview",
         "text": {
           "type": "mrkdwn",
-          "text": "📁 `research/primary-research/va-housing-study/03-fieldwork/[folder]/[participant]-[type]-[date].[ext]`"
+          "text": "📁 `{project}/{study}/03-fieldwork/[folder]/[participant]-[type]-[date].[ext]`"
         }
       },
 

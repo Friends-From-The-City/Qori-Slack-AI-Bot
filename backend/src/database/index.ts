@@ -4,6 +4,7 @@ import config from '../config/sequelize';
 // Import your model definition functions
 import User from './models/user.model';
 import ChannelConfig from './models/channel_config';
+import Project from './models/project';
 import ResearchStudy from './models/research_study';
 import ResearchStudyUserRole from './models/research_study_user_role';
 import StudyStatus from './models/study_status';
@@ -25,9 +26,11 @@ const sequelizeConfig = (config as Record<string, any>)[env];
 const sequelize = new Sequelize(sequelizeConfig);
 
 // List of all model definition functions
+// Note: Project must be defined before ResearchStudy due to FK dependency
 const modelDefiners = [
   User,
   ChannelConfig,
+  Project,
   ResearchStudy,
   ResearchStudyUserRole,
   StudyStatus,

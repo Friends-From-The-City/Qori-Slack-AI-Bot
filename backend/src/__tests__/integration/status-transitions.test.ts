@@ -4,6 +4,8 @@
  * Tests the canonical status enum and participant tracker integrity.
  * Verifies that status updates propagate correctly through the model
  * and that getParticipantStats counts reflect the actual state.
+ *
+ * Phase 2B: Updated to create Project before ResearchStudy (FK required).
  */
 
 import { getTestDb, truncateAll } from './setup/testDb';
@@ -11,12 +13,28 @@ import { PARTICIPANT_STATUS, ACTIVE_STATUSES, TERMINAL_STATUSES } from '../../co
 
 const sequelize = getTestDb();
 
-beforeEach(() => truncateAll());
+let testProjectId: number;
+
+beforeEach(async () => {
+  await truncateAll();
+
+  const Project = sequelize.models.Project;
+  const project = await Project.create({
+    name: 'Status Test Project',
+    slug: 'status-test-project',
+    status: 'active',
+    created_by: 'U_TEST',
+  });
+  testProjectId = (project as unknown as { id: number }).id;
+});
+
 afterAll(() => sequelize.close());
 
 async function createStudyWithParticipant(overrides: Record<string, unknown> = {}) {
   const study = await sequelize.models.ResearchStudy.create({
+    project_id: testProjectId,
     name: 'status-test-study',
+    slug: 'status-test-study',
     channel_name: 'test',
     created_by: 'U_TEST',
     researcher_name: 'R',
@@ -69,7 +87,9 @@ describe('status transitions', () => {
 
   it('getParticipantStats reflects correct counts per status', async () => {
     const study = await sequelize.models.ResearchStudy.create({
+      project_id: testProjectId,
       name: 'stats-test',
+      slug: 'stats-test',
       channel_name: 'test',
       created_by: 'U_TEST',
       researcher_name: 'R',
@@ -101,7 +121,9 @@ describe('status transitions', () => {
 
   it('terminal statuses are excluded from active count', async () => {
     const study = await sequelize.models.ResearchStudy.create({
+      project_id: testProjectId,
       name: 'terminal-test',
+      slug: 'terminal-test',
       channel_name: 'test',
       created_by: 'U_TEST',
       researcher_name: 'R',

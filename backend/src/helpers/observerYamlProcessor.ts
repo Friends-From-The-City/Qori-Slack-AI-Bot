@@ -362,7 +362,7 @@ export async function processObserverYamlTemplate(
   rawYamlContent: string,
   inputValues: Record<string, unknown>,
   baseFolderEncoded: string,
-  extraFolder = 'primary-research',
+  extraFolder = '',
   observerRequests: ObserverRequest[] = [],
   participants: Participant[] = [],
 ): Promise<ProcessResult> {

@@ -36,13 +36,6 @@ async function qoriMainHandler({ ack, command, client }: SlackCommandMiddlewareA
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: '*`/qori-request`* → Stakeholder submits research request'
-      }
-    },
-    {
-      type: 'section',
-      text: {
-        type: 'mrkdwn',
         text: '*`/qori-brief`* → Create research brief (starts a new study)'
       }
     },
