@@ -497,7 +497,6 @@ describe('pattern: folder structure alignment (Phase B-0.5)', () => {
   // Files explicitly excluded from migration (deferred/being removed)
   const MIGRATION_EXCLUSIONS = [
     'createStudyHandler.ts',      // Phase B-0.6: deferred to project-aware migration
-    'requestResearchHandler.ts',  // Phase B-0.7: being removed entirely
   ];
 
   it('no hardcoded old folder names in handlers (enforced)', () => {
@@ -572,8 +571,6 @@ describe('pattern: folder structure alignment (Phase B-0.5)', () => {
         }
       }
 
-      // Skip research_request (separate intake flow)
-      if (yamlFilename === 'research_request.yaml') continue;
 
       // Normalize path (remove trailing slash)
       const normalizedPath = outputPath.replace(/\/$/, '');
@@ -691,5 +688,104 @@ describe('pattern: folder structure alignment (Phase B-0.5)', () => {
 
     // Variables folder
     expect(STUDY_FOLDERS.VARIABLES).toBe('.variables');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════
+// Phase B Step 3: Handler re-anchoring assertions
+// ═══════════════════════════════════════════════════════════
+
+describe('pattern: Phase B handlers use getStudyById, not resolveStudyFromName', () => {
+  const commandsDir = join(SRC_ROOT, 'helpers/slack/commands');
+
+  // Files that have been migrated to FK-based pattern in Phase B
+  const MIGRATED_HANDLERS = [
+    'planHandler.ts',
+    'modal-openers/planModalOpener.ts',
+    'discussion-guide/discussionGuideHandler.ts',
+    'modal-openers/briefToStudyHandler.ts',
+  ];
+
+  it('migrated handlers do not call resolveStudyFromName', () => {
+    const violations: string[] = [];
+
+    for (const handler of MIGRATED_HANDLERS) {
+      const filePath = join(commandsDir, handler);
+      let content: string;
+      try {
+        content = readFile(filePath);
+      } catch {
+        // File doesn't exist in test environment
+        continue;
+      }
+
+      const rel = relative(SRC_ROOT, filePath);
+      const lines = content.split('\n');
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        // Skip comments
+        if (line.trimStart().startsWith('//')) continue;
+        // Skip import statements
+        if (line.includes('import ')) continue;
+
+        if (line.includes('resolveStudyFromName(')) {
+          violations.push(`${rel}:${i + 1}: calls deprecated resolveStudyFromName — use getStudyById with projectId from metadata`);
+        }
+      }
+    }
+
+    expect(violations).toEqual([]);
+  });
+
+  it('migrated handlers import getStudyById from research_study.service', () => {
+    const violations: string[] = [];
+
+    for (const handler of MIGRATED_HANDLERS) {
+      const filePath = join(commandsDir, handler);
+      let content: string;
+      try {
+        content = readFile(filePath);
+      } catch {
+        // File doesn't exist in test environment
+        continue;
+      }
+
+      const rel = relative(SRC_ROOT, filePath);
+
+      // Must import getStudyById
+      if (!content.includes('getStudyById') || !content.includes('research_study.service')) {
+        violations.push(`${rel}: missing import of getStudyById from research_study.service`);
+      }
+    }
+
+    expect(violations).toEqual([]);
+  });
+
+  it('migrated handlers use StudySetupModalMetadata for typed metadata', () => {
+    const violations: string[] = [];
+
+    for (const handler of MIGRATED_HANDLERS) {
+      const filePath = join(commandsDir, handler);
+      let content: string;
+      try {
+        content = readFile(filePath);
+      } catch {
+        // File doesn't exist in test environment
+        continue;
+      }
+
+      const rel = relative(SRC_ROOT, filePath);
+
+      // Check for typed metadata usage
+      // Either imports StudySetupModalMetadata or uses satisfies StudySetupModalMetadata
+      const hasTypedMetadata = content.includes('StudySetupModalMetadata');
+
+      if (!hasTypedMetadata) {
+        violations.push(`${rel}: missing StudySetupModalMetadata for typed modal metadata`);
+      }
+    }
+
+    expect(violations).toEqual([]);
   });
 });

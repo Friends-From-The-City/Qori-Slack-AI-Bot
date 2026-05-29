@@ -26,22 +26,20 @@ interface BriefData {
 }
 
 interface CreateStudyModalOptions {
-  requestData?: RequestData;
   briefData?: BriefData;
 }
 
 const createStudyModal = (options: CreateStudyModalOptions = {}) => {
-  const { requestData, briefData } = options;
-  const isFromRequest = !!requestData;
+  const { briefData } = options;
   const isFromBrief = !!briefData;
 
-  // Map briefData to requestData format for consistency
+  // Map briefData to prefill format for consistency
   const prefillData: RequestData | undefined = briefData ? {
     project_title: briefData.project_title || briefData.studyName,
     prepared_by: briefData.requestor_name,
     requestedBy: briefData.requestedBy, // Use the user ID from briefData
     briefUrl: briefData.brief_url || briefData.briefUrl,
-  } : requestData;
+  } : undefined;
 
   const hasPrefillData = !!prefillData;
 
@@ -225,12 +223,10 @@ const createStudyModal = (options: CreateStudyModalOptions = {}) => {
     }
   );
 
-  // First user-role pair (pre-filled with requester if from request or brief)
-  if ((isFromRequest && requestData!.requestedBy) || (isFromBrief && prefillData!.requestedBy)) {
-    const userDisplayName = isFromRequest
-      ? requestData!.submittedBy || requestData!.prepared_by
-      : briefData!.userDisplayName || prefillData!.prepared_by || briefData!.requestor_name;
-    const userId = isFromRequest ? requestData!.requestedBy : prefillData!.requestedBy;
+  // First user-role pair (pre-filled with requester if from brief)
+  if (isFromBrief && prefillData!.requestedBy) {
+    const userDisplayName = briefData!.userDisplayName || prefillData!.prepared_by || briefData!.requestor_name;
+    const userId = prefillData!.requestedBy;
 
     blocks.push(
       {
