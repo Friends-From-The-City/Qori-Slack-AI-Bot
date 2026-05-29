@@ -21,6 +21,13 @@ const TEMPLATE_TO_DISCOVERY_TYPE: Record<string, string> = {
   'survey_synthesis': 'survey-synthesis',
 };
 
+// Reverse mapping: discovery type → source_template for filtering queries
+const DISCOVERY_TYPE_TO_TEMPLATE: Record<string, string> = {
+  'desk-research': 'desk_research',
+  'stakeholder-interviews': 'stakeholder_synthesis',
+  'survey-synthesis': 'survey_synthesis',
+};
+
 // ═══════════════════════════════════════════════════════════
 // TYPE DEFINITIONS
 // ═══════════════════════════════════════════════════════════
@@ -534,11 +541,20 @@ export async function readDiscoveryVariablesByProject(projectId: number, discove
 
   if (StudyVariable) {
     try {
+      // Map discovery type to source_template for filtering
+      // e.g., 'desk-research' → 'desk_research'
+      const sourceTemplate = DISCOVERY_TYPE_TO_TEMPLATE[discoveryType];
+      if (!sourceTemplate) {
+        console.warn(`⚠️ Unknown discovery type "${discoveryType}", returning empty`);
+        return createEmptyDiscoveryVariablesFile(`project-${projectId}`, discoveryType);
+      }
+
       const rows = await StudyVariable.findAll({
         where: {
           project_id: projectId,
           study_id: null,
           scope: 'discovery',
+          source_template: sourceTemplate,
         },
       });
 
