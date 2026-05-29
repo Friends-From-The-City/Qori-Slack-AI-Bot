@@ -1,8 +1,8 @@
 # Phase B-0.6: createStudyHandler Disposition
 
-**Status:** Stub — implementation deferred
+**Status:** ✅ Complete
 **Filed:** 2026-05-28
-**Updated:** 2026-05-29 (B-0.7 closure: handler confirmed unreachable)
+**Completed:** 2026-05-29 (PR #167)
 
 ---
 
@@ -139,3 +139,27 @@ When a study is created from an approved brief, the brief submitter gets **no DM
 - ✅ Registration grep confirms zero reachable invocations (see Caller Map above)
 
 **B-0.6 is now a straightforward removal** — no migration logic needed, just delete dead code and verify tests pass.
+
+---
+
+## Completion Summary (2026-05-29)
+
+**Deleted:**
+- `createStudyHandler.ts` (3 exports, all unreachable)
+- `createStudyModal.ts` (only caller deleted)
+- `openStudyFromBrief` function in briefToStudyHandler.ts
+- 4 registrations in events.ts
+- Dead `create_study_from_brief` button path in requestChangesHandler.ts
+
+**Preserved:**
+- `create_research_plan_from_brief` button with FK context (Step 3 work)
+- `openPlanFromBrief` handler
+
+**Verification:**
+- Typecheck, unit tests (114), integration tests (92) pass
+- CI green (PR #167)
+- Orphaned reference greps clean
+
+**Net change:** -814 lines, +29 lines
+
+**Phase B complete.**
