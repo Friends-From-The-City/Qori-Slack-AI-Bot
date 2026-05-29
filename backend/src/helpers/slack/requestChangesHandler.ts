@@ -2,7 +2,10 @@ import type { WebClient } from '@slack/web-api';
 import type { BlockAction, ViewSubmitAction, ViewResponseAction, AckFn } from '@slack/bolt';
 import type { View } from '@slack/types';
 import { requestStudyChangesModal } from './ui/requestStudyChangesModal';
-import { resolveStudyFromName } from '../../services/research_study.service';
+// Phase B Step 3: getStudyByProjectAndName for FK-based study lookup in brief approval
+// resolveStudyFromName retained for other flows (request changes, non-brief approvals) — migrate in future step
+import { getStudyByProjectAndName, resolveStudyFromName } from '../../services/research_study.service';
+import { getProjectByChannelId } from '../../services/project.service';
 
 import { addStudyStatus, getStudyStatusByStudyId } from '../../services/study-status.service';
 
@@ -94,8 +97,33 @@ export async function handleApproveSubmission(
     discussion: 'discussion guide',
   };
 
+  // Look up study first to get study_id for addStudyStatus (required by NOT NULL constraint)
+  let studyId: number | null = null;
+  let existingStudy: ResearchStudy | null = null;
+  let projectId: number | null = null;
+
+  if (type === 'brief') {
+    // Brief approval: use project-based lookup
+    const project = await getProjectByChannelId(channelId);
+    projectId = project?.id ?? null;
+    if (project) {
+      const study = await getStudyByProjectAndName(project.id, studyName);
+      if (study && study.path) {
+        existingStudy = study as unknown as ResearchStudy;
+        studyId = study.id;
+      }
+    }
+  } else {
+    // Plan/discussion approval: use name-based lookup
+    const resolved = await resolveStudyFromName(studyName);
+    if (resolved) {
+      studyId = resolved.studyId;
+      existingStudy = resolved.study as unknown as ResearchStudy;
+    }
+  }
+
   await addStudyStatus({
-    study_name: studyName,
+    study_id: studyId ?? undefined,
     path: url,
     approved_by: user,
     status: 'approve',
@@ -104,18 +132,16 @@ export async function handleApproveSubmission(
   if (type === 'brief') {
     const researchTeamChannelId = process.env.RESEARCH_TEAM_CHANNEL_ID || channelId;
 
-    const resolved = await resolveStudyFromName(studyName);
-    const existingStudy = resolved?.study as unknown as ResearchStudy | null;
     const studyExists = !!(existingStudy && existingStudy.path);
 
     let ctaButton;
-    if (studyExists) {
+    if (studyExists && studyId && projectId) {
       ctaButton = {
         type: 'button',
         text: { type: 'plain_text', text: 'Create Research Plan', emoji: true },
         style: 'primary',
         action_id: 'create_research_plan_from_brief',
-        value: JSON.stringify({ studyName, briefUrl: url, channelId: researchTeamChannelId }),
+        value: JSON.stringify({ studyName, studyId, projectId, briefUrl: url, channelId: researchTeamChannelId }),
       };
     } else {
       const briefDataForStudy = briefData || { project_title: studyName, brief_url: url };
