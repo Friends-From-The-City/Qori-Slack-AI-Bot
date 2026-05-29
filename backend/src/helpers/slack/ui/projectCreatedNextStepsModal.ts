@@ -90,21 +90,12 @@ export function projectCreatedNextStepsModal(options: ProjectNextStepsModalOptio
           type: "button",
           text: {
             type: "plain_text",
-            text: "Coming soon",
+            text: "Run discovery",
           },
           action_id: "project_action_discovery",
           value: projectSlug,
           style: "primary",
         },
-      },
-      {
-        type: "context",
-        elements: [
-          {
-            type: "mrkdwn",
-            text: "_Wiring in progress — discovery will flow into briefs automatically._",
-          },
-        ],
       },
       {
         type: "section",
@@ -116,20 +107,11 @@ export function projectCreatedNextStepsModal(options: ProjectNextStepsModalOptio
           type: "button",
           text: {
             type: "plain_text",
-            text: "Coming soon",
+            text: "Create brief",
           },
           action_id: "project_action_brief",
           value: projectSlug,
         },
-      },
-      {
-        type: "context",
-        elements: [
-          {
-            type: "mrkdwn",
-            text: "_Briefs will auto-connect to this project once wiring is complete._",
-          },
-        ],
       },
       {
         type: "section",
@@ -164,7 +146,7 @@ export function projectCreatedNextStepsModal(options: ProjectNextStepsModalOptio
         elements: [
           {
             type: "mrkdwn",
-            text: `Project: \`${projectSlug}\` — these workflows connect to projects in the next update.`,
+            text: `Project: \`${projectSlug}\``,
           },
         ],
       },
