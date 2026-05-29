@@ -568,7 +568,12 @@ export async function readDiscoveryVariables(_team: string, _discoveryType: stri
 
 /**
  * Write discovery variables by project ID.
- * Preferred method for new code.
+ *
+ * Architecture (Phase 2D):
+ * - Postgres is authoritative for cascade variables (what brief modal reads)
+ * - GitHub is a readable backup/debugging artifact
+ * - Postgres write failure = hard fail (cascade would break invisibly)
+ * - GitHub write failure = soft warning (Postgres is authoritative)
  */
 export async function writeDiscoveryVariablesByProject(
   projectId: number,
@@ -578,17 +583,19 @@ export async function writeDiscoveryVariablesByProject(
 ): Promise<void> {
   const StudyVariable = getStudyVariableModel();
 
-  if (StudyVariable) {
-    try {
-      await writeDiscoveryToPostgresByProject(StudyVariable, projectId, variablesData);
-      console.log(`✅ Discovery variables written to Postgres for project:${projectId}`);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      console.error('❌ Postgres discovery write failed:', message);
-    }
+  // Hard-fail if database unavailable — discovery without cascade is broken
+  if (!StudyVariable) {
+    throw new Error(
+      'Database unavailable — cannot persist discovery variables. ' +
+      'Discovery requires database connection for cascade to work.'
+    );
   }
 
-  // Also write GitHub artifact if path provided
+  // Postgres write — let exceptions propagate (hard-fail)
+  await writeDiscoveryToPostgresByProject(StudyVariable, projectId, variablesData);
+  console.log(`✅ Discovery variables written to Postgres for project:${projectId}`);
+
+  // GitHub artifact — only write if Postgres succeeded (soft warning on failure)
   // Note: discoveryType is used for Postgres queries but NOT for file paths
   // All discovery variables go to a single flat .variables/ folder
   if (projectPath) {
