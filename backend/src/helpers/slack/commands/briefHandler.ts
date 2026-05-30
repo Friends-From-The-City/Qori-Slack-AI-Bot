@@ -526,6 +526,16 @@ async function handleBriefSubmission({ ack, body, view, client }: SlackViewMiddl
   const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, "research_brief.yaml");
   const renderedYaml = await processYamlTemplate(file.content, data, study.path ?? '', '', false, variableContext);
 
+  // CRITICAL: Await extraction to ensure cascade variables are committed before returning success.
+  // Without this, downstream modals (plan) may read stale data. See ADR 0019.
+  if (renderedYaml.extractionPromise) {
+    const extractResult = await renderedYaml.extractionPromise;
+    if (!extractResult.success) {
+      throw new Error(`Cascade variable extraction failed: ${extractResult.error}. Document was saved but variables were not written.`);
+    }
+    console.log(`✅ Cascade variables committed: ${extractResult.variableCount} items (${extractResult.keys?.join(', ')})`);
+  }
+
   const url: string = renderedYaml.result.url;
 
   // Update progress message → completion (in project's bound channel)

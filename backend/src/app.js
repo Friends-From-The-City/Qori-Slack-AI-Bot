@@ -2,6 +2,10 @@
 const dotenv = require("dotenv");
 dotenv.config();
 
+// Initialize Sentry BEFORE other imports (captures initialization errors)
+const { initSentry } = require("./config/sentry");
+initSentry();
+
 const Sentry = require("@sentry/node");
 const compression = require("compression");
 const cookieParser = require("cookie-parser");
@@ -20,11 +24,7 @@ const { NODE_ENV, DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT, PORT, DB_DIAL
 
 const app = express();
 
-if (NODE_ENV !== "development" && process.env.SENTRY_DSN) {
-  Sentry.init(configs.sentryConfig(app));
-  app.use(Sentry.Handlers.requestHandler());
-  app.use(Sentry.Handlers.tracingHandler());
-}
+// Note: Sentry error handler is set up later, after routes
 
 app.use(logger("dev"));
 
@@ -73,8 +73,9 @@ app.use((req, res, next) => {
   next(createError(404));
 });
 
-if (NODE_ENV !== "development") {
-  app.use(Sentry.Handlers.errorHandler());
+// Sentry v8: Error handler after routes, before custom error handler
+if (NODE_ENV !== "development" && process.env.SENTRY_DSN) {
+  Sentry.setupExpressErrorHandler(app);
 }
 
 app.use((err, req, res, next) => {

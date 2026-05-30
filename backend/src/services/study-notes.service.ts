@@ -195,15 +195,24 @@ class StudyNotesService {
     }
   }
 
-  async getStudyNotesByParticipantName(participantName: string, options: QueryOptions = {}): Promise<StudyNotes[]> {
+  async getStudyNotesByParticipantName(
+    participantName: string,
+    studyId?: number,
+    options: QueryOptions = {}
+  ): Promise<StudyNotes[]> {
     try {
       if (!participantName) {
         throw new Error('Participant name is required');
       }
 
-      const where = {
+      // Bug fix: scope by study_id to avoid cross-study data leakage.
+      // Without this, participant "Alice" in Study A would see notes from Study B.
+      const where: Record<string, unknown> = {
         participant_name: participantName
       };
+      if (studyId !== undefined) {
+        where.study_id = studyId;
+      }
 
       const notes = await StudyNotesModel.findAll({
         where,
@@ -224,8 +233,8 @@ class StudyNotesService {
 
       return notes;
     } catch (error) {
-      console.error('Error getting study notes by exact study name:', error);
-      throw new Error(`Failed to get study notes by exact study name: ${error instanceof Error ? error.message : String(error)}`);
+      console.error('Error getting study notes by participant name:', error);
+      throw new Error(`Failed to get study notes by participant name: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 

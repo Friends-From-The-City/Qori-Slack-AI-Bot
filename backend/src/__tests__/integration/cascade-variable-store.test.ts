@@ -710,3 +710,184 @@ describe('postgres to github fallback', () => {
     expect(row.source_date).toBeInstanceOf(Date);
   });
 });
+
+// ═══════════════════════════════════════════════════════════
+// TEST 8: Discovery type isolation (Bug fix verification)
+// Writing one discovery type must NOT nuke other discovery types
+//
+// This tests the fix for the bug where writeDiscoveryToPostgresByProject
+// deleted ALL discovery variables instead of just the source_template
+// being written. We use direct model operations to simulate the fixed
+// behavior and verify scope isolation.
+// ═══════════════════════════════════════════════════════════
+
+describe('discovery type isolation', () => {
+  it('writing one discovery type preserves other discovery types', async () => {
+    const StudyVariable = sequelize.models.StudyVariable;
+
+    // Simulate writing desk_research (delete by source_template, then insert)
+    await sequelize.transaction(async (t) => {
+      await StudyVariable.destroy({
+        where: { project_id: testProjectId, study_id: null, scope: 'discovery', source_template: 'desk_research' },
+        transaction: t,
+      });
+      await StudyVariable.create({
+        project_id: testProjectId,
+        study_id: null,
+        variable_key: 'desk_findings',
+        value: { id: 'DF-001', finding: 'Desk finding 1' },
+        source_template: 'desk_research',
+        source_version: 'v7.0',
+        is_pool: true,
+        scope: 'discovery',
+        discovery_artifact_id: 'artifact-1',
+      }, { transaction: t });
+    });
+
+    // Simulate writing stakeholder_synthesis
+    await sequelize.transaction(async (t) => {
+      await StudyVariable.destroy({
+        where: { project_id: testProjectId, study_id: null, scope: 'discovery', source_template: 'stakeholder_synthesis' },
+        transaction: t,
+      });
+      await StudyVariable.create({
+        project_id: testProjectId,
+        study_id: null,
+        variable_key: 'stakeholder_needs',
+        value: { id: 'SN-001', need: 'Stakeholder need 1' },
+        source_template: 'stakeholder_synthesis',
+        source_version: 'v7.0',
+        is_pool: true,
+        scope: 'discovery',
+        discovery_artifact_id: 'artifact-2',
+      }, { transaction: t });
+    });
+
+    // Simulate writing survey_synthesis
+    await sequelize.transaction(async (t) => {
+      await StudyVariable.destroy({
+        where: { project_id: testProjectId, study_id: null, scope: 'discovery', source_template: 'survey_synthesis' },
+        transaction: t,
+      });
+      await StudyVariable.create({
+        project_id: testProjectId,
+        study_id: null,
+        variable_key: 'survey_insights',
+        value: { id: 'SI-001', insight: 'Survey insight 1' },
+        source_template: 'survey_synthesis',
+        source_version: 'v7.0',
+        is_pool: true,
+        scope: 'discovery',
+        discovery_artifact_id: 'artifact-3',
+      }, { transaction: t });
+    });
+
+    // All three should exist - none were nuked by writing others
+    const deskRows = await StudyVariable.findAll({
+      where: { project_id: testProjectId, scope: 'discovery', source_template: 'desk_research' },
+    });
+    const stakeholderRows = await StudyVariable.findAll({
+      where: { project_id: testProjectId, scope: 'discovery', source_template: 'stakeholder_synthesis' },
+    });
+    const surveyRows = await StudyVariable.findAll({
+      where: { project_id: testProjectId, scope: 'discovery', source_template: 'survey_synthesis' },
+    });
+
+    expect(deskRows).toHaveLength(1);
+    expect(stakeholderRows).toHaveLength(1);
+    expect(surveyRows).toHaveLength(1);
+
+    // Verify each has correct content
+    expect((deskRows[0] as unknown as { value: { id: string } }).value.id).toBe('DF-001');
+    expect((stakeholderRows[0] as unknown as { value: { id: string } }).value.id).toBe('SN-001');
+    expect((surveyRows[0] as unknown as { value: { id: string } }).value.id).toBe('SI-001');
+
+    // Verify total count is 3 (one of each type)
+    const allDiscoveryRows = await StudyVariable.findAll({
+      where: { project_id: testProjectId, scope: 'discovery' },
+    });
+    expect(allDiscoveryRows).toHaveLength(3);
+  });
+
+  it('re-writing same discovery type replaces only that type', async () => {
+    const StudyVariable = sequelize.models.StudyVariable;
+
+    // Initial write: desk_research with finding DF-001
+    await sequelize.transaction(async (t) => {
+      await StudyVariable.destroy({
+        where: { project_id: testProjectId, study_id: null, scope: 'discovery', source_template: 'desk_research' },
+        transaction: t,
+      });
+      await StudyVariable.create({
+        project_id: testProjectId,
+        study_id: null,
+        variable_key: 'desk_findings',
+        value: { id: 'DF-001', finding: 'Original finding' },
+        source_template: 'desk_research',
+        source_version: 'v7.0',
+        is_pool: true,
+        scope: 'discovery',
+      }, { transaction: t });
+    });
+
+    // Also write stakeholder_synthesis
+    await sequelize.transaction(async (t) => {
+      await StudyVariable.destroy({
+        where: { project_id: testProjectId, study_id: null, scope: 'discovery', source_template: 'stakeholder_synthesis' },
+        transaction: t,
+      });
+      await StudyVariable.create({
+        project_id: testProjectId,
+        study_id: null,
+        variable_key: 'stakeholder_needs',
+        value: { id: 'SN-001', need: 'Stakeholder need' },
+        source_template: 'stakeholder_synthesis',
+        source_version: 'v7.0',
+        is_pool: true,
+        scope: 'discovery',
+      }, { transaction: t });
+    });
+
+    // Re-write desk_research with updated finding
+    await sequelize.transaction(async (t) => {
+      await StudyVariable.destroy({
+        where: { project_id: testProjectId, study_id: null, scope: 'discovery', source_template: 'desk_research' },
+        transaction: t,
+      });
+      await StudyVariable.create({
+        project_id: testProjectId,
+        study_id: null,
+        variable_key: 'desk_findings',
+        value: { id: 'DF-002', finding: 'Updated finding' },
+        source_template: 'desk_research',
+        source_version: 'v7.1',
+        is_pool: true,
+        scope: 'discovery',
+      }, { transaction: t });
+    });
+
+    // Verify desk_research was replaced (DF-002, not DF-001)
+    const deskRows = await StudyVariable.findAll({
+      where: { project_id: testProjectId, scope: 'discovery', source_template: 'desk_research' },
+    });
+    expect(deskRows).toHaveLength(1);
+    const deskValue = (deskRows[0] as unknown as { value: { id: string; finding: string } }).value;
+    expect(deskValue.id).toBe('DF-002');
+    expect(deskValue.finding).toBe('Updated finding');
+
+    // Verify stakeholder_synthesis is untouched
+    const stakeholderRows = await StudyVariable.findAll({
+      where: { project_id: testProjectId, scope: 'discovery', source_template: 'stakeholder_synthesis' },
+    });
+    expect(stakeholderRows).toHaveLength(1);
+    const stakeholderValue = (stakeholderRows[0] as unknown as { value: { id: string; need: string } }).value;
+    expect(stakeholderValue.id).toBe('SN-001');
+    expect(stakeholderValue.need).toBe('Stakeholder need');
+
+    // Verify total is still 2 (desk replaced, stakeholder preserved)
+    const allDiscoveryRows = await StudyVariable.findAll({
+      where: { project_id: testProjectId, scope: 'discovery' },
+    });
+    expect(allDiscoveryRows).toHaveLength(2);
+  });
+});

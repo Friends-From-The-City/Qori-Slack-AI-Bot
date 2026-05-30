@@ -90,12 +90,16 @@ Start with `0001` and read forward. The history is itself useful — it shows ho
 - [0015 — Bolt native middleware types for handler signatures](./0015-bolt-native-middleware-types.md) — Framework-aligned typing; eliminates registration boundary casts
 - [0016 — Brief template restructured to v7.0 interleaved Handlebars/AI](./0016-brief-template-v7-restructure.md) — First template restructure; sets the pattern for the remaining 10
 - [0017 — Template ID convention](./0017-template-id-convention.md) — YAML `id` must match consumer-side `consumes.source` exactly; no suffixes
+- [0018 — Cascade-aware synthesis modal](./0018-cascade-aware-synthesis-modal.md) — Synthesis reads variable store; file picker removed; structured nuggets as real input
+- [0019 — Ack-first await-extraction handler pattern](./0019-ack-first-await-extraction-handler-pattern.md) — Handlers must await extractionPromise before returning success; eliminates read-before-write races
 
 ### Lessons (informal ADRs from failure modes)
 
 - [L001 — Service queries default to fetching all model attributes](./L001-fetch-all-model-attributes.md) — From the attribute whitelist bug
 - [L002 — Parsers require fuzz inputs covering format variations](./L002-parser-fuzz-coverage.md) — From the comma parser bug
 - [L003 — End-to-end tests for critical flows, not just per-layer unit tests](./L003-end-to-end-tests.md) — From three rounds of compensation bugs
+- [L004 — Cascade contract test suite](./L004-cascade-contract-test-suite.md) — From synthesis bypassing declared consumes blocks; backfill readout/brief/plan
+- [L005 — Per-participant pool schemas must include participant field](./L005-per-participant-pool-schema-field.md) — From silent isolation failure in atomic_nugget_detail; enforced by CI
 
 The L-prefix distinguishes "lessons" from active design decisions. Lessons capture failure patterns to avoid; decisions document architectural commitments. Both are useful; they serve different purposes.
 

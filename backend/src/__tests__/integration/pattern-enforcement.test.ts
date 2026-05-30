@@ -787,3 +787,88 @@ describe('pattern: Phase B handlers use getStudyById, not resolveStudyFromName',
     expect(violations).toEqual([]);
   });
 });
+
+// ═══════════════════════════════════════════════════════════
+// Assertion 10: Per-participant pool schemas must have participant field
+// Lesson from L005: without participant field, pool merge silently fails to isolate
+// ═══════════════════════════════════════════════════════════
+
+describe('pattern: per-participant pool schemas include participant field (L005)', () => {
+  const PROMPTS_DIR = join(__dirname, '../../../../config/prompts');
+  const SCHEMAS_DIR = join(__dirname, '../../../config/schemas');
+
+  it('all append_or_replace_per_participant pool schemas have participant or participant_id field', () => {
+    const violations: string[] = [];
+    let yamlFiles: string[] = [];
+
+    try {
+      yamlFiles = readdirSync(PROMPTS_DIR).filter(f => f.endsWith('.yaml'));
+    } catch {
+      console.log('[L005] Skipping - config/prompts not found');
+      return;
+    }
+
+    for (const yamlFilename of yamlFiles) {
+      const yamlPath = join(PROMPTS_DIR, yamlFilename);
+      const content = readFileSync(yamlPath, 'utf-8');
+
+      // Parse emits block
+      let yamlDoc: { emits?: Array<{ key: string; pool_strategy?: string; schema?: { $ref?: string } }> };
+      try {
+        yamlDoc = loadYaml(content) as typeof yamlDoc;
+      } catch {
+        // Skip files that don't parse as YAML
+        continue;
+      }
+
+      if (!yamlDoc?.emits) continue;
+
+      for (const emit of yamlDoc.emits) {
+        // Only check per-participant pools
+        if (emit.pool_strategy !== 'append_or_replace_per_participant') continue;
+
+        const schemaRef = emit.schema?.$ref;
+        if (!schemaRef) {
+          violations.push(`${yamlFilename}: emit '${emit.key}' has per-participant strategy but no schema $ref`);
+          continue;
+        }
+
+        // Load the referenced schema
+        const schemaPath = join(SCHEMAS_DIR, schemaRef.replace('schemas/', ''));
+        let schemaContent: string;
+        try {
+          schemaContent = readFileSync(schemaPath, 'utf-8');
+        } catch {
+          violations.push(`${yamlFilename}: emit '${emit.key}' references schema '${schemaRef}' which doesn't exist`);
+          continue;
+        }
+
+        let schemaDoc: { properties?: Record<string, unknown> };
+        try {
+          schemaDoc = loadYaml(schemaContent) as typeof schemaDoc;
+        } catch {
+          violations.push(`${yamlFilename}: emit '${emit.key}' schema '${schemaRef}' is not valid YAML`);
+          continue;
+        }
+
+        // Check for participant or participant_id in properties
+        const props = schemaDoc?.properties || {};
+        const hasParticipant = 'participant' in props || 'participant_id' in props;
+
+        if (!hasParticipant) {
+          violations.push(
+            `${yamlFilename}: emit '${emit.key}' uses append_or_replace_per_participant but schema ` +
+            `'${schemaRef}' lacks 'participant' or 'participant_id' field — merge isolation will silently fail`
+          );
+        }
+      }
+    }
+
+    if (violations.length > 0) {
+      console.log(`[L005] Found ${violations.length} per-participant schema violations:`);
+      violations.forEach(v => console.log(`  ${v}`));
+    }
+
+    expect(violations).toEqual([]);
+  });
+});
