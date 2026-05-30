@@ -286,55 +286,52 @@ slackExpressRouter.post('/commands', (req: any, res: any) => {
 // ─── Temporary PII scrubbing verification command ──────
 // Remove after verifying Sentry scrubbing covers all PII hiding places
 //
-// CONVENTION: Error messages should NOT interpolate PII. Put PII in
-// structured fields (Sentry.setExtra), use generic messages.
-// The scrubber is a BACKSTOP - it will catch interpolated PII, but
-// the primary defense is not interpolating it in the first place.
+// Tests the two-phase PII scrubbing in beforeSend:
+// 1. COLLECT: PII values from structured fields (extra, contexts, breadcrumbs)
+// 2. SCRUB: Those exact values from the exception message
+// 3. REDACT: The structured fields themselves
+//
+// IMPORTANT: Uses captureException directly (not throw) because the error
+// handler's withScope creates an isolated context. Extras set before throwing
+// don't flow into that scope — they're lost. Direct capture ensures context
+// is attached to the event that reaches beforeSend.
 slackApp.command('/qori-test-pii', async ({ ack }) => {
   await ack();
 
-  // CORRECT PATTERN: PII in structured fields, not in message
-  // The scrubber collects these values and scrubs them from everywhere
-  Sentry.setExtra('participant_data', {
-    participant_id: 'PT-099',
-    name: 'Robert Johnson',
-    quote: 'The veteran mentioned that the VA website is hard to navigate',
-    verbatim: 'I just want to check my appointments without calling',
-  });
-
-  // Breadcrumb with PII in structured data field
-  Sentry.addBreadcrumb({
-    message: 'User action recorded', // Generic message - no PII
-    category: 'ui',
-    data: {
-      participant_name: 'Jane Doe', // PII in data, will be collected & scrubbed
-      action: 'form_submit',
-    },
-  });
-
-  // Tag with participant ID (will be pattern-matched)
-  Sentry.setTag('test_participant', 'PT-123');
-
-  // WRONG PATTERN (but scrubber should catch it as backstop):
-  // Error message interpolates PII - the scrubber will find "John Smith"
-  // and "The login process..." in the structured fields and scrub them
-  // from this message too.
-  //
-  // In real code, this should be:
-  //   throw new Error('Extraction failed: nugget parse error')
-  //   with context: { participant_id: 'PT-007', participant_name: 'John Smith', ... }
-  Sentry.setExtra('error_context', {
-    participant_id: 'PT-007',
-    name: 'John Smith',
-    nugget_text: 'The login process takes forever and I give up',
-  });
-
+  // Error message with interpolated PII (BAD PATTERN, but scrubber should catch)
   const err = new Error(
     'Extraction failed for participant PT-007 (John Smith): ' +
     'nugget "The login process takes forever and I give up" could not be parsed'
   );
 
-  throw err;
+  // Capture directly with context attached — this is how beforeSend receives it
+  Sentry.captureException(err, {
+    tags: {
+      test_participant: 'PT-123',
+      slack_error: 'true',
+      error_type: 'PII_TEST',
+    },
+    extra: {
+      // These PII values will be COLLECTED and used to scrub the message above
+      error_context: {
+        participant_id: 'PT-007',
+        name: 'John Smith',  // Should be found in message and replaced with [REDACTED_PII]
+        nugget_text: 'The login process takes forever and I give up',  // Same
+      },
+      participant_data: {
+        participant_id: 'PT-099',
+        name: 'Robert Johnson',
+        quote: 'The veteran mentioned that the VA website is hard to navigate',
+        verbatim: 'I just want to check my appointments without calling',
+      },
+    },
+    contexts: {
+      breadcrumb_test: {
+        participant_name: 'Jane Doe',
+        action: 'form_submit',
+      },
+    },
+  });
 });
 
 slackApp.command('/qori', qoriMainCommand);
