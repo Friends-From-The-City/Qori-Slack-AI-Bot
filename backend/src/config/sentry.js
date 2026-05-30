@@ -148,6 +148,26 @@ function scrubPII(data, visited = new Set(), depth = 0) {
  * @returns {import('@sentry/node').Event | null} - Scrubbed event or null to drop
  */
 function beforeSend(event) {
+  // Debug mode: log before/after for PII verification
+  // Set SENTRY_DEBUG_SCRUBBING=true to enable
+  const debugScrubbing = process.env.SENTRY_DEBUG_SCRUBBING === 'true';
+
+  if (debugScrubbing) {
+    console.log('\n========== SENTRY BEFORE SCRUBBING ==========');
+    console.log(JSON.stringify({
+      exception_message: event.exception?.values?.[0]?.value,
+      exception_stack_vars: event.exception?.values?.[0]?.stacktrace?.frames?.slice(-3).map(f => ({
+        function: f.function,
+        vars: f.vars
+      })),
+      extra: event.extra,
+      contexts: event.contexts,
+      tags: event.tags,
+      breadcrumbs: event.breadcrumbs?.slice(-3),
+      request_data: event.request?.data,
+    }, null, 2));
+  }
+
   try {
     // Scrub exception values (error messages)
     if (event.exception?.values) {
@@ -194,6 +214,23 @@ function beforeSend(event) {
     // Scrub request body if present
     if (event.request?.data) {
       event.request.data = scrubPII(event.request.data);
+    }
+
+    if (debugScrubbing) {
+      console.log('\n========== SENTRY AFTER SCRUBBING ==========');
+      console.log(JSON.stringify({
+        exception_message: event.exception?.values?.[0]?.value,
+        exception_stack_vars: event.exception?.values?.[0]?.stacktrace?.frames?.slice(-3).map(f => ({
+          function: f.function,
+          vars: f.vars
+        })),
+        extra: event.extra,
+        contexts: event.contexts,
+        tags: event.tags,
+        breadcrumbs: event.breadcrumbs?.slice(-3),
+        request_data: event.request?.data,
+      }, null, 2));
+      console.log('==============================================\n');
     }
 
     return event;
