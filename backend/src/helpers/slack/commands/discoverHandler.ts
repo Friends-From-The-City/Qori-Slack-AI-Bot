@@ -537,6 +537,16 @@ async function handleDiscoverSubmission({ ack, view, body, client }: SlackViewMi
       variableContext,
     );
 
+    // CRITICAL: Await extraction to ensure cascade variables are committed before returning success.
+    // Without this, downstream modals (brief) may read stale data. See ADR 0019.
+    if (renderedYaml.extractionPromise) {
+      const extractResult = await renderedYaml.extractionPromise;
+      if (!extractResult.success) {
+        throw new Error(`Cascade variable extraction failed: ${extractResult.error}. Document was saved but variables were not written.`);
+      }
+      console.log(`✅ Cascade variables committed: ${extractResult.variableCount} items (${extractResult.keys?.join(', ')})`);
+    }
+
     const url: string = renderedYaml.result.url;
 
     // Type-aware next-step guidance (D2)

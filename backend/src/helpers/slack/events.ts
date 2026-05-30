@@ -7,10 +7,15 @@
  * Error handling: TemplateContractError is caught globally via
  * slackApp.error() middleware and sent as a DM to the researcher.
  * Handlers throw TemplateContractError without catching it.
+ *
+ * Errors are captured to Sentry (with PII scrubbed) and posted to
+ * #qori-alerts channel for ops visibility.
  */
 
 import express from 'express';
 import { App } from '@slack/bolt';
+import * as Sentry from '@sentry/node';
+import { scrubPII } from '../../config/sentry';
 import type { View } from '@slack/types';
 // ── Extracted handlers (TypeScript) ─────────────────────────────
 
@@ -54,7 +59,7 @@ import { handleTabManual, handleTabUpload, handleSessionSelectionChange, handleS
 
 // Analysis
 import { analyzeNotesHandler, handleAnalyzeNotesSubmission, handleStudySelectionChange as handleAnalyzeNotesStudyChange, handleSessionSelectionChange as handleAnalyzeNotesSessionChange } from './commands/analyzeNotesHandler';
-import { researchSynthesisHandler, handleResearchSynthesisSubmission, handleStudySelectionChange, handleFileCheckboxChange, handleLoadSynthesisFiles } from './commands/researchSynthesisHandler';
+import { researchSynthesisHandler, handleResearchSynthesisSubmission, handleStudySelectionChange, handleAnalysisMethodChange, handleEnrichmentCheckboxChange } from './commands/researchSynthesisHandler';
 
 // Readouts & tickets
 import { openReadoutModal, handleReadoutModalInteraction, handleReadoutModalSubmission } from './commands/readoutHandler';
@@ -97,6 +102,66 @@ const slackApp = new App({
   extendedErrorHandler: true,
 });
 
+// ── Alerts channel configuration ─────────────────────────────────
+
+const ALERTS_CHANNEL_ID = process.env.QORI_ALERTS_CHANNEL_ID;
+
+/**
+ * Post an error alert to the #qori-alerts channel.
+ * PII is scrubbed from the context before posting.
+ */
+async function postErrorAlert(
+  errorType: string,
+  errorMessage: string,
+  context: Record<string, unknown>,
+): Promise<void> {
+  if (!ALERTS_CHANNEL_ID) {
+    console.log('QORI_ALERTS_CHANNEL_ID not set, skipping alert channel post');
+    return;
+  }
+
+  try {
+    // Scrub PII from context before posting to Slack
+    const scrubbedContext = scrubPII(context) as Record<string, unknown>;
+
+    const blocks = [
+      {
+        type: 'header',
+        text: {
+          type: 'plain_text',
+          text: `Error: ${errorType}`,
+          emoji: true,
+        },
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*Error:* \`${errorMessage.substring(0, 200)}${errorMessage.length > 200 ? '...' : ''}\``,
+        },
+      },
+      {
+        type: 'context',
+        elements: [
+          {
+            type: 'mrkdwn',
+            text: `*Time:* ${new Date().toISOString()} | *User:* ${scrubbedContext.userId || 'unknown'} | *Command:* ${scrubbedContext.command || 'unknown'}`,
+          },
+        ],
+      },
+    ];
+
+    await slackApp.client.chat.postMessage({
+      channel: ALERTS_CHANNEL_ID,
+      text: `Error ${errorType}: ${errorMessage.substring(0, 100)}`,
+      blocks,
+    });
+  } catch (alertErr) {
+    // Don't let alert failures break error handling
+    console.error('Failed to post to alerts channel:', alertErr instanceof Error ? alertErr.message : String(alertErr));
+  }
+}
+
 // ── Global error middleware ─────────────────────────────────────
 
 slackApp.error(async ({ error, body, logger }: { error: Error; body: any; logger: any }) => {
@@ -107,9 +172,35 @@ slackApp.error(async ({ error, body, logger }: { error: Error; body: any; logger
   const boltError = error as BoltError;
   const original = boltError.original || error;
 
+  const userId = body?.user?.id || body?.user_id;
+  const command = body?.command || body?.view?.callback_id || 'unknown';
+
+  // ── Capture to Sentry (PII is scrubbed in beforeSend) ──────────
+  Sentry.withScope((scope) => {
+    scope.setTag('slack_error', 'true');
+    scope.setTag('error_type', original.name || 'Error');
+    scope.setTag('command', command);
+    if (userId) {
+      scope.setUser({ id: userId });
+    }
+    // Add scrubbed context as extra data
+    scope.setExtra('body', scrubPII(body));
+    Sentry.captureException(original);
+  });
+
+  // ── Handle TemplateContractError (cascade contract violations) ──
   if (original.name === 'TemplateContractError') {
-    logger.warn(`⚠️ Cascade contract error: ${original.message}`);
-    const userId = body?.user?.id || body?.user_id;
+    logger.warn(`Cascade contract error: ${original.message}`);
+
+    // Post to alerts channel
+    await postErrorAlert('Cascade Contract Error', original.message, {
+      userId,
+      command,
+      templateId: (original as any).templateId,
+      variableKey: (original as any).variableKey,
+    });
+
+    // Send user-friendly DM
     const userMessage = (original as BoltError['original'] & { userMessage?: string }).userMessage;
     if (userId && userMessage) {
       try {
@@ -118,7 +209,7 @@ slackApp.error(async ({ error, body, logger }: { error: Error; body: any; logger
         if (im.channel?.id) {
           await client.chat.postMessage({
             channel: im.channel.id,
-            text: `⚠️ *Could not complete that action*\n\n${userMessage}`,
+            text: `*Could not complete that action*\n\n${userMessage}`,
           });
         }
       } catch (dmErr) {
@@ -129,9 +220,17 @@ slackApp.error(async ({ error, body, logger }: { error: Error; body: any; logger
     return;
   }
 
-  // Generic error — notify the user so they aren't left waiting
+  // ── Generic error — notify the user so they aren't left waiting ──
   logger.error('Unhandled error:', error);
-  const userId = body?.user?.id || body?.user_id;
+
+  // Post to alerts channel
+  await postErrorAlert('Unhandled Error', original.message || String(original), {
+    userId,
+    command,
+    stack: original.stack?.split('\n').slice(0, 5).join('\n'), // First 5 lines of stack
+  });
+
+  // Send user DM
   if (userId) {
     try {
       const client = slackApp.client;
@@ -139,7 +238,7 @@ slackApp.error(async ({ error, body, logger }: { error: Error; body: any; logger
       if (im.channel?.id) {
         await client.chat.postMessage({
           channel: im.channel.id,
-          text: '❌ *Something went wrong on our end*\n\nYour request didn\u2019t complete. The team has been notified. Please try again, and if it keeps happening, let us know.',
+          text: '*Something went wrong on our end*\n\nYour request did not complete. The team has been notified. Please try again, and if it keeps happening, let us know.',
         });
       }
     } catch (dmErr) {
@@ -154,7 +253,7 @@ slackApp.error(async ({ error, body, logger }: { error: Error; body: any; logger
 slackExpressRouter.post('/events', async (req: any, res: any) => {
   const { type, challenge } = req.body;
   if (type === 'url_verification') {
-    console.log('🔐 Slack URL verification successful!');
+    console.log('Slack URL verification successful!');
     return res.status(200).send({ challenge });
   }
 });
@@ -175,6 +274,20 @@ slackExpressRouter.post('/commands', (req: any, res: any) => {
 // ═════════════════════════════════════════════════════════════════
 
 // ─── Slash commands (entry points) ──────────────────────────────
+
+// ─── Temporary test command (remove after verifying Sentry) ──────
+slackApp.command('/qori-test-error', async ({ ack }) => {
+  await ack();
+  const testError = new Error('Test error: Participant PT-007 reported login issues');
+  (testError as any).context = {
+    participant_id: 'PT-007',
+    participant_name: 'John Smith',
+    nugget_text: 'Veteran said the login flow is confusing and takes too long',
+    email: 'john.smith@example.com',
+    variables: { theme: 'usability', severity: 'high' },
+  };
+  throw testError;
+});
 
 slackApp.command('/qori', qoriMainCommand);
 slackApp.command('/qori-start', projectStartCommand);
@@ -337,12 +450,12 @@ slackApp.view('analyze_notes_submit', handleAnalyzeNotesSubmission);
 slackApp.action('study_select_test', handleAnalyzeNotesStudyChange);
 slackApp.action('analyze_notes_session_select', handleAnalyzeNotesSessionChange);
 
-// ─── Research synthesis ─────────────────────────────────────────
+// ─── Research synthesis (ADR 0018: cascade-aware) ────────────────
 
 slackApp.view('research-synthesis-modal', handleResearchSynthesisSubmission);
 slackApp.action('study_select_synthesize', handleStudySelectionChange);
-slackApp.action('load_synthesis_files', handleLoadSynthesisFiles);
-slackApp.action(/^file_checkbox_/, handleFileCheckboxChange);
+slackApp.action('analysis_method', handleAnalysisMethodChange);
+slackApp.action('enrichment_checkboxes', handleEnrichmentCheckboxChange);
 
 // ─── Readouts & tickets ─────────────────────────────────────────
 

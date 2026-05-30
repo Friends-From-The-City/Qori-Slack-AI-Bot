@@ -41,11 +41,8 @@ describe('desk_research template', () => {
   it('is marked as discovery scope (project-level, not study-level)', () => {
     const config = harness.loadTemplate('desk_research');
 
-    // Desk research is discovery-scoped
-    // In Phase 2B, this becomes project_id (not study_id)
-    // For 2A, verify the config loaded successfully
-    expect(config.id).toBeDefined();
-    // The exact discovery_scope field depends on template version
+    // Desk research is discovery-scoped — verify the flag is set
+    expect(config.discovery_scope).toBe(true);
   });
 
   // ═══════════════════════════════════════════════════════════

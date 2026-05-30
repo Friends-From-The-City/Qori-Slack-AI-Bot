@@ -217,6 +217,14 @@ const handleAnalyzeNotesSubmission = async ({ ack, body, view, client }: SlackVi
   try {
     await ack();
 
+    // Immediate progress message — LLM analysis takes 1-2 minutes.
+    // Without this, researchers assume failure and re-run. See ADR 0019.
+    await client.chat.postEphemeral({
+      channel: body.user.id,
+      user: body.user.id,
+      text: '🔄 *Analyzing session* — this takes a minute or two. You\'ll see a confirmation when it\'s done.',
+    });
+
     if (!studyId || studyId === "no_studies") {
       throw new Error("No research study selected");
     }
@@ -351,6 +359,16 @@ const handleAnalyzeNotesSubmission = async ({ ack, body, view, client }: SlackVi
       false,
       variableContext
     );
+
+    // CRITICAL: Await extraction to ensure cascade variables are committed before returning success.
+    // Without this, downstream modals (synthesis) may read stale data. See ADR 0019.
+    if (renderedYaml.extractionPromise) {
+      const extractResult = await renderedYaml.extractionPromise;
+      if (!extractResult.success) {
+        throw new Error(`Cascade variable extraction failed: ${extractResult.error}. Document was saved but variables were not written.`);
+      }
+      console.log(`✅ Cascade variables committed: ${extractResult.variableCount} items (${extractResult.keys?.join(', ')})`);
+    }
 
     const { result } = renderedYaml;
     const urlParts: string[] = result.path.split('/');
@@ -558,12 +576,13 @@ const handleSessionSelectionChange = async ({ ack, body, client }: SlackActionMi
       console.warn("Warning: Could not fetch participant details:", message);
     }
 
-    // Fetch notes for the specific participant
+    // Fetch notes for the specific participant, scoped to this study.
+    // Bug fix: without studyId, participant "Alice" in Study A would see notes from Study B.
     let studyNotes: NoteDetail[] = [];
     try {
       if (participantName) {
-        studyNotes = await studyNotesService.getStudyNotesByParticipantName(participantName);
-        console.log(`✅ Loaded ${studyNotes.length} notes for participant "${participantName}" (session: "${sessionName}")`);
+        studyNotes = await studyNotesService.getStudyNotesByParticipantName(participantName, studyId);
+        console.log(`✅ Loaded ${studyNotes.length} notes for participant "${participantName}" in study ${studyId} (session: "${sessionName}")`);
       } else {
         // No participant_name means notes can't be scoped — show empty list
         console.warn(`No participant_name found for session "${sessionName}" — notes dropdown will be empty`);

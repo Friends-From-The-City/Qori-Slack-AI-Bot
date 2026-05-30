@@ -239,6 +239,16 @@ async function handlePlanSubmission({ ack, body, view, client }: SlackViewMiddle
     variableContext
   );
 
+  // CRITICAL: Await extraction to ensure cascade variables are committed before returning success.
+  // Without this, downstream modals (discussion guide) may read stale data. See ADR 0019.
+  if (renderedYaml.extractionPromise) {
+    const extractResult = await renderedYaml.extractionPromise;
+    if (!extractResult.success) {
+      throw new Error(`Cascade variable extraction failed: ${extractResult.error}. Document was saved but variables were not written.`);
+    }
+    console.log(`✅ Cascade variables committed: ${extractResult.variableCount} items (${extractResult.keys?.join(', ')})`);
+  }
+
   const url: string = renderedYaml.result.url;
   const urlParts: string[] = renderedYaml.result.path.split('/');
   const fileName = urlParts[urlParts.length - 1];

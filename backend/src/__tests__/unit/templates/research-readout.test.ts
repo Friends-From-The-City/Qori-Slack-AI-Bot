@@ -58,8 +58,15 @@ describe('research_readout template', () => {
 
     const missing = shouldThrowForMissingRequired(config, providedVariables);
 
-    // Should detect missing if there are required consumes
-    // Note: behavior depends on template version
+    // Should detect missing required consumes
+    // Readout requires session data to synthesize
+    const requiredConsumes = (config.consumes || []).filter(c => c.required);
+    if (requiredConsumes.length > 0) {
+      expect(missing.length).toBeGreaterThan(0);
+      // Verify at least one required key is reported missing
+      const requiredKeys = requiredConsumes.map(c => c.key);
+      expect(missing.some(m => requiredKeys.includes(m))).toBe(true);
+    }
   });
 
   // ═══════════════════════════════════════════════════════════

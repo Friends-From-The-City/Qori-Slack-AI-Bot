@@ -3,11 +3,15 @@
 # Consumed by: research_readout (verbatim quotes), journey_mapping (behaviors)
 # Schema v1.0 — split from atomic_nugget v2.0 for extraction reliability
 type: object
-required: [id]
+required: [id, participant]
 properties:
   id:
     type: string
     description: "Links to atomic_nugget_core.id — must match exactly"
+  participant:
+    type: string
+    pattern: "PT-###"
+    description: "Participant ID — required for per-participant pool merge isolation"
   verbatim_quote:
     type: string
     nullable: true

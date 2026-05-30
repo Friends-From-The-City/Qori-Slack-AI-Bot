@@ -126,6 +126,33 @@ export interface VariableContext {
 type StudyVariableModel = ModelStatic<Model<any, any>>;
 
 // ═══════════════════════════════════════════════════════════
+// TEST INJECTION (for integration tests)
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * Injected Sequelize instance for integration tests.
+ * When set, getSequelizeInstance() returns this instead of require('../database').
+ * This allows tests to seed data and have studyVariables.ts read from the same instance.
+ */
+let _injectedSequelize: Sequelize | null = null;
+
+/**
+ * Inject a Sequelize instance for integration tests.
+ * Call this in beforeAll() with getTestDb() to unify the database connection.
+ */
+export function injectSequelizeForTest(instance: Sequelize): void {
+  _injectedSequelize = instance;
+}
+
+/**
+ * Clear the injected Sequelize instance after tests.
+ * Call this in afterAll() to restore normal behavior.
+ */
+export function clearInjectedSequelize(): void {
+  _injectedSequelize = null;
+}
+
+// ═══════════════════════════════════════════════════════════
 // FIELD NORMALIZATION
 // ═══════════════════════════════════════════════════════════
 
@@ -208,9 +235,7 @@ function normalizeVariableFields(key: string, value: unknown): unknown {
 
 function getStudyVariableModel(): StudyVariableModel | null {
   try {
-    // Dynamic import to avoid circular dependencies and handle missing DB gracefully
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const sequelize = require('../database') as Sequelize;
+    const sequelize = getSequelizeInstance();
     return (sequelize.models.StudyVariable as StudyVariableModel) || null;
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
@@ -220,6 +245,11 @@ function getStudyVariableModel(): StudyVariableModel | null {
 }
 
 function getSequelizeInstance(): Sequelize {
+  // Use injected instance for integration tests (see injectSequelizeForTest)
+  if (_injectedSequelize) {
+    return _injectedSequelize;
+  }
+  // Dynamic import to avoid circular dependencies and handle missing DB gracefully
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   return require('../database') as Sequelize;
 }
@@ -271,28 +301,24 @@ export async function readStudyVariables(_studyBasePath: string): Promise<StudyV
 }
 
 /**
- * Write study variables to Postgres using FK-based context.
- * Preferred method for new code.
+ * Write study variables GitHub artifact (debugging only).
+ *
+ * NOTE: This function no longer writes to Postgres. The Postgres write
+ * is handled by mergeVariablesByContext(), which correctly implements
+ * per-participant isolation for pool variables. Calling writeVariablesToPostgresByContext()
+ * here was causing a double-write that nuked per-participant scoping.
+ * See L005: Per-participant pool schemas must include participant field.
  */
 export async function writeStudyVariablesByContext(
   ctx: VariableContext,
   variablesData: StudyVariablesStructure,
   studyBasePath?: string
 ): Promise<void> {
-  const StudyVariable = getStudyVariableModel();
-  const studySlug = ctx.studySlug || variablesData.study || `study-${ctx.studyId}`;
+  // NOTE: Postgres write removed — mergeVariablesByContext() already wrote to Postgres
+  // with correct per-participant isolation. Writing again here would overwrite
+  // without participant scoping, breaking pool isolation.
 
-  if (StudyVariable) {
-    try {
-      await writeVariablesToPostgresByContext(StudyVariable, ctx, variablesData);
-      console.log(`✅ Variables written to Postgres for project:${ctx.projectId}/study:${ctx.studyId}`);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      console.error(`❌ Postgres write failed:`, message);
-    }
-  }
-
-  // Also write GitHub JSON (debugging artifact, not authoritative)
+  // Write GitHub JSON (debugging artifact, not authoritative)
   if (studyBasePath) {
     try {
       const filePath = `${studyBasePath}/${VARIABLES_DIR}/${VARIABLES_FILE}`;
@@ -1033,6 +1059,9 @@ async function writeVariablesToPostgresByContext(
 
 /**
  * Write discovery variables to Postgres using project_id.
+ *
+ * Bug fix (ADR 0019 era): Scopes delete by source_template to avoid
+ * nuking other discovery types when writing one type.
  */
 async function writeDiscoveryToPostgresByProject(
   StudyVariable: StudyVariableModel,
@@ -1042,13 +1071,21 @@ async function writeDiscoveryToPostgresByProject(
   const sequelize = getSequelizeInstance();
   const now = new Date().toISOString();
 
+  // Extract the discovery type being written — scope delete to just this type
+  const sourceTemplate = variablesData.discovery_type;
+  if (!sourceTemplate) {
+    throw new Error('writeDiscoveryToPostgresByProject requires variablesData.discovery_type');
+  }
+
   await sequelize.transaction(async (t) => {
-    // Clear all existing discovery variables for this project (study_id = NULL)
+    // Clear existing discovery variables for this project AND this source_template only.
+    // Bug fix: previously deleted ALL discovery types, nuking desk_research when writing stakeholder_synthesis.
     await StudyVariable.destroy({
       where: {
         project_id: projectId,
         study_id: null,
         scope: 'discovery',
+        source_template: sourceTemplate,
       },
       transaction: t,
     });
