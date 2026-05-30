@@ -3,6 +3,12 @@
 // Sentry v8 configuration with PII scrubbing.
 // CRITICAL: Federal data-handling requires scrubbing participant data
 // before sending to third-party error services.
+//
+// CONVENTION: Error messages should NOT interpolate PII. Use structured
+// fields for PII data, and generic messages for the error itself.
+// Example: throw new Error('Extraction failed') with context = { participant_id: 'PT-007' }
+// NOT: throw new Error('Extraction failed for PT-007')
+// The scrubber is a BACKSTOP, not the primary defense.
 
 const Sentry = require('@sentry/node');
 
@@ -12,16 +18,12 @@ const { NODE_ENV, SENTRY_DSN } = process.env;
 // PII SCRUBBING CONFIGURATION
 // ═══════════════════════════════════════════════════════════════════════════
 //
-// What gets scrubbed:
-// 1. Participant identifiers (PT-XXX, P-XXX, P01, participant IDs)
-// 2. Names (participant names, researcher names in error context)
-// 3. Nugget content / verbatim quotes (text, quote, verbatim fields)
-// 4. Variable store payloads (cascade variables that may contain PII)
-// 5. Session content (transcripts, notes, summaries)
+// Two-phase scrubbing:
+// 1. COLLECT known PII values from structured fields (extra, contexts, etc.)
+// 2. SCRUB those exact values from ALL strings (including exception messages)
+// 3. REDACT the structured fields themselves
 //
-// Scrubbing approach: Deep recursive traversal of error data. Sensitive
-// fields are redacted with [REDACTED_*] markers that indicate what was
-// stripped without exposing the content.
+// This catches interpolated PII in error messages without guessing at patterns.
 
 // Fields that contain PII and should be fully redacted
 const PII_FIELDS = new Set([
@@ -57,7 +59,7 @@ const PII_FIELDS = new Set([
   'value', // variable value field
 ]);
 
-// Patterns to detect and redact in string values
+// Patterns to detect and redact in string values (fallback)
 const PII_PATTERNS = [
   // Participant IDs: PT-001, P-12, P01, PT12
   { pattern: /\bP[T]?[-_]?\d{1,4}\b/gi, replacement: '[REDACTED_PARTICIPANT_ID]' },
@@ -65,18 +67,97 @@ const PII_PATTERNS = [
   { pattern: /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, replacement: '[REDACTED_EMAIL]' },
   // Phone numbers (US format)
   { pattern: /\b\d{3}[-.]?\d{3}[-.]?\d{4}\b/g, replacement: '[REDACTED_PHONE]' },
-  // Names that look like "John Smith" or "Dr. Smith" (basic heuristic)
-  { pattern: /\b(?:Dr\.|Mr\.|Ms\.|Mrs\.)\s+[A-Z][a-z]+\b/g, replacement: '[REDACTED_NAME]' },
 ];
+
+/**
+ * Recursively collect PII values from an object.
+ * Returns a Set of string values that should be scrubbed from messages.
+ */
+function collectPIIValues(data, collected = new Set(), visited = new Set(), depth = 0) {
+  if (depth > 30 || data === null || data === undefined) return collected;
+
+  if (typeof data === 'string') {
+    // Don't collect very short strings (likely not meaningful PII)
+    // or very long strings (would cause performance issues)
+    if (data.length >= 3 && data.length <= 500) {
+      collected.add(data);
+    }
+    return collected;
+  }
+
+  if (typeof data !== 'object') return collected;
+  if (visited.has(data)) return collected;
+  visited.add(data);
+
+  if (Array.isArray(data)) {
+    for (const item of data.slice(0, 50)) { // Limit array traversal
+      collectPIIValues(item, collected, visited, depth + 1);
+    }
+    return collected;
+  }
+
+  for (const [key, value] of Object.entries(data)) {
+    const keyLower = key.toLowerCase();
+    // Only collect values from PII fields
+    if (PII_FIELDS.has(key) || PII_FIELDS.has(keyLower)) {
+      if (typeof value === 'string' && value.length >= 3 && value.length <= 500) {
+        collected.add(value);
+      } else if (typeof value === 'object' && value !== null) {
+        // Recursively collect from nested PII objects
+        collectPIIValues(value, collected, visited, depth + 1);
+      }
+    } else {
+      // Still traverse non-PII fields to find nested PII
+      collectPIIValues(value, collected, visited, depth + 1);
+    }
+  }
+
+  return collected;
+}
+
+/**
+ * Scrub known PII values from a string.
+ * @param {string} text - The string to scrub
+ * @param {Set<string>} knownPII - Set of known PII values to remove
+ * @returns {string} - Scrubbed string
+ */
+function scrubKnownPIIFromString(text, knownPII) {
+  if (typeof text !== 'string') return text;
+
+  let scrubbed = text;
+
+  // First, scrub known PII values (exact match, case-insensitive)
+  for (const piiValue of knownPII) {
+    if (piiValue && piiValue.length >= 3) {
+      // Escape regex special characters in the PII value
+      const escaped = piiValue.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(escaped, 'gi');
+      scrubbed = scrubbed.replace(regex, '[REDACTED_PII]');
+    }
+  }
+
+  // Then apply pattern-based scrubbing (catches PII not in structured fields)
+  for (const { pattern, replacement } of PII_PATTERNS) {
+    scrubbed = scrubbed.replace(pattern, replacement);
+  }
+
+  // Truncate very long strings
+  if (scrubbed.length > 500) {
+    return scrubbed.substring(0, 200) + '[TRUNCATED_LONG_STRING]';
+  }
+
+  return scrubbed;
+}
 
 /**
  * Recursively scrub PII from an object or value.
  * @param {any} data - The data to scrub
+ * @param {Set<string>} knownPII - Set of known PII values to scrub from strings
  * @param {Set<any>} visited - Set of already-visited objects (cycle prevention)
  * @param {number} depth - Current recursion depth
  * @returns {any} - Scrubbed data
  */
-function scrubPII(data, visited = new Set(), depth = 0) {
+function scrubPII(data, knownPII = new Set(), visited = new Set(), depth = 0) {
   // Prevent infinite recursion
   if (depth > 50) return '[TRUNCATED_DEEP_NESTING]';
 
@@ -84,15 +165,7 @@ function scrubPII(data, visited = new Set(), depth = 0) {
   if (data === null || data === undefined) return data;
 
   if (typeof data === 'string') {
-    let scrubbed = data;
-    for (const { pattern, replacement } of PII_PATTERNS) {
-      scrubbed = scrubbed.replace(pattern, replacement);
-    }
-    // Truncate very long strings (likely content/transcript dumps)
-    if (scrubbed.length > 500) {
-      return scrubbed.substring(0, 200) + '[TRUNCATED_LONG_STRING]';
-    }
-    return scrubbed;
+    return scrubKnownPIIFromString(data, knownPII);
   }
 
   if (typeof data === 'number' || typeof data === 'boolean') {
@@ -105,7 +178,7 @@ function scrubPII(data, visited = new Set(), depth = 0) {
     if (data.length > 20) {
       return `[REDACTED_ARRAY: ${data.length} items]`;
     }
-    return data.map((item) => scrubPII(item, visited, depth + 1));
+    return data.map((item) => scrubPII(item, knownPII, visited, depth + 1));
   }
 
   // Handle objects
@@ -134,7 +207,7 @@ function scrubPII(data, visited = new Set(), depth = 0) {
       }
 
       // Recursively scrub nested values
-      scrubbed[key] = scrubPII(value, visited, depth + 1);
+      scrubbed[key] = scrubPII(value, knownPII, visited, depth + 1);
     }
     return scrubbed;
   }
@@ -169,51 +242,77 @@ function beforeSend(event) {
   }
 
   try {
-    // Scrub exception values (error messages)
+    // PHASE 1: Collect known PII values from all structured fields
+    // These will be scrubbed from ALL strings, including exception messages
+    const knownPII = new Set();
+
+    if (event.extra) {
+      collectPIIValues(event.extra, knownPII);
+    }
+    if (event.contexts) {
+      collectPIIValues(event.contexts, knownPII);
+    }
+    if (event.tags) {
+      collectPIIValues(event.tags, knownPII);
+    }
+    if (event.breadcrumbs) {
+      for (const crumb of event.breadcrumbs) {
+        if (crumb.data) collectPIIValues(crumb.data, knownPII);
+      }
+    }
+
+    if (debugScrubbing && knownPII.size > 0) {
+      console.log(`\n📋 Collected ${knownPII.size} PII values to scrub from messages`);
+    }
+
+    // PHASE 2: Scrub exception messages using known PII values
     if (event.exception?.values) {
       event.exception.values = event.exception.values.map((ex) => ({
         ...ex,
-        value: typeof ex.value === 'string' ? scrubPII(ex.value) : ex.value,
+        value: typeof ex.value === 'string'
+          ? scrubKnownPIIFromString(ex.value, knownPII)
+          : ex.value,
         // Scrub stack trace local variables if present
         stacktrace: ex.stacktrace
           ? {
               ...ex.stacktrace,
               frames: ex.stacktrace.frames?.map((frame) => ({
                 ...frame,
-                vars: frame.vars ? scrubPII(frame.vars) : frame.vars,
+                vars: frame.vars ? scrubPII(frame.vars, knownPII) : frame.vars,
               })),
             }
           : ex.stacktrace,
       }));
     }
 
-    // Scrub extra context
+    // PHASE 3: Scrub structured fields (with field-level redaction)
     if (event.extra) {
-      event.extra = scrubPII(event.extra);
+      event.extra = scrubPII(event.extra, knownPII);
     }
 
-    // Scrub contexts
     if (event.contexts) {
-      event.contexts = scrubPII(event.contexts);
+      event.contexts = scrubPII(event.contexts, knownPII);
     }
 
     // Scrub tags (shouldn't contain PII, but defense in depth)
     if (event.tags) {
-      event.tags = scrubPII(event.tags);
+      event.tags = scrubPII(event.tags, knownPII);
     }
 
     // Scrub breadcrumbs
     if (event.breadcrumbs) {
       event.breadcrumbs = event.breadcrumbs.map((crumb) => ({
         ...crumb,
-        message: typeof crumb.message === 'string' ? scrubPII(crumb.message) : crumb.message,
-        data: crumb.data ? scrubPII(crumb.data) : crumb.data,
+        message: typeof crumb.message === 'string'
+          ? scrubKnownPIIFromString(crumb.message, knownPII)
+          : crumb.message,
+        data: crumb.data ? scrubPII(crumb.data, knownPII) : crumb.data,
       }));
     }
 
     // Scrub request body if present
     if (event.request?.data) {
-      event.request.data = scrubPII(event.request.data);
+      event.request.data = scrubPII(event.request.data, knownPII);
     }
 
     if (debugScrubbing) {
@@ -289,6 +388,8 @@ function initSentry() {
 module.exports = {
   initSentry,
   scrubPII,
+  scrubKnownPIIFromString,
+  collectPIIValues,
   beforeSend,
   PII_FIELDS,
   PII_PATTERNS,
