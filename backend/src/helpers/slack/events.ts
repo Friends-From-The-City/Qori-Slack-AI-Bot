@@ -164,13 +164,20 @@ async function postErrorAlert(
 
 // ── Global error middleware ─────────────────────────────────────
 
+// Type annotation uses 'any' for body/logger (Bolt's types are complex unions)
+// Pattern enforcement allows ': any' annotations, just not 'as any' casts
 slackApp.error(async ({ error, body, logger }: { error: Error; body: any; logger: any }) => {
   // Bolt wraps errors — unwrap to find the original thrown error
+  interface TemplateContractErrorShape extends Error {
+    userMessage?: string;
+    templateId?: string;
+    variableKey?: string;
+  }
   interface BoltError extends Error {
-    original?: Error & { userMessage?: string };
+    original?: TemplateContractErrorShape;
   }
   const boltError = error as BoltError;
-  const original = boltError.original || error;
+  const original: TemplateContractErrorShape = boltError.original || error;
 
   const userId = body?.user?.id || body?.user_id;
   const command = body?.command || body?.view?.callback_id || 'unknown';
@@ -196,8 +203,8 @@ slackApp.error(async ({ error, body, logger }: { error: Error; body: any; logger
     await postErrorAlert('Cascade Contract Error', original.message, {
       userId,
       command,
-      templateId: (original as any).templateId,
-      variableKey: (original as any).variableKey,
+      templateId: original.templateId,
+      variableKey: original.variableKey,
     });
 
     // Send user-friendly DM
@@ -278,8 +285,11 @@ slackExpressRouter.post('/commands', (req: any, res: any) => {
 // ─── Temporary test command (remove after verifying Sentry) ──────
 slackApp.command('/qori-test-error', async ({ ack }) => {
   await ack();
-  const testError = new Error('Test error: Participant PT-007 reported login issues');
-  (testError as any).context = {
+  interface TestError extends Error {
+    context?: Record<string, unknown>;
+  }
+  const testError: TestError = new Error('Test error: Participant PT-007 reported login issues');
+  testError.context = {
     participant_id: 'PT-007',
     participant_name: 'John Smith',
     nugget_text: 'Veteran said the login flow is confusing and takes too long',
