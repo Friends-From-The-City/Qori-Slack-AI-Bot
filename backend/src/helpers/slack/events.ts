@@ -282,23 +282,6 @@ slackExpressRouter.post('/commands', (req: any, res: any) => {
 
 // ─── Slash commands (entry points) ──────────────────────────────
 
-// ─── Temporary test command (remove after verifying Sentry) ──────
-slackApp.command('/qori-test-error', async ({ ack }) => {
-  await ack();
-  interface TestError extends Error {
-    context?: Record<string, unknown>;
-  }
-  const testError: TestError = new Error('Test error: Participant PT-007 reported login issues');
-  testError.context = {
-    participant_id: 'PT-007',
-    participant_name: 'John Smith',
-    nugget_text: 'Veteran said the login flow is confusing and takes too long',
-    email: 'john.smith@example.com',
-    variables: { theme: 'usability', severity: 'high' },
-  };
-  throw testError;
-});
-
 slackApp.command('/qori', qoriMainCommand);
 slackApp.command('/qori-start', projectStartCommand);
 slackApp.command('/qori-brief', async ({ ack, client, command }) => {
