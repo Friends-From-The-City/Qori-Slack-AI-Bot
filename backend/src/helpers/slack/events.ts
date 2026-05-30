@@ -295,7 +295,7 @@ slackExpressRouter.post('/commands', (req: any, res: any) => {
 // handler's withScope creates an isolated context. Extras set before throwing
 // don't flow into that scope — they're lost. Direct capture ensures context
 // is attached to the event that reaches beforeSend.
-slackApp.command('/qori-test-pii', async ({ ack }) => {
+slackApp.command('/qori-test-pii', async ({ ack, client, command }) => {
   await ack();
 
   // Error message with interpolated PII (BAD PATTERN, but scrubber should catch)
@@ -305,7 +305,7 @@ slackApp.command('/qori-test-pii', async ({ ack }) => {
   );
 
   // Capture directly with context attached — this is how beforeSend receives it
-  Sentry.captureException(err, {
+  const eventId = Sentry.captureException(err, {
     tags: {
       test_participant: 'PT-123',
       slack_error: 'true',
@@ -331,6 +331,15 @@ slackApp.command('/qori-test-pii', async ({ ack }) => {
         action: 'form_submit',
       },
     },
+  });
+
+  // Confirm to user that the test ran
+  await client.chat.postEphemeral({
+    channel: command.channel_id,
+    user: command.user_id,
+    text: eventId
+      ? `PII test event sent to Sentry.\nEvent ID: \`${eventId}\`\n\nCheck Sentry for an event with tag \`error_type: PII_TEST\`. The exception message should show \`[REDACTED_PII]\` instead of "John Smith" and the verbatim quote.`
+      : `Sentry capture returned no event ID. Check if SENTRY_DSN is set and NODE_ENV is not "development".`,
   });
 });
 
