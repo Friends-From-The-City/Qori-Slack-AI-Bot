@@ -285,20 +285,16 @@ slackExpressRouter.post('/commands', (req: any, res: any) => {
 
 // ─── Temporary PII scrubbing verification command ──────
 // Remove after verifying Sentry scrubbing covers all PII hiding places
-slackApp.command('/qori-test-pii', async ({ ack, client, command }) => {
+//
+// CONVENTION: Error messages should NOT interpolate PII. Put PII in
+// structured fields (Sentry.setExtra), use generic messages.
+// The scrubber is a BACKSTOP - it will catch interpolated PII, but
+// the primary defense is not interpolating it in the first place.
+slackApp.command('/qori-test-pii', async ({ ack }) => {
   await ack();
 
-  // Add a breadcrumb with PII (will be captured by Sentry)
-  Sentry.addBreadcrumb({
-    message: 'User PT-042 clicked submit button',
-    category: 'ui',
-    data: {
-      participant_name: 'Jane Doe',
-      action: 'form_submit',
-    },
-  });
-
-  // Set extra context with PII
+  // CORRECT PATTERN: PII in structured fields, not in message
+  // The scrubber collects these values and scrubs them from everywhere
   Sentry.setExtra('participant_data', {
     participant_id: 'PT-099',
     name: 'Robert Johnson',
@@ -306,10 +302,33 @@ slackApp.command('/qori-test-pii', async ({ ack, client, command }) => {
     verbatim: 'I just want to check my appointments without calling',
   });
 
-  // Set tags (shouldn't have PII but testing defense in depth)
+  // Breadcrumb with PII in structured data field
+  Sentry.addBreadcrumb({
+    message: 'User action recorded', // Generic message - no PII
+    category: 'ui',
+    data: {
+      participant_name: 'Jane Doe', // PII in data, will be collected & scrubbed
+      action: 'form_submit',
+    },
+  });
+
+  // Tag with participant ID (will be pattern-matched)
   Sentry.setTag('test_participant', 'PT-123');
 
-  // Error message contains PII
+  // WRONG PATTERN (but scrubber should catch it as backstop):
+  // Error message interpolates PII - the scrubber will find "John Smith"
+  // and "The login process..." in the structured fields and scrub them
+  // from this message too.
+  //
+  // In real code, this should be:
+  //   throw new Error('Extraction failed: nugget parse error')
+  //   with context: { participant_id: 'PT-007', participant_name: 'John Smith', ... }
+  Sentry.setExtra('error_context', {
+    participant_id: 'PT-007',
+    name: 'John Smith',
+    nugget_text: 'The login process takes forever and I give up',
+  });
+
   const err = new Error(
     'Extraction failed for participant PT-007 (John Smith): ' +
     'nugget "The login process takes forever and I give up" could not be parsed'
