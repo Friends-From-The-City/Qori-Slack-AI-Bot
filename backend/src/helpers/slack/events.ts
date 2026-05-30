@@ -283,66 +283,6 @@ slackExpressRouter.post('/commands', (req: any, res: any) => {
 
 // ─── Slash commands (entry points) ──────────────────────────────
 
-// ─── Temporary PII scrubbing verification command ──────
-// Remove after verifying Sentry scrubbing covers all PII hiding places
-//
-// Tests the two-phase PII scrubbing in beforeSend:
-// 1. COLLECT: PII values from structured fields (extra, contexts, breadcrumbs)
-// 2. SCRUB: Those exact values from the exception message
-// 3. REDACT: The structured fields themselves
-//
-// IMPORTANT: Uses captureException directly (not throw) because the error
-// handler's withScope creates an isolated context. Extras set before throwing
-// don't flow into that scope — they're lost. Direct capture ensures context
-// is attached to the event that reaches beforeSend.
-slackApp.command('/qori-test-pii', async ({ ack, client, command }) => {
-  await ack();
-
-  // Error message with interpolated PII (BAD PATTERN, but scrubber should catch)
-  const err = new Error(
-    'Extraction failed for participant PT-007 (John Smith): ' +
-    'nugget "The login process takes forever and I give up" could not be parsed'
-  );
-
-  // Capture directly with context attached — this is how beforeSend receives it
-  const eventId = Sentry.captureException(err, {
-    tags: {
-      test_participant: 'PT-123',
-      slack_error: 'true',
-      error_type: 'PII_TEST',
-    },
-    extra: {
-      // These PII values will be COLLECTED and used to scrub the message above
-      error_context: {
-        participant_id: 'PT-007',
-        name: 'John Smith',  // Should be found in message and replaced with [REDACTED_PII]
-        nugget_text: 'The login process takes forever and I give up',  // Same
-      },
-      participant_data: {
-        participant_id: 'PT-099',
-        name: 'Robert Johnson',
-        quote: 'The veteran mentioned that the VA website is hard to navigate',
-        verbatim: 'I just want to check my appointments without calling',
-      },
-    },
-    contexts: {
-      breadcrumb_test: {
-        participant_name: 'Jane Doe',
-        action: 'form_submit',
-      },
-    },
-  });
-
-  // Confirm to user that the test ran
-  await client.chat.postEphemeral({
-    channel: command.channel_id,
-    user: command.user_id,
-    text: eventId
-      ? `PII test event sent to Sentry.\nEvent ID: \`${eventId}\`\n\nCheck Sentry for an event with tag \`error_type: PII_TEST\`. The exception message should show \`[REDACTED_PII]\` instead of "John Smith" and the verbatim quote.`
-      : `Sentry capture returned no event ID. Check if SENTRY_DSN is set and NODE_ENV is not "development".`,
-  });
-});
-
 slackApp.command('/qori', qoriMainCommand);
 slackApp.command('/qori-start', projectStartCommand);
 slackApp.command('/qori-brief', async ({ ack, client, command }) => {
