@@ -108,7 +108,7 @@ const ALERTS_CHANNEL_ID = process.env.QORI_ALERTS_CHANNEL_ID;
 
 /**
  * Post an error alert to the #qori-alerts channel.
- * PII is scrubbed from the context before posting.
+ * PII is scrubbed from BOTH the message AND context before posting.
  */
 async function postErrorAlert(
   errorType: string,
@@ -121,7 +121,8 @@ async function postErrorAlert(
   }
 
   try {
-    // Scrub PII from context before posting to Slack
+    // Scrub PII from BOTH message and context before posting to Slack
+    const scrubbedMessage = scrubPII(errorMessage) as string;
     const scrubbedContext = scrubPII(context) as Record<string, unknown>;
 
     const blocks = [
@@ -137,7 +138,7 @@ async function postErrorAlert(
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `*Error:* \`${errorMessage.substring(0, 200)}${errorMessage.length > 200 ? '...' : ''}\``,
+          text: `*Error:* \`${scrubbedMessage.substring(0, 200)}${scrubbedMessage.length > 200 ? '...' : ''}\``,
         },
       },
       {
@@ -153,7 +154,7 @@ async function postErrorAlert(
 
     await slackApp.client.chat.postMessage({
       channel: ALERTS_CHANNEL_ID,
-      text: `Error ${errorType}: ${errorMessage.substring(0, 100)}`,
+      text: `Error ${errorType}: ${scrubbedMessage.substring(0, 100)}`,
       blocks,
     });
   } catch (alertErr) {
