@@ -282,21 +282,39 @@ slackExpressRouter.post('/commands', (req: any, res: any) => {
 
 // ─── Slash commands (entry points) ──────────────────────────────
 
-// ─── Temporary test command (remove after verifying Sentry) ──────
-slackApp.command('/qori-test-error', async ({ ack }) => {
+// ─── Temporary PII scrubbing verification command ──────
+// Remove after verifying Sentry scrubbing covers all PII hiding places
+slackApp.command('/qori-test-pii', async ({ ack, client, command }) => {
   await ack();
-  interface TestError extends Error {
-    context?: Record<string, unknown>;
-  }
-  const testError: TestError = new Error('Test error: Participant PT-007 reported login issues');
-  testError.context = {
-    participant_id: 'PT-007',
-    participant_name: 'John Smith',
-    nugget_text: 'Veteran said the login flow is confusing and takes too long',
-    email: 'john.smith@example.com',
-    variables: { theme: 'usability', severity: 'high' },
-  };
-  throw testError;
+
+  // Add a breadcrumb with PII (will be captured by Sentry)
+  Sentry.addBreadcrumb({
+    message: 'User PT-042 clicked submit button',
+    category: 'ui',
+    data: {
+      participant_name: 'Jane Doe',
+      action: 'form_submit',
+    },
+  });
+
+  // Set extra context with PII
+  Sentry.setExtra('participant_data', {
+    participant_id: 'PT-099',
+    name: 'Robert Johnson',
+    quote: 'The veteran mentioned that the VA website is hard to navigate',
+    verbatim: 'I just want to check my appointments without calling',
+  });
+
+  // Set tags (shouldn't have PII but testing defense in depth)
+  Sentry.setTag('test_participant', 'PT-123');
+
+  // Error message contains PII
+  const err = new Error(
+    'Extraction failed for participant PT-007 (John Smith): ' +
+    'nugget "The login process takes forever and I give up" could not be parsed'
+  );
+
+  throw err;
 });
 
 slackApp.command('/qori', qoriMainCommand);
