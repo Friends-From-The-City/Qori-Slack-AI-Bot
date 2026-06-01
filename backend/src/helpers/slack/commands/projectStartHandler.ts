@@ -1,23 +1,18 @@
 /**
  * projectStartHandler.ts — /qori-start project creation flow
  *
- * Phase 2C: Opens the project creation modal. On submission, creates
- * the project, optionally creates a dedicated Slack channel, and shows
- * the next-steps modal with gated action buttons.
+ * Opens the project creation modal. On submission, creates the project,
+ * optionally creates a dedicated Slack channel, and posts an orienting
+ * confirmation message.
  */
 
-import type { AllMiddlewareArgs, SlackCommandMiddlewareArgs, SlackViewMiddlewareArgs, ViewSubmitAction, SlackActionMiddlewareArgs, BlockAction } from '@slack/bolt';
+import type { AllMiddlewareArgs, SlackCommandMiddlewareArgs, SlackViewMiddlewareArgs, ViewSubmitAction } from '@slack/bolt';
 import type { View } from '@slack/types';
 import type { WebClient } from '@slack/web-api';
 
 import { createProjectFromName, bindProjectToChannel } from '../../../services/project.service';
 import { scaffoldProject } from '../../../services/scaffolding.service';
 import { projectCreationModal, type ProjectCreationModalMetadata } from '../ui/projectCreationModal';
-import { projectCreatedNextStepsModal, type ProjectNextStepsModalMetadata } from '../ui/projectCreatedNextStepsModal';
-import { buildBriefEntryModal } from '../ui/researchBriefEntryModal';
-import { discoverHubModal, DISCOVERY_GUIDANCE_BLOCK_ID, DISCOVERY_ARTIFACTS_BLOCK_ID } from '../ui/discoverHubModal';
-import { loadDiscoveryArtifacts, type DiscoveryArtifact } from '../../discoveryLoader';
-import { buildGuidanceText, buildArtifactDisplayText } from './discoverHandler';
 
 // ─── Channel naming utilities ────────────────────────────────────
 
@@ -241,18 +236,23 @@ async function handleProjectCreateSubmission({ ack, body, view, client }: SlackV
       }
     }
 
-    // Ack with update to show next-steps modal
-    await ack({
-      response_action: 'update',
-      view: projectCreatedNextStepsModal({
-        projectId: project.id,
-        projectName: project.name,
-        projectSlug: project.slug,
-        channelId: metadata.channelId,
-        createdChannelId,
-        createdChannelName,
-      }) as View,
-    });
+    // Close modal and post orienting confirmation
+    await ack();
+
+    const channelContext = createdChannelName ? `, <#${createdChannelId}> ready` : '';
+    const confirmationText = `✅ *${project.name}* created${channelContext}. When you're ready, run \`/qori-brief\` to start your first study — or \`/qori-discover\` first if you want to add background research.`;
+
+    // Post to the created channel if one exists, otherwise DM
+    const targetChannel = createdChannelId || body.user.id;
+    try {
+      await client.chat.postMessage({
+        channel: targetChannel,
+        text: confirmationText,
+      });
+    } catch (msgErr) {
+      const msgMessage = msgErr instanceof Error ? msgErr.message : String(msgErr);
+      console.warn(`Could not post confirmation message: ${msgMessage}`);
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
 
@@ -278,164 +278,7 @@ async function handleProjectCreateSubmission({ ack, body, view, client }: SlackV
   }
 }
 
-// ─── Button handlers ────────────────────────────────────────────
-
-/**
- * Handle project action buttons from the next-steps modal.
- *
- * Phase 2D: Brief and Discovery buttons open their respective modals with project context.
- * Library remains "coming soon" placeholder.
- */
-async function handleProjectActionButton({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
-  await ack();
-
-  const actionId = (body as BlockAction).actions?.[0]?.action_id || 'unknown';
-
-  // Parse modal metadata for project context
-  let metadata: ProjectNextStepsModalMetadata;
-  try {
-    const viewBody = body as BlockAction & { view?: { private_metadata?: string } };
-    metadata = JSON.parse(viewBody.view?.private_metadata || '{}') as ProjectNextStepsModalMetadata;
-  } catch {
-    await client.chat.postEphemeral({
-      channel: body.user.id,
-      user: body.user.id,
-      text: '❌ Could not read project context. Please try again.',
-    });
-    return;
-  }
-
-  // Handle brief button — open the brief entry modal
-  if (actionId === 'project_action_brief') {
-    try {
-      // Get user's display name for lead researcher pre-fill
-      let leadResearcher: string | null = null;
-      try {
-        const userInfo = await client.users.info({ user: body.user.id });
-        leadResearcher = userInfo.user?.real_name || userInfo.user?.profile?.display_name || null;
-      } catch {
-        // Non-critical — leave null
-      }
-
-      const briefModal = await buildBriefEntryModal({
-        leadResearcher,
-        channelId: metadata.channelId || metadata.createdChannelId || body.user.id,
-        projectId: metadata.projectId,
-        projectName: metadata.projectName,
-        projectSlug: metadata.projectSlug,
-        source: 'project_next_steps',
-      });
-
-      await client.views.push({
-        trigger_id: (body as BlockAction).trigger_id,
-        // @ts-expect-error — modal blocks are Record<string,unknown>[] from JSON.parse; structurally valid at runtime
-        view: briefModal,
-      });
-      return;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      console.error('Failed to open brief modal from project next steps:', message);
-      await client.chat.postEphemeral({
-        channel: body.user.id,
-        user: body.user.id,
-        text: `❌ Could not open brief modal: ${message}`,
-      });
-      return;
-    }
-  }
-
-  // Handle discovery button — open the discover hub modal
-  if (actionId === 'project_action_discovery') {
-    try {
-      // Load existing discovery artifacts for this project
-      let artifacts: DiscoveryArtifact[] = [];
-      try {
-        artifacts = await loadDiscoveryArtifacts(metadata.projectId);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        console.warn('Could not load discovery artifacts for hub:', message);
-      }
-
-      // Build dynamic hub blocks
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const blocks: any[] = [...discoverHubModal.blocks];
-
-      // Inject D2 guidance
-      const guidanceIdx = blocks.findIndex((b: { block_id?: string }) => b.block_id === DISCOVERY_GUIDANCE_BLOCK_ID);
-      if (guidanceIdx !== -1) {
-        blocks[guidanceIdx] = {
-          ...blocks[guidanceIdx],
-          elements: [
-            {
-              type: "mrkdwn",
-              text: buildGuidanceText(artifacts),
-            },
-          ],
-        };
-      }
-
-      // Inject D1 artifact visibility
-      const artifactsIdx = blocks.findIndex((b: { block_id?: string }) => b.block_id === DISCOVERY_ARTIFACTS_BLOCK_ID);
-      if (artifactsIdx !== -1) {
-        blocks[artifactsIdx] = {
-          ...blocks[artifactsIdx],
-          elements: [
-            {
-              type: "mrkdwn",
-              text: buildArtifactDisplayText(artifacts),
-            },
-          ],
-        };
-      }
-
-      // Include project context in metadata
-      const discoverMeta = {
-        channelId: metadata.createdChannelId || metadata.channelId,
-        projectId: metadata.projectId,
-        projectSlug: metadata.projectSlug,
-      };
-
-      await client.views.push({
-        trigger_id: (body as BlockAction).trigger_id,
-        view: {
-          ...discoverHubModal,
-          blocks,
-          private_metadata: JSON.stringify(discoverMeta),
-        } as View,
-      });
-      return;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      console.error('Failed to open discover hub from project next steps:', message);
-      await client.chat.postEphemeral({
-        channel: body.user.id,
-        user: body.user.id,
-        text: `❌ Could not open discovery hub: ${message}`,
-      });
-      return;
-    }
-  }
-
-  // Library button remains "coming soon" for now
-  if (actionId === 'project_action_library') {
-    await client.chat.postEphemeral({
-      channel: body.user.id,
-      user: body.user.id,
-      text: `*Library import* connects to projects in the next update.`,
-    });
-    return;
-  }
-
-  // Unknown action
-  await client.chat.postEphemeral({
-    channel: body.user.id,
-    user: body.user.id,
-    text: `Unknown action: ${actionId}`,
-  });
-}
-
 export {
   projectStartCommand,
   handleProjectCreateSubmission,
-  handleProjectActionButton,
 };
