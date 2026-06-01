@@ -351,20 +351,9 @@ const handleStudySelectionChange = async ({ ack, body, client }: SlackActionMidd
       }
     }
 
-    // Parse existing excluded enrichments from metadata
-    let excludedEnrichments: string[] = [];
-    if (view.private_metadata) {
-      try {
-        const metadata = JSON.parse(view.private_metadata) as SynthesisModalMetadata;
-        excludedEnrichments = metadata.excludedEnrichments || [];
-      } catch {
-        // Ignore parse errors
-      }
-    }
-
     await client.views.update({
       view_id: view.id,
-      view: researchSynthesisModal(studies as Study[], studyId, currentAnalysisMethod, cascadeData, excludedEnrichments)
+      view: researchSynthesisModal(studies as Study[], studyId, currentAnalysisMethod, cascadeData)
     });
 
     console.log("✅ Modal updated with cascade data");
@@ -417,84 +406,13 @@ const handleAnalysisMethodChange = async ({ ack, body, client }: SlackActionMidd
       }
     }
 
-    // Parse existing excluded enrichments
-    let excludedEnrichments: string[] = [];
-    if (view.private_metadata) {
-      try {
-        const metadata = JSON.parse(view.private_metadata) as SynthesisModalMetadata;
-        excludedEnrichments = metadata.excludedEnrichments || [];
-      } catch {
-        // Ignore parse errors
-      }
-    }
-
     await client.views.update({
       view_id: view.id,
-      view: researchSynthesisModal(studies as Study[], studyId, newAnalysisMethod, cascadeData, excludedEnrichments)
+      view: researchSynthesisModal(studies as Study[], studyId, newAnalysisMethod, cascadeData)
     });
 
   } catch (error) {
     console.error("Error in handleAnalysisMethodChange:", error);
-  }
-};
-
-// ─── Enrichment checkbox change handler ──────────────────────────
-
-const handleEnrichmentCheckboxChange = async ({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs): Promise<void> => {
-  try {
-    await ack();
-
-    const view = body.view;
-    if (!view || !view.state || !view.state.values) {
-      return;
-    }
-
-    // Get currently selected enrichments
-    const selectedEnrichments = view.state.values.enrichments_list?.enrichment_checkboxes?.selected_options || [];
-    const selectedKeys = selectedEnrichments.map((opt: { value: string }) => opt.value);
-
-    // Parse metadata to get available enrichments and compute excluded
-    let metadata: SynthesisModalMetadata = { selectedStudyId: null, selectedAnalysisMethod: null };
-    if (view.private_metadata) {
-      try {
-        metadata = JSON.parse(view.private_metadata) as SynthesisModalMetadata;
-      } catch {
-        // Ignore parse errors
-      }
-    }
-
-    // Get the study to rebuild cascade data
-    const selectedStudyOption = view.state.values.study_select_block?.study_select_synthesize?.selected_option;
-    const studyId = selectedStudyOption?.value;
-    const analysisMethod = view.state.values.analysis_method_selection?.analysis_method?.selected_option?.value || 'affinity_mapping';
-
-    if (!studyId || studyId === "no_studies") {
-      return;
-    }
-
-    const studies = await getStudiesByUser(body.user.id);
-    const selectedStudy = studies.find((s: Study) => s.id.toString() === studyId.toString());
-
-    let cascadeData: SynthesisCascadeData | null = null;
-    if (selectedStudy) {
-      const resolved = await resolveStudyFromName(selectedStudy.name);
-      if (resolved) {
-        const variableContext: VariableContext = { projectId: resolved.projectId, studyId: resolved.studyId };
-        cascadeData = await buildSynthesisCascadeData(variableContext, analysisMethod);
-      }
-    }
-
-    // Compute excluded enrichments (those available but not selected)
-    const availableKeys = cascadeData?.enrichments.map(e => e.key) || [];
-    const excludedEnrichments = availableKeys.filter(k => !selectedKeys.includes(k));
-
-    await client.views.update({
-      view_id: view.id,
-      view: researchSynthesisModal(studies as Study[], studyId, analysisMethod, cascadeData, excludedEnrichments)
-    });
-
-  } catch (error) {
-    console.error("Error in handleEnrichmentCheckboxChange:", error);
   }
 };
 
@@ -524,21 +442,6 @@ const handleResearchSynthesisSubmission = async ({ ack, body, view, client }: Sl
     const study = resolved.study;
     const variableContext: VariableContext = { projectId: resolved.projectId, studyId: resolved.studyId };
 
-    // Parse excluded enrichments from metadata
-    let excludedEnrichments: string[] = [];
-    if (view.private_metadata) {
-      try {
-        const metadata = JSON.parse(view.private_metadata) as SynthesisModalMetadata;
-        excludedEnrichments = metadata.excludedEnrichments || [];
-      } catch {
-        // Ignore parse errors
-      }
-    }
-
-    // Get selected enrichments from checkboxes
-    const selectedEnrichmentOptions = view.state.values.enrichments_list?.enrichment_checkboxes?.selected_options || [];
-    const selectedEnrichmentKeys = selectedEnrichmentOptions.map((opt: { value: string }) => opt.value);
-
     // ─── CASCADE CONTRACT VALIDATION ─────────────────────────────────
     // ADR 0018: Cascade-aware synthesis requires atomic_nugget_core/detail
 
@@ -558,32 +461,25 @@ const handleResearchSynthesisSubmission = async ({ ack, body, view, client }: Sl
       );
     }
 
-    // ─── BUILD CONSUMES SPEC WITH EXCLUSIONS ─────────────────────────
-    // Build the consumes spec, excluding user-deselected enrichments
+    // ─── BUILD CONSUMES SPEC ─────────────────────────────────────────
+    // ADR 0018 amendment: All enrichments always included when available (no opt-out)
 
     const templateConsumes = TEMPLATE_CONSUMES[analysisMethod] || [];
-    const filteredConsumes: ConsumeSpec[] = templateConsumes
-      .filter(spec => {
-        // Always include required vars
-        if (spec.required) return true;
-        // Include optional if not excluded by user
-        return !excludedEnrichments.includes(spec.key);
-      })
-      .map(spec => ({
-        key: spec.key,
-        required: spec.required,
-        source: spec.source_hint?.includes('brief') ? 'research_brief' :
-                spec.source_hint?.includes('affinity') ? 'affinity_mapping' :
-                spec.source_hint?.includes('persona') ? 'persona_generator' :
-                spec.source_hint?.includes('stakeholder') ? 'stakeholder_synthesis' :
-                'session_summary',
-      }));
+    const consumesSpec: ConsumeSpec[] = templateConsumes.map(spec => ({
+      key: spec.key,
+      required: spec.required,
+      source: spec.source_hint?.includes('brief') ? 'research_brief' :
+              spec.source_hint?.includes('affinity') ? 'affinity_mapping' :
+              spec.source_hint?.includes('persona') ? 'persona_generator' :
+              spec.source_hint?.includes('stakeholder') ? 'stakeholder_synthesis' :
+              'session_summary',
+    }));
 
     // ─── LOAD STRUCTURED CASCADE VARIABLES ───────────────────────────
     // ADR 0018: The real wiring — read from variable store
 
     console.log(`🚀 ~ Loading cascade variables for ${analysisMethod}...`);
-    const upstreamVars: UpstreamVariables = await readUpstreamVariablesByContext(variableContext, filteredConsumes);
+    const upstreamVars: UpstreamVariables = await readUpstreamVariablesByContext(variableContext, consumesSpec);
     console.log(`✅ Loaded ${Object.keys(upstreamVars).length} cascade variables: ${Object.keys(upstreamVars).join(', ')}`);
 
     // ─── BUILD RAW CONTENT AS CONTEXT ────────────────────────────────
@@ -726,7 +622,6 @@ export {
   handleResearchSynthesisSubmission,
   handleStudySelectionChange,
   handleAnalysisMethodChange,
-  handleEnrichmentCheckboxChange,
   buildSessionDataStats,
   buildAvailableEnrichments,
   buildSynthesisCascadeData,

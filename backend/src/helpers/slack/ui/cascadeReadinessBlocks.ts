@@ -72,11 +72,15 @@ const TEMPLATE_CONSUMES: Record<string, ConsumeSpec[]> = {
     { key: 'atomic_nugget_core', required: true, label: 'Atomic nuggets (core)', source_hint: 'Run session summaries first' },
     { key: 'atomic_nugget_detail', required: true, label: 'Atomic nuggets (detail)', source_hint: 'Run session summaries first' },
     { key: 'validated_themes', required: false, label: 'Validated themes', source_hint: 'Run affinity mapping first' },
+    { key: 'target_barriers', required: false, label: 'Target barriers', source_hint: 'Run research brief first' },
+    { key: 'research_questions', required: false, label: 'Research questions', source_hint: 'Run research brief first' },
   ],
   usability_issues: [
     { key: 'atomic_nugget_core', required: true, label: 'Atomic nuggets (core)', source_hint: 'Run session summaries first' },
     { key: 'atomic_nugget_detail', required: true, label: 'Atomic nuggets (detail)', source_hint: 'Run session summaries first' },
     { key: 'validated_themes', required: false, label: 'Validated themes', source_hint: 'Run affinity mapping first' },
+    { key: 'target_barriers', required: false, label: 'Target barriers', source_hint: 'Run research brief first' },
+    { key: 'research_questions', required: false, label: 'Research questions', source_hint: 'Run research brief first' },
   ],
   design_opportunities: [
     { key: 'atomic_nugget_core', required: true, label: 'Atomic nuggets (core)', source_hint: 'Run session summaries first' },
@@ -84,6 +88,7 @@ const TEMPLATE_CONSUMES: Record<string, ConsumeSpec[]> = {
     { key: 'validated_themes', required: false, label: 'Validated themes', source_hint: 'Run affinity mapping first' },
     { key: 'personas', required: false, label: 'Personas', source_hint: 'Run persona generation first' },
     { key: 'stakeholder_constraints', required: false, label: 'Stakeholder constraints', source_hint: 'Run stakeholder synthesis first' },
+    { key: 'validated_jobs', required: false, label: 'Validated jobs', source_hint: 'Run jobs-to-be-done first' },
   ],
   service_blueprint: [
     { key: 'atomic_nugget_core', required: true, label: 'Atomic nuggets (core)', source_hint: 'Run session summaries first' },

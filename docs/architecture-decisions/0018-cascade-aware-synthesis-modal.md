@@ -24,7 +24,9 @@ Wire synthesis to actually read the variable store. Remove file checkboxes from 
 
 Specific sub-decisions:
 
-1. **Enrichments opt-out by default.** When `validated_themes`, `target_barriers`, or other optional cascade variables exist, they're included automatically. Researcher can uncheck to exclude. Cascade just works.
+1. **~~Enrichments opt-out by default.~~** ~~When `validated_themes`, `target_barriers`, or other optional cascade variables exist, they're included automatically. Researcher can uncheck to exclude. Cascade just works.~~
+
+   **Amendment (2026-06-01): Enrichments always injected, no opt-out.** The original opt-out design was reversed. Rationale: researchers excluding enrichments causes synthesis output to vary unpredictably, and most won't understand the consequence of unchecking (e.g., excluding `validated_themes` means affinity map loses prior theme context). New decision: enrichments are ALWAYS injected when available. The modal displays which enrichments are feeding the synthesis (read-only info), but provides no mechanism to exclude them. This matches the no-per-session-exclusion principle in sub-decision 3.
 
 2. **Hard-fail when no sessions analyzed.** If no `atomic_nugget_core` rows exist for the study, the modal shows an error state and submit is disabled. "Run /qori-analyze first" — no submit-into-nothing.
 

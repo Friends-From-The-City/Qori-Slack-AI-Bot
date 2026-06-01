@@ -59,7 +59,7 @@ import { handleTabManual, handleTabUpload, handleSessionSelectionChange, handleS
 
 // Analysis
 import { analyzeNotesHandler, handleAnalyzeNotesSubmission, handleStudySelectionChange as handleAnalyzeNotesStudyChange, handleSessionSelectionChange as handleAnalyzeNotesSessionChange } from './commands/analyzeNotesHandler';
-import { researchSynthesisHandler, handleResearchSynthesisSubmission, handleStudySelectionChange, handleAnalysisMethodChange, handleEnrichmentCheckboxChange } from './commands/researchSynthesisHandler';
+import { researchSynthesisHandler, handleResearchSynthesisSubmission, handleStudySelectionChange, handleAnalysisMethodChange } from './commands/researchSynthesisHandler';
 
 // Readouts & tickets
 import { openReadoutModal, handleReadoutModalInteraction, handleReadoutModalSubmission } from './commands/readoutHandler';
@@ -446,7 +446,6 @@ slackApp.action('analyze_notes_session_select', handleAnalyzeNotesSessionChange)
 slackApp.view('research-synthesis-modal', handleResearchSynthesisSubmission);
 slackApp.action('study_select_synthesize', handleStudySelectionChange);
 slackApp.action('analysis_method', handleAnalysisMethodChange);
-slackApp.action('enrichment_checkboxes', handleEnrichmentCheckboxChange);
 
 // ─── Readouts & tickets ─────────────────────────────────────────
 
