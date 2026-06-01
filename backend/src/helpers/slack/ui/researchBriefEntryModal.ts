@@ -15,14 +15,9 @@ export interface BriefEntryModalMetadata {
 
 interface CascadeFields {
   method?: string;
-  methodHint?: string;
   participants?: string;
-  participantsHint?: string;
   questions?: string;
-  questionsHint?: string;
   outOfScope?: string;
-  outOfScopeHint?: string;
-  risksPreview?: string;
 }
 
 interface BuildBriefEntryModalOptions {
@@ -36,9 +31,10 @@ interface BuildBriefEntryModalOptions {
 
 /**
  * Synthesize pre-population values from aggregated discovery variables.
- * Returns { method, methodHint, participants, participantsHint, questions, questionsHint, outOfScope, outOfScopeHint, risksPreview }
+ * Returns { method, participants, questions, outOfScope } for field pre-fills.
+ * Risks are NOT pre-filled here — they're consumed by brief generation (research_brief.yaml).
  */
-function synthesizeCascadeFields(upstream: Record<string, string>, artifacts: DiscoveryArtifact[]): CascadeFields {
+function synthesizeCascadeFields(upstream: Record<string, string>, _artifacts: DiscoveryArtifact[]): CascadeFields {
   const result: CascadeFields = {};
 
   // Method — from methodology_recommendations
@@ -51,7 +47,6 @@ function synthesizeCascadeFields(upstream: Record<string, string>, artifacts: Di
       const firstMethod = methods[0].replace(/^\*\*\d+\.\*\*\s*/, '').replace(/^-\s*/, '').split('\n')[0];
       const methodName = firstMethod.match(/method(?:_name)?:\s*(.+?)(?:,|$)/i)?.[1] || firstMethod.substring(0, 80);
       result.method = methodName.trim();
-      result.methodHint = `Recommended by ${artifacts.length} discovery source${artifacts.length === 1 ? '' : 's'}`;
     }
   }
 
@@ -69,7 +64,6 @@ function synthesizeCascadeFields(upstream: Record<string, string>, artifacts: Di
     }
     if (questionTexts.length > 0) {
       result.questions = questionTexts.slice(0, 3).map((q, i) => `${i + 1}. ${q}`).join('\n');
-      result.questionsHint = `Pulled from stakeholder questions for users (${Math.min(questionTexts.length, 3)} of ${questionTexts.length} selected)`;
     }
   }
 
@@ -87,13 +81,11 @@ function synthesizeCascadeFields(upstream: Record<string, string>, artifacts: Di
     }
     if (established.length > 0) {
       result.outOfScope = established.slice(0, 2).map(e => `${e} (already established by discovery)`).join('\n');
-      result.outOfScopeHint = `First items pre-populated — discovery already established these findings`;
     }
   }
 
   // Participants — synthesize from discovery evidence
   const segments: string[] = [];
-  const participantHints: string[] = [];
 
   // Check for AT user evidence from constraints or survey
   const constraintText = upstream.upstream_stakeholder_constraints || '';
@@ -105,36 +97,16 @@ function synthesizeCascadeFields(upstream: Record<string, string>, artifacts: Di
       barrierText.match(/screen.reader|assistive.tech|accessibility/i)) {
     segments.push('3 screen reader users');
     segments.push('2 voice control users');
-    participantHints.push('AT users flagged by discovery');
   }
 
   // Check for age-related patterns
   if (barrierText.match(/age|older|65\+|senior/i) ||
       surveyText.match(/age|older|65\+|senior/i)) {
     segments.push('at least 3 aged 65+');
-    participantHints.push('age-related barriers in discovery');
   }
 
   if (segments.length > 0) {
     result.participants = `8-12 Veterans, including ${segments.join(', ')}. Mix of iOS and Android users. Recruited via VA Section 508 Office and MHV coordinators.`;
-    result.participantsHint = `Composition reflects discovery: ${participantHints.join('; ')}`;
-  }
-
-  // Risks preview — from stakeholder_constraints
-  const constraints = upstream.upstream_stakeholder_constraints;
-  if (constraints) {
-    const riskLines: string[] = [];
-    const constraintBlocks = constraints.split('\n\n').filter((b: string) => b.trim());
-    for (const block of constraintBlocks.slice(0, 3)) {
-      const constraintMatch = block.match(/constraint:\s*(.+)/i);
-      const sourceMatch = block.match(/source(?:_role)?:\s*(.+)/i);
-      if (constraintMatch) {
-        const risk = constraintMatch[1].trim().substring(0, 80);
-        const source = sourceMatch ? sourceMatch[1].trim() : 'Stakeholder';
-        riskLines.push(`- ${risk} (${source})`);
-      }
-    }
-    result.risksPreview = riskLines.join('\n');
   }
 
   return result;
@@ -142,7 +114,7 @@ function synthesizeCascadeFields(upstream: Record<string, string>, artifacts: Di
 
 /**
  * Build the brief entry modal.
- * Cascade-aware: auto-selects discovery, pre-populates fields with sparkle markers.
+ * Cascade-aware: auto-selects discovery sources, pre-populates fields from discovery data.
  *
  * Phase 2D: Requires projectId. Study name is inherited from project (no study_name_block).
  */
@@ -269,38 +241,61 @@ export async function buildBriefEntryModal(options: BuildBriefEntryModalOptions)
       // Insert checkbox block after status
       modalBlocks.splice(statusIdx + 1, 0, checkboxBlock);
 
-      // Aggregate variables for pre-population
+      // Aggregate variables for pre-population (pre-fills only, no narration blocks)
       const upstream = aggregateDiscoveryVariables(artifacts) as Record<string, string>;
       const cascade = synthesizeCascadeFields(upstream, artifacts);
 
-      // Build cascade-suggests blocks
-      const cascadeBlocks: Record<string, unknown>[] = [];
-
-      cascadeBlocks.push({ type: "divider" });
-      cascadeBlocks.push({
-        type: "context",
-        elements: [{
-          type: "mrkdwn",
-          text: "🤖 *Discovery suggests* — Edit any field to override. Uncheck sources above to exclude.",
-        }],
-      });
-
       // Pre-populate method — hybrid radio + override
       if (cascade.method) {
-        // Check if cascade method matches a radio option
         const radioOptions: Record<string, string> = {
+          // Usability Testing
           'usability testing': 'usability_testing',
+          'usability test': 'usability_testing',
+          'usability study': 'usability_testing',
           'moderated usability testing': 'usability_testing',
+          'moderated usability test': 'usability_testing',
+          'unmoderated usability testing': 'usability_testing',
+          // User Interviews
           'user interviews': 'user_interviews',
+          'user interview': 'user_interviews',
+          'interviews': 'user_interviews',
+          'interview': 'user_interviews',
+          // Contextual Inquiry
           'contextual inquiry': 'contextual_inquiry',
+          'contextual inquiries': 'contextual_inquiry',
+          // Concept Testing
           'concept testing': 'concept_testing',
+          'concept test': 'concept_testing',
+          'concept validation': 'concept_testing',
+          // Survey Research
           'survey': 'survey',
           'survey research': 'survey',
+          'surveys': 'survey',
+          // Card Sorting
           'card sorting': 'card_sorting',
+          'card sort': 'card_sorting',
+          'card sorts': 'card_sorting',
+          // Tree Testing
           'tree testing': 'tree_testing',
+          'tree test': 'tree_testing',
+          'tree tests': 'tree_testing',
+          // Mixed Methods
           'mixed methods': 'mixed_methods',
+          'mixed method': 'mixed_methods',
         };
-        const matchedRadio = radioOptions[cascade.method.toLowerCase()];
+        const methodLower = cascade.method.toLowerCase();
+
+        // Check for exact match first
+        let matchedRadio = radioOptions[methodLower];
+
+        // If no exact match, check for combined/mixed methods indicators
+        if (!matchedRadio) {
+          const combinedIndicators = ['followed by', 'then', ' + ', ' and ', 'combined with'];
+          const isCombined = combinedIndicators.some(ind => methodLower.includes(ind));
+          if (isCombined) {
+            matchedRadio = 'mixed_methods';
+          }
+        }
 
         if (matchedRadio) {
           // Matches a radio option — pre-select it
@@ -316,10 +311,6 @@ export async function buildBriefEntryModal(options: BuildBriefEntryModalOptions)
               };
             }
           }
-          cascadeBlocks.push({
-            type: "context",
-            elements: [{ type: "mrkdwn", text: `✨ *Method:* ${cascade.method} — ${cascade.methodHint}` }],
-          });
         } else {
           // Doesn't match radio — pre-fill override text field
           const overrideIdx = modalBlocks.findIndex((b: Record<string, unknown>) => b.block_id === 'method_override_block');
@@ -329,10 +320,6 @@ export async function buildBriefEntryModal(options: BuildBriefEntryModalOptions)
               element: { ...(modalBlocks[overrideIdx].element as Record<string, unknown>), initial_value: cascade.method },
             };
           }
-          cascadeBlocks.push({
-            type: "context",
-            elements: [{ type: "mrkdwn", text: `✨ *Method:* Discovery recommends combined method — using custom field. ${cascade.methodHint}` }],
-          });
         }
       }
 
@@ -347,13 +334,6 @@ export async function buildBriefEntryModal(options: BuildBriefEntryModalOptions)
               initial_value: cascade.questions,
             },
           };
-          cascadeBlocks.push({
-            type: "context",
-            elements: [{
-              type: "mrkdwn",
-              text: `✨ *Research questions:* ${cascade.questionsHint}`,
-            }],
-          });
         }
       }
 
@@ -368,13 +348,6 @@ export async function buildBriefEntryModal(options: BuildBriefEntryModalOptions)
               initial_value: cascade.outOfScope,
             },
           };
-          cascadeBlocks.push({
-            type: "context",
-            elements: [{
-              type: "mrkdwn",
-              text: `✨ *Out of scope:* ${cascade.outOfScopeHint}`,
-            }],
-          });
         }
       }
 
@@ -389,30 +362,11 @@ export async function buildBriefEntryModal(options: BuildBriefEntryModalOptions)
               initial_value: cascade.participants,
             },
           };
-          cascadeBlocks.push({
-            type: "context",
-            elements: [{
-              type: "mrkdwn",
-              text: `✨ *Participants:* ${cascade.participantsHint}`,
-            }],
-          });
         }
       }
 
-      // Risks preview from constraints
-      if (cascade.risksPreview) {
-        cascadeBlocks.push({
-          type: "context",
-          elements: [{
-            type: "mrkdwn",
-            text: `⚠️ *Risks preview* (from stakeholder constraints):\n${cascade.risksPreview}`,
-          }],
-        });
-      }
-
-      // Insert all cascade blocks after the checkbox block
-      const insertIdx = statusIdx + 2; // after status + checkbox
-      modalBlocks.splice(insertIdx, 0, ...cascadeBlocks);
+      // Note: Risks from upstream_stakeholder_constraints are consumed by brief
+      // generation (research_brief.yaml risks task), not displayed in modal.
     }
   }
 
