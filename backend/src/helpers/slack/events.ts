@@ -23,7 +23,7 @@ import type { View } from '@slack/types';
 import { qoriMainCommand, handleStudySelect } from './commands/qoriMainHandler';
 
 // Project creation (Phase 2C)
-import { projectStartCommand, handleProjectCreateSubmission, handleProjectActionButton } from './commands/projectStartHandler';
+import { projectStartCommand, handleProjectCreateSubmission } from './commands/projectStartHandler';
 import { handleViewClosed, handlePlanStudyNoop, handleStudySetupSkip, handleUserSelectOptions } from './commands/study/studyLifecycleHandler';
 import { deleteStudyCommand, handleDeleteStudySubmission } from './commands/study/deleteStudyHandler';
 
@@ -59,7 +59,7 @@ import { handleTabManual, handleTabUpload, handleSessionSelectionChange, handleS
 
 // Analysis
 import { analyzeNotesHandler, handleAnalyzeNotesSubmission, handleStudySelectionChange as handleAnalyzeNotesStudyChange, handleSessionSelectionChange as handleAnalyzeNotesSessionChange } from './commands/analyzeNotesHandler';
-import { researchSynthesisHandler, handleResearchSynthesisSubmission, handleStudySelectionChange, handleAnalysisMethodChange, handleEnrichmentCheckboxChange } from './commands/researchSynthesisHandler';
+import { researchSynthesisHandler, handleResearchSynthesisSubmission, handleStudySelectionChange, handleAnalysisMethodChange } from './commands/researchSynthesisHandler';
 
 // Readouts & tickets
 import { openReadoutModal, handleReadoutModalInteraction, handleReadoutModalSubmission } from './commands/readoutHandler';
@@ -350,12 +350,9 @@ slackApp.view('delete-study-modal', handleDeleteStudySubmission);
 // The handler uses an inline type with { event: { view: { callback_id } } }.
 slackApp.event('view_closed', handleViewClosed as any);
 
-// ─── Project creation (Phase 2C) ─────────────────────────────────
+// ─── Project creation ────────────────────────────────────────────
 
 slackApp.view('project_create_modal', handleProjectCreateSubmission);
-slackApp.action('project_action_discovery', handleProjectActionButton);
-slackApp.action('project_action_brief', handleProjectActionButton);
-slackApp.action('project_action_library', handleProjectActionButton);
 
 // ─── Research brief ─────────────────────────────────────────────
 
@@ -449,7 +446,6 @@ slackApp.action('analyze_notes_session_select', handleAnalyzeNotesSessionChange)
 slackApp.view('research-synthesis-modal', handleResearchSynthesisSubmission);
 slackApp.action('study_select_synthesize', handleStudySelectionChange);
 slackApp.action('analysis_method', handleAnalysisMethodChange);
-slackApp.action('enrichment_checkboxes', handleEnrichmentCheckboxChange);
 
 // ─── Readouts & tickets ─────────────────────────────────────────
 

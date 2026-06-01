@@ -116,6 +116,7 @@ function formatObjectAsMarkdown(obj: Record<string, unknown>, index?: number): s
     'theme',
     'label',
     'metric',
+    'method', // methodology_recommendation.method — human-readable method name
   ];
   const primaryKey = primaryKeys.find((k) => obj[k]) || Object.keys(obj)[0];
   const primaryValue = obj[primaryKey];
