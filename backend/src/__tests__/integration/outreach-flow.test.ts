@@ -44,6 +44,7 @@ async function createParticipant(status: string = PARTICIPANT_STATUS.NOT_CONTACT
 
   const participant = await sequelize.models.StudyParticipant.create({
     study_id: study.get('id') as number,
+    participant_code: 'PT-001',
     participant_name: 'Outreach Participant',
     status_select: status,
     added_by: 'U_TEST',
@@ -122,6 +123,7 @@ describe('outreach flow', () => {
 
     const p = await sequelize.models.StudyParticipant.create({
       study_id: studyId,
+      participant_code: 'PT-001',
       participant_name: 'Query Participant',
       status_select: 'not_contacted',
       added_by: 'U_TEST',

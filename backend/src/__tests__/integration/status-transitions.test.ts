@@ -43,6 +43,7 @@ async function createStudyWithParticipant(overrides: Record<string, unknown> = {
 
   const participant = await sequelize.models.StudyParticipant.create({
     study_id: study.get('id') as number,
+    participant_code: 'PT-001',
     participant_name: 'Test Participant',
     status_select: PARTICIPANT_STATUS.NOT_CONTACTED,
     added_by: 'U_TEST',
@@ -99,11 +100,11 @@ describe('status transitions', () => {
     const SP = sequelize.models.StudyParticipant;
 
     // Create participants in various statuses
-    await SP.create({ study_id: studyId, participant_name: 'P1', status_select: 'not_contacted', added_by: 'U' });
-    await SP.create({ study_id: studyId, participant_name: 'P2', status_select: 'contacted', added_by: 'U' });
-    await SP.create({ study_id: studyId, participant_name: 'P3', status_select: 'confirmed', added_by: 'U' });
-    await SP.create({ study_id: studyId, participant_name: 'P4', status_select: 'completed', added_by: 'U' });
-    await SP.create({ study_id: studyId, participant_name: 'P5', status_select: 'contacted', added_by: 'U' });
+    await SP.create({ study_id: studyId, participant_code: 'PT-001', participant_name: 'P1', status_select: 'not_contacted', added_by: 'U' });
+    await SP.create({ study_id: studyId, participant_code: 'PT-002', participant_name: 'P2', status_select: 'contacted', added_by: 'U' });
+    await SP.create({ study_id: studyId, participant_code: 'PT-003', participant_name: 'P3', status_select: 'confirmed', added_by: 'U' });
+    await SP.create({ study_id: studyId, participant_code: 'PT-004', participant_name: 'P4', status_select: 'completed', added_by: 'U' });
+    await SP.create({ study_id: studyId, participant_code: 'PT-005', participant_name: 'P5', status_select: 'contacted', added_by: 'U' });
 
     // Count by status directly (mirroring getParticipantStats logic)
     const total = await SP.count({ where: { study_id: studyId } });
@@ -133,8 +134,9 @@ describe('status transitions', () => {
     const SP = sequelize.models.StudyParticipant;
 
     // All terminal statuses
+    let i = 1;
     for (const status of TERMINAL_STATUSES) {
-      await SP.create({ study_id: studyId, participant_name: `P-${status}`, status_select: status, added_by: 'U' });
+      await SP.create({ study_id: studyId, participant_code: `PT-${String(i++).padStart(3, '0')}`, participant_name: `P-${status}`, status_select: status, added_by: 'U' });
     }
 
     const active = await SP.count({ where: { study_id: studyId, status_select: ACTIVE_STATUSES } });

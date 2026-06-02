@@ -310,7 +310,7 @@ const handleSessionNotesSubmission = async ({ ack, body, view, client }: SlackVi
       if (participant) {
         selectedSession = {
           id: participantId,
-          session_id: `PT-${String(participantId).padStart(3, '0')}`,
+          session_id: participant.participant_code,
           study: participant.study || { name: 'Unknown Study' },
           // @ts-expect-error — pre-existing type mismatch from require() → import migration
           participant,
@@ -338,7 +338,7 @@ const handleSessionNotesSubmission = async ({ ack, body, view, client }: SlackVi
       researcher: selectedSession.study?.researcher_name || 'Unknown Researcher',
       slack_user_id: body.user.id || 'Unknown',
       study_name: selectedSession.study?.name || 'Unknown Study',
-      participant_id: selectedSession.participant?.participant_name || 'Unknown Participant ID',
+      participant_id: selectedSession.session_id || 'PT-UNKNOWN',
     };
 
     let renderedYaml: { result: GitHubResult } | undefined;

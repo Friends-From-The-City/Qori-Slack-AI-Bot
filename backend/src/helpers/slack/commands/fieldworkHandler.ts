@@ -397,11 +397,11 @@ async function handleFieldworkUploadNotes({ ack, body, client }: SlackActionMidd
 
       mode = 'researcher';
       // @ts-expect-error — pre-existing type mismatch from require() → import migration
-      sessions = participants.map((p: any, idx: number) => ({
+      sessions = participants.map((p: any) => ({
         id: `p_${p.id}`,
         study: p.study || { id: studyId, name: studyName },
         participant: p,
-        session_id: `PT-${String(idx + 1).padStart(3, '0')}`,
+        session_id: p.participant_code,
       }));
     }
 

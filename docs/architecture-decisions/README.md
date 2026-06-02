@@ -92,6 +92,7 @@ Start with `0001` and read forward. The history is itself useful — it shows ho
 - [0017 — Template ID convention](./0017-template-id-convention.md) — YAML `id` must match consumer-side `consumes.source` exactly; no suffixes
 - [0018 — Cascade-aware synthesis modal](./0018-cascade-aware-synthesis-modal.md) — Synthesis reads variable store; file picker removed; structured nuggets as real input
 - [0019 — Ack-first await-extraction handler pattern](./0019-ack-first-await-extraction-handler-pattern.md) — Handlers must await extractionPromise before returning success; eliminates read-before-write races
+- [0020 — System-assigned per-study participant codes](./0020-system-assigned-participant-codes.md) — PT-XXX codes are system-assigned at creation; LLM uses verbatim (complements L005)
 
 ### Lessons (informal ADRs from failure modes)
 

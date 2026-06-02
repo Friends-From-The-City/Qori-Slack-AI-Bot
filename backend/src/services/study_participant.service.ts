@@ -4,8 +4,10 @@ import type { StudyParticipant } from '../database/models/study_participant';
 import type { ResearchStudy } from '../database/models/research_study';
 import type { StudyParticipantCreationAttributes } from '../types/models';
 import type { ParticipantStatus } from '../constants/participantStatus';
+import type { Transaction } from 'sequelize';
 
 import sequelize from '../database';
+import { QueryTypes } from 'sequelize';
 import { processParticipantYamlTemplate } from '../helpers/participantYamlProcessor';
 import { PARTICIPANT_STATUS, ACTIVE_STATUSES } from '../constants/participantStatus';
 
@@ -46,18 +48,60 @@ interface AggregateWithCount extends StudyParticipant {
 
 class StudyParticipantService {
   /**
+   * Generate the next participant code for a study.
+   * Uses MAX+1 logic (delete-safe) with advisory lock for race condition prevention.
+   * Returns PT-001, PT-002, etc. — each study starts at 001.
+   */
+  async getNextParticipantCode(studyId: number, transaction?: Transaction): Promise<string> {
+    const seq = StudyParticipantModel.sequelize!;
+
+    // Advisory lock keyed on study_id prevents race conditions during concurrent creates
+    await seq.query('SELECT pg_advisory_xact_lock($1)', {
+      bind: [studyId],
+      transaction,
+    });
+
+    const [result] = (await seq.query(
+      `SELECT COALESCE(
+         MAX(CAST(SUBSTRING(participant_code FROM 4) AS INTEGER)),
+         0
+       ) + 1 AS next_code
+       FROM study_participants
+       WHERE study_id = $1`,
+      { bind: [studyId], transaction, type: QueryTypes.SELECT },
+    )) as [{ next_code: number }];
+
+    return `PT-${String(result.next_code).padStart(3, '0')}`;
+  }
+
+  /**
    * Create a new participant for a study and update the tracker YAML.
+   * Participant code is system-assigned (PT-001, PT-002 per study).
    */
   async createParticipant(
     participantData: StudyParticipantCreationAttributes & { study_name?: string },
     fileData?: FileData | null,
   ): Promise<StudyParticipant> {
+    const transaction = await StudyParticipantModel.sequelize!.transaction();
+
     try {
       console.log('Creating new participant');
-      const participant = await StudyParticipantModel.create(participantData);
+
+      // Generate system-assigned participant code within transaction
+      const participantCode = await this.getNextParticipantCode(
+        participantData.study_id,
+        transaction,
+      );
+
+      const participant = await StudyParticipantModel.create(
+        { ...participantData, participant_code: participantCode },
+        { transaction },
+      );
 
       await this.updateStudyParticipantCount(participantData.study_id);
+      await transaction.commit();
 
+      // YAML processing outside transaction (non-critical, should not roll back participant creation)
       if (fileData && fileData.file && fileData.study_path) {
         try {
           const allParticipants = await this.getParticipantsByStudy(participantData.study_id);
@@ -66,6 +110,7 @@ class StudyParticipantService {
           const inputData = {
             study_id: participantData.study_id,
             study_name: study ? study.name : (participantData.study_name || 'Study'),
+            participant_code: participantCode,
             participant_name: participantData.participant_name,
             contact_details: participantData.contact_details,
             recruitment_source: participantData.recruitment_source,
@@ -95,6 +140,7 @@ class StudyParticipantService {
 
       return participant;
     } catch (error) {
+      await transaction.rollback();
       console.error('Error creating/updating participant:', error);
       throw error;
     }
