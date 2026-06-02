@@ -9,7 +9,7 @@
 import type { AllMiddlewareArgs, SlackCommandMiddlewareArgs, SlackActionMiddlewareArgs, SlackViewMiddlewareArgs, BlockAction, ViewSubmitAction } from '@slack/bolt';
 import type { ResearchQuestion, TargetBarrier } from '../../../types/cascade';
 
-import { analyzeNotesModal } from "../ui/analyzeNotesModal";
+import { analyzeNotesModal, type AnalyzeNotesModalMetadata } from "../ui/analyzeNotesModal";
 import { getStudiesByUser, resolveStudyFromName } from "../../../services/research_study.service";
 import { getActiveStudy, setActiveStudy } from "../../../services/slack-user-state.service";
 import { studyNotesService } from "../../../services";
@@ -131,6 +131,28 @@ const mapParticipantsToSessions = (participants: ParticipantRecord[]): MappedSes
   }));
 };
 
+// ─── Dynamic block_id helpers ────────────────────────────────────
+// Session block_id is dynamic (includes study ID) to reset Slack's view state on study change.
+// These helpers find the session selection regardless of which study's block_id is in use.
+
+type ViewStateValues = Record<string, Record<string, { selected_option?: { value?: string; text?: { text?: string } } }>>;
+
+const findSessionSelection = (values: ViewStateValues): { value?: string; text?: string } | null => {
+  // Search all blocks for the session action_id
+  for (const blockId of Object.keys(values)) {
+    if (blockId.startsWith('session_select_block')) {
+      const action = values[blockId]?.analyze_notes_session_select;
+      if (action?.selected_option) {
+        return {
+          value: action.selected_option.value,
+          text: action.selected_option.text?.text,
+        };
+      }
+    }
+  }
+  return null;
+};
+
 // ─── Command handler ────────────────────────────────────────────
 
 const analyzeNotesHandler = async ({ ack, body, client }: SlackCommandMiddlewareArgs & AllMiddlewareArgs): Promise<void> => {
@@ -197,18 +219,31 @@ const analyzeNotesHandler = async ({ ack, body, client }: SlackCommandMiddleware
 const handleAnalyzeNotesSubmission = async ({ ack, body, view, client }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs): Promise<void> => {
   const values = view.state.values;
 
+  // Parse metadata for auto-selected transcript (when exactly 1 transcript exists)
+  let metadata: AnalyzeNotesModalMetadata = { source: 'slack' };
+  try {
+    metadata = JSON.parse(view.private_metadata || '{}');
+  } catch {
+    // Default to empty metadata if parsing fails
+  }
+
   const studyId = values.study_select_block?.study_select_test?.selected_option?.value as string | undefined;
-  const sessionId = values.session_select_block?.analyze_notes_session_select?.selected_option?.value as string | undefined;
-  const selectedTranscriptId = values.transcript_select_block?.transcript_select?.selected_option?.value as string | undefined;
+  const sessionSelection = findSessionSelection(values as ViewStateValues);
+  const sessionId = sessionSelection?.value;
   const selectedNotes = values.notes_select_block?.notes_select?.selected_options || [];
 
+  // Transcript: check form value first (>1 transcripts), fall back to auto-selected (1 transcript)
+  const selectedTranscriptId =
+    values.transcript_select_block?.transcript_select?.selected_option?.value ||
+    metadata.autoSelectedTranscriptId;
+
   // Transcript is required
-  const transcriptBlock = values.transcript_select_block;
-  if (!transcriptBlock || !selectedTranscriptId) {
+  if (!selectedTranscriptId) {
+    // This only happens if 0 transcripts (submit should be disabled, but defensive)
     await (ack as Function)({
       response_action: "errors",
       errors: {
-        transcript_select_block: "Please select a session transcript to analyze."
+        transcript_selection_header: "No transcript available. Upload one via /qori-notes first."
       }
     });
     return;
@@ -237,7 +272,7 @@ const handleAnalyzeNotesSubmission = async ({ ack, body, view, client }: SlackVi
     }
 
     const studyName: string = values.study_select_block?.study_select_test?.selected_option?.text?.text || "Unknown Study";
-    const sessionName: string | null = values.session_select_block?.analyze_notes_session_select?.selected_option?.text?.text || null;
+    const sessionName: string | null = sessionSelection?.text || null;
 
     // Fetch the transcript (required)
     const noteDetails: NoteDetail[] = [];
@@ -524,7 +559,7 @@ const handleSessionSelectionChange = async ({ ack, body, client }: SlackActionMi
     }
 
     const selectedStudyOption = view.state.values.study_select_block?.study_select_test?.selected_option;
-    const selectedSessionOption = view.state.values.session_select_block?.analyze_notes_session_select?.selected_option;
+    const sessionSelection = findSessionSelection(view.state.values as ViewStateValues);
 
     if (!selectedStudyOption || selectedStudyOption.value === "no_studies") {
       console.log("🚀 ~ No study selected");
@@ -546,7 +581,7 @@ const handleSessionSelectionChange = async ({ ack, body, client }: SlackActionMi
     ]);
     const sessions = mapParticipantsToSessions(participantsResult as ParticipantRecord[]);
 
-    if (!selectedSessionOption || selectedSessionOption.value === "no_sessions") {
+    if (!sessionSelection || sessionSelection.value === "no_sessions") {
       console.log("🚀 ~ No session selected, showing sessions only");
       await client.views.update({
         view_id: view.id,
@@ -562,14 +597,14 @@ const handleSessionSelectionChange = async ({ ack, body, client }: SlackActionMi
       return;
     }
 
-    const sessionId = parseInt(selectedSessionOption.value);
-    const sessionName: string = selectedSessionOption.text.text;
+    const sessionId = parseInt(sessionSelection.value!);
+    const sessionName: string = sessionSelection.text || 'Unknown Session';
 
     // Get the participant to extract participant_name
     let participantName: string | null = null;
     try {
       const allParticipants = await studyParticipantService.getParticipantsByStudy(studyId);
-      const participant = allParticipants.find((p) => p.id.toString() === selectedSessionOption.value);
+      const participant = allParticipants.find((p) => p.id.toString() === sessionSelection.value);
       participantName = participant?.participant_name || null;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

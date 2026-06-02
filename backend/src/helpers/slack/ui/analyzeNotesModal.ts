@@ -6,6 +6,7 @@ import { generateFileCheckboxOptions } from "../../generateFileCheckboxOptions";
 /** The shape of private_metadata for the analyze-notes-modal. */
 export interface AnalyzeNotesModalMetadata {
   source: 'slack';
+  autoSelectedTranscriptId?: string;  // Populated when exactly 1 transcript exists
 }
 
 interface ResearchStudy {
@@ -240,9 +241,16 @@ export const analyzeNotesModal = (
       sessionSelectElement.initial_option = selectedSessionOption;
     }
 
+    // Dynamic block_id incorporates study ID so Slack resets state when study changes.
+    // Without this, Slack preserves the old session selection in view.state.values
+    // even after we rebuild the modal with new options.
+    const sessionBlockId = selectedStudy
+      ? `session_select_block_${selectedStudy}`
+      : "session_select_block";
+
     blocks.push({
       type: "input",
-      block_id: "session_select_block",
+      block_id: sessionBlockId,
       dispatch_action: true,
       label: {
         type: "plain_text",
@@ -252,7 +260,19 @@ export const analyzeNotesModal = (
       element: sessionSelectElement,
     });
 
-    if (sessions.length > 10) {
+    if (sessions.length === 0) {
+      // No sessions — actionable hint (same pattern as no-transcripts)
+      blocks.push({
+        type: "context",
+        block_id: "no_sessions_hint",
+        elements: [
+          {
+            type: "mrkdwn",
+            text: "No sessions yet — run `/qori-notes` to upload a session transcript first.",
+          },
+        ],
+      });
+    } else if (sessions.length > 10) {
       blocks.push({
         type: "context",
         block_id: "sessions_limit_warning",
@@ -273,16 +293,61 @@ export const analyzeNotesModal = (
     });
 
     // Section 3a: Session Transcript (required)
-    blocks.push({
-      type: "section",
-      block_id: "transcript_selection_header",
-      text: {
-        type: "mrkdwn",
-        text: `*Session Transcript*\n${transcriptFiles.length > 0 ? 'Select the session transcript to analyze. This is the primary source for the summary.' : 'No transcripts available for this session.'}`,
-      },
-    });
+    // Three states: 0 transcripts (warning, no submit), 1 transcript (auto-select), >1 transcripts (picker)
+    const transcriptCount = transcriptFiles.length;
 
-    if (transcriptOptions.length > 0) {
+    if (transcriptCount === 0) {
+      // State: 0 transcripts — hard fail, no submit
+      blocks.push({
+        type: "section",
+        block_id: "transcript_selection_header",
+        text: {
+          type: "mrkdwn",
+          text: "*Session Transcript*\n:warning: No transcript uploaded for this session.",
+        },
+      });
+      blocks.push({
+        type: "context",
+        block_id: "no_transcripts_warning",
+        elements: [
+          {
+            type: "mrkdwn",
+            text: "Upload a session transcript first via `/qori-notes`, then re-open this modal.",
+          },
+        ],
+      });
+    } else if (transcriptCount === 1) {
+      // State: 1 transcript — auto-select, read-only display
+      const transcript = transcriptFiles[0];
+      blocks.push({
+        type: "section",
+        block_id: "transcript_selection_header",
+        text: {
+          type: "mrkdwn",
+          text: "*Session Transcript*",
+        },
+      });
+      blocks.push({
+        type: "context",
+        block_id: "transcript_auto_selected",
+        elements: [
+          {
+            type: "mrkdwn",
+            text: `📄 *Analyzing:* \`${transcript.filename || 'Unknown'}\``,
+          },
+        ],
+      });
+      // autoSelectedTranscriptId will be stored in private_metadata
+    } else {
+      // State: >1 transcripts — picker (legacy/edge case)
+      blocks.push({
+        type: "section",
+        block_id: "transcript_selection_header",
+        text: {
+          type: "mrkdwn",
+          text: "*Session Transcript*\nSelect the transcript to analyze.",
+        },
+      });
       blocks.push({
         type: "input",
         block_id: "transcript_select_block",
@@ -300,17 +365,6 @@ export const analyzeNotesModal = (
           },
           options: transcriptOptions,
         },
-      });
-    } else {
-      blocks.push({
-        type: "context",
-        block_id: "no_transcripts_warning",
-        elements: [
-          {
-            type: "mrkdwn",
-            text: "No transcripts available. Upload a session transcript first via `/qori-notes`.",
-          },
-        ],
       });
     }
 
@@ -358,12 +412,20 @@ export const analyzeNotesModal = (
     }
   }
 
+  // Determine if submission is allowed
+  // When showNotes is true, we need at least 1 transcript to enable submit
+  const canSubmit = !showNotes || transcriptFiles.length > 0;
+
   // Submit button text based on state
-  const submitButtonText = showNotes && (transcriptOptions.length > 0)
+  const submitButtonText = showNotes && transcriptFiles.length > 0
     ? "Analyze"
-    : showSession
-      ? "Continue"
-      : "Continue";
+    : "Continue";
+
+  // Build metadata — include autoSelectedTranscriptId when exactly 1 transcript
+  const metadata: AnalyzeNotesModalMetadata = {
+    source: 'slack',
+    ...(transcriptFiles.length === 1 && { autoSelectedTranscriptId: transcriptFiles[0].id.toString() }),
+  };
 
   return {
     type: "modal",
@@ -378,12 +440,15 @@ export const analyzeNotesModal = (
       text: "Cancel",
       emoji: false,
     },
-    submit: {
-      type: "plain_text",
-      text: submitButtonText,
-      emoji: false,
-    },
-    private_metadata: JSON.stringify({ source: 'slack' } satisfies AnalyzeNotesModalMetadata),
+    // No submit button when 0 transcripts (canSubmit = false)
+    ...(canSubmit && {
+      submit: {
+        type: "plain_text",
+        text: submitButtonText,
+        emoji: false,
+      },
+    }),
+    private_metadata: JSON.stringify(metadata),
     blocks,
   } as unknown as View;
 };
