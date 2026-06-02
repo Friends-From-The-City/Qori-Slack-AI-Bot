@@ -161,11 +161,7 @@ export function generateSessionObservers(
         request.dataValues?.participant) as Participant | undefined;
       const participant =
         assocParticipant ||
-        participants.find((p) => {
-          const pId = `PT${String(p.id).padStart(3, '0')}`;
-          const normalized = sessionId.replace(/-/g, '').toUpperCase();
-          return pId === normalized;
-        });
+        participants.find((p) => p.participant_code === sessionId);
       if (participant) {
         const pData = (participant.dataValues || participant) as Record<string, unknown>;
         sessionMap[sessionId].date_time =

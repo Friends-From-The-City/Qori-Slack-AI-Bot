@@ -145,6 +145,7 @@ export interface StudyStatusCreationAttributes
 export interface StudyParticipantAttributes {
   id: number;
   study_id: number;
+  participant_code: string;
   participant_name: string;
   contact_details: string | null;
   recruitment_source: string | null;
@@ -165,7 +166,7 @@ export interface StudyParticipantAttributes {
 
 export interface StudyParticipantCreationAttributes
   extends Omit<StudyParticipantAttributes,
-    'id' | 'created_at' | 'updated_at' | 'outreach_count' |
+    'id' | 'created_at' | 'updated_at' | 'outreach_count' | 'participant_code' |
     'contact_details' | 'recruitment_source' | 'scheduled_date' | 'scheduled_time' |
     'status_select' | 'notes_field' | 'demographics_info' | 'compensation_amount' |
     'outreach_sent_at' | 'outreach_method'

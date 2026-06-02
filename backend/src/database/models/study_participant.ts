@@ -26,6 +26,7 @@ class StudyParticipant extends Model<
   // — Attributes —
   declare id: CreationOptional<number>;
   declare study_id: ForeignKey<number>;
+  declare participant_code: string;
   declare participant_name: string;
   declare recruitment_source: string | null;
   declare scheduled_date: string | null;
@@ -85,6 +86,10 @@ export default (sequelize: Sequelize) => {
           model: 'research_studies',
           key: 'id',
         },
+      },
+      participant_code: {
+        type: DataTypes.STRING(10),
+        allowNull: false,
       },
       participant_name: {
         type: DataTypes.STRING,

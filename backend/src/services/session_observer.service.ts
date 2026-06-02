@@ -589,14 +589,14 @@ const buildSessionsWithCounts = async (studyId: number): Promise<SessionWithCoun
   const sessions: SessionWithCount[] = [];
 
   for (const p of participants) {
-    const ptId = `PT-${String(p.id).padStart(3, '0')}`;
+    const ptCode = p.participant_code;
     const dateStr = p.scheduled_date || 'TBD';
-    const count = await service.countConfirmedObserversForSession(ptId);
+    const count = await service.countConfirmedObserversForSession(ptCode);
     sessions.push({
-      id: `${ptId}|${p.id}`,
-      sessionId: ptId,
+      id: `${ptCode}|${p.id}`,
+      sessionId: ptCode,
       participantId: p.id,
-      label: `${ptId} — ${dateStr}`,
+      label: `${ptCode} — ${dateStr}`,
       count,
     });
   }

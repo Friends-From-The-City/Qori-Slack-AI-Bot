@@ -267,8 +267,19 @@ const handleAnalyzeNotesSubmission = async ({ ack, body, view, client }: SlackVi
     // Update active study for cross-command pre-fill
     await setActiveStudy(body.user.id, parseInt(studyId, 10));
 
+    // sessionId from dropdown IS the participant database ID (see mapParticipantsToSessions)
+    // Fetch participant to get system-assigned participant_code for cascade isolation
+    let participantCode = 'PT-UNKNOWN';
     if (sessionId && sessionId !== "no_sessions") {
-      console.log("Selected session ID:", sessionId);
+      console.log("Selected session ID (participant DB ID):", sessionId);
+      const participantDbId = parseInt(sessionId, 10);
+      if (!isNaN(participantDbId)) {
+        const participant = await studyParticipantService.getParticipantById(participantDbId);
+        if (participant?.participant_code) {
+          participantCode = participant.participant_code;
+          console.log("Resolved participant_code:", participantCode);
+        }
+      }
     }
 
     const studyName: string = values.study_select_block?.study_select_test?.selected_option?.text?.text || "Unknown Study";
@@ -339,12 +350,9 @@ const handleAnalyzeNotesSubmission = async ({ ack, body, view, client }: SlackVi
 
     const noteTakers: string[] = notesWithContent.map((note: NoteDetail) => note.created_by).filter(Boolean);
 
-    const participantIds: string[] = notesWithContent.map((note: NoteDetail) => {
-      const participantName = note.participant_name || note.dataValues?.participant_name || (note.get ? note.get('participant_name') : undefined);
-      return (participantName as string) || 'unknown';
-    });
-
-    const uniqueParticipantIds = [...new Set(participantIds)];
+    // NOTE: participant_id is now resolved from sessionId (participant DB ID) → participant_code
+    // NOT extracted from note.participant_name (which is freeform and non-unique)
+    // See ADR 0020: System-Assigned Per-Study Participant Codes
 
     const formatNoteContent = (note: NoteDetail): string => {
       const filename = note.filename || 'Unknown File';
@@ -375,7 +383,7 @@ const handleAnalyzeNotesSubmission = async ({ ack, body, view, client }: SlackVi
       coded_transcript_content: coded_transcript_content,
       notes_content: notes_content,
       note_takers: noteTakers.join(', '),
-      participant_id: uniqueParticipantIds[0] || 'Unknown Participant ID',
+      participant_id: participantCode,
       researcher_contact: study?.researcher_name || study?.researcher_email || '',
       analyzer: (body.user as Record<string, string>).username || body.user.name || body.user.id
     };

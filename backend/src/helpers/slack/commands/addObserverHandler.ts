@@ -390,7 +390,7 @@ async function handleSelfJoinSubmission({ ack, body, client, view }: SlackViewMi
         const participants = await studyParticipantService.getParticipantsByStudy(studyId);
 
         for (const sessionId of joinedSessions) {
-          const participant = participants.find((p: any) => `PT-${String(p.id).padStart(3, '0')}` === sessionId);
+          const participant = participants.find((p: any) => p.participant_code === sessionId);
           const dateStr = participant?.scheduled_date || 'TBD';
 
           const roleLabel = ROLE_DISPLAY[selectedRole] || selectedRole;

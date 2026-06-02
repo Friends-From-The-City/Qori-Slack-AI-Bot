@@ -47,9 +47,9 @@ const addParticipantModal = {
         type: "plain_text_input",
         action_id: "participant_name",
         max_length: 100,
-        placeholder: { type: "plain_text", text: "e.g., PT004 or Participant A" },
+        placeholder: { type: "plain_text", text: "e.g., Veteran 5, Alice, or P-04" },
       },
-      hint: { type: "plain_text", text: "Use alias (PT001, PT002) to protect participant privacy." },
+      hint: { type: "plain_text", text: "Human-readable name or alias (e.g., 'Veteran 5', 'Alice'). A code (PT-001, etc.) is assigned automatically." },
     },
     // Recruitment method
     {

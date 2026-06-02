@@ -4,11 +4,13 @@
 id: session_summary
 name: analyze_session_notes
 label: "Analyze Notes"
-version: "v7.0"
+version: "v7.1"
 
 description: |
   Analyze session transcript and observer notes to produce a structured
   session summary with pain points, insights, and barrier validation.
+  v7.1: Verbatim system-assigned participant codes (ADR 0020). LLM must
+  use {{participant_id}} exactly as provided — no guessing/inventing.
   v7.0: Interleaved Handlebars/AI — mechanical content rendered by
   template, LLM writes bounded analytical sections. Emits 5 pool
   variables (atomic nuggets, participant metadata, task completion
@@ -17,7 +19,7 @@ description: |
 
 author: Qori R&D
 created: 2025-10-25
-last_updated: 2026-05-21
+last_updated: 2026-06-02
 
 # ═══════════════════════════════════════════════════════════
 # CONFIGURATION
@@ -235,9 +237,12 @@ ai_generation_tasks:
       4. Every finding must trace back to specific source evidence
       5. When in doubt about Pain Points or Quotes, OMIT
       6. When in doubt about Opportunities or Insights, INCLUDE with clear evidence link
-      7. NEVER use participant real names — use participant ID (e.g., PT-001) or
-         "the participant" throughout. If the transcript contains real names,
-         replace them with the participant ID in your output.
+      7. PARTICIPANT IDENTIFIER RULES:
+         - The system has assigned this participant the code: {{participant_id}}
+         - Use this EXACT code ({{participant_id}}) throughout your output — do NOT invent or modify it
+         - Replace any real names in the transcript with {{participant_id}}
+         - "the participant" is also acceptable for variety
+         - Nugget IDs must follow format: nugget-{{participant_id}}-NNN (e.g., nugget-PT-003-001)
 
       QUOTE RULES:
       - ONLY use quotes that appear VERBATIM in the sources with quotation marks

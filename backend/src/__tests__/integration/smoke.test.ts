@@ -80,6 +80,7 @@ describe('test database infrastructure', () => {
 
     const participant = await StudyParticipant.create({
       study_id: study.get('id') as number,
+      participant_code: 'PT-001',
       participant_name: 'Jane Doe',
       status_select: 'not_contacted',
       added_by: 'U_TEST',
