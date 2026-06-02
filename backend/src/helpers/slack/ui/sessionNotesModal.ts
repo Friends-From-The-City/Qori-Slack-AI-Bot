@@ -86,13 +86,18 @@ export const buildSessionNotesView = (state: SessionNotesState = {}) => {
           action_id: 'session_select_change',
           placeholder: { type: 'plain_text', text: 'Choose the session you observed…' },
           options: (state.sessions && state.sessions.length > 0)
-            ? state.sessions.map(session => ({
-              text: {
-                type: 'plain_text',
-                text: `${session.study?.name || 'Unknown Study'} - ${session.participant?.participant_name || 'Unknown Participant'} (${session.session_id || 'Unknown Session'})`
-              },
-              value: session.id.toString()
-            }))
+            ? state.sessions.map(session => {
+              const code = session.session_id || 'Unknown';
+              const alias = session.participant?.participant_name;
+              const displayName = alias ? `${code} (${alias})` : code;
+              return {
+                text: {
+                  type: 'plain_text',
+                  text: `${session.study?.name || 'Unknown Study'} - ${displayName}`
+                },
+                value: session.id.toString()
+              };
+            })
             : [{
               text: {
                 type: 'plain_text',
@@ -101,13 +106,18 @@ export const buildSessionNotesView = (state: SessionNotesState = {}) => {
               value: 'no_sessions'
             }],
           initial_option: state.session
-            ? {
-              text: {
-                type: 'plain_text',
-                text: state.session.displayName || `${state.session.study?.name || 'Unknown Study'} - ${state.session.participant?.participant_name || 'Unknown Participant'} (${state.session.session_id || 'Unknown Session'})`
-              },
-              value: state.session.id.toString()
-            }
+            ? (() => {
+              const code = state.session.session_id || 'Unknown';
+              const alias = state.session.participant?.participant_name;
+              const displayName = alias ? `${code} (${alias})` : code;
+              return {
+                text: {
+                  type: 'plain_text',
+                  text: state.session.displayName || `${state.session.study?.name || 'Unknown Study'} - ${displayName}`
+                },
+                value: state.session.id.toString()
+              };
+            })()
             : undefined
         }
       },

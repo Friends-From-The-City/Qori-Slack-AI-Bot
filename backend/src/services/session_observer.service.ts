@@ -281,7 +281,7 @@ class SessionObserverService {
           {
             model: StudyParticipantModel,
             as: 'participant',
-            attributes: ['id', 'participant_name', 'scheduled_date', 'scheduled_time', 'status_select']
+            attributes: ['id', 'participant_code', 'participant_name', 'scheduled_date', 'scheduled_time', 'status_select']
           }
         ],
         order: [['created_at', 'DESC']]
@@ -359,7 +359,7 @@ class SessionObserverService {
           {
             model: StudyParticipantModel,
             as: 'participant',
-            attributes: ['id', 'participant_name', 'scheduled_date', 'scheduled_time']
+            attributes: ['id', 'participant_code', 'participant_name', 'scheduled_date', 'scheduled_time']
           }
         ],
         order: [['created_at', 'DESC']]
@@ -387,7 +387,7 @@ class SessionObserverService {
           {
             model: StudyParticipantModel,
             as: 'participant',
-            attributes: ['id', 'participant_name', 'scheduled_date', 'scheduled_time']
+            attributes: ['id', 'participant_code', 'participant_name', 'scheduled_date', 'scheduled_time']
           }
         ],
         order: [['created_at', 'DESC']]
@@ -418,7 +418,7 @@ class SessionObserverService {
           {
             model: StudyParticipantModel,
             as: 'participant',
-            attributes: ['id', 'participant_name', 'scheduled_date', 'scheduled_time']
+            attributes: ['id', 'participant_code', 'participant_name', 'scheduled_date', 'scheduled_time']
           }
         ],
         order: [['created_at', 'DESC']]
@@ -518,7 +518,7 @@ class SessionObserverService {
         },
         include: [
           { model: ResearchStudyModel, as: 'study', attributes: ['id', 'name', 'path', 'researcher_name'] },
-          { model: StudyParticipantModel, as: 'participant', attributes: ['id', 'participant_name', 'scheduled_date', 'scheduled_time'] },
+          { model: StudyParticipantModel, as: 'participant', attributes: ['id', 'participant_code', 'participant_name', 'scheduled_date', 'scheduled_time'] },
         ],
         order: [['created_at', 'DESC']],
       });

@@ -53,6 +53,23 @@ async function participantHandler({ ack, body, client, command }: SlackCommandMi
 
       // Store first study ID in metadata for default
       const studyId = studies[0].id;
+
+      // Preview the next participant code for the initially selected study
+      const nextCode = await studyParticipantService.previewNextParticipantCode(studyId);
+      const codePreviewBlockIndex = blocks.findIndex((block: any) => block.block_id === 'code_preview_block');
+      if (codePreviewBlockIndex !== -1) {
+        blocks[codePreviewBlockIndex] = {
+          type: "context",
+          block_id: "code_preview_block",
+          elements: [
+            {
+              type: "mrkdwn",
+              text: `🏷️ *Will be assigned:* \`${nextCode}\``
+            }
+          ]
+        };
+      }
+
       await client.views.open({
         trigger_id: body.trigger_id,
         view: {
@@ -191,10 +208,16 @@ async function handleLoadParticipantsButton({ ack, body, client }: SlackActionMi
     }
 
     // Transform participants to the format expected by the modal
-    const participantOptions = participants.map((participant: any) => ({
-      text: { type: 'plain_text', text: participant.participant_name },
-      value: participant.id.toString()
-    }));
+    // Display format: PT-001 (alias) or just PT-001 if no alias
+    const participantOptions = participants.map((participant: any) => {
+      const code = participant.participant_code || `PT-${String(participant.id).padStart(3, '0')}`;
+      const alias = participant.participant_name;
+      const displayText = alias ? `${code} (${alias})` : code;
+      return {
+        text: { type: 'plain_text', text: displayText },
+        value: participant.id.toString()
+      };
+    });
 
     // Get the studies list to pass back to the modal
     const studies = await getStudiesByUser(body.user.id);
@@ -388,10 +411,62 @@ async function handleUpdateParticipantSubmission({ ack, body, view, client }: Sl
   }
 }
 
+/**
+ * Handle study selection change in Add Participant modal.
+ * Updates the code preview block to show the next code for the selected study.
+ */
+async function handleAddParticipantStudySelect({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs): Promise<void> {
+  await ack();
+
+  try {
+    const view = body.view;
+    if (!view) return;
+
+    // Get the selected study ID from the action
+    const action = body.actions[0];
+    if (action.type !== 'static_select' || !action.selected_option) return;
+
+    const studyId = parseInt(action.selected_option.value, 10);
+    if (isNaN(studyId)) return;
+
+    // Preview the next participant code
+    const nextCode = await studyParticipantService.previewNextParticipantCode(studyId);
+
+    // Update the code preview block
+    const blocks = JSON.parse(JSON.stringify(view.blocks));
+    const codePreviewBlockIndex = blocks.findIndex((block: any) => block.block_id === 'code_preview_block');
+    if (codePreviewBlockIndex !== -1) {
+      blocks[codePreviewBlockIndex] = {
+        type: "context",
+        block_id: "code_preview_block",
+        elements: [
+          {
+            type: "mrkdwn",
+            text: `🏷️ *Will be assigned:* \`${nextCode}\``
+          }
+        ]
+      };
+    }
+
+    // Update the modal with the new code preview
+    await client.views.update({
+      view_id: view.id,
+      view: {
+        ...addParticipantModal,
+        blocks,
+        private_metadata: view.private_metadata || "{}",
+      } as View,
+    });
+  } catch (error) {
+    console.error("Error updating code preview:", error);
+  }
+}
+
 export {
   participantHandler,
   participantHandler as handleAddParticipantSubmit,
   updateParticipantHandler,
   handleLoadParticipantsButton,
   handleUpdateParticipantSubmission,
+  handleAddParticipantStudySelect,
 };

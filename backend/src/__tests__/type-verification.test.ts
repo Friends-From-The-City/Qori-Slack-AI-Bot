@@ -18,7 +18,7 @@ import type { ResearchStudy } from '../database/models/research_study';
 function verifyParticipantTypes(participant: StudyParticipant) {
   // These should compile with their correct types:
   const id: number = participant.id;
-  const name: string = participant.participant_name;
+  const name: string | null = participant.participant_name;
   const status: string | null = participant.status_select;
   const compensation: number | null = participant.compensation_amount;
   const outreachMethod: 'email' | 'slack' | 'phone' | 'other' | null = participant.outreach_method;

@@ -48,6 +48,24 @@ interface AggregateWithCount extends StudyParticipant {
 
 class StudyParticipantService {
   /**
+   * Preview the next participant code for a study (no lock, read-only).
+   * Use this for modal display; actual assignment uses getNextParticipantCode with transaction.
+   */
+  async previewNextParticipantCode(studyId: number): Promise<string> {
+    const [result] = (await StudyParticipantModel.sequelize!.query(
+      `SELECT COALESCE(
+         MAX(CAST(SUBSTRING(participant_code FROM 4) AS INTEGER)),
+         0
+       ) + 1 AS next_code
+       FROM study_participants
+       WHERE study_id = $1`,
+      { bind: [studyId], type: QueryTypes.SELECT },
+    )) as [{ next_code: number }];
+
+    return `PT-${String(result.next_code).padStart(3, '0')}`;
+  }
+
+  /**
    * Generate the next participant code for a study.
    * Uses MAX+1 logic (delete-safe) with advisory lock for race condition prevention.
    * Returns PT-001, PT-002, etc. — each study starts at 001.
