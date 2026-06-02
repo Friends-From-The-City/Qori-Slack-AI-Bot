@@ -1138,15 +1138,16 @@ async function handleAddParticipantSubmit({ ack, body, view, client }: SlackView
     }
 
     // Send message to the researcher's DM with the GitHub link to the participant tracker
+    const assignedCode = savedParticipant.participant_code;
     await client.chat.postMessage({
       channel: userId, // Use original Slack user ID for DM channel
-      text: `:busts_in_silhouette: *New Participant Added*\n\n*Participant:* ${participant_name}\n*Study:* ${study_name}\n*Status:* ${status_select}\n*Recruitment Source:* ${recruitment_source}`,
+      text: `:busts_in_silhouette: *New Participant Added*\n\n*Code:* ${assignedCode}\n*Name:* ${participant_name}\n*Study:* ${study_name}\n*Status:* ${status_select}`,
       blocks: [
         {
           type: "section",
           text: {
             type: "mrkdwn",
-            text: `:busts_in_silhouette: *New Participant Added*\n\n*Participant:* ${participant_name}\n*Study:* ${study_name}\n*Status:* ${status_select}\n*Recruitment Source:* ${recruitment_source}`
+            text: `:busts_in_silhouette: *New Participant Added*\n\n*Code:* \`${assignedCode}\`\n*Name:* ${participant_name}\n*Study:* ${study_name}\n*Status:* ${status_select}\n*Recruitment Source:* ${recruitment_source}`
           }
         },
         {
