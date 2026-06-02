@@ -28,28 +28,42 @@ const addParticipantModal = {
       label: { type: "plain_text", text: "Research study *" },
       element: {
         type: "static_select",
-        action_id: "study_select",
+        action_id: "add_participant_study_select",
         placeholder: { type: "plain_text", text: "Select a study..." },
         options: [ { text: { type: "plain_text", text: "Loading studies..." }, value: "loading" } ],
       },
+      dispatch_action: true,
+    },
+
+    // Code assignment preview (populated dynamically after study selection)
+    {
+      type: "context",
+      block_id: "code_preview_block",
+      elements: [
+        {
+          type: "mrkdwn",
+          text: "_Select a study to see the code that will be assigned_"
+        }
+      ]
     },
 
     { type: "divider" },
 
     // Participant Information
     { type: "section", text: { type: "mrkdwn", text: "📝 *Participant Information*" } },
-    // Participant name
+    // Participant alias (optional memory aid)
     {
       type: "input",
       block_id: "participant_name_block",
-      label: { type: "plain_text", text: "Participant name or alias *" },
+      label: { type: "plain_text", text: "Private alias (optional)" },
       element: {
         type: "plain_text_input",
         action_id: "participant_name",
         max_length: 100,
-        placeholder: { type: "plain_text", text: "e.g., Veteran 5, Alice, or P-04" },
+        placeholder: { type: "plain_text", text: "e.g., 'screen-reader user', 'Veteran A'" },
       },
-      hint: { type: "plain_text", text: "Human-readable name or alias (e.g., 'Veteran 5', 'Alice'). A code (PT-001, etc.) is assigned automatically." },
+      hint: { type: "plain_text", text: "Optional private label to help YOU remember this participant. Do NOT enter real names — use the system code for identity." },
+      optional: true,
     },
     // Recruitment method
     {

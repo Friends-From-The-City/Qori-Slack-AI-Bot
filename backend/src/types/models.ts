@@ -146,7 +146,7 @@ export interface StudyParticipantAttributes {
   id: number;
   study_id: number;
   participant_code: string;
-  participant_name: string;
+  participant_name: string | null;
   contact_details: string | null;
   recruitment_source: string | null;
   scheduled_date: string | null;

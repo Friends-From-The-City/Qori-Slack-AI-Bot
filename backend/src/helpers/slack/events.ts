@@ -50,7 +50,7 @@ import { discoverHandler, openDiscoverTypeModal, handleDiscoverSubmission } from
 
 // Fieldwork
 import { fieldworkHandler, handleFieldworkStudyPickerSubmit, handleFieldworkAddParticipant, handleFieldworkUpdateStatus, handleFieldworkObserve, handleFieldworkOutreach, handleFieldworkUploadNotes } from './commands/fieldworkHandler';
-import { handleUpdateParticipantSubmission, handleLoadParticipantsButton } from './commands/participantHandler';
+import { handleUpdateParticipantSubmission, handleLoadParticipantsButton, handleAddParticipantStudySelect } from './commands/participantHandler';
 import { handleParticipantOutreachSubmit, handleInitialRecruitmentSubmit, handleReschedulingRequestSubmit, handleSessionConfirmationSubmit, handleThankYouSubmit, handleFollowUpSubmit, handleSessionReminderSubmit, handleAddParticipantSubmit, handleObserverModalButton } from './commands/participantOutreachHandler';
 import { handleAddObserverSubmission, handleSelfJoinObserver, handleSelfJoinSubmission } from './commands/addObserverHandler';
 
@@ -406,6 +406,7 @@ slackApp.action('fieldwork_observe', handleFieldworkObserve);
 slackApp.action('fieldwork_outreach', handleFieldworkOutreach);
 slackApp.action('fieldwork_upload_notes', handleFieldworkUploadNotes);
 slackApp.action('load_participants_button', handleLoadParticipantsButton);
+slackApp.action('add_participant_study_select', handleAddParticipantStudySelect);
 slackApp.view('add-participant-modal', handleAddParticipantSubmit);
 slackApp.view('update-participant-status', handleUpdateParticipantSubmission);
 
