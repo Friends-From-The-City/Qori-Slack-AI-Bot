@@ -18,6 +18,7 @@ type DemographicsInfo = Record<string, string> | string | null | undefined;
 /** Shape of a participant record as stored in the database / passed into this module. */
 export interface ParticipantRecord {
   id: number;
+  participant_code: string;
   participant_name: string;
   contact_details: string | null;
   recruitment_source: string | null;
@@ -612,7 +613,7 @@ export async function processParticipantYamlTemplate(
       completed_sessions_count: completedSessionsCount,
       total_observer_assignments: 0,
       participants: allParticipants.map(p => ({
-        id: p.participant_name || `P${p.id}`,
+        id: p.participant_code || `PT-${String(p.id).padStart(3, '0')}`,
         participant_name: p.participant_name,
         contact_details: p.contact_details,
         recruitment_source: getRecruitmentSourceDisplay(p.recruitment_source || 'unknown'),
@@ -684,7 +685,7 @@ export async function processParticipantYamlTemplate(
       })(),
       observer_action_items: [],
       accommodations: allParticipants.filter(p => p.notes_field && p.notes_field.trim() !== '').map(p => ({
-        participant_id: p.participant_name || `P${p.id}`,
+        participant_id: p.participant_code || `PT-${String(p.id).padStart(3, '0')}`,
         accommodation_details: p.notes_field,
       })),
       demographics_summary: generateDemographicsSummary(allParticipants),
