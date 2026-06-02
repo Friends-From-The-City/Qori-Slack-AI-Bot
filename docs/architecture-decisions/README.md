@@ -100,6 +100,7 @@ Start with `0001` and read forward. The history is itself useful — it shows ho
 - [L003 — End-to-end tests for critical flows, not just per-layer unit tests](./L003-end-to-end-tests.md) — From three rounds of compensation bugs
 - [L004 — Cascade contract test suite](./L004-cascade-contract-test-suite.md) — From synthesis bypassing declared consumes blocks; backfill readout/brief/plan
 - [L005 — Per-participant pool schemas must include participant field](./L005-per-participant-pool-schema-field.md) — From silent isolation failure in atomic_nugget_detail; enforced by CI
+- [L006 — Dynamic block_id for Slack dropdowns with changing options](./L006-dynamic-blockid-for-slack-dropdowns-with-changing-options.md) — From stale session selection on study change; use context-scoped block_id to force fresh state
 
 The L-prefix distinguishes "lessons" from active design decisions. Lessons capture failure patterns to avoid; decisions document architectural commitments. Both are useful; they serve different purposes.
 
