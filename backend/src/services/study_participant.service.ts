@@ -51,6 +51,7 @@ class StudyParticipantService {
    * Generate the next participant code for a study.
    * Uses MAX+1 logic (delete-safe) with advisory lock for race condition prevention.
    * Returns PT-001, PT-002, etc. — each study starts at 001.
+   * See ADR 0020 for rationale.
    */
   async getNextParticipantCode(studyId: number, transaction?: Transaction): Promise<string> {
     const seq = StudyParticipantModel.sequelize!;

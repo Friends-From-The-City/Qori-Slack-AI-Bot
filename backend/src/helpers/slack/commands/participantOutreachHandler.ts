@@ -1033,10 +1033,11 @@ async function handleAddParticipantSubmit({ ack, body, view, client }: SlackView
     };
 
     const current_date = new Date().toISOString().split('T')[0];
-    let added_by = userId;
+    // Resolve display name for data storage, but keep userId for DM channel
+    let added_by_display = userId;
     try {
       const userInfo = await client.users.info({ user: userId });
-      added_by = userInfo.user?.profile?.display_name || userInfo.user?.real_name || userId;
+      added_by_display = userInfo.user?.profile?.display_name || userInfo.user?.real_name || userId;
     } catch {
       // Fall through with userId if API fails
     }
@@ -1052,7 +1053,7 @@ async function handleAddParticipantSubmit({ ack, body, view, client }: SlackView
       notes_field,
       demographics_info,
       current_date,
-      added_by
+      added_by: added_by_display
     }
     console.log(`🚀 ~ handleAddParticipantSubmit: study=${data.study_name}, participant=${(data as any).participant_id}`);
 
@@ -1138,7 +1139,7 @@ async function handleAddParticipantSubmit({ ack, body, view, client }: SlackView
 
     // Send message to the researcher's DM with the GitHub link to the participant tracker
     await client.chat.postMessage({
-      channel: added_by, // Slack user ID of the researcher who added the participant
+      channel: userId, // Use original Slack user ID for DM channel
       text: `:busts_in_silhouette: *New Participant Added*\n\n*Participant:* ${participant_name}\n*Study:* ${study_name}\n*Status:* ${status_select}\n*Recruitment Source:* ${recruitment_source}`,
       blocks: [
         {
@@ -1160,7 +1161,7 @@ async function handleAddParticipantSubmit({ ack, body, view, client }: SlackView
           elements: [
             {
               type: "mrkdwn",
-              text: `Added by <@${added_by}> • ${current_date}`
+              text: `Added by <@${userId}> • ${current_date}`
             }
           ]
         }
