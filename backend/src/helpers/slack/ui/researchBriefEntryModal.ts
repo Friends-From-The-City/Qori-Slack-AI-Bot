@@ -197,15 +197,26 @@ export async function buildBriefEntryModal(options: BuildBriefEntryModalOptions)
       };
     } else {
       // Build checkbox options from artifacts — AUTO-SELECT ALL
+      // Note: Slack limits: checkbox text = 150 chars, value = 75 chars
       const checkboxOptions = artifacts.map(a => {
         const categories = formatVariableCategories(Object.keys(a.variables));
-        const categoryLabel = categories || `${a.variableCount} variables`;
+        const categoryLabel = categories || `${a.variableCount} vars`;
+        // Truncate slug if needed (for both display and value)
+        const maxSlugDisplay = 30;
+        const displaySlug = a.slug.length > maxSlugDisplay
+          ? a.slug.substring(0, maxSlugDisplay - 1) + '…'
+          : a.slug;
+        // Build compact display: "📊 *slug* · label · date"
+        const baseText = `${a.icon} *${displaySlug}* · ${a.label} · ${a.date}`;
+        const displayText = baseText.length > 150
+          ? baseText.substring(0, 147) + '…'
+          : baseText;
+        // Value: truncate to 75 chars
+        const rawValue = `${a.type}::${a.slug}`;
+        const value = rawValue.length > 75 ? rawValue.substring(0, 75) : rawValue;
         return {
-          text: {
-            type: "mrkdwn",
-            text: `${a.icon} *${a.slug}*\n      ${a.label} · ${categoryLabel} · ${a.date}`,
-          },
-          value: `${a.type}::${a.slug}`,
+          text: { type: "mrkdwn", text: displayText },
+          value,
         };
       });
 
@@ -288,7 +299,19 @@ export async function buildBriefEntryModal(options: BuildBriefEntryModalOptions)
         // Check for exact match first
         let matchedRadio = radioOptions[methodLower];
 
-        // If no exact match, check for combined/mixed methods indicators
+        // If no exact match, check if method string CONTAINS any known method name
+        if (!matchedRadio) {
+          // Priority order: longer matches first to avoid "interview" matching before "user interview"
+          const orderedKeys = Object.keys(radioOptions).sort((a, b) => b.length - a.length);
+          for (const key of orderedKeys) {
+            if (methodLower.includes(key)) {
+              matchedRadio = radioOptions[key];
+              break;
+            }
+          }
+        }
+
+        // If still no match, check for combined/mixed methods indicators
         if (!matchedRadio) {
           const combinedIndicators = ['followed by', 'then', ' + ', ' and ', 'combined with'];
           const isCombined = combinedIndicators.some(ind => methodLower.includes(ind));

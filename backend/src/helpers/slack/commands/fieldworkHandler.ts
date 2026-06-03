@@ -210,13 +210,27 @@ async function handleFieldworkAddParticipant({ ack, body, client }: SlackActionM
       value: s.id.toString(),
     }));
 
-    let blocks = JSON.parse(JSON.stringify(addParticipantModal.blocks));
+    const blocks = JSON.parse(JSON.stringify(addParticipantModal.blocks));
     const studyBlockIdx = blocks.findIndex((b: any) => b.block_id === 'study_select_block');
     if (studyBlockIdx !== -1 && studyOptions.length > 0) {
       const initialOption = studyOptions.find((o: any) => o.value === studyId.toString()) || studyOptions[0];
       blocks[studyBlockIdx] = {
         ...blocks[studyBlockIdx],
         element: { ...blocks[studyBlockIdx].element, options: studyOptions, initial_option: initialOption },
+      };
+    }
+
+    // Update code preview since study is pre-selected (ADR 0020)
+    const codePreviewIdx = blocks.findIndex((b: any) => b.block_id === 'code_preview_block');
+    if (codePreviewIdx !== -1 && studyId) {
+      const nextCode = await studyParticipantService.previewNextParticipantCode(studyId);
+      blocks[codePreviewIdx] = {
+        type: "context",
+        block_id: "code_preview_block",
+        elements: [{
+          type: "mrkdwn",
+          text: `✨ Will be assigned: *${nextCode}*`
+        }]
       };
     }
 
@@ -228,9 +242,17 @@ async function handleFieldworkAddParticipant({ ack, body, client }: SlackActionM
         private_metadata: JSON.stringify({ ...dashboardMeta, studyId, studyName, rootViewId: body.view?.id }),
       } as View,
     });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error('handleFieldworkAddParticipant error:', message);
+  } catch (error: unknown) {
+    const errData = (error as Record<string, unknown>)?.data;
+    const messages = (errData as Record<string, unknown>)?.response_metadata as Record<string, unknown>;
+    console.error('❌ handleFieldworkAddParticipant error:');
+    console.error('Error data:', JSON.stringify(errData, null, 2));
+    if (messages?.messages) {
+      console.error('Validation errors:', JSON.stringify(messages.messages, null, 2));
+    } else {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error('Error message:', message);
+    }
   }
 }
 
@@ -414,13 +436,17 @@ async function handleFieldworkUploadNotes({ ack, body, client }: SlackActionMidd
     }));
 
     const firstSession = plainSessions[0];
+    // Build displayName matching sessionNotesModal format: "Study - PT-001 (alias)" or "Study - PT-001"
+    const code = firstSession.session_id || 'Unknown';
+    const alias = firstSession.participant?.participant_name;
+    const sessionDisplayPart = alias ? `${code} (${alias})` : code;
     const initialState = {
       tab: 'upload',
       mode,
       studyId,
       session: {
         id: firstSession.id,
-        displayName: `${firstSession.study?.name || 'Unknown Study'} - ${firstSession.participant?.participant_name || 'Unknown Participant'} (${firstSession.session_id || 'Unknown Session'})`,
+        displayName: `${firstSession.study?.name || 'Unknown Study'} - ${sessionDisplayPart}`,
         study: firstSession.study,
         participant: firstSession.participant,
         session_id: firstSession.session_id,
@@ -436,10 +462,15 @@ async function handleFieldworkUploadNotes({ ack, body, client }: SlackActionMidd
       trigger_id: body.trigger_id,
       view: buildSessionNotesView(initialState as any) as View,
     });
-  } catch (error) {
+  } catch (error: unknown) {
+    const errData = (error as Record<string, unknown>)?.data;
+    const messages = (errData as Record<string, unknown>)?.response_metadata as Record<string, unknown>;
+    console.error('❌ handleFieldworkUploadNotes error:');
+    console.error('Error data:', JSON.stringify(errData, null, 2));
+    if (messages?.messages) {
+      console.error('Validation errors:', JSON.stringify(messages.messages, null, 2));
+    }
     const message = error instanceof Error ? error.message : String(error);
-    const detail = (error as Record<string, unknown>)?.data ?? '';
-    console.error('handleFieldworkUploadNotes error:', message, detail);
     await client.chat.postEphemeral({
       channel: body.user.id,
       user: body.user.id,

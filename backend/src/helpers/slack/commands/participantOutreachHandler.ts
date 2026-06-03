@@ -1008,8 +1008,8 @@ async function handleAddParticipantSubmit({ ack, body, view, client }: SlackView
     const meta = JSON.parse(body.view.private_metadata || '{}');
     const { channelId, userId } = meta;
 
-    // Extract study from dropdown selection
-    const selectedStudyOption = state.study_select_block?.study_select?.selected_option || null;
+    // Extract study from dropdown selection (action_id: add_participant_study_select)
+    const selectedStudyOption = state.study_select_block?.add_participant_study_select?.selected_option || null;
     const study_id = selectedStudyOption?.value || "";
     const study_name = selectedStudyOption?.text?.text || "";
     const participant_name = state.participant_name_block?.participant_name?.value || "";

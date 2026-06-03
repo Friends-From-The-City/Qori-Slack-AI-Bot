@@ -613,7 +613,7 @@ export async function processParticipantYamlTemplate(
       completed_sessions_count: completedSessionsCount,
       total_observer_assignments: 0,
       participants: allParticipants.map(p => ({
-        id: p.participant_code || `PT-${String(p.id).padStart(3, '0')}`,
+        id: p.participant_code ?? 'PT-???',
         participant_name: p.participant_name,
         contact_details: p.contact_details,
         recruitment_source: getRecruitmentSourceDisplay(p.recruitment_source || 'unknown'),
@@ -685,7 +685,7 @@ export async function processParticipantYamlTemplate(
       })(),
       observer_action_items: [],
       accommodations: allParticipants.filter(p => p.notes_field && p.notes_field.trim() !== '').map(p => ({
-        participant_id: p.participant_code || `PT-${String(p.id).padStart(3, '0')}`,
+        participant_id: p.participant_code ?? 'PT-???',
         accommodation_details: p.notes_field,
       })),
       demographics_summary: generateDemographicsSummary(allParticipants),

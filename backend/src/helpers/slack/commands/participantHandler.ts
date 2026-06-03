@@ -210,9 +210,12 @@ async function handleLoadParticipantsButton({ ack, body, client }: SlackActionMi
     // Transform participants to the format expected by the modal
     // Display format: PT-001 (alias) or just PT-001 if no alias
     const participantOptions = participants.map((participant: any) => {
-      const code = participant.participant_code || `PT-${String(participant.id).padStart(3, '0')}`;
+      const code = participant.participant_code;
+      if (!code) {
+        console.warn(`⚠️ Participant ${participant.id} missing participant_code — this should not happen after ADR 0020`);
+      }
       const alias = participant.participant_name;
-      const displayText = alias ? `${code} (${alias})` : code;
+      const displayText = alias ? `${code || 'PT-???'} (${alias})` : (code || 'PT-???');
       return {
         text: { type: 'plain_text', text: displayText },
         value: participant.id.toString()

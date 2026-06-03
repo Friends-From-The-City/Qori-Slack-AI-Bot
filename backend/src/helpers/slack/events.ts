@@ -308,16 +308,31 @@ slackApp.command('/qori-brief', async ({ ack, client, command }) => {
     console.warn('Could not fetch Slack profile for brief modal:', errMessage);
   }
 
-  const modal = await buildBriefEntryModal({
-    leadResearcher,
-    channelId: command.channel_id,
-    projectId: project.id,
-    projectName: project.name,
-    projectSlug: project.slug,
-    source: 'qori_brief_command',
-  });
-  // @ts-expect-error — modal blocks are Record<string,unknown>[] from JSON.parse; structurally valid at runtime
-  await client.views.open({ trigger_id: command.trigger_id, view: modal });
+  try {
+    const modal = await buildBriefEntryModal({
+      leadResearcher,
+      channelId: command.channel_id,
+      projectId: project.id,
+      projectName: project.name,
+      projectSlug: project.slug,
+      source: 'qori_brief_command',
+    });
+    // @ts-expect-error — modal blocks are Record<string,unknown>[] from JSON.parse; structurally valid at runtime
+    await client.views.open({ trigger_id: command.trigger_id, view: modal });
+  } catch (err: unknown) {
+    const errData = (err as Record<string, unknown>)?.data;
+    const messages = (errData as Record<string, unknown>)?.response_metadata as Record<string, unknown>;
+    console.error('❌ Error opening brief modal:');
+    console.error('Error data:', JSON.stringify(errData, null, 2));
+    if (messages?.messages) {
+      console.error('Validation errors:', JSON.stringify(messages.messages, null, 2));
+    }
+    await client.chat.postEphemeral({
+      channel: command.channel_id,
+      user: command.user_id,
+      text: `❌ Error opening research brief modal. Check server logs for details.`,
+    });
+  }
 });
 slackApp.command('/qori-plan', async ({ ack, client, command }) => {
   await ack();
