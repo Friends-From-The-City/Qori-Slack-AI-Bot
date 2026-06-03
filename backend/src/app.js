@@ -18,7 +18,6 @@ const configs = require("./config"); // ./config/index.js
 const { authenticationMiddleware, sentryMiddleware } = require("./middleware"); // ./middleware/index.js
 const { slackApp, slackExpressRouter } = require('./helpers/slack/events');
 const { createFolderWithDummyData, readFolderContents, listOrgRepos, listAllTopLevelFolders, readFolders } = require("./helpers/github");
-const { runRAG } = require("./helpers/rag");
 
 const { NODE_ENV, DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT, PORT, DB_DIALECT } = process.env;
 
