@@ -61,17 +61,21 @@ export const researchSynthesisModal = (
   selectedAnalysisMethod: string | null = null,
   cascadeData: SynthesisCascadeData | null = null,
 ) => {
-  // Build research study options
+  // Truncate study names to Slack's 75-char limit for plain_text
+  const truncateName = (name: string) => name.length > 75 ? name.slice(0, 72) + '...' : name;
+
+  // Build research study options (first 10 only)
   const studyOptions = researchStudies.slice(0, 10).map((study) => ({
     text: {
       type: "plain_text",
-      text: study.name,
+      text: truncateName(study.name),
     },
     value: study.id.toString(),
   }));
 
-  // Find selected study
-  const selectedStudy = researchStudies.find(s => s.id.toString() === selectedStudyId?.toString());
+  // Find selected study - ONLY from visible options (first 10)
+  // initial_option must match one of the options, so don't select studies beyond index 10
+  const selectedStudy = researchStudies.slice(0, 10).find(s => s.id.toString() === selectedStudyId?.toString());
 
   // Determine if selected method is cascade-aware
   const isCascadeAware = selectedAnalysisMethod && CASCADE_AWARE_METHODS.includes(selectedAnalysisMethod);
@@ -219,10 +223,10 @@ export const researchSynthesisModal = (
       type: "plain_text",
       text: "Research Synthesis",
     },
-    submit: cascadeData?.readyToRun !== false ? {
+    submit: {
       type: "plain_text",
       text: "Run Analysis",
-    } : undefined,
+    },
     close: {
       type: "plain_text",
       text: "Cancel",
@@ -243,7 +247,7 @@ export const researchSynthesisModal = (
             { text: { type: "plain_text", text: "No research studies found" }, value: "no_studies" },
           ],
           initial_option: selectedStudy ? {
-            text: { type: "plain_text", text: selectedStudy.name },
+            text: { type: "plain_text", text: truncateName(selectedStudy.name) },
             value: selectedStudy.id.toString(),
           } : undefined,
         },
