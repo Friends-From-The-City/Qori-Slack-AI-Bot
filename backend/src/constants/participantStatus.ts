@@ -6,6 +6,7 @@ export const PARTICIPANT_STATUS = {
   NEEDS_RESCHEDULE: 'needs_reschedule',
   COMPLETED: 'completed',
   DECLINED: 'declined',
+  DISQUALIFIED: 'disqualified',
   NO_RESPONSE: 'no_response',
   CANCELED: 'canceled',
 } as const;
@@ -22,6 +23,7 @@ export const PARTICIPANT_STATUS_LABELS: Record<ParticipantStatus, string> = {
   needs_reschedule: 'Needs reschedule',
   completed: 'Completed',
   declined: 'Declined',
+  disqualified: 'Disqualified',
   no_response: 'No response',
   canceled: 'Canceled',
 };
@@ -39,6 +41,7 @@ export const ACTIVE_STATUSES: readonly ParticipantStatus[] = [
 export const TERMINAL_STATUSES: readonly ParticipantStatus[] = [
   PARTICIPANT_STATUS.COMPLETED,
   PARTICIPANT_STATUS.DECLINED,
+  PARTICIPANT_STATUS.DISQUALIFIED,
   PARTICIPANT_STATUS.NO_RESPONSE,
   PARTICIPANT_STATUS.CANCELED,
 ];
