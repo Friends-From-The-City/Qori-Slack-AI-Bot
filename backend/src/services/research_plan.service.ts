@@ -14,7 +14,7 @@ interface QueryOptions {
 }
 
 interface SearchCriteria {
-  study_name?: string;
+  study_id?: number;  // A1: Changed from study_name to study_id
   filename?: string;
 }
 
@@ -138,39 +138,7 @@ class ResearchPlanService {
     }
   }
 
-  /**
-   * Get research plans by exact study name match
-   */
-  async getResearchPlansByStudyName(studyName: string, options: QueryOptions = {}): Promise<ResearchPlan[]> {
-    try {
-      if (!studyName) {
-        throw new Error('Study name is required');
-      }
-
-      const where = {
-        study_name: studyName
-      };
-
-      const plans = await ResearchPlanModel.findAll({
-        where,
-        include: [
-          {
-            model: ResearchStudyModel,
-            as: 'study',
-            attributes: ['id', 'name', 'path', 'description']
-          }
-        ],
-        order: [['created_at', 'DESC']],
-        limit: options.limit || 100,
-        offset: options.offset || 0
-      });
-
-      return plans;
-    } catch (error) {
-      console.error('Error getting research plans by exact study name:', error);
-      throw new Error(`Failed to get research plans by exact study name: ${error instanceof Error ? error.message : String(error)}`);
-    }
-  }
+  // NOTE: getResearchPlansByStudyId already exists above (A1-compliant)
 
   /**
    * Search research plans
@@ -179,9 +147,9 @@ class ResearchPlanService {
     try {
       const where: Record<string, unknown> = {};
 
-      // Add search criteria
-      if (searchCriteria.study_name) {
-        where.study_name = { [Op.iLike]: `%${searchCriteria.study_name}%` };
+      // Add search criteria (A1: use study_id FK, not study_name)
+      if (searchCriteria.study_id) {
+        where.study_id = searchCriteria.study_id;
       }
 
       if (searchCriteria.filename) {

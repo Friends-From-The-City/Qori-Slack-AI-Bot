@@ -14,7 +14,7 @@ interface QueryOptions {
 }
 
 interface SearchCriteria {
-  study_name?: string;
+  study_id?: number;  // A1: Changed from study_name to study_id
   filename?: string;
   participant_name?: string;
 }
@@ -245,9 +245,9 @@ class StudyNotesService {
     try {
       const where: Record<string, unknown> = {};
 
-      // Add search criteria
-      if (searchCriteria.study_name) {
-        where.study_name = { [Op.iLike]: `%${searchCriteria.study_name}%` };
+      // Add search criteria (A1: use study_id FK, not study_name)
+      if (searchCriteria.study_id) {
+        where.study_id = searchCriteria.study_id;
       }
 
       if (searchCriteria.filename) {

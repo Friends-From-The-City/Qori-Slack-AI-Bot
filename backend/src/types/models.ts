@@ -78,20 +78,21 @@ export interface ResearchStudyAttributes {
   created_by: string;
   researcher_name: string;
   researcher_email: string;
-  total_participants: number;
   /** DECIMAL(10,2) — model getter coerces to number. See ADR 0014. */
   parsed_budget_amount: number | null;
   target_participants: number | null;
+  /** IANA timezone identifier for session times. Default: America/New_York. */
+  session_timezone: string;
   created_at: Date;
   updated_at: Date;
 }
 
 export interface ResearchStudyCreationAttributes
   extends Omit<ResearchStudyAttributes,
-    'id' | 'created_at' | 'updated_at' | 'total_participants' |
+    'id' | 'created_at' | 'updated_at' | 'session_timezone' |
     'description' | 'link' | 'path' | 'sha4' | 'parsed_budget_amount' | 'target_participants'
   > {
-  total_participants?: number;
+  session_timezone?: string;
   description?: string | null;
   link?: string | null;
   path?: string | null;
@@ -149,7 +150,9 @@ export interface StudyParticipantAttributes {
   participant_name: string | null;
   contact_details: string | null;
   recruitment_source: string | null;
-  scheduled_date: string | null;
+  /** R2: DATEONLY returns Date. */
+  scheduled_date: Date | null;
+  /** R2: TIME returns string (HH:MM:SS). */
   scheduled_time: string | null;
   status_select: ParticipantStatus | null;
   notes_field: string | null;
@@ -174,7 +177,9 @@ export interface StudyParticipantCreationAttributes
   outreach_count?: number;
   contact_details?: string | null;
   recruitment_source?: string | null;
-  scheduled_date?: string | null;
+  /** R2: DATEONLY — accepts Date or ISO date string (YYYY-MM-DD). */
+  scheduled_date?: Date | string | null;
+  /** R2: TIME — accepts string (HH:MM:SS or HH:MM). */
   scheduled_time?: string | null;
   status_select?: ParticipantStatus | null;
   notes_field?: string | null;
@@ -236,7 +241,9 @@ export interface StudyNotesAttributes {
   file_path: string | null;
   file_url: string | null;
   transcript: boolean;
-  session_date: string | null;
+  /** R2: DATEONLY returns Date. */
+  session_date: Date | null;
+  /** R2: TIME returns string (HH:MM:SS). */
   session_time: string | null;
   participant_name: string | null;
   researcher: string | null;
@@ -253,7 +260,9 @@ export interface StudyNotesCreationAttributes
   transcript?: boolean;
   file_path?: string | null;
   file_url?: string | null;
-  session_date?: string | null;
+  /** R2: DATEONLY — accepts Date or ISO date string (YYYY-MM-DD). */
+  session_date?: Date | string | null;
+  /** R2: TIME — accepts string (HH:MM:SS or HH:MM). */
   session_time?: string | null;
   participant_name?: string | null;
   researcher?: string | null;

@@ -307,14 +307,14 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }: SlackVi
     } else {
       // For other report types, fetch research plans and session summaries
       try {
-        researchPlans = await researchPlanService.getResearchPlansByStudyName(selectedStudyName);
+        researchPlans = await researchPlanService.getResearchPlansByStudyId(resolved.studyId);
         console.log(`Found ${researchPlans.length} research plans`);
       } catch (error) {
         console.error('Error fetching research plans:', error);
       }
 
       try {
-        sessionSummaries = await sessionSummaryService.getSessionSummariesByStudyName(selectedStudyName);
+        sessionSummaries = await sessionSummaryService.getSessionSummariesByStudyId(resolved.studyId);
         console.log(`Found ${sessionSummaries.length} session summaries`);
       } catch (error) {
         console.error('Error fetching session summaries:', error);

@@ -29,8 +29,8 @@ class StudyParticipant extends Model<
   declare participant_code: string;
   declare participant_name: string | null;
   declare recruitment_source: string | null;
-  declare scheduled_date: string | null;
-  declare scheduled_time: string | null;
+  declare scheduled_date: Date | null;
+  declare scheduled_time: string | null;  // TIME type stored as string in JS
   declare status_select: ParticipantStatus | null;
   declare notes_field: string | null;
   declare demographics_info: Record<string, unknown> | null;
@@ -100,11 +100,11 @@ export default (sequelize: Sequelize) => {
         allowNull: true,
       },
       scheduled_date: {
-        type: DataTypes.STRING,
+        type: DataTypes.DATEONLY,
         allowNull: true,
       },
       scheduled_time: {
-        type: DataTypes.STRING,
+        type: DataTypes.TIME,
         allowNull: true,
       },
       status_select: {

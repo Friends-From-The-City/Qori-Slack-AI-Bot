@@ -38,9 +38,10 @@ class ResearchStudy extends Model<
   declare created_by: string;
   declare researcher_name: string;
   declare researcher_email: string;
-  declare total_participants: CreationOptional<number>;
   /** DECIMAL(10,2) — model getter coerces to number. See ADR 0014. */
   declare parsed_budget_amount: number | null;
+  /** IANA timezone identifier for session times. Default: America/New_York (VA HQ). */
+  declare session_timezone: CreationOptional<string>;
   declare target_participants: number | null;
   declare created_at: CreationOptional<Date>;
   declare updated_at: CreationOptional<Date>;
@@ -158,11 +159,6 @@ export default (sequelize: Sequelize) => {
         type: DataTypes.STRING,
         allowNull: false,
       },
-      total_participants: {
-        type: DataTypes.INTEGER,
-        allowNull: false,
-        defaultValue: 0,
-      },
       parsed_budget_amount: {
         type: DataTypes.DECIMAL(10, 2),
         allowNull: true,
@@ -174,6 +170,11 @@ export default (sequelize: Sequelize) => {
       target_participants: {
         type: DataTypes.INTEGER,
         allowNull: true,
+      },
+      session_timezone: {
+        type: DataTypes.STRING(50),
+        allowNull: false,
+        defaultValue: 'America/New_York',
       },
       created_at: {
         type: DataTypes.DATE,

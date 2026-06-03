@@ -25,8 +25,8 @@ class StudyNotes extends Model<
   declare file_path: string | null;
   declare file_url: string | null;
   declare transcript: CreationOptional<boolean>;
-  declare session_date: string | null;
-  declare session_time: string | null;
+  declare session_date: Date | null;
+  declare session_time: string | null;  // TIME type stored as string in JS
   declare participant_name: string | null;
   declare researcher: string | null;
   declare created_at: CreationOptional<Date>;
@@ -85,11 +85,11 @@ export default (sequelize: Sequelize) => {
         allowNull: false,
       },
       session_date: {
-        type: DataTypes.STRING,
+        type: DataTypes.DATEONLY,
         allowNull: true,
       },
       session_time: {
-        type: DataTypes.STRING,
+        type: DataTypes.TIME,
         allowNull: true,
       },
       participant_name: {
