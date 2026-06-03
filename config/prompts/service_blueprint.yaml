@@ -49,11 +49,18 @@ blueprint_scope_options:
 # CASCADE CONTRACT
 # ═══════════════════════════════════════════════════════════
 consumes:
-  - key: atomic_nuggets
+  # NOTE: service_blueprint is excluded from cascade-aware modal per ADR 0018.
+  # When re-enabling, update TEMPLATE_CONSUMES in cascadeReadinessBlocks.ts.
+  - key: atomic_nugget_core
     source: session_summary
     required: true
     inject_as: context
-    description: "Atomic observations — evidence for blueprint lanes"
+    description: "Atomic observations (core) — evidence for blueprint lanes"
+  - key: atomic_nugget_detail
+    source: session_summary
+    required: true
+    inject_as: context
+    description: "Atomic observations (detail) — verbatim quotes and context for blueprint"
   - key: backstage_observations
     source: stakeholder_synthesis
     required: false

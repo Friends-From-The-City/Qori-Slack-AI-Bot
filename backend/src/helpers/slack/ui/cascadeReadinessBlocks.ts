@@ -1,11 +1,12 @@
 // cascadeReadinessBlocks.ts — Build Slack Block Kit blocks for cascade readiness display
+//
+// TEMPLATE_CONSUMES is now generated from YAML sources.
+// See cascadeRegistry.generated.ts (npm run build:cascade)
 
-interface ConsumeSpec {
-  key: string;
-  required: boolean;
-  label: string;
-  source_hint: string;
-}
+import { TEMPLATE_CONSUMES, type ConsumeSpec } from './cascadeRegistry.generated';
+
+// Re-export for consumers that import from this file
+export { TEMPLATE_CONSUMES, type ConsumeSpec };
 
 interface AvailableVariable {
   key: string;
@@ -40,91 +41,6 @@ interface VariableValue {
 interface StudyVars {
   variables: Record<string, VariableValue>;
 }
-
-// Consumes specs per template (from cascade contracts in YAML)
-// Must stay in sync with YAML templates' consumes: blocks
-const TEMPLATE_CONSUMES: Record<string, ConsumeSpec[]> = {
-  // Synthesis modal — method-dependent
-  affinity_mapping: [
-    { key: 'atomic_nugget_core', required: true, label: 'Atomic nuggets (core)', source_hint: 'Run session summaries first' },
-    { key: 'atomic_nugget_detail', required: true, label: 'Atomic nuggets (detail)', source_hint: 'Run session summaries first' },
-    { key: 'target_barriers', required: false, label: 'Target barriers', source_hint: 'Run research brief first' },
-    { key: 'research_questions', required: false, label: 'Research questions', source_hint: 'Run research brief first' },
-    { key: 'participant_metadata', required: false, label: 'Participant metadata', source_hint: 'Run session summaries first' },
-  ],
-  journey_mapping: [
-    { key: 'atomic_nugget_core', required: true, label: 'Atomic nuggets (core)', source_hint: 'Run session summaries first' },
-    { key: 'atomic_nugget_detail', required: true, label: 'Atomic nuggets (detail)', source_hint: 'Run session summaries first' },
-    { key: 'validated_themes', required: false, label: 'Validated themes', source_hint: 'Run affinity mapping first' },
-    { key: 'personas', required: false, label: 'Personas', source_hint: 'Run persona generation first' },
-    { key: 'target_barriers', required: false, label: 'Target barriers', source_hint: 'Run research brief first' },
-    { key: 'research_questions', required: false, label: 'Research questions', source_hint: 'Run research brief first' },
-  ],
-  persona_generation: [
-    { key: 'atomic_nugget_core', required: true, label: 'Atomic nuggets (core)', source_hint: 'Run session summaries first' },
-    { key: 'atomic_nugget_detail', required: true, label: 'Atomic nuggets (detail)', source_hint: 'Run session summaries first' },
-    { key: 'validated_themes', required: false, label: 'Validated themes', source_hint: 'Run affinity mapping first' },
-    { key: 'participant_metadata', required: true, label: 'Participant metadata', source_hint: 'Run session summaries first' },
-    { key: 'target_barriers', required: false, label: 'Target barriers', source_hint: 'Run research brief first' },
-    { key: 'research_questions', required: false, label: 'Research questions', source_hint: 'Run research brief first' },
-  ],
-  jobs_to_be_done: [
-    { key: 'atomic_nugget_core', required: true, label: 'Atomic nuggets (core)', source_hint: 'Run session summaries first' },
-    { key: 'atomic_nugget_detail', required: true, label: 'Atomic nuggets (detail)', source_hint: 'Run session summaries first' },
-    { key: 'validated_themes', required: false, label: 'Validated themes', source_hint: 'Run affinity mapping first' },
-    { key: 'target_barriers', required: false, label: 'Target barriers', source_hint: 'Run research brief first' },
-    { key: 'research_questions', required: false, label: 'Research questions', source_hint: 'Run research brief first' },
-  ],
-  usability_issues: [
-    { key: 'atomic_nugget_core', required: true, label: 'Atomic nuggets (core)', source_hint: 'Run session summaries first' },
-    { key: 'atomic_nugget_detail', required: true, label: 'Atomic nuggets (detail)', source_hint: 'Run session summaries first' },
-    { key: 'validated_themes', required: false, label: 'Validated themes', source_hint: 'Run affinity mapping first' },
-    { key: 'target_barriers', required: false, label: 'Target barriers', source_hint: 'Run research brief first' },
-    { key: 'research_questions', required: false, label: 'Research questions', source_hint: 'Run research brief first' },
-  ],
-  design_opportunities: [
-    { key: 'atomic_nugget_core', required: true, label: 'Atomic nuggets (core)', source_hint: 'Run session summaries first' },
-    { key: 'atomic_nugget_detail', required: true, label: 'Atomic nuggets (detail)', source_hint: 'Run session summaries first' },
-    { key: 'validated_themes', required: false, label: 'Validated themes', source_hint: 'Run affinity mapping first' },
-    { key: 'personas', required: false, label: 'Personas', source_hint: 'Run persona generation first' },
-    { key: 'stakeholder_constraints', required: false, label: 'Stakeholder constraints', source_hint: 'Run stakeholder synthesis first' },
-    { key: 'validated_jobs', required: false, label: 'Validated jobs', source_hint: 'Run jobs-to-be-done first' },
-  ],
-  service_blueprint: [
-    { key: 'atomic_nugget_core', required: true, label: 'Atomic nuggets (core)', source_hint: 'Run session summaries first' },
-    { key: 'atomic_nugget_detail', required: true, label: 'Atomic nuggets (detail)', source_hint: 'Run session summaries first' },
-    { key: 'backstage_observations', required: false, label: 'Backstage observations', source_hint: 'Run stakeholder synthesis first' },
-    { key: 'system_failure_modes', required: false, label: 'System failure modes', source_hint: 'Run stakeholder synthesis first' },
-    { key: 'stakeholder_constraints', required: false, label: 'Stakeholder constraints', source_hint: 'Run stakeholder synthesis first' },
-  ],
-
-  // Planning modals
-  research_brief: [
-    { key: 'discovered_barriers', required: false, label: 'Discovered barriers', source_hint: 'Run /qori-discover (desk research) first' },
-    { key: 'knowledge_gaps', required: false, label: 'Knowledge gaps', source_hint: 'Run /qori-discover (desk research) first' },
-    { key: 'stakeholder_constraints', required: false, label: 'Stakeholder constraints', source_hint: 'Run /qori-discover (stakeholder) first' },
-    { key: 'stakeholder_priorities', required: false, label: 'Stakeholder priorities', source_hint: 'Run /qori-discover (stakeholder) first' },
-  ],
-  research_plan: [
-    { key: 'research_objectives', required: true, label: 'Research objectives', source_hint: 'Create research brief first' },
-    { key: 'research_questions', required: true, label: 'Research questions', source_hint: 'Create research brief first' },
-    { key: 'methodology_selection', required: true, label: 'Methodology', source_hint: 'Create research brief first' },
-    { key: 'target_barriers', required: true, label: 'Target barriers', source_hint: 'Create research brief first' },
-    { key: 'participant_criteria', required: true, label: 'Participant criteria', source_hint: 'Create research brief first' },
-    { key: 'participant_approach', required: false, label: 'Participant approach', source_hint: 'Create research brief first' },
-    { key: 'timeline_preference', required: false, label: 'Timeline', source_hint: 'Create research brief first' },
-    { key: 'budget', required: false, label: 'Budget', source_hint: 'Create research brief first' },
-    { key: 'decision_deadline', required: false, label: 'Decision deadline', source_hint: 'Create research brief first' },
-    { key: 'recruitment_sources', required: false, label: 'Recruitment sources', source_hint: 'Create research brief first' },
-  ],
-  discussion_guide: [
-    { key: 'research_objectives', required: true, label: 'Research objectives', source_hint: 'Create research brief first' },
-    { key: 'research_questions', required: true, label: 'Research questions', source_hint: 'Create research brief first' },
-    { key: 'methodology_selection', required: true, label: 'Methodology', source_hint: 'Create research brief first' },
-    { key: 'target_barriers', required: true, label: 'Target barriers', source_hint: 'Create research brief first' },
-    { key: 'participant_criteria', required: false, label: 'Participant criteria', source_hint: 'Create research brief first' },
-  ],
-};
 
 /**
  * Build cascade readiness from study variables for a given template.
@@ -220,5 +136,5 @@ function buildCascadeBlocks(cascadeData: CascadeData | null) {
   return blocks;
 }
 
-export { buildCascadeReadiness, buildCascadeBlocks, TEMPLATE_CONSUMES };
+export { buildCascadeReadiness, buildCascadeBlocks };
 export type { CascadeData };

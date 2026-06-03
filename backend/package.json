@@ -25,7 +25,8 @@
     "test:watch": "NODE_ENV=test jest --config jest.config.js --watch",
     "db:migrate": "npx sequelize-cli db:migrate",
     "adr": "../scripts/new-adr.sh",
-    "adr:lesson": "../scripts/new-adr-lesson.sh"
+    "adr:lesson": "../scripts/new-adr-lesson.sh",
+    "build:cascade": "npx ts-node scripts/build-cascade-registry.ts"
   },
   "dependencies": {
     "@chroma-core/default-embed": "^0.1.8",
