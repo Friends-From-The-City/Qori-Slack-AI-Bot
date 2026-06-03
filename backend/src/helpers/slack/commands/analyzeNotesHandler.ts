@@ -80,7 +80,7 @@ interface NoteDetail {
   filename: string;
   transcript: boolean;
   participant_name: string | null;
-  session_date: string | null;
+  session_date: Date | null;  // R2: DATEONLY returns Date
   created_by: string;
   file_path: string | null;
   file_url: string | null;
@@ -95,8 +95,8 @@ interface NoteFile {
   transcript: boolean;
   author: string;
   participant_name: string | null;
-  session_date: string | null;
-  session_time: string | null;
+  session_date: Date | null;  // R2: DATEONLY returns Date
+  session_time: string | null;  // TIME returns string (HH:MM:SS)
   study_name: string;
   file_url: string | null;
 }

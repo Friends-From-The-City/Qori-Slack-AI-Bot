@@ -37,9 +37,10 @@ function verifyStudyTypes(study: ResearchStudy) {
   const name: string = study.name;
   const budget: number | null = study.parsed_budget_amount;
   const target: number | null = study.target_participants;
-  const totalParticipants: number = study.total_participants;
+  // R3: total_participants removed — use study.countParticipants() instead
+  const sessionTimezone: string = study.session_timezone;
 
-  void id; void name; void budget; void target; void totalParticipants;
+  void id; void name; void budget; void target; void sessionTimezone;
 }
 
 // -- Verify association mixin types thread through --

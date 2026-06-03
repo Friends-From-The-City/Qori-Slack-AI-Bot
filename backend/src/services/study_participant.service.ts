@@ -112,12 +112,18 @@ class StudyParticipantService {
         transaction,
       );
 
+      // R2: Normalize scheduled_date to Date (accepts string or Date from handlers)
+      const normalizedDate: Date | null =
+        typeof participantData.scheduled_date === 'string'
+          ? new Date(participantData.scheduled_date)
+          : (participantData.scheduled_date ?? null);
+
       const participant = await StudyParticipantModel.create(
-        { ...participantData, participant_code: participantCode },
+        { ...participantData, participant_code: participantCode, scheduled_date: normalizedDate },
         { transaction },
       );
 
-      await this.updateStudyParticipantCount(participantData.study_id);
+      // R3: No longer updating denormalized count — computed on read
       await transaction.commit();
 
       // YAML processing outside transaction (non-critical, should not roll back participant creation)
@@ -165,26 +171,8 @@ class StudyParticipantService {
     }
   }
 
-  /**
-   * Update the total_participants count for a study.
-   */
-  async updateStudyParticipantCount(studyId: number): Promise<void> {
-    try {
-      const participantCount = await StudyParticipantModel.count({
-        where: { study_id: studyId },
-      });
-
-      await ResearchStudyModel.update(
-        { total_participants: participantCount },
-        { where: { id: studyId } },
-      );
-
-      console.log(`Updated total_participants count for study ${studyId}: ${participantCount}`);
-    } catch (error) {
-      console.error('Error updating study participant count:', error);
-      throw error;
-    }
-  }
+  // R3: updateStudyParticipantCount() removed — count is now computed on read
+  // via StudyParticipantModel.count() or study.countParticipants()
 
   /**
    * Get all participants for a specific study.
@@ -267,7 +255,13 @@ class StudyParticipantService {
         throw new Error('Participant not found');
       }
 
-      await participant.update(updateData);
+      // R2: Normalize scheduled_date to Date if present (accepts string or Date)
+      const normalizedUpdate = { ...updateData };
+      if (typeof normalizedUpdate.scheduled_date === 'string') {
+        normalizedUpdate.scheduled_date = new Date(normalizedUpdate.scheduled_date);
+      }
+
+      await participant.update(normalizedUpdate as Parameters<typeof participant.update>[0]);
       return participant;
     } catch (error) {
       console.error('Error updating participant:', error);
@@ -285,11 +279,9 @@ class StudyParticipantService {
         throw new Error('Participant not found');
       }
 
-      const studyId = participant.study_id;
       await participant.destroy();
 
-      await this.updateStudyParticipantCount(studyId);
-
+      // R3: No longer updating denormalized count — computed on read
       return { success: true, message: 'Participant deleted successfully' };
     } catch (error) {
       console.error('Error deleting participant:', error);
@@ -435,6 +427,7 @@ class StudyParticipantService {
 
   /**
    * Check if study has reached a participant milestone.
+   * R3: Now computes count instead of reading denormalized total_participants.
    */
   async checkStudyMilestone(studyId: number, milestoneCount: number = 2): Promise<MilestoneResult> {
     try {
@@ -443,11 +436,16 @@ class StudyParticipantService {
         throw new Error('Study not found');
       }
 
-      const hasReachedMilestone = study.total_participants === milestoneCount;
+      // R3: Compute count instead of reading stored value
+      const currentCount = await StudyParticipantModel.count({
+        where: { study_id: studyId },
+      });
+
+      const hasReachedMilestone = currentCount === milestoneCount;
 
       return {
         hasReachedMilestone,
-        currentCount: study.total_participants,
+        currentCount,
         milestoneCount,
         studyName: study.name,
       };

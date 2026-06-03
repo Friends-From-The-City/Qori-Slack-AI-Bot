@@ -101,7 +101,7 @@ const addResearchStudyWithRoles = async (data: StudyInput): Promise<ResearchStud
 const getStudyById = async (studyId: number): Promise<ResearchStudy | null> => {
   const study = await ResearchStudyModel.findOne({
     where: { id: studyId },
-    attributes: ['id', 'project_id', 'name', 'slug', 'description', 'path', 'created_by', 'researcher_name', 'researcher_email', 'created_at', 'updated_at', 'link', 'total_participants', 'parsed_budget_amount', 'target_participants'],
+    attributes: ['id', 'project_id', 'name', 'slug', 'description', 'path', 'created_by', 'researcher_name', 'researcher_email', 'created_at', 'updated_at', 'link', 'parsed_budget_amount', 'target_participants', 'session_timezone'],
     include: [
       { model: UserRoleModel, as: 'userRoles', attributes: ['user_id', 'role', 'created_at'] },
       { model: ProjectModel, as: 'project', attributes: ['id', 'name', 'slug'] },
@@ -109,7 +109,7 @@ const getStudyById = async (studyId: number): Promise<ResearchStudy | null> => {
   });
 
   if (study) {
-    study.total_participants = study.total_participants || 0;
+    // R3: total_participants removed — compute via study.countParticipants() if needed
     const withCounts = study as ResearchStudy & StudyComputedCounts;
     withCounts.total_sessions = 0;
     withCounts.total_transcripts = 0;
@@ -125,7 +125,7 @@ const getStudyById = async (studyId: number): Promise<ResearchStudy | null> => {
 const getStudyByProjectAndName = async (projectId: number, name: string): Promise<ResearchStudy | null> => {
   const study = await ResearchStudyModel.findOne({
     where: { project_id: projectId, name },
-    attributes: ['id', 'project_id', 'name', 'slug', 'description', 'path', 'created_by', 'researcher_name', 'researcher_email', 'created_at', 'updated_at', 'link', 'total_participants', 'parsed_budget_amount', 'target_participants'],
+    attributes: ['id', 'project_id', 'name', 'slug', 'description', 'path', 'created_by', 'researcher_name', 'researcher_email', 'created_at', 'updated_at', 'link', 'parsed_budget_amount', 'target_participants', 'session_timezone'],
     include: [
       { model: UserRoleModel, as: 'userRoles', attributes: ['user_id', 'role', 'created_at'] },
       { model: ProjectModel, as: 'project', attributes: ['id', 'name', 'slug'] },
@@ -133,7 +133,7 @@ const getStudyByProjectAndName = async (projectId: number, name: string): Promis
   });
 
   if (study) {
-    study.total_participants = study.total_participants || 0;
+    // R3: total_participants removed — compute via study.countParticipants() if needed
     const withCounts = study as ResearchStudy & StudyComputedCounts;
     withCounts.total_sessions = 0;
     withCounts.total_transcripts = 0;
@@ -244,7 +244,7 @@ const resolveStudyFromName = async (studyName: string): Promise<{
     attributes: [
       'id', 'project_id', 'name', 'slug', 'channel_name', 'description',
       'path', 'link', 'created_by', 'researcher_name', 'researcher_email',
-      'total_participants', 'parsed_budget_amount', 'target_participants',
+      'parsed_budget_amount', 'target_participants', 'session_timezone',
       'created_at', 'updated_at',
     ],
     include: [

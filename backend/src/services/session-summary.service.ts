@@ -129,31 +129,7 @@ class SessionSummaryService {
     }
   }
 
-  /**
-   * Get session summaries by study name
-   */
-  async getSessionSummariesByStudyName(studyName: string): Promise<SessionSummary[]> {
-    try {
-      const summaries = await SessionSummaryModel.findAll({
-        where: { study_name: studyName },
-        include: [
-          {
-            model: ResearchStudyModel,
-            as: 'study',
-            attributes: ['id', 'name', 'path']
-          }
-        ],
-        order: [
-          ['created_at', 'DESC']
-        ]
-      });
-
-      return summaries;
-    } catch (error) {
-      console.error('Error getting session summaries by study name:', error);
-      throw new Error(`Failed to get session summaries: ${error instanceof Error ? error.message : String(error)}`);
-    }
-  }
+  // NOTE: getSessionSummariesByStudyId already exists above (A1-compliant)
 
   /**
    * Get all session summaries
