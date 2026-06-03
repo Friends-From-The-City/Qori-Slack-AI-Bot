@@ -74,12 +74,6 @@ consumes:
     inject_as: reference
     description: "Progress-focused jobs for HMW opportunity framing (what users are trying to accomplish)"
 
-  - key: validated_jobs
-    source: jobs_to_be_done
-    required: false
-    inject_as: reference
-    description: "Progress-focused jobs — what users are trying to accomplish"
-
   - key: target_barriers
     source: research_brief
     required: false

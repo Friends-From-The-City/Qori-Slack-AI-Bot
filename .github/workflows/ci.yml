@@ -43,6 +43,15 @@ jobs:
         working-directory: backend
         run: npm run typecheck
 
+      - name: Check cascade registry freshness
+        working-directory: backend
+        run: |
+          npm run build:cascade
+          git diff --exit-code src/helpers/slack/ui/cascadeRegistry.generated.ts src/types/cascade.generated.ts || {
+            echo "::error::Cascade registry is stale. Run 'npm run build:cascade' and commit the generated files."
+            exit 1
+          }
+
       - name: Run unit tests
         working-directory: backend
         run: npm test
