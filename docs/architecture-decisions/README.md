@@ -95,6 +95,7 @@ Start with `0001` and read forward. The history is itself useful — it shows ho
 - [0020 — System-assigned per-study participant codes](./0020-system-assigned-participant-codes.md) — PT-XXX codes are system-assigned at creation; LLM uses verbatim (complements L005)
 - [0021 — Single source of truth for cascade consumes/emits](./0021-single-source-of-truth-cascade-consumes-emits.md) — YAML is authoritative; TypeScript generated; CI freshness check prevents drift
 - [0022 — Data integrity batch (R1/R2/R3)](./0022-data-integrity-batch.md) — CHECK constraints for enums; DATE/TIME types with timezone anchor; drop denormalized count
+- [0023 — Access control current state and gaps](./0023-access-control-current-state-and-gaps.md) — Federal-reviewer evidence: honest gap analysis, authorization map, remediation plan
 
 ### Lessons (informal ADRs from failure modes)
 
