@@ -4,7 +4,7 @@
 id: session_summary
 name: analyze_session_notes
 label: "Analyze Notes"
-version: "v7.1"
+version: "v7.2"
 
 description: |
   Analyze session transcript and observer notes to produce a structured
@@ -19,7 +19,7 @@ description: |
 
 author: Qori R&D
 created: 2025-10-25
-last_updated: 2026-06-02
+last_updated: 2026-06-03
 
 # ═══════════════════════════════════════════════════════════
 # CONFIGURATION
@@ -49,13 +49,10 @@ input_variables:
       min_selections: 1
       max_selections: 10
 
-  - coded_transcript_file:
-      type: "select"
-      required: true
-      label: "Session transcript"
-      placeholder: "Select session transcript file..."
-      data_source: "coded_transcripts"
-      help_text: "Primary source for analysis"
+  # NOTE: coded_transcript_file was removed in v7.2 (B1 cleanup).
+  # The old coded-transcript workflow no longer exists — transcripts are now
+  # uploaded via /qori-notes with transcript=true flag, and the handler
+  # (analyzeNotesHandler.ts) provides coded_transcript_content directly.
 
   - participant_id:
       type: "hidden"
@@ -79,7 +76,8 @@ input_variables:
 
   - coded_transcript_content:
       type: "hidden"
-      derived_from: "coded_transcript_file.content"
+      # Handler-provided: analyzeNotesHandler.ts fetches transcript content
+      # directly from notes marked transcript=true. No YAML derivation.
 
   - analyzer:
       type: "hidden"
