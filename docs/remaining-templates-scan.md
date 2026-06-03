@@ -1,90 +1,81 @@
 # Remaining Templates Scan
 
-**Date:** 2026-05-21
+**Date:** 2026-05-21 (original) → **Updated:** 2026-06-03
 **Purpose:** Lightweight structural audit before committing to v7.0 restructure sessions
 
 ---
 
-## Summary
+## Summary (Updated 2026-06-03)
 
-| Template | Version | v7.0 Pattern | Cascade Contract | Emits | Restructure Effort |
-|----------|---------|:------------:|:----------------:|:-----:|:------------------:|
-| discussion_guide | v7.0 | Done | Clean | task_scenarios, probes | **None** |
-| journey_mapping | v4.0 | Done | Clean | journey_stages, journey_pain_points | **None** |
-| participant_tracker | v1.1 | N/A (data-only) | None | None | **Significant** (outlier) |
-| jobs_to_be_done | v3.5 | Single-LLM blob | Partial (no emits) | Missing | **Moderate** |
-| usability_issues | v3.1 | Single-LLM blob | Partial (no emits) | Missing | **Moderate** |
-| design_opportunities | v2.4 | Single-LLM blob | Partial (no emits) | Missing | **Moderate** |
+| Template | Version | v7.0 Pattern | Cascade Contract | Emits | Status |
+|----------|---------|:------------:|:----------------:|:-----:|:------:|
+| discussion_guide | v7.0 | Done | Clean | task_scenarios, probes | **Complete** |
+| journey_mapping | v4.0 | Done | Clean | journey_stages, journey_pain_points | **Complete** |
+| participant_tracker | v1.1 | N/A (data-only) | N/A | N/A | **Complete** (handler provides all vars) |
+| jobs_to_be_done | v7.0 | Done | Clean | validated_jobs | **Complete** |
+| usability_issues | v7.0 | Done | Clean | prioritized_issues | **Complete** |
+| design_opportunities | v7.0 | Done | Clean | design_hmw_opportunities | **Complete** |
 
-**2 already done.** discussion_guide and journey_mapping have full cascade contracts and correct handler routing.
-
-**3 need standard v7.0 work + emit schemas.** JTBD, usability_issues, and design_opportunities are single-LLM blobs with incomplete cascade contracts — they consume upstream variables but declare no `emits:` section. Each needs: Handlebars/AI interleave, OUTPUT BOUNDARIES, cascade summary, and new emit schemas defining what they produce for downstream consumers.
-
-**1 outlier.** participant_tracker is not an AI template at all — it's a data-only Handlebars render (no `ai_generation_tasks`). It has undefined Handlebars variables (`{{#each participants}}`, `{{recruitment_analysis}}`) and aspirational metadata blocks. Needs a separate decision: either formalize as a non-AI data template or redesign.
+**All 6 templates complete.** The v7.0 restructure work was done on 2026-05-21 for JTBD, usability_issues, and design_opportunities. participant_tracker handler was updated to provide all required variables.
 
 ---
 
-## Per-template details
+## Changelog
 
-### 1. discussion_guide.yaml -- v7.0 (no work needed)
+### 2026-06-03 Update
 
-- **Pattern:** Single AI task `guide_complete` with Jinja2 methodology branching (7 branches + fallback). Already v7.0.
-- **Cascade:** Consumes 5 from research_brief (research_objectives, research_questions, methodology_selection, target_barriers, participant_criteria). Emits task_scenarios + probes with schema refs. All schemas exist.
-- **Handler:** `discussionGuideHandler.ts` -- clean.
-- **Flags:** None.
+This document was stale — it captured the state *before* the v7.0 restructure work was completed on the same day (2026-05-21). Verified current state:
 
-### 2. journey_mapping.yaml -- v4.0 (no work needed)
+**jobs_to_be_done.yaml (v7.0)**
+- ✅ Interleaved Handlebars/AI with single `analysis_body` task
+- ✅ `emits:` section with `validated_jobs` schema
+- ✅ `consumes:` 5 variables (fixed in Batch 1 ADR 0021)
+- ✅ Cascade summary section
+- ✅ OUTPUT BOUNDARIES instruction
+- ✅ `{{focus_area}}` bug fixed (removed, was never provided)
+- ✅ Footer bug fixed (malformed footer removed)
 
-- **Pattern:** Single AI task `journey_map_complete` (plus a file_discovery_summary helper). Full cascade awareness with TB-XXX/RQ-XXX markers, persona references, nugget ID citations.
-- **Cascade:** Consumes atomic_nugget_core, atomic_nugget_detail, validated_themes, personas, target_barriers, research_questions. Emits journey_stages + journey_pain_points. All schema refs valid.
-- **Handler:** Routes through `researchSynthesisHandler.ts` via ANALYSIS_YAML_MAPPING.
-- **Flags:** None. Version is v4.0 but structurally complete -- the version number predates the v7.0 naming convention.
+**usability_issues_extractor.yaml (v7.0)**
+- ✅ Interleaved Handlebars/AI with single `analysis_body` task
+- ✅ `emits:` section with `prioritized_issues` schema
+- ✅ `consumes:` 5 variables (fixed in Batch 1 ADR 0021)
+- ✅ Cascade summary section
+- ✅ OUTPUT BOUNDARIES instruction
 
-### 3. participant_tracker.yaml -- v1.1 (outlier, significant work)
+**design_opportunity_generator.yaml (v7.0)**
+- ✅ Interleaved Handlebars/AI with single `analysis_body` task
+- ✅ `emits:` section with `design_hmw_opportunities` schema
+- ✅ `consumes:` 8 variables (fixed in Batch 1 ADR 0021, duplicate removed)
+- ✅ Cascade summary section
+- ✅ OUTPUT BOUNDARIES instruction
 
-- **Pattern:** No AI tasks. Pure Handlebars data template with `{{#each}}` loops over participant lists, demographics breakdowns, session observers.
-- **Cascade:** No consumes, no emits.
-- **Bugs:**
-  - Multiple `{{#each}}` blocks reference variables never provided by handler (`participants`, `session_observers`, `race_ethnicity_breakdown`, `age_range_breakdown`, etc.)
-  - `{{recruitment_analysis}}` variable referenced but never injected
-  - Large aspirational metadata sections (`observer_management`, `workflow_integration`, `capacity_management`) describe features that don't exist in handler code
-- **Handler:** Routes through `participantHandler.ts` + `participantYamlProcessor.ts` (separate processor from standard `processYamlTemplate`). Data shape mismatch risk.
-- **Decision needed:** This is not a candidate for standard v7.0 restructure. Either formalize as a non-AI data template with correct variable mapping, or redesign as an AI-assisted participant summary. Separate session recommended.
-
-### 4. jobs_to_be_done.yaml -- v3.5 (moderate work)
-
-- **Pattern:** Single-LLM blob. `{{ai_generated.jtbd_complete}}`.
-- **Cascade:** Consumes atomic_nuggets + validated_themes. **No `emits:` section** -- generates JTBD statements but doesn't declare them for downstream.
-- **Bugs:**
-  - `{{focus_area}}` referenced in prompt but never provided by handler (acknowledged in notes as latent bug)
-  - Footer line `*Generated by Qori * {{current_date}}*` may render literal braces if current_date not injected
-- **Handler:** Routes through `researchSynthesisHandler.ts`.
-- **v7.0 work:** Handlebars/AI interleave, OUTPUT BOUNDARIES, cascade summary. Plus: define emit schema for extracted jobs (job statements, evidence, priority), remove or resolve `{{focus_area}}`.
-
-### 5. usability_issues_extractor.yaml -- v3.1 (moderate work)
-
-- **Pattern:** Single-LLM blob. `{{ai_generated.usability_complete}}`.
-- **Cascade:** Consumes atomic_nuggets + validated_themes. **No `emits:` section** -- extracts usability issues but doesn't declare schema.
-- **Bugs:** None beyond missing emits.
-- **Handler:** Routes through `researchSynthesisHandler.ts`.
-- **v7.0 work:** Handlebars/AI interleave, OUTPUT BOUNDARIES, cascade summary. Plus: define emit schema for usability issues (severity, affected participants, task context, fix recommendations).
-
-### 6. design_opportunity_generator.yaml -- v2.4 (moderate work)
-
-- **Pattern:** Single-LLM blob. `{{ai_generated.opportunities_complete}}`.
-- **Cascade:** Consumes atomic_nuggets + validated_themes + personas + stakeholder_constraints. **No `emits:` section** -- generates HMW opportunities but doesn't declare schema.
-- **Bugs:** None beyond missing emits.
-- **Handler:** Routes through `researchSynthesisHandler.ts`.
-- **v7.0 work:** Handlebars/AI interleave, OUTPUT BOUNDARIES, cascade summary. Plus: define emit schema for design opportunities (HMW statement, evidence, personas affected, priority, effort).
+**participant_tracker.yaml (v1.1)**
+- ✅ Data-only template (no AI tasks) — this is intentional
+- ✅ Handler (`participantYamlProcessor.ts`) now provides all required variables:
+  - `participants` array with mapped data
+  - `recruitment_breakdown`
+  - Demographic breakdowns (`race_ethnicity_breakdown`, `age_range_breakdown`, etc.)
+  - `session_observers` with full observer data
+  - `recruitment_analysis`
+  - `next_steps_recommendations`
+  - Role counts (`note_taker_count`, etc.)
+  - `accommodations`
+- ✅ Metadata sections (`observer_management`, `workflow_integration`, `capacity_management`) are config/documentation, not runtime — acceptable
 
 ---
 
-## Recommended session order
+## Original scan (2026-05-21, superseded)
 
-1. **session_summary** (this session) -- highest cascade impact, 5 pool emits
-2. **jobs_to_be_done** -- needs emit schema design + v7.0 restructure
-3. **usability_issues** -- needs emit schema design + v7.0 restructure
-4. **design_opportunities** -- needs emit schema design + v7.0 restructure
-5. **participant_tracker** -- outlier, separate decision session
+<details>
+<summary>Historical record — click to expand</summary>
 
-discussion_guide and journey_mapping need no work.
+The original scan documented these as needing work:
+
+- jobs_to_be_done v3.5 — Single-LLM blob, no emits
+- usability_issues v3.1 — Single-LLM blob, no emits
+- design_opportunities v2.4 — Single-LLM blob, no emits
+- participant_tracker v1.1 — Variables not provided by handler
+
+All were addressed on 2026-05-21 (templates) and by subsequent handler updates.
+
+</details>
