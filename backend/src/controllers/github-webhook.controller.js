@@ -1,17 +1,36 @@
 // src/controllers/github-webhook.controller.js
 const GithubWebhookService = require('../services/github-webhook.service');
 
-// Fail loudly at startup if webhook secret is missing (H2 federal-readiness fix)
-const GITHUB_WEBHOOK_SECRET = process.env.GITHUB_WEBHOOK_SECRET;
-if (!GITHUB_WEBHOOK_SECRET) {
-  throw new Error(
-    'GITHUB_WEBHOOK_SECRET environment variable is required. ' +
-    'Webhook signature verification cannot proceed without a secret.'
-  );
+// Lazy initialization — allows app to start even if webhooks aren't configured.
+// The check happens when the endpoint is called, not at module load time.
+// This is graceful degradation: webhooks are optional, but if used, the secret is required.
+let githubWebhookService = null;
+
+function getWebhookService() {
+  if (githubWebhookService) return githubWebhookService;
+
+  const secret = process.env.GITHUB_WEBHOOK_SECRET;
+  if (!secret) {
+    throw new Error(
+      'GITHUB_WEBHOOK_SECRET environment variable is required. ' +
+      'Webhook signature verification cannot proceed without a secret.'
+    );
+  }
+
+  githubWebhookService = new GithubWebhookService(secret);
+  return githubWebhookService;
 }
-const githubWebhookService = new GithubWebhookService(GITHUB_WEBHOOK_SECRET);
 
 exports.handleWebhook = (req, res) => {
+  // Fail at request time if secret is missing (not at startup)
+  let service;
+  try {
+    service = getWebhookService();
+  } catch (err) {
+    console.error('[Webhook] Configuration error:', err.message);
+    return res.status(500).send('Webhook not configured');
+  }
+
   const signature = req.headers['x-hub-signature-256'];
   const event = req.headers['x-github-event'];
   const rawBody = req.rawBody;
@@ -25,11 +44,11 @@ exports.handleWebhook = (req, res) => {
   }
 
   // Verify signature using the raw body string
-  if (!githubWebhookService.verifySignature(signature, rawBody)) {
+  if (!service.verifySignature(signature, rawBody)) {
     return res.status(401).send('Invalid signature');
   }
 
   // req.body is already parsed by our custom middleware
-  githubWebhookService.handleEvent(event, req.body);
+  service.handleEvent(event, req.body);
   res.status(200).send('Webhook received');
 };
