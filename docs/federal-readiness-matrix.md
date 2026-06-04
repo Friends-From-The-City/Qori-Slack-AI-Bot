@@ -236,7 +236,11 @@ This matrix maps NIST 800-53 control families to Qori's current state, identifie
 
 **Strength:** Participant code system (ADR 0020) is privacy-preserving design. Sentry PII scrubbing is comprehensive.
 
-**Critical finding:** Transcripts with participant names sent to Claude API. LLM instructed to redact post-hoc, but raw PII is processed.
+**REMEDIATED (2026-06-04):** Pre-transmission PII redaction now replaces known participant names with codes (PT-XXX) BEFORE content is sent to Claude API. Fail-closed assertion aborts API call if any known name is detected in payload after redaction. Console logs and error messages also redacted to prevent Sentry leaks.
+
+**Evidence files:**
+- `backend/src/helpers/piiRedaction.ts` (redactTranscript + assertKnownNamesRedacted)
+- `backend/src/__tests__/integration/h9-pii-redaction.test.ts` (7 acceptance tests)
 
 ---
 
@@ -261,7 +265,7 @@ This matrix maps NIST 800-53 control families to Qori's current state, identifie
 | H6 | Participant PII (contact_details, name) still stored against zero-PII design | PT-4 | workstream |
 | H7 | No data subject access mechanism (export/delete) | PT-7 | NEW |
 | H8 | No data retention policy | PT-8 | NEW |
-| H9 | Transcript PII sent to Claude API without pre-redaction | PT-4 | NEW |
+| H9 | ~~Transcript PII sent to Claude API without pre-redaction~~ | PT-4 | ✅ REMEDIATED (2026-06-04) — pre-transmission redaction |
 
 ### UNKNOWN (Requires infrastructure verification)
 
@@ -311,19 +315,20 @@ Based on this gap analysis, remediation groups into coordinated workstreams:
 **Related issues:** #194, #193
 **Evidence:** `authorization-bypass.test.ts` passes, pattern-enforcement.test.ts includes auth import checks
 
-### Workstream 2: Privacy & PII (HIGH)
-**Issues:** H6, H7, H8, H9, M5
+### Workstream 2: Privacy & PII (HIGH) — H9 COMPLETE ✅
+**Issues:** H6, H7, H8, ~~H9~~, M5
 **Scope:** Complete zero-PII architecture, add DSAR handling
 **Dependencies:** Workstream 1 (authorization must be fixed first)
 **Effort:** Medium
 
-- Complete `pii-handling-architecture` workstream audit
-- Remove `contact_details` from participant model
-- Pre-redact transcripts before Claude API call
-- Implement participant data export/deletion
-- Define and document retention policy
-- Document consent model (researcher responsibility)
+- ✅ Pre-redact transcripts before Claude API call (H9 — PR #198)
+- ⬜ Complete `pii-handling-architecture` workstream audit (H6)
+- ⬜ Remove `contact_details` from participant model (H6)
+- ⬜ Implement participant data export/deletion (H7)
+- ⬜ Define and document retention policy (H8)
+- ⬜ Document consent model (researcher responsibility) (M5)
 
+**Evidence:** `backend/src/helpers/piiRedaction.ts`, `h9-pii-redaction.test.ts`
 **Related:** `docs/workstreams/pii-handling-architecture.md`
 
 ### Workstream 3: Infrastructure Verification (UNKNOWN)
@@ -394,3 +399,4 @@ Based on this gap analysis, remediation groups into coordinated workstreams:
 |------|--------|--------|
 | 2026-06-03 | Claude Code audit | Initial gap analysis |
 | 2026-06-04 | Claude Code | Workstream 1 Phase 1 complete: C1, C2 remediated (authorization enforcement), H2 remediated (webhook secret). ADR 0024 published. 10-test bypass suite passes. |
+| 2026-06-04 | Claude Code | Workstream 2 H9 complete: Pre-transmission PII redaction. Known participant names replaced with codes before Claude API call. Fail-closed assertion. Console/error message leaks fixed. PR #198. |
