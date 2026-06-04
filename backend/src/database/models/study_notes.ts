@@ -12,6 +12,7 @@ import {
   type Sequelize,
 } from 'sequelize';
 import type { ResearchStudy } from './research_study';
+import type { StudyParticipant } from './study_participant';
 
 class StudyNotes extends Model<
   InferAttributes<StudyNotes>,
@@ -20,6 +21,7 @@ class StudyNotes extends Model<
   // — Attributes —
   declare id: CreationOptional<number>;
   declare study_id: ForeignKey<number>;
+  declare participant_id: ForeignKey<number | null>;
   declare study_name: string;
   declare filename: string;
   declare file_path: string | null;
@@ -27,8 +29,6 @@ class StudyNotes extends Model<
   declare transcript: CreationOptional<boolean>;
   declare session_date: Date | null;
   declare session_time: string | null;  // TIME type stored as string in JS
-  declare participant_name: string | null;
-  declare researcher: string | null;
   declare created_at: CreationOptional<Date>;
   declare updated_at: CreationOptional<Date>;
   declare created_by: string;
@@ -36,6 +36,8 @@ class StudyNotes extends Model<
   // — Association mixins —
   declare getStudy: BelongsToGetAssociationMixin<ResearchStudy>;
   declare study?: NonAttribute<ResearchStudy>;
+  declare getParticipant: BelongsToGetAssociationMixin<StudyParticipant>;
+  declare participant?: NonAttribute<StudyParticipant>;
 
   // — Associations —
   static associate(models: Record<string, any>) {
@@ -43,6 +45,11 @@ class StudyNotes extends Model<
       foreignKey: 'study_id',
       as: 'study',
       onDelete: 'CASCADE',
+    });
+    this.belongsTo(models.StudyParticipant, {
+      foreignKey: 'participant_id',
+      as: 'participant',
+      onDelete: 'SET NULL',
     });
   }
 }
@@ -60,6 +67,14 @@ export default (sequelize: Sequelize) => {
         allowNull: false,
         references: {
           model: 'research_studies',
+          key: 'id',
+        },
+      },
+      participant_id: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        references: {
+          model: 'study_participants',
           key: 'id',
         },
       },
@@ -90,14 +105,6 @@ export default (sequelize: Sequelize) => {
       },
       session_time: {
         type: DataTypes.TIME,
-        allowNull: true,
-      },
-      participant_name: {
-        type: DataTypes.STRING,
-        allowNull: true,
-      },
-      researcher: {
-        type: DataTypes.STRING,
         allowNull: true,
       },
       created_at: {

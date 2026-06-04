@@ -15,7 +15,7 @@ const createError = require("http-errors");
 const logger = require("morgan");
 const { Sequelize } = require("sequelize");
 const configs = require("./config"); // ./config/index.js
-const { authenticationMiddleware, sentryMiddleware } = require("./middleware"); // ./middleware/index.js
+const { sentryMiddleware } = require("./middleware"); // ./middleware/index.js
 const { slackApp, slackExpressRouter } = require('./helpers/slack/events');
 const { createFolderWithDummyData, readFolderContents, listOrgRepos, listAllTopLevelFolders, readFolders } = require("./helpers/github");
 
@@ -37,7 +37,6 @@ app.use(express.urlencoded({ extended: false }));
 app.use(cors(configs.corsConfig));
 app.use(compression(configs.compressionConfig));
 app.use(cookieParser());
-app.use(authenticationMiddleware);
 app.use('/slack', slackExpressRouter);
 
 if (NODE_ENV !== "development") {

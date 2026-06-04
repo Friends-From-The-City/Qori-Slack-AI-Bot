@@ -13,7 +13,6 @@
 import { Sequelize, Model } from 'sequelize';
 
 // Import model definers (same list as database/index.ts)
-import User from '../../../database/models/user.model';
 import ChannelConfig from '../../../database/models/channel_config';
 import Project from '../../../database/models/project';
 import ProjectMember from '../../../database/models/project_member';
@@ -50,7 +49,7 @@ export function getTestDb(): Sequelize {
 
   // Register all models (Project must be registered before models that depend on it)
   const modelDefiners = [
-    User, ChannelConfig, Project, ProjectMember, ResearchStudy, ResearchStudyUserRole,
+    ChannelConfig, Project, ProjectMember, ResearchStudy, ResearchStudyUserRole,
     StudyStatus, StudyParticipant, SessionObserver, StudyNotes,
     ResearchPlan, SessionSummary, StudyVariable, CreatedIssue, SlackUserState,
   ];
