@@ -1,5 +1,6 @@
 import type { StudyNotes } from '../database/models/study_notes';
 import type { ResearchStudy } from '../database/models/research_study';
+import type { StudyParticipant } from '../database/models/study_participant';
 import { Op, type CreationAttributes } from 'sequelize';
 
 import sequelize from '../database';
@@ -7,6 +8,7 @@ import sequelize from '../database';
 // Typed model references — cast once, use everywhere. See Phase 3 notes.
 const StudyNotesModel = sequelize.models.StudyNotes as typeof StudyNotes;
 const ResearchStudyModel = sequelize.models.ResearchStudy as typeof ResearchStudy;
+const StudyParticipantModel = sequelize.models.StudyParticipant as typeof StudyParticipant;
 
 interface QueryOptions {
   limit?: number;
@@ -16,7 +18,7 @@ interface QueryOptions {
 interface SearchCriteria {
   study_id?: number;  // A1: Changed from study_name to study_id
   filename?: string;
-  participant_name?: string;
+  participant_id?: number;  // H6: Changed from participant_name to participant_id FK
 }
 
 interface NoteInput {
@@ -83,6 +85,11 @@ class StudyNotesService {
             model: ResearchStudyModel,
             as: 'study',
             attributes: ['id', 'name', 'path', 'description']
+          },
+          {
+            model: StudyParticipantModel,
+            as: 'participant',
+            attributes: ['id', 'participant_code', 'participant_name']
           }
         ]
       });
@@ -195,20 +202,23 @@ class StudyNotesService {
     }
   }
 
-  async getStudyNotesByParticipantName(
-    participantName: string,
+  /**
+   * Get study notes by participant ID (FK-based query, replaces text-match on participant_name).
+   * H6 remediation: eliminates PII duplication, enables proper relational queries.
+   */
+  async getStudyNotesByParticipant(
+    participantId: number,
     studyId?: number,
     options: QueryOptions = {}
   ): Promise<StudyNotes[]> {
     try {
-      if (!participantName) {
-        throw new Error('Participant name is required');
+      if (!participantId) {
+        throw new Error('Participant ID is required');
       }
 
-      // Bug fix: scope by study_id to avoid cross-study data leakage.
-      // Without this, participant "Alice" in Study A would see notes from Study B.
+      // Bug fix preserved: scope by study_id to avoid cross-study data leakage.
       const where: Record<string, unknown> = {
-        participant_name: participantName
+        participant_id: participantId
       };
       if (studyId !== undefined) {
         where.study_id = studyId;
@@ -221,6 +231,11 @@ class StudyNotesService {
             model: ResearchStudyModel,
             as: 'study',
             attributes: ['id', 'name', 'path', 'description']
+          },
+          {
+            model: StudyParticipantModel,
+            as: 'participant',
+            attributes: ['id', 'participant_code', 'participant_name']
           }
         ],
         order: [
@@ -233,8 +248,8 @@ class StudyNotesService {
 
       return notes;
     } catch (error) {
-      console.error('Error getting study notes by participant name:', error);
-      throw new Error(`Failed to get study notes by participant name: ${error instanceof Error ? error.message : String(error)}`);
+      console.error('Error getting study notes by participant:', error);
+      throw new Error(`Failed to get study notes by participant: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -254,8 +269,9 @@ class StudyNotesService {
         where.filename = { [Op.iLike]: `%${searchCriteria.filename}%` };
       }
 
-      if (searchCriteria.participant_name) {
-        where.participant_name = { [Op.iLike]: `%${searchCriteria.participant_name}%` };
+      // H6: Use participant_id FK for filtering
+      if (searchCriteria.participant_id) {
+        where.participant_id = searchCriteria.participant_id;
       }
 
       const notes = await StudyNotesModel.findAll({
@@ -265,6 +281,11 @@ class StudyNotesService {
             model: ResearchStudyModel,
             as: 'study',
             attributes: ['id', 'name', 'path']
+          },
+          {
+            model: StudyParticipantModel,
+            as: 'participant',
+            attributes: ['id', 'participant_code', 'participant_name']
           }
         ],
         order: [['createdAt', 'DESC']],

@@ -25,6 +25,7 @@ interface SessionInfo {
   session_id: string;
   study?: { id?: number; name?: string; researcher_name?: string };
   participant?: {
+    id?: number;  // H6: participant FK
     participant_name?: string;
     scheduled_date?: string;
     scheduled_time?: string;
@@ -443,6 +444,8 @@ ${templateData.input_text}`;
     }
 
     // Store the study note in the database
+    // H6: Use participant_id FK instead of denormalized participant_name.
+    // To get participant info, join to study_participants via participant_id.
     const studyNoteData = {
       study_id: selectedSession.study?.id || null,
       study_name: templateData.study_name,
@@ -451,8 +454,7 @@ ${templateData.input_text}`;
       file_url: result.url,
       session_date: templateData.session_date,
       session_time: templateData.session_time,
-      participant_name: templateData.participant_name,
-      researcher: templateData.researcher,
+      participant_id: selectedSession.participant?.id || null,
       created_by: body.user.id,
       transcript: !isManual
     };

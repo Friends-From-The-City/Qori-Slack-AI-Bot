@@ -82,7 +82,7 @@ interface NoteDetail {
   id: number;
   filename: string;
   transcript: boolean;
-  participant_name: string | null;
+  participant_id: number | null;  // H6: FK to study_participants
   session_date: Date | null;  // R2: DATEONLY returns Date
   created_by: string;
   file_path: string | null;
@@ -90,6 +90,7 @@ interface NoteDetail {
   githubContent?: string;
   dataValues?: Record<string, unknown>;
   get?: (key: string) => unknown;
+  participant?: { id: number; participant_code: string; participant_name: string | null };  // H6: association
 }
 
 interface NoteFile {
@@ -635,31 +636,18 @@ const handleSessionSelectionChange = async ({ ack, body, client }: SlackActionMi
       return;
     }
 
-    const sessionId = parseInt(sessionSelection.value!);
+    const participantId = parseInt(sessionSelection.value!);
     const sessionName: string = sessionSelection.text || 'Unknown Session';
 
-    // Get the participant to extract participant_name
-    let participantName: string | null = null;
-    try {
-      const allParticipants = await studyParticipantService.getParticipantsByStudy(studyId);
-      const participant = allParticipants.find((p) => p.id.toString() === sessionSelection.value);
-      participantName = participant?.participant_name || null;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.warn("Warning: Could not fetch participant details:", message);
-    }
-
-    // Fetch notes for the specific participant, scoped to this study.
-    // Bug fix: without studyId, participant "Alice" in Study A would see notes from Study B.
+    // H6: Fetch notes by participant_id FK (replaces text-match on participant_name).
+    // Bug fix preserved: scoped by studyId to prevent cross-study data leakage.
     let studyNotes: NoteDetail[] = [];
     try {
-      if (participantName) {
-        studyNotes = await studyNotesService.getStudyNotesByParticipantName(participantName, studyId);
-        // H9: Do NOT log participant_name — it's PII
-        console.log(`✅ Loaded ${studyNotes.length} notes for participant [REDACTED] in study ${studyId}`);
+      if (participantId) {
+        studyNotes = await studyNotesService.getStudyNotesByParticipant(participantId, studyId);
+        console.log(`✅ Loaded ${studyNotes.length} notes for participant ${participantId} in study ${studyId}`);
       } else {
-        // No participant_name means notes can't be scoped — show empty list
-        console.warn(`No participant_name found for session "${sessionName}" — notes dropdown will be empty`);
+        console.warn(`No participant ID found for session "${sessionName}" — notes dropdown will be empty`);
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -667,12 +655,13 @@ const handleSessionSelectionChange = async ({ ack, body, client }: SlackActionMi
     }
 
     // Transform notes to the format expected by the modal
+    // H6: participant_name now comes from the included participant association
     const noteFiles: NoteFile[] = studyNotes.map((note: NoteDetail) => ({
       id: note.id.toString(),
       filename: note.filename,
       transcript: note.transcript || false,
       author: note.created_by,
-      participant_name: note.participant_name,
+      participant_name: (note as any).participant?.participant_name || null,
       session_date: note.session_date,
       session_time: null,
       study_name: studyName,
@@ -688,7 +677,7 @@ const handleSessionSelectionChange = async ({ ack, body, client }: SlackActionMi
         showSession: true,
         showNotes: true,
         selectedStudy: studyId,
-        selectedSession: sessionId,
+        selectedSession: participantId,
         cascadeContext,
       })
     });

@@ -2,7 +2,6 @@ import { Model, Sequelize } from 'sequelize';
 import config from '../config/sequelize';
 
 // Import your model definition functions
-import User from './models/user.model';
 import ChannelConfig from './models/channel_config';
 import Project from './models/project';
 import ProjectMember from './models/project_member';
@@ -29,7 +28,6 @@ const sequelize = new Sequelize(sequelizeConfig);
 // List of all model definition functions
 // Note: Project must be defined before ResearchStudy due to FK dependency
 const modelDefiners = [
-  User,
   ChannelConfig,
   Project,
   ProjectMember,
