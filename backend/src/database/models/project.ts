@@ -51,6 +51,12 @@ class Project extends Model<
       as: 'studies',
       onDelete: 'CASCADE',
     });
+
+    this.hasMany(models.ProjectMember, {
+      foreignKey: 'project_id',
+      as: 'members',
+      onDelete: 'CASCADE',
+    });
   }
 }
 

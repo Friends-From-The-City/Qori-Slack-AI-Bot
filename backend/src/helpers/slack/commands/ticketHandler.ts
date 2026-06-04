@@ -12,6 +12,7 @@ import { getStudiesByUser } from '../../../services/research_study.service';
 import { getActiveStudy, setActiveStudy } from '../../../services/slack-user-state.service';
 import sequelize from '../../../database';
 import type { StudyVariableAttributes } from '../../../types/models';
+import { assertStudyAccess } from '../../../services/authorization.service';
 
 // ─── Types ──────────────────────────────────────────────────────
 
@@ -230,6 +231,9 @@ const handleStep1Submit = async ({ ack, body, view, client }: SlackViewMiddlewar
     await (ack as Function)({ response_action: 'errors', errors: { study_select: 'Select a study', audience_select: 'Select an audience' } });
     return;
   }
+
+  // Authorization check: verify user has access to this study (ADR 0024)
+  await assertStudyAccess(body.user.id, parseInt(studyId, 10), client);
 
   const config = AUDIENCE_CONFIG[audience as AudienceKey];
   if (!config) {

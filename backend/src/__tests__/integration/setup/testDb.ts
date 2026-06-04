@@ -16,6 +16,7 @@ import { Sequelize, Model } from 'sequelize';
 import User from '../../../database/models/user.model';
 import ChannelConfig from '../../../database/models/channel_config';
 import Project from '../../../database/models/project';
+import ProjectMember from '../../../database/models/project_member';
 import ResearchStudy from '../../../database/models/research_study';
 import ResearchStudyUserRole from '../../../database/models/research_study_user_role';
 import StudyStatus from '../../../database/models/study_status';
@@ -49,7 +50,7 @@ export function getTestDb(): Sequelize {
 
   // Register all models (Project must be registered before models that depend on it)
   const modelDefiners = [
-    User, ChannelConfig, Project, ResearchStudy, ResearchStudyUserRole,
+    User, ChannelConfig, Project, ProjectMember, ResearchStudy, ResearchStudyUserRole,
     StudyStatus, StudyParticipant, SessionObserver, StudyNotes,
     ResearchPlan, SessionSummary, StudyVariable, CreatedIssue, SlackUserState,
   ];

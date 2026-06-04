@@ -872,3 +872,62 @@ describe('pattern: per-participant pool schemas include participant field (L005)
     expect(violations).toEqual([]);
   });
 });
+
+// ═══════════════════════════════════════════════════════════
+// ADR 0024: Authorization enforcement
+// ═══════════════════════════════════════════════════════════
+
+describe('pattern: authorization enforcement (ADR 0024)', () => {
+  const commandsDir = join(SRC_ROOT, 'helpers/slack/commands');
+
+  // Handlers that legitimately don't need study authorization:
+  // - Commands that create new resources (no existing study to authorize against)
+  // - Commands that operate at project level only
+  // - Commands that are disabled or deprecated
+  const AUTH_EXEMPT = [
+    'projectStartHandler.ts',       // Creates new project
+    'qoriMainHandler.ts',           // Hub menu, no study access
+    'learn/learnHandler.ts',        // User onboarding
+    'repo/repoConfigHandler.ts',    // Channel config
+    'repo/syncHandler.ts',          // Folder sync
+    'qa/askStudyHandler.ts',        // Disabled RAG
+    'qa/runTemplateHandler.ts',     // Legacy template runner
+    'briefHandler.ts',              // Creates new study (auth at project level)
+  ];
+
+  it('handlers accepting studyId from modal input call assertStudyAccess (backstop)', () => {
+    const files = findTsFiles(commandsDir);
+    const violations: string[] = [];
+
+    for (const file of files) {
+      const content = readFile(file);
+      const rel = relative(SRC_ROOT, file);
+      const filename = rel.split('/').pop() || '';
+
+      // Skip exempt handlers
+      if (AUTH_EXEMPT.some(exempt => rel.includes(exempt))) continue;
+
+      // Pattern: handler extracts studyId from view.state.values
+      // This indicates user-selected study input that needs authorization
+      const hasStudyIdExtraction =
+        content.includes('study_select') &&
+        (content.includes('selected_option?.value') || content.includes('selected_option!.value'));
+
+      if (!hasStudyIdExtraction) continue;
+
+      // Should call assertStudyAccess or assertProjectAccess
+      const hasAuthCheck =
+        content.includes('assertStudyAccess') ||
+        content.includes('assertProjectAccess');
+
+      if (!hasAuthCheck) {
+        violations.push(`${rel}: extracts studyId from modal but doesn't call assertStudyAccess`);
+      }
+    }
+
+    // Note: This is a BACKSTOP, not proof of coverage.
+    // The authoritative list is the handler catalog in ADR 0023.
+    // Regex can false-pass (extraction patterns not matched).
+    expect(violations).toEqual([]);
+  });
+});

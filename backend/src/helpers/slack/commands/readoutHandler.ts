@@ -18,6 +18,7 @@ import researchPlanService from '../../../services/research_plan.service';
 import sessionSummaryService from '../../../services/session-summary.service';
 import sequelize from '../../../database';
 import type { StudyVariableAttributes } from '../../../types/models';
+import { assertStudyAccess } from '../../../services/authorization.service';
 
 // ─── Types ──────────────────────────────────────────────────────
 
@@ -270,6 +271,10 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }: SlackVi
     }
     const selectedStudy = resolved.study;
     const variableContext: VariableContext = { projectId: resolved.projectId, studyId: resolved.studyId };
+
+    // Authorization check: verify user has access to this study (ADR 0024)
+    await assertStudyAccess(body.user.id, resolved.studyId, client);
+
     if (selectedStudy) await setActiveStudy(body.user.id, selectedStudy.id);
     const folderPath: string = selectedStudy.path ?? '';
     const reportType: string = state.reportType;

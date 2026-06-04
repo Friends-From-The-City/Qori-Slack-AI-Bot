@@ -19,6 +19,7 @@ import { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepoByPath, fetchFileFr
 import { processYamlTemplate } from "../../../helpers/yamlProcessor";
 import { readStudyVariablesByContext, readUpstreamVariablesByContext, type VariableContext, type ConsumeSpec, type UpstreamVariables } from '../../studyVariables';
 import { TEMPLATE_CONSUMES } from "../ui/cascadeReadinessBlocks";
+import { assertStudyAccess } from '../../../services/authorization.service';
 
 // ─── Types ──────────────────────────────────────────────────────
 
@@ -430,6 +431,9 @@ const handleResearchSynthesisSubmission = async ({ ack, body, view, client }: Sl
     if (!selectedStudyId || selectedStudyId === "no_studies") {
       throw new Error("Please select a valid research study");
     }
+
+    // Authorization check: verify user has access to this study (ADR 0024)
+    await assertStudyAccess(body.user.id, parseInt(selectedStudyId, 10), client);
 
     if (!analysisMethod) {
       throw new Error("Please select an analysis method");

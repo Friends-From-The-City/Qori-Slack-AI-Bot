@@ -5,6 +5,7 @@ import config from '../config/sequelize';
 import User from './models/user.model';
 import ChannelConfig from './models/channel_config';
 import Project from './models/project';
+import ProjectMember from './models/project_member';
 import ResearchStudy from './models/research_study';
 import ResearchStudyUserRole from './models/research_study_user_role';
 import StudyStatus from './models/study_status';
@@ -31,6 +32,7 @@ const modelDefiners = [
   User,
   ChannelConfig,
   Project,
+  ProjectMember,
   ResearchStudy,
   ResearchStudyUserRole,
   StudyStatus,
