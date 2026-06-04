@@ -8,6 +8,7 @@ import { processParticipantYamlTemplate } from "../../../helpers/participantYaml
 import { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo } from "../../github";
 import { refreshDashboardAfterAction } from './fieldworkHandler';
 import type { View } from '@slack/types';
+import { assertStudyAccess } from '../../../services/authorization.service';
 
 /** Resolve Slack user ID to display name. Falls back to username, never to raw ID. */
 async function resolveDisplayName(client: AllMiddlewareArgs['client'], userId: string, fallbackName?: string): Promise<string> {
@@ -194,6 +195,9 @@ async function handleLoadParticipantsButton({ ack, body, client }: SlackActionMi
     const studyId = selectedStudyOption.value;
     const studyName = selectedStudyOption.text.text;
 
+    // Authorization check: verify user has access to this study (ADR 0024)
+    await assertStudyAccess(body.user.id, parseInt(studyId, 10), client);
+
     console.log("🚀 ~ Loading participants for study:", studyId, studyName);
 
     // Fetch participants for the selected study
@@ -314,6 +318,9 @@ async function handleUpdateParticipantSubmission({ ack, body, view, client }: Sl
     if (!studyId || studyId === "loading") {
       throw new Error("No research study selected");
     }
+
+    // Authorization check: verify user has access to this study (ADR 0024)
+    await assertStudyAccess(body.user.id, parseInt(studyId, 10), client);
 
     if (!participantId || participantId === "no_participants") {
       throw new Error("No participant selected");

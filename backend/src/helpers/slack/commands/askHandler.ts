@@ -13,6 +13,8 @@ import { getStudiesByUser } from '../../../services/research_study.service';
 import { getActiveStudy } from '../../../services/slack-user-state.service';
 import { searchVariablesAcrossStudies } from '../../studyVariables';
 import { buildAskModal } from '../ui/askModal';
+import { getProjectByChannelId, getProjectsByUser } from '../../../services/project.service';
+import { assertProjectAccess, assertStudyAccess } from '../../../services/authorization.service';
 
 // ─── Constants ──────────────────────────────────────────────────────
 
@@ -304,12 +306,39 @@ async function handleAskSubmit({ ack, body, view, client }: SlackViewMiddlewareA
 
     const meta = JSON.parse(view.private_metadata || '{}');
     const userId = meta.userId || body.user.id;
+    const originChannelId = meta.channelId;
     const question = view.state.values.ask_question?.question_text?.value as string;
     const scope = (view.state.values.ask_scope?.scope_choice?.selected_option?.value || 'all') as string;
     const selectedStudyId = view.state.values.ask_study_select?.ask_study_choice?.selected_option?.value as string | undefined;
 
+    // ADR 0024: Channel-scoped search — get current project from channel binding
+    const currentProject = await getProjectByChannelId(originChannelId);
+    if (!currentProject) {
+      // No project bound to this channel — show helpful error
+      const userProjects = await getProjectsByUser(userId);
+      const errorMessage = userProjects.length === 0
+        ? 'No projects yet. Run `/qori-start` to create one.'
+        : 'Cross-study search requires a project channel. Run this command from your project\'s dedicated channel, or use `/qori-start` to create a new project with a channel.';
+
+      const dm = await client.conversations.open({ users: userId });
+      await client.chat.postMessage({
+        channel: dm.channel!.id as string,
+        text: errorMessage,
+      });
+      return;
+    }
+
+    // Authorization check: verify user has access to this project
+    await assertProjectAccess(userId, currentProject.id, client);
+
+    // For single-study scope, verify the study is in the current project
+    let studyId: number | undefined;
     let studyName: string | undefined;
     if (scope === 'single' && selectedStudyId) {
+      studyId = parseInt(selectedStudyId, 10);
+      // Verify study belongs to current project
+      await assertStudyAccess(userId, studyId, client);
+      // Get study name for display
       const studies = await getStudiesByUser(userId);
       const study = studies.find((s: any) => s.id.toString() === selectedStudyId);
       studyName = study?.name;
@@ -327,11 +356,11 @@ async function handleAskSubmit({ ack, body, view, client }: SlackViewMiddlewareA
     // Interpret query with Haiku
     const interpretation = await interpretQuery(question);
 
-    // Run cross-study search
+    // Run cross-study search — scoped to current project (ADR 0024: never all studies in DB)
     const result = await searchVariablesAcrossStudies(
       interpretation.variable_keys,
       interpretation.search_terms,
-      { studyName, limit: 30 },
+      { projectId: currentProject.id, studyId, limit: 30 },
     );
     const rows = result.rows as VariableRow[];
     const { total } = result;

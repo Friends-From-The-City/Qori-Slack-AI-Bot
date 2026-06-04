@@ -1,8 +1,14 @@
 // src/controllers/github-webhook.controller.js
 const GithubWebhookService = require('../services/github-webhook.service');
 
-// You should set your GitHub webhook secret here or load from env
-const GITHUB_WEBHOOK_SECRET = process.env.GITHUB_WEBHOOK_SECRET || 'Qori AI';
+// Fail loudly at startup if webhook secret is missing (H2 federal-readiness fix)
+const GITHUB_WEBHOOK_SECRET = process.env.GITHUB_WEBHOOK_SECRET;
+if (!GITHUB_WEBHOOK_SECRET) {
+  throw new Error(
+    'GITHUB_WEBHOOK_SECRET environment variable is required. ' +
+    'Webhook signature verification cannot proceed without a secret.'
+  );
+}
 const githubWebhookService = new GithubWebhookService(GITHUB_WEBHOOK_SECRET);
 
 exports.handleWebhook = (req, res) => {

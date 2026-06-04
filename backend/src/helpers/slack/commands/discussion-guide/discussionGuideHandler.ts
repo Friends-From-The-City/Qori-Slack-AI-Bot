@@ -18,6 +18,7 @@ import type { View } from '@slack/types';
 import { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo } from '../../../github';
 import { getStudyById } from '../../../../services/research_study.service';
 import { getProjectById } from '../../../../services/project.service';
+import { assertStudyAccess } from '../../../../services/authorization.service';
 import { processYamlTemplate } from '../../../yamlProcessor';
 import { addStudyStatus } from '../../../../services/study-status.service';
 import { sendStudyResultMessage, generateStudyResultBlocks } from '../../ui/studyResultBlocks';
@@ -143,6 +144,9 @@ async function openDiscussionGuideModal({ ack, body, client }: SlackActionMiddle
       });
       return;
     }
+
+    // Authorization check: verify user has access to this study (ADR 0024)
+    await assertStudyAccess(userId, studyId, client);
 
     // ── Guard rail #3: Validate study belongs to a project ──
     const projectId = study.project_id;

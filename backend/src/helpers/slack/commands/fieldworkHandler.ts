@@ -19,6 +19,7 @@ import { buildAddObserverModal } from '../ui/addObserverModal';
 import { participantOutreachModal } from '../ui/outreach/participantOutreachModal';
 import { buildSessionNotesView } from '../ui/sessionNotesModal';
 import type { View } from '@slack/types';
+import { assertStudyAccess } from '../../../services/authorization.service';
 
 // ── Helpers ────────────────────────────────────────────────
 
@@ -144,6 +145,9 @@ async function handleFieldworkStudyPickerSubmit({ ack, body, view, client }: Sla
     const selectedStudyId = view.state.values.fieldwork_study_select.fieldwork_study_choice.selected_option!.value;
     const meta = JSON.parse(view.private_metadata || '{}');
     const userId = meta.userId || body.user.id;
+
+    // Authorization check: verify user has access to this study (ADR 0024)
+    await assertStudyAccess(userId, parseInt(selectedStudyId, 10), client);
 
     await setActiveStudy(userId, parseInt(selectedStudyId, 10));
 

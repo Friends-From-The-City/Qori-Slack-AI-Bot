@@ -22,6 +22,7 @@ import type { AllMiddlewareArgs, SlackActionMiddlewareArgs, BlockAction } from '
 import type { View } from '@slack/types';
 
 import { getStudyById } from '../../../../services/research_study.service';
+import { assertProjectAccess, AuthorizationError } from '../../../../services/authorization.service';
 import { researchPlanGeneratorModal, STUDY_DISPLAY_BLOCK_ID } from '../../ui/researchPlanGeneratorModal';
 import { readStudyVariablesByContext, type VariableContext } from '../../../studyVariables';
 import { buildCascadeReadiness, buildCascadeBlocks } from '../../ui/cascadeReadinessBlocks';
@@ -104,6 +105,22 @@ async function openResearchPlanModal({ ack, body, client }: SlackActionMiddlewar
         text: `❌ Study "${preselectStudyName}" is not linked to a project. Please run \`/qori-start\` to create a project first, then use \`/qori-brief\` to create a new study within it.`,
       });
       return;
+    }
+
+    // ── Guard rail #4: Authorization check (ADR 0024) ──
+    try {
+      await assertProjectAccess(userId, projectId, client);
+    } catch (err) {
+      if (err instanceof AuthorizationError) {
+        console.warn(`[AUTH] Plan opener denied: user=${userId} project=${projectId}`);
+        await client.chat.postEphemeral({
+          channel: meta.channelId || body.user.id,
+          user: body.user.id,
+          text: `❌ You don't have access to this study's project. Please ask the project owner to add you as a member.`,
+        });
+        return;
+      }
+      throw err;
     }
 
     // Extract study data for downstream use

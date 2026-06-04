@@ -18,6 +18,7 @@ import studyParticipantService from "../../../services/study_participant.service
 import { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepoByPath, fetchFileFromRepo } from "../../../helpers/github";
 import { processYamlTemplate } from "../../../helpers/yamlProcessor";
 import { readStudyVariablesByContext, type VariableContext } from '../../studyVariables';
+import { assertStudyAccess, AuthorizationError } from '../../../services/authorization.service';
 
 // ─── Cascade context ─────────────────────────────────────────────
 
@@ -263,6 +264,9 @@ const handleAnalyzeNotesSubmission = async ({ ack, body, view, client }: SlackVi
     if (!studyId || studyId === "no_studies") {
       throw new Error("No research study selected");
     }
+
+    // Authorization check: verify user has access to this study (ADR 0024)
+    await assertStudyAccess(body.user.id, parseInt(studyId, 10), client);
 
     // Update active study for cross-command pre-fill
     await setActiveStudy(body.user.id, parseInt(studyId, 10));

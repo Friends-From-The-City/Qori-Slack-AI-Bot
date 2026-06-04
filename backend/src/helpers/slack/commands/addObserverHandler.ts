@@ -13,6 +13,7 @@ import { getStudiesByUser, resolveStudyFromName } from '../../../services/resear
 import { sendObserverGuideDM } from '../ui/observerGuideDM';
 import { buildSelfJoinSessionPickerModal } from '../ui/selfJoinSessionPickerModal';
 import { refreshDashboardAfterAction } from './fieldworkHandler';
+import { assertStudyAccess } from '../../../services/authorization.service';
 import { processObserverYamlTemplate } from '../../observerYamlProcessor';
 import { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo } from '../../github';
 
@@ -80,6 +81,9 @@ async function handleAddObserverSubmission({ ack, body, client, view }: SlackVie
   const values = view.state.values;
   const meta = JSON.parse(view.private_metadata || '{}');
   const { studyId, studyName, channelId, userId, rootViewId } = meta;
+
+  // Authorization check: verify user has access to this study (ADR 0024)
+  await assertStudyAccess(body.user.id, parseInt(studyId, 10), client);
 
   // Extract form values
   const selectedSessionValues: string[] = values.observer_sessions_block?.observer_sessions?.selected_options?.map((o: any) => o.value) || [];

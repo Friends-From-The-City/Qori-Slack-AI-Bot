@@ -40,16 +40,17 @@ This matrix maps NIST 800-53 control families to Qori's current state, identifie
 | Requirement | Current State | Gap | Severity | Maps To | Remediation |
 |-------------|---------------|-----|----------|---------|-------------|
 | **AC-2: Account Management** | Slack workspace membership controls user access. No application-level account management. | No user provisioning/deprovisioning in Qori — relies on Slack workspace admin | LOW | — | Document: Slack workspace admin is account authority |
-| **AC-3: Access Enforcement** | `/qori-delete` enforces `WHERE created_by = userId` at DB layer. 7+ other handlers use UI-only filtering (dropdown shows user's studies but submission not re-validated). | **CRITICAL:** UI-hidden ≠ enforced. Crafted request bypasses dropdown filtering. | **CRITICAL** | #194 | Apply delete pattern to all handlers: validate ownership at DB layer before any study operation |
-| **AC-4: Information Flow Enforcement** | No data flow controls between studies or projects. `/qori-ask` can query ALL studies' variables including other users' participant data. | **CRITICAL:** Cross-study data exposure. Any authenticated user can query any study. | **CRITICAL** | #194 | Require explicit scope in variable search; filter by `created_by` or `project_id` |
+| **AC-3: Access Enforcement** | ✅ **REMEDIATED (2026-06-04).** All 11 gap handlers now call `assertStudyAccess` or `assertProjectAccess` before any study/project operation. Authorization service uses project-level membership with fail-closed semantics. | — | — | ADR 0024 | None (remediated) |
+| **AC-4: Information Flow Enforcement** | ✅ **REMEDIATED (2026-06-04).** `/qori-ask` now scopes search to current project only (channel-bound). Cross-study queries require project membership. | — | — | ADR 0024 | None (remediated) |
 | **AC-5: Separation of Duties** | No role separation. Everyone is a peer with ownership-only distinction. `ResearchStudyUserRole` table exists but never enforced. | No researcher vs stakeholder vs observer enforcement | MEDIUM | NEW | Defer to RBAC workstream (lower priority than enforcement fixes) |
 | **AC-6: Least Privilege** | All workspace users can create projects/studies. No approval workflow. | Open creation may be acceptable (researcher autonomy) or may need gating | LOW | — | Document design decision; add approval if VA requires |
 | **AC-17: Remote Access** | Slack OAuth for all access. Socket mode connection. | Adequate for SaaS model | — | — | None |
 
 **Evidence files:**
-- `docs/architecture-decisions/0023-access-control-current-state-and-gaps.md`
-- `backend/src/services/research_study.service.ts:169-177` (correct pattern)
-- `backend/src/helpers/studyVariables.ts:826-892` (gap: no ownership filter)
+- `docs/architecture-decisions/0024-project-level-authorization-model.md` (decision + security contract)
+- `backend/src/services/authorization.service.ts` (fail-closed implementation)
+- `backend/src/__tests__/integration/authorization-bypass.test.ts` (decisive proof: 10 tests)
+- `backend/src/database/migrations/20260604000000-create-project-members.js` (3-source bootstrap)
 
 ---
 
@@ -243,17 +244,17 @@ This matrix maps NIST 800-53 control families to Qori's current state, identifie
 
 ### CRITICAL (Must fix before federal deployment)
 
-| ID | Issue | Family | Maps To |
-|----|-------|--------|---------|
-| C1 | Authorization bypass — 7+ handlers trust UI filtering, not DB-layer enforcement | AC-3 | #194 |
-| C2 | Cross-study data exposure — `/qori-ask` queries all studies without ownership filter | AC-4 | #194 |
+| ID | Issue | Family | Status |
+|----|-------|--------|--------|
+| C1 | ~~Authorization bypass — 7+ handlers trust UI filtering, not DB-layer enforcement~~ | AC-3 | ✅ REMEDIATED (2026-06-04) — ADR 0024, authorization.service.ts |
+| C2 | ~~Cross-study data exposure — `/qori-ask` queries all studies without ownership filter~~ | AC-4 | ✅ REMEDIATED (2026-06-04) — project-scoped search |
 
 ### HIGH (Should fix before federal deployment)
 
 | ID | Issue | Family | Maps To |
 |----|-------|--------|---------|
 | H1 | No audit log table — only `created_by` tracked, not access/actions | AU-2 | NEW |
-| H2 | Hardcoded webhook secret fallback (`'Qori AI'`) | SC-12 | NEW |
+| H2 | ~~Hardcoded webhook secret fallback (`'Qori AI'`)~~ | SC-12 | ✅ REMEDIATED (2026-06-04) — startup validation added |
 | H3 | No input schema validation (Zod/Joi), no rate limiting | SI-10 | NEW |
 | H4 | No disaster recovery runbook, backup policy UNKNOWN | CP-10 | NEW |
 | H5 | No security incident runbook, no on-call rotation | IR-4, IR-8 | NEW |
@@ -295,19 +296,20 @@ This matrix maps NIST 800-53 control families to Qori's current state, identifie
 
 Based on this gap analysis, remediation groups into coordinated workstreams:
 
-### Workstream 1: Data Isolation & Access Control (CRITICAL)
-**Issues:** C1, C2, H1, M1
-**Scope:** Fix authorization enforcement, implement audit logging
+### Workstream 1: Data Isolation & Access Control (CRITICAL) — PHASE 1 COMPLETE ✅
+**Issues:** ~~C1~~, ~~C2~~, H1, M1
+**Status:** Authorization enforcement complete (2026-06-04). Audit logging (H1) and RBAC (M1) remain.
 **Dependencies:** None
-**Effort:** Large (10+ handlers, new audit table, pattern enforcement)
+**Effort:** ~~Large~~ Remaining: Medium (audit table, RBAC)
 
-- Apply `/qori-delete` pattern (DB-layer `created_by` check) to all handlers
-- Fix `/qori-ask` to require ownership/project scope
-- Create `activity_log` table for audit trail
-- Add pattern enforcement test for authorization bypass
-- Defer RBAC (M1) until enforcement is solid
+- ✅ Apply `assertStudyAccess`/`assertProjectAccess` to all handlers (ADR 0024)
+- ✅ Fix `/qori-ask` to scope search to current project only
+- ✅ Add authorization bypass test (10 tests, decisive proof)
+- ⬜ Create `activity_log` table for audit trail
+- ⬜ Defer RBAC (M1) until enforcement is solid
 
 **Related issues:** #194, #193
+**Evidence:** `authorization-bypass.test.ts` passes, pattern-enforcement.test.ts includes auth import checks
 
 ### Workstream 2: Privacy & PII (HIGH)
 **Issues:** H6, H7, H8, H9, M5
@@ -391,3 +393,4 @@ Based on this gap analysis, remediation groups into coordinated workstreams:
 | Date | Author | Change |
 |------|--------|--------|
 | 2026-06-03 | Claude Code audit | Initial gap analysis |
+| 2026-06-04 | Claude Code | Workstream 1 Phase 1 complete: C1, C2 remediated (authorization enforcement), H2 remediated (webhook secret). ADR 0024 published. 10-test bypass suite passes. |

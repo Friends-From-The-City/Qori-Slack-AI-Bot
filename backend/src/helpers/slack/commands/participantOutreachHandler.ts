@@ -18,6 +18,7 @@ import { buildAddObserverModal } from "../ui/addObserverModal";
 import sessionObserverService from "../../../services/session_observer.service";
 import { calculatePerPersonCompensation } from '../../../utils/compensationCalculator';
 import { refreshDashboardAfterAction } from './fieldworkHandler';
+import { assertStudyAccess } from '../../../services/authorization.service';
 
 
 async function participantOutreachHandler({ ack, body, client, command }: SlackCommandMiddlewareArgs & AllMiddlewareArgs): Promise<void> {
@@ -125,6 +126,9 @@ async function handleParticipantOutreachSubmit({ ack, body, view, client }: Slac
   const resolved = await resolveStudyFromName(finalSelectedStudy);
   if (!resolved) throw new Error(`Study "${finalSelectedStudy}" not found`);
   const study = resolved.study;
+
+  // Authorization check: verify user has access to this study (ADR 0024)
+  await assertStudyAccess(userId, resolved.studyId, client);
 
   let nextModal;
 
