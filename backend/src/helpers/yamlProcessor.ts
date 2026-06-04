@@ -4,7 +4,7 @@ import Handlebars from 'handlebars';
 import { format } from 'date-fns';
 import path from 'path';
 import { createOrUpdateFileOnGitHub, type GitHubWriteResult } from './github';
-import { executeAiGenerationTasks } from './langchain';
+import { executeAiGenerationTasks, type PiiRedactionContext } from './langchain';
 import { extractVariables, type EmitSpec, type ExtractionResult } from './variableExtractor';
 import {
   readStudyVariablesByContext,
@@ -191,6 +191,7 @@ export async function processYamlTemplate(
   extraFolder = '',
   aiCheck = false,
   variableContext?: VariableContext,
+  piiContext?: PiiRedactionContext,
 ): Promise<ProcessResult> {
   // 1. Parse the raw YAML content first
   const yamlConfig = yaml.load(rawYamlContent) as YamlConfig | null;
@@ -282,11 +283,15 @@ export async function processYamlTemplate(
   // 4. Prepare LangChain tasks for AI generation (optional)
   let aiResponses: Record<string, string> = {};
   if (yamlConfig.ai_generation_tasks && yamlConfig.ai_generation_tasks.length > 0) {
-    aiResponses = await executeAiGenerationTasks(yamlConfig.ai_generation_tasks, {
-      ...inputValues,
-      current_date: format(new Date(), 'MMMM d, yyyy'),
-      current_date_iso: format(new Date(), 'yyyy-MM-dd'),
-    });
+    aiResponses = await executeAiGenerationTasks(
+      yamlConfig.ai_generation_tasks,
+      {
+        ...inputValues,
+        current_date: format(new Date(), 'MMMM d, yyyy'),
+        current_date_iso: format(new Date(), 'yyyy-MM-dd'),
+      },
+      piiContext,  // H9: Pass PII context for pre-transmission assertion
+    );
     console.log(
       `AI generation complete for ${yamlConfig.id}: ${Object.keys(aiResponses).length} task(s), ${Object.values(aiResponses).reduce((sum, v) => sum + (typeof v === 'string' ? v.length : 0), 0)} chars total`,
     );

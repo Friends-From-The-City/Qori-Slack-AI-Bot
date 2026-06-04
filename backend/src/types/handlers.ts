@@ -61,3 +61,25 @@ export class TemplateContractError extends Error {
     this.name = 'TemplateContractError';
   }
 }
+
+// ---------------------------------------------------------------------------
+// PII redaction error
+// ---------------------------------------------------------------------------
+
+/**
+ * Thrown when PII redaction fails or known names are detected in a payload
+ * that should have been redacted.
+ *
+ * FAIL-CLOSED: If this error is thrown, the API call MUST be aborted.
+ * A known participant name in the payload means redaction failed.
+ */
+export class PiiRedactionError extends Error {
+  constructor(
+    message: string,
+    public readonly participantCode?: string,
+    public readonly detectedNames?: string[],
+  ) {
+    super(message);
+    this.name = 'PiiRedactionError';
+  }
+}

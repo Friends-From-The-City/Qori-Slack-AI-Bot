@@ -1,8 +1,25 @@
 import nunjucks from 'nunjucks';
 import { ChatAnthropic } from '@langchain/anthropic';
+import { assertKnownNamesRedacted } from './piiRedaction';
 
 // make sure nunjucks knows it's okay to render standalone strings
 nunjucks.configure({ autoescape: false });
+
+// ---------------------------------------------------------------------------
+// PII redaction context (H9)
+// ---------------------------------------------------------------------------
+
+/**
+ * Optional PII context passed to executeAiGenerationTasks.
+ * If provided, the assertion is run BEFORE each LLM API call.
+ * If any known name is detected in the prompt, the call is ABORTED.
+ */
+export interface PiiRedactionContext {
+  /** Participant names that should have been redacted */
+  knownNames: Array<string | null | undefined>;
+  /** Participant code that should appear instead */
+  participantCode?: string;
+}
 
 interface AiGenerationTask {
   task_id: string;
@@ -60,6 +77,7 @@ function unescapeNunjucksSyntax(str: string): string {
 export async function executeAiGenerationTasks(
   aiGenerationTasks: AiGenerationTask[],
   inputValues: Record<string, any>,
+  piiContext?: PiiRedactionContext,
 ): Promise<AiResponses> {
   const modelName = process.env.ANTHROPIC_MODEL_NAME || 'claude-sonnet-4-20250514';
   const temperature = parseFloat(process.env.ANTHROPIC_TEMPERATURE || '0.4');
@@ -92,6 +110,16 @@ export async function executeAiGenerationTasks(
       const nunjucksTemplate = convertHandlebarsToNunjucks(task.prompt);
       const jinjaOut = nunjucks.renderString(nunjucksTemplate, safeInputValues);
       const finalPrompt = unescapeNunjucksSyntax(jinjaOut);
+
+      // H9: Pre-transmission PII assertion — FAIL CLOSED if known names detected
+      // This is the LAST check before data crosses the wire to Anthropic
+      if (piiContext?.knownNames?.length) {
+        assertKnownNamesRedacted(
+          finalPrompt,
+          piiContext.knownNames,
+          piiContext.participantCode,
+        );
+      }
 
       const response = await llm.invoke(finalPrompt);
       return { taskId: task.task_id, response: response.content as string };
