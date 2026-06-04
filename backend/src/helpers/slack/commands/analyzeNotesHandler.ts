@@ -17,8 +17,10 @@ import sessionSummaryService from "../../../services/session-summary.service";
 import studyParticipantService from "../../../services/study_participant.service";
 import { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepoByPath, fetchFileFromRepo } from "../../../helpers/github";
 import { processYamlTemplate } from "../../../helpers/yamlProcessor";
+import type { PiiRedactionContext } from "../../../helpers/langchain";
 import { readStudyVariablesByContext, type VariableContext } from '../../studyVariables';
 import { assertStudyAccess, AuthorizationError } from '../../../services/authorization.service';
+import { redactTranscript } from '../../../helpers/piiRedaction';
 
 // ─── Cascade context ─────────────────────────────────────────────
 
@@ -273,7 +275,9 @@ const handleAnalyzeNotesSubmission = async ({ ack, body, view, client }: SlackVi
 
     // sessionId from dropdown IS the participant database ID (see mapParticipantsToSessions)
     // Fetch participant to get system-assigned participant_code for cascade isolation
+    // AND participant_name for pre-transmission PII redaction (H9)
     let participantCode = 'PT-UNKNOWN';
+    let participantName: string | null = null;
     if (sessionId && sessionId !== "no_sessions") {
       console.log("Selected session ID (participant DB ID):", sessionId);
       const participantDbId = parseInt(sessionId, 10);
@@ -282,6 +286,11 @@ const handleAnalyzeNotesSubmission = async ({ ack, body, view, client }: SlackVi
         if (participant?.participant_code) {
           participantCode = participant.participant_code;
           console.log("Resolved participant_code:", participantCode);
+        }
+        if (participant?.participant_name) {
+          participantName = participant.participant_name;
+          // H9: Do NOT log participant_name — it's PII. Log only that we have it.
+          console.log("Resolved participant_name for PII redaction: [REDACTED]");
         }
       }
     }
@@ -358,13 +367,19 @@ const handleAnalyzeNotesSubmission = async ({ ack, body, view, client }: SlackVi
     // NOT extracted from note.participant_name (which is freeform and non-unique)
     // See ADR 0020: System-Assigned Per-Study Participant Codes
 
+    // H9: Pre-transmission PII redaction — replace participant name with code in content
+    // This happens BEFORE content goes to the LLM template
     const formatNoteContent = (note: NoteDetail): string => {
       const filename = note.filename || 'Unknown File';
+      // Redact participant name from GitHub content before embedding
+      const rawContent = note.githubContent || '[No content available]';
+      const redactedContent = redactTranscript(rawContent, participantName, participantCode);
+      // Use participant CODE in header, not participant NAME (H9)
       return `# ${filename}\n\n` +
-        `**Participant:** ${note.participant_name || 'Unknown Participant'}\n` +
+        `**Participant:** ${participantCode}\n` +
         `**Date:** ${note.session_date || 'Unknown Date'}\n` +
         `**Note Taker:** ${note.created_by || 'Unknown User'}\n\n` +
-        `${note.githubContent || '[No content available]'}`;
+        `${redactedContent}`;
     };
 
     const transcriptNotes = notesWithContent.filter((note: NoteDetail) => note.transcript === true);
@@ -377,6 +392,11 @@ const handleAnalyzeNotesSubmission = async ({ ack, body, view, client }: SlackVi
     const notes_content: string = regularNotes.length > 0
       ? regularNotes.map(formatNoteContent).join('\n\n---\n\n')
       : '';
+
+    // Log redaction stats for debugging (H9: do NOT log the actual name)
+    if (participantName) {
+      console.log(`[PII] Pre-transmission redaction applied: [REDACTED] → "${participantCode}"`);
+    }
 
     const templateData: SessionSummaryTemplateInput = {
       study_folder: studyName,
@@ -398,13 +418,19 @@ const handleAnalyzeNotesSubmission = async ({ ack, body, view, client }: SlackVi
     const studyPath = study?.path;
     if (!studyPath) throw new Error('Unexpected: study.path missing after resolution');
 
+    // H9: Construct PII context for pre-transmission assertion in langchain
+    const piiContext: PiiRedactionContext | undefined = participantName
+      ? { knownNames: [participantName], participantCode }
+      : undefined;
+
     const renderedYaml = await processYamlTemplate(
       yamlTemplateFile.content,
       templateData,
       studyPath,
       '',
       false,
-      variableContext
+      variableContext,
+      piiContext,  // H9: Pre-transmission PII assertion
     );
 
     // CRITICAL: Await extraction to ensure cascade variables are committed before returning success.
@@ -629,7 +655,8 @@ const handleSessionSelectionChange = async ({ ack, body, client }: SlackActionMi
     try {
       if (participantName) {
         studyNotes = await studyNotesService.getStudyNotesByParticipantName(participantName, studyId);
-        console.log(`✅ Loaded ${studyNotes.length} notes for participant "${participantName}" in study ${studyId} (session: "${sessionName}")`);
+        // H9: Do NOT log participant_name — it's PII
+        console.log(`✅ Loaded ${studyNotes.length} notes for participant [REDACTED] in study ${studyId}`);
       } else {
         // No participant_name means notes can't be scoped — show empty list
         console.warn(`No participant_name found for session "${sessionName}" — notes dropdown will be empty`);
