@@ -134,7 +134,7 @@ function buildCommandMapBlocks() {
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: '*UTILITY*\n`/qori-learn`  This tour\n`/qori-delete`  Clean up studies',
+        text: '*UTILITY*\n`/qori-learn`  This tour\n`/qori-admin`  Admin center',
       },
     },
   ];

@@ -404,11 +404,14 @@ describe('pattern: channel context threading', () => {
   // - repo/repoConfigHandler: Channel-to-repo binding (becomes channel→project in 2B)
   // - repo/syncHandler: Channel-level folder sync
   // - qa/askStudyHandler: Disabled RAG feature (returns "not available yet")
+  // - admin/adminCenterHandler: Uses project context via ProjectModel.findOne, passes
+  //   project object to modal builder (pattern check doesn't recognize project.id)
   const CHANNEL_ONLY_ALLOWED = [
     'learn/learnHandler.ts',
     'repo/repoConfigHandler.ts',
     'repo/syncHandler.ts',
     'qa/askStudyHandler.ts',
+    'admin/adminCenterHandler.ts',
   ];
 
   it('handler files that use channel_id also reference study or project context', () => {
@@ -915,10 +918,13 @@ describe('pattern: authorization enforcement (ADR 0024)', () => {
 
       if (!hasStudyIdExtraction) continue;
 
-      // Should call assertStudyAccess or assertProjectAccess
+      // Should call assertStudyAccess/assertProjectAccess or the stronger
+      // owner-level checks (assertStudyOwner/assertProjectOwner per ADR 0025)
       const hasAuthCheck =
         content.includes('assertStudyAccess') ||
-        content.includes('assertProjectAccess');
+        content.includes('assertProjectAccess') ||
+        content.includes('assertStudyOwner') ||
+        content.includes('assertProjectOwner');
 
       if (!hasAuthCheck) {
         violations.push(`${rel}: extracts studyId from modal but doesn't call assertStudyAccess`);

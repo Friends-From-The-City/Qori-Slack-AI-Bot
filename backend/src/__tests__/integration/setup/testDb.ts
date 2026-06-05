@@ -27,6 +27,7 @@ import SessionSummary from '../../../database/models/session_summary';
 import StudyVariable from '../../../database/models/study_variable';
 import CreatedIssue from '../../../database/models/created_issue';
 import SlackUserState from '../../../database/models/slack_user_state';
+import DispositionAuditLog from '../../../database/models/disposition_audit_log';
 
 let instance: Sequelize | null = null;
 
@@ -52,6 +53,7 @@ export function getTestDb(): Sequelize {
     ChannelConfig, Project, ProjectMember, ResearchStudy, ResearchStudyUserRole,
     StudyStatus, StudyParticipant, SessionObserver, StudyNotes,
     ResearchPlan, SessionSummary, StudyVariable, CreatedIssue, SlackUserState,
+    DispositionAuditLog,
   ];
 
   for (const defineModel of modelDefiners) {

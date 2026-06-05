@@ -93,6 +93,8 @@ docker-compose up    # Starts app (3000), postgres (5432), redis (6379)
 
 **Deploy flow:** Push to `main` → Railway auto-deploys. GitHub Actions CI runs typecheck + tests on every PR.
 
+**Full deployment checklist:** See `docs/deployment-checklist.md` for fresh deployments. Includes Slack scope requirements (critical: `groups:read` for private channels), environment variable setup, and post-deployment verification steps.
+
 ## Key Directories
 
 - `backend/src/helpers/slack/commands/` — ~30 handler files (TypeScript, Bolt native types per ADR 0015)

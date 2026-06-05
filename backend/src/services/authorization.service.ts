@@ -261,6 +261,7 @@ export async function assertStudyDeleteAccess(
  *
  * @param userId - Slack user ID
  * @param projectId - Project database ID
+ * @deprecated Use assertProjectOwner instead (ADR 0025)
  */
 export async function assertProjectDeleteAccess(
   userId: string,
@@ -282,6 +283,114 @@ export async function assertProjectDeleteAccess(
     if (error instanceof AuthorizationError) throw error;
     console.error(
       `[AUTH] assertProjectDeleteAccess failed for user=${userId} project=${projectId}:`,
+      error instanceof Error ? error.message : error,
+    );
+    throw new AuthorizationError('Access denied: authorization check failed');
+  }
+}
+
+// ─── Owner Checks (ADR 0025: Records Authority) ──────────────────────
+
+/**
+ * Check if user is a project owner (records authority).
+ * Returns false on any error (fail-closed, non-throwing).
+ *
+ * Per ADR 0025: Project owners are the records authority for destructive
+ * operations (DSAR delete, study delete, project delete).
+ *
+ * @param userId - Slack user ID
+ * @param projectId - Project database ID
+ */
+export async function isProjectOwner(
+  userId: string,
+  projectId: number,
+): Promise<boolean> {
+  try {
+    const membership = await ProjectMemberModel.findOne({
+      where: { project_id: projectId, user_id: userId, role: 'owner' },
+    });
+    return !!membership;
+  } catch (error) {
+    // Database error — fail closed
+    console.error(
+      `[AUTH] isProjectOwner check failed for user=${userId} project=${projectId}, returning false:`,
+      error instanceof Error ? error.message : error,
+    );
+    return false;
+  }
+}
+
+/**
+ * Assert user is a project owner (records authority).
+ * Throws AuthorizationError if not.
+ *
+ * Per ADR 0025: Only project owners can perform destructive operations
+ * (DSAR delete, study delete, project delete).
+ *
+ * FAIL-CLOSED: Database errors → DENY, throw AuthorizationError
+ *
+ * @param userId - Slack user ID
+ * @param projectId - Project database ID
+ */
+export async function assertProjectOwner(
+  userId: string,
+  projectId: number,
+): Promise<void> {
+  try {
+    const membership = await ProjectMemberModel.findOne({
+      where: { project_id: projectId, user_id: userId, role: 'owner' },
+    });
+
+    if (!membership) {
+      throw new AuthorizationError(
+        'Access denied: only project owners can perform this action'
+      );
+    }
+  } catch (error) {
+    if (error instanceof AuthorizationError) throw error;
+    // Database error — fail closed
+    console.error(
+      `[AUTH] assertProjectOwner failed for user=${userId} project=${projectId}:`,
+      error instanceof Error ? error.message : error,
+    );
+    throw new AuthorizationError('Access denied: authorization check failed');
+  }
+}
+
+/**
+ * Assert user is an owner of the project containing this study.
+ * Throws AuthorizationError if not.
+ *
+ * Per ADR 0025: Study deletion requires ownership of the study's project,
+ * not just study creation.
+ *
+ * FAIL-CLOSED: Database errors → DENY, throw AuthorizationError
+ *
+ * @param userId - Slack user ID
+ * @param studyId - Study database ID
+ */
+export async function assertStudyOwner(
+  userId: string,
+  studyId: number,
+): Promise<void> {
+  try {
+    const study = await ResearchStudyModel.findByPk(studyId, {
+      attributes: ['id', 'project_id'],
+    });
+
+    if (!study) {
+      throw new AuthorizationError('Study not found');
+    }
+
+    if (!study.project_id) {
+      throw new AuthorizationError('Study has no project — cannot verify ownership');
+    }
+
+    await assertProjectOwner(userId, study.project_id);
+  } catch (error) {
+    if (error instanceof AuthorizationError) throw error;
+    console.error(
+      `[AUTH] assertStudyOwner failed for user=${userId} study=${studyId}:`,
       error instanceof Error ? error.message : error,
     );
     throw new AuthorizationError('Access denied: authorization check failed');

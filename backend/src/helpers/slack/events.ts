@@ -25,7 +25,19 @@ import { qoriMainCommand, handleStudySelect } from './commands/qoriMainHandler';
 // Project creation (Phase 2C)
 import { projectStartCommand, handleProjectCreateSubmission } from './commands/projectStartHandler';
 import { handleViewClosed, handlePlanStudyNoop, handleStudySetupSkip, handleUserSelectOptions } from './commands/study/studyLifecycleHandler';
-import { deleteStudyCommand, handleDeleteStudySubmission } from './commands/study/deleteStudyHandler';
+
+// Admin Center (ADR 0025)
+import { adminCenterCommand } from './commands/admin/adminCenterHandler';
+import {
+  handleDsarOpen,
+  handleDsarStudySelect,
+  handleDsarParticipantSelect,
+  handleDsarActionSelect,
+  handleDsarDeleteConfirm,
+  handleDeleteStudyOpen,
+  handleDeleteStudySelect,
+  handleDeleteStudyConfirm,
+} from './commands/admin/adminActionsHandler';
 
 // Research brief
 import { openResearchBriefModal } from './commands/modal-openers/briefModalOpener';
@@ -384,7 +396,7 @@ slackApp.command('/qori-ask', askHandler);
 slackApp.command('/qori-learn', learnCommand);
 slackApp.command('/qori-repo', repoCommand);
 slackApp.command('/qori-sync', syncCommand);
-slackApp.command('/qori-delete', deleteStudyCommand);
+slackApp.command('/qori-admin', adminCenterCommand);
 slackApp.command('/ask-study', askStudyCommand);
 slackApp.command('/run-template', runTemplateCommand);
 
@@ -393,7 +405,6 @@ slackApp.command('/run-template', runTemplateCommand);
 slackApp.options('user_select', handleUserSelectOptions);
 slackApp.view('plan_study_modal', handlePlanStudyNoop);
 slackApp.view('study-setup-modal-start-research', handleStudySetupSkip);
-slackApp.view('delete-study-modal', handleDeleteStudySubmission);
 // Bolt type gap: 'view_closed' isn't a recognized SlackEvent subtype, so
 // EventFromType<'view_closed'> resolves to BaseSlackEvent which lacks .view.
 // The handler uses an inline type with { event: { view: { callback_id } } }.
@@ -402,6 +413,22 @@ slackApp.event('view_closed', handleViewClosed as any);
 // ─── Project creation ────────────────────────────────────────────
 
 slackApp.view('project_create_modal', handleProjectCreateSubmission);
+
+// ─── Admin Center (ADR 0025) ─────────────────────────────────────
+
+// Button actions
+slackApp.action('admin-dsar-open', handleDsarOpen);
+slackApp.action('admin-delete-study-open', handleDeleteStudyOpen);
+
+// DSAR flow views
+slackApp.view('admin-dsar-study-select', handleDsarStudySelect);
+slackApp.view('admin-dsar-participant-select', handleDsarParticipantSelect);
+slackApp.view('admin-dsar-action-select', handleDsarActionSelect);
+slackApp.view('admin-dsar-delete-confirm', handleDsarDeleteConfirm);
+
+// Delete study flow views
+slackApp.view('admin-delete-study-select', handleDeleteStudySelect);
+slackApp.view('admin-delete-study-confirm', handleDeleteStudyConfirm);
 
 // ─── Research brief ─────────────────────────────────────────────
 
