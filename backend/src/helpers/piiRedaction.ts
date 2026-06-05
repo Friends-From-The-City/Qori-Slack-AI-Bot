@@ -61,7 +61,18 @@ export function redactTranscript(
     `\\b${escapeRegex(trimmedName)}\\b`,
     'gi',
   );
-  const redacted = content.replace(fullNamePattern, participantCode);
+
+  // Count replacements for observability (positive signal redaction is running)
+  let replacementCount = 0;
+  const redacted = content.replace(fullNamePattern, () => {
+    replacementCount++;
+    return participantCode;
+  });
+
+  // H9: Log success signal (count only, never names) — catches silent no-op case
+  if (replacementCount > 0) {
+    console.log(`[PII] redaction applied: ${replacementCount} replacement(s)`);
+  }
 
   return redacted;
 }
@@ -110,11 +121,12 @@ export function assertKnownNamesRedacted(
     console.error(
       `[PII] known-name redaction failed: detected ${detectedNames.length} name(s) in payload`,
     );
-    // Error message uses count, not names. detectedNames stored for local debugging only.
+    // SECURITY: Error carries COUNT only, never names. This error may reach
+    // Sentry/#qori-alerts — exposing names on the failure path defeats redaction.
     throw new PiiRedactionError(
       `Known participant name(s) detected in payload after redaction (${detectedNames.length} found). Redaction failed - API call aborted.`,
       participantCode,
-      detectedNames,  // Available in error object for local catch, NOT serialized to logs
+      detectedNames.length,  // Count only — no names on the error object
     );
   }
 }

@@ -82,7 +82,7 @@ The system works okay but sometimes there are delays. I mentioned to Dr. Johnson
       }).toThrow(PiiRedactionError);
     });
 
-    it('PiiRedactionError includes diagnostic information', () => {
+    it('PiiRedactionError includes count but NOT names (Sentry safety)', () => {
       const unreducedContent = 'Interview with Jane Smith and John Doe.';
 
       try {
@@ -92,13 +92,15 @@ The system works okay but sometimes there are delays. I mentioned to Dr. Johnson
         expect(err).toBeInstanceOf(PiiRedactionError);
         const piiError = err as PiiRedactionError;
 
-        // Diagnostic info for debugging/auditing
+        // Diagnostic info: count and code, never names
         expect(piiError.name).toBe('PiiRedactionError');
         expect(piiError.participantCode).toBe('PT-001');
-        // Names available in error object for local debugging
-        expect(piiError.detectedNames).toContain('Jane Smith');
-        expect(piiError.detectedNames).toContain('John Doe');
-        // But message does NOT include names (could leak to Sentry)
+
+        // SECURITY: Count only — no names on the error object
+        expect(piiError.detectedCount).toBe(2);
+        expect((piiError as any).detectedNames).toBeUndefined();
+
+        // Message uses count, not names (could leak to Sentry/#qori-alerts)
         expect(piiError.message).toContain('2 found');
         expect(piiError.message).not.toContain('Jane Smith');
         expect(piiError.message).not.toContain('John Doe');
