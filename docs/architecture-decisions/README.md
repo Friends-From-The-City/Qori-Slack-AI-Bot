@@ -97,6 +97,7 @@ Start with `0001` and read forward. The history is itself useful — it shows ho
 - [0022 — Data integrity batch (R1/R2/R3)](./0022-data-integrity-batch.md) — CHECK constraints for enums; DATE/TIME types with timezone anchor; drop denormalized count
 - [0023 — Access control current state and gaps](./0023-access-control-current-state-and-gaps.md) — Federal-reviewer evidence: honest gap analysis, authorization map, remediation plan
 - [0024 — Project-level authorization model](./0024-project-level-authorization-model.md) — Tiered access (membership=act, creator=delete); channel-based membership with fail-closed Slack fallback
+- [0025 — Admin center and federal records management](./0025-admin-center-records-management.md) — Owner-as-records-authority; disposition schedules; legal holds; retention-gated deletion; audit logging
 
 ### Lessons (informal ADRs from failure modes)
 

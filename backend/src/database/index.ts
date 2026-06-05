@@ -16,6 +16,7 @@ import SessionSummary from './models/session_summary';
 import StudyVariable from './models/study_variable';
 import CreatedIssue from './models/created_issue';
 import SlackUserState from './models/slack_user_state';
+import DispositionAuditLog from './models/disposition_audit_log';
 
 
 // Set environment and configuration
@@ -42,6 +43,7 @@ const modelDefiners = [
   StudyVariable,
   CreatedIssue,
   SlackUserState,
+  DispositionAuditLog,
 ];
 
 // Register all models with Sequelize
