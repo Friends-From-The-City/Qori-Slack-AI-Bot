@@ -228,6 +228,40 @@ slackApp.error(async ({ error, body, logger }: { error: Error; body: any; logger
     return;
   }
 
+  // ── Handle PiiRedactionError (H9 fail-closed) ──────────────────────
+  // SECURITY: Alert is distinguishable ("PII Redaction Failure") so ops
+  // can spot repeated failures fast. User message stays generic — don't
+  // leak that it's a PII issue to the researcher.
+  if (original.name === 'PiiRedactionError') {
+    logger.error(`PII redaction failure: ${original.message}`);
+
+    // Post DISTINGUISHABLE alert — not buried in "Unhandled Error"
+    await postErrorAlert('PII Redaction Failure', original.message, {
+      userId,
+      command,
+      // Note: error.detectedCount is available but we don't need it here —
+      // the message already contains the count ("N found")
+    });
+
+    // User gets generic message — don't reveal it's a PII/redaction issue
+    if (userId) {
+      try {
+        const client = slackApp.client;
+        const im = await client.conversations.open({ users: userId });
+        if (im.channel?.id) {
+          await client.chat.postMessage({
+            channel: im.channel.id,
+            text: '*Something went wrong on our end*\n\nYour request did not complete. The team has been notified. Please try again, and if it keeps happening, let us know.',
+          });
+        }
+      } catch (dmErr) {
+        const dmMessage = dmErr instanceof Error ? dmErr.message : String(dmErr);
+        logger.error('Failed to send PiiRedactionError DM:', dmMessage);
+      }
+    }
+    return;
+  }
+
   // ── Generic error — notify the user so they aren't left waiting ──
   logger.error('Unhandled error:', error);
 

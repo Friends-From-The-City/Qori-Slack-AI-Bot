@@ -83,7 +83,7 @@ Line 3: PT-001 concluded.`);
       }).toThrow(PiiRedactionError);
     });
 
-    it('includes detected names in the error', () => {
+    it('includes detected COUNT (not names) in the error', () => {
       const payload = 'Interview with Jane Smith about their experience.';
       try {
         assertKnownNamesRedacted(payload, ['Jane Smith'], 'PT-001');
@@ -91,8 +91,11 @@ Line 3: PT-001 concluded.`);
       } catch (err) {
         expect(err).toBeInstanceOf(PiiRedactionError);
         const piiError = err as PiiRedactionError;
-        expect(piiError.detectedNames).toEqual(['Jane Smith']);
+        // SECURITY: Count only, never names — error may reach Sentry/#qori-alerts
+        expect(piiError.detectedCount).toBe(1);
         expect(piiError.participantCode).toBe('PT-001');
+        // Verify no detectedNames property exists
+        expect((piiError as any).detectedNames).toBeUndefined();
       }
     });
 
@@ -110,7 +113,7 @@ Line 3: PT-001 concluded.`);
       }).not.toThrow();
     });
 
-    it('detects multiple names', () => {
+    it('counts multiple detected names', () => {
       const payload = 'Jane Smith and John Doe were present.';
       try {
         assertKnownNamesRedacted(payload, ['Jane Smith', 'John Doe'], 'PT-001');
@@ -118,8 +121,9 @@ Line 3: PT-001 concluded.`);
       } catch (err) {
         expect(err).toBeInstanceOf(PiiRedactionError);
         const piiError = err as PiiRedactionError;
-        expect(piiError.detectedNames).toContain('Jane Smith');
-        expect(piiError.detectedNames).toContain('John Doe');
+        // SECURITY: Count only — 2 distinct names detected
+        expect(piiError.detectedCount).toBe(2);
+        expect(piiError.message).toContain('2 found');
       }
     });
 

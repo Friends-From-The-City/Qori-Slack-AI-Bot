@@ -72,12 +72,16 @@ export class TemplateContractError extends Error {
  *
  * FAIL-CLOSED: If this error is thrown, the API call MUST be aborted.
  * A known participant name in the payload means redaction failed.
+ *
+ * SECURITY: This error carries COUNT only, never actual names. The error
+ * may reach Sentry/#qori-alerts — exposing names on the failure path
+ * would defeat the purpose of redaction.
  */
 export class PiiRedactionError extends Error {
   constructor(
     message: string,
     public readonly participantCode?: string,
-    public readonly detectedNames?: string[],
+    public readonly detectedCount?: number,
   ) {
     super(message);
     this.name = 'PiiRedactionError';
