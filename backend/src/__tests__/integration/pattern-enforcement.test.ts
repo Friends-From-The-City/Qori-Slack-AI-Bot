@@ -877,6 +877,37 @@ describe('pattern: per-participant pool schemas include participant field (L005)
 });
 
 // ═══════════════════════════════════════════════════════════
+// ADR 0025: /qori-delete removed (Admin Center consolidation)
+// ═══════════════════════════════════════════════════════════
+
+describe('pattern: /qori-delete removed (ADR 0025)', () => {
+  const eventsFile = readFile(join(SRC_ROOT, 'helpers/slack/events.ts'));
+
+  it('/qori-delete command is NOT registered', () => {
+    // Per ADR 0025: /qori-delete was removed — study deletion now lives in Admin Center
+    // This test ensures the command is not re-introduced
+    const hasDeleteCommand = eventsFile.includes("slackApp.command('/qori-delete'");
+    expect(hasDeleteCommand).toBe(false);
+  });
+
+  it('delete-study-modal view handler is NOT registered', () => {
+    // The modal submission handler should also be removed
+    const hasDeleteModal = eventsFile.includes("slackApp.view('delete-study-modal'");
+    expect(hasDeleteModal).toBe(false);
+  });
+
+  it('deleteStudyHandler is not imported in events.ts', () => {
+    // The import should be removed to avoid dangling references
+    const hasDeleteImport = eventsFile.includes('deleteStudyHandler');
+    // Allow it in comments (for the "REMOVED per ADR 0025" note)
+    const codeLines = eventsFile.split('\n').filter(l => !l.trimStart().startsWith('//'));
+    const codeOnly = codeLines.join('\n');
+    const hasDeleteImportInCode = codeOnly.includes('deleteStudyHandler');
+    expect(hasDeleteImportInCode).toBe(false);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════
 // ADR 0024: Authorization enforcement
 // ═══════════════════════════════════════════════════════════
 
