@@ -251,7 +251,9 @@ function getSequelizeInstance(): Sequelize {
   }
   // Dynamic import to avoid circular dependencies and handle missing DB gracefully
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  return require('../database') as Sequelize;
+  const db = require('../database');
+  // Handle both ES module default export and CommonJS
+  return (db.default || db) as Sequelize;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -889,6 +891,187 @@ export async function searchVariablesAcrossStudies(
   const total = typeof countResult === 'number' ? countResult : (countResult as unknown as { count: number }[]).reduce((sum, g) => sum + g.count, 0);
 
   return { rows, total };
+}
+
+// ═══════════════════════════════════════════════════════════
+// REVERSE-QUERY (Traceable Role-Transformation)
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * Linkage field definitions for reverse queries.
+ * Maps variable keys to their linkage fields and the upstream variable type they reference.
+ */
+const LINKAGE_DEFINITIONS: Record<string, { field: string; referencesType: string }[]> = {
+  task_scenarios: [
+    { field: 'validates_barriers', referencesType: 'target_barriers' },
+    { field: 'addresses_questions', referencesType: 'research_questions' },
+  ],
+  probes: [
+    { field: 'addresses_question', referencesType: 'research_questions' },
+  ],
+  prioritized_findings: [
+    { field: 'supporting_themes', referencesType: 'validated_themes' },
+    { field: 'supporting_nuggets', referencesType: 'atomic_nugget_core' },
+    { field: 'validates_barrier', referencesType: 'target_barriers' },
+    { field: 'addresses_question', referencesType: 'research_questions' },
+  ],
+  prioritized_recommendations: [
+    { field: 'addresses_findings', referencesType: 'prioritized_findings' },
+    { field: 'addresses_barrier', referencesType: 'target_barriers' },
+  ],
+  validated_themes: [
+    { field: 'supporting_nuggets', referencesType: 'atomic_nugget_core' },
+    { field: 'linked_barriers', referencesType: 'target_barriers' },
+    { field: 'linked_questions', referencesType: 'research_questions' },
+  ],
+  deliverables: [
+    { field: 'addresses_objective', referencesType: 'research_objectives' },
+  ],
+  journey_stages: [
+    { field: 'supporting_nuggets', referencesType: 'atomic_nugget_core' },
+    { field: 'linked_barriers', referencesType: 'target_barriers' },
+  ],
+};
+
+export interface ReverseQueryResult {
+  sourceVariable: string;
+  sourceId: string;
+  items: Array<{
+    id: string;
+    linkageField: string;
+    variableKey: string;
+    fullItem: unknown;
+  }>;
+}
+
+/**
+ * Find all downstream variables that reference a specific upstream ID.
+ * Example: queryUpstreamReferences(ctx, 'TB-001', 'target_barriers') returns
+ * all task_scenarios, themes, and findings that validate/link to TB-001.
+ *
+ * This enables bidirectional traceability queries:
+ * - Forward: "What barrier does task-01 validate?" → task_scenarios[0].validates_barriers
+ * - Reverse: "Which tasks validate TB-001?" → queryUpstreamReferences(ctx, 'TB-001', 'target_barriers')
+ */
+export async function queryUpstreamReferences(
+  ctx: VariableContext,
+  upstreamId: string,
+  upstreamType: string,
+): Promise<ReverseQueryResult> {
+  const result: ReverseQueryResult = {
+    sourceVariable: upstreamType,
+    sourceId: upstreamId,
+    items: [],
+  };
+
+  // Get all variables for this study
+  const studyVars = await readStudyVariablesByContext(ctx);
+  if (!studyVars?.variables) return result;
+
+  // Find all variable types that can reference this upstream type
+  for (const [variableKey, linkageFields] of Object.entries(LINKAGE_DEFINITIONS)) {
+    const relevantFields = linkageFields.filter(l => l.referencesType === upstreamType);
+    if (relevantFields.length === 0) continue;
+
+    const storedVar = studyVars.variables[variableKey];
+    if (!storedVar?.value) continue;
+
+    const items = Array.isArray(storedVar.value) ? storedVar.value : [storedVar.value];
+
+    for (const item of items) {
+      if (typeof item !== 'object' || item === null) continue;
+      const itemObj = item as Record<string, unknown>;
+      const itemId = (itemObj.id as string) || 'unknown';
+
+      for (const { field } of relevantFields) {
+        const fieldValue = itemObj[field];
+
+        // Check if this item references the upstream ID
+        let matches = false;
+        if (Array.isArray(fieldValue)) {
+          matches = fieldValue.includes(upstreamId);
+        } else if (typeof fieldValue === 'string') {
+          matches = fieldValue === upstreamId;
+        }
+
+        if (matches) {
+          result.items.push({
+            id: itemId,
+            linkageField: field,
+            variableKey,
+            fullItem: item,
+          });
+        }
+      }
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Validate that all required linkages are populated for a study.
+ * Returns a report of missing linkages that should have been populated.
+ */
+export interface LinkageValidationReport {
+  valid: boolean;
+  gaps: Array<{
+    variableKey: string;
+    itemId: string;
+    missingField: string;
+    upstreamType: string;
+  }>;
+  summary: string;
+}
+
+export async function validateStudyLinkages(
+  ctx: VariableContext,
+): Promise<LinkageValidationReport> {
+  const gaps: LinkageValidationReport['gaps'] = [];
+
+  const studyVars = await readStudyVariablesByContext(ctx);
+  if (!studyVars?.variables) {
+    return { valid: true, gaps: [], summary: 'No variables found' };
+  }
+
+  // Check each variable type with required linkage fields
+  for (const [variableKey, linkageFields] of Object.entries(LINKAGE_DEFINITIONS)) {
+    const storedVar = studyVars.variables[variableKey];
+    if (!storedVar?.value) continue;
+
+    const items = Array.isArray(storedVar.value) ? storedVar.value : [storedVar.value];
+
+    for (const item of items) {
+      if (typeof item !== 'object' || item === null) continue;
+      const itemObj = item as Record<string, unknown>;
+      const itemId = (itemObj.id as string) || 'unknown';
+
+      for (const { field, referencesType } of linkageFields) {
+        const fieldValue = itemObj[field];
+
+        // Check for empty required linkage (arrays only)
+        const isEmpty = Array.isArray(fieldValue) && fieldValue.length === 0;
+        const isMissing = fieldValue === undefined || fieldValue === null;
+        const isEmptyString = typeof fieldValue === 'string' && fieldValue.trim() === '';
+
+        if (isEmpty || isMissing || isEmptyString) {
+          gaps.push({
+            variableKey,
+            itemId,
+            missingField: field,
+            upstreamType: referencesType,
+          });
+        }
+      }
+    }
+  }
+
+  const valid = gaps.length === 0;
+  const summary = valid
+    ? 'All linkages populated'
+    : `${gaps.length} linkage gap(s) found across ${new Set(gaps.map(g => g.variableKey)).size} variable type(s)`;
+
+  return { valid, gaps, summary };
 }
 
 // ═══════════════════════════════════════════════════════════

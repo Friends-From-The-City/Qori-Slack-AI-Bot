@@ -37,6 +37,7 @@ interface StudyStatus {
 }
 
 interface ResearchStudy {
+  id?: number;
   path?: string;
   created_by?: string;
   [key: string]: unknown;
@@ -328,16 +329,17 @@ export async function handleRequestChangesSubmission(
   console.log('Deadline:', deadline);
   console.log('Raw view.state.values:', Object.keys(values).length, 'blocks');
 
+  // Resolve study first to get study_id for addStudyStatus (required by NOT NULL constraint)
+  const resolvedForChanges = await resolveStudyFromName(studyName);
+  const study = resolvedForChanges?.study as unknown as ResearchStudy | null;
+
   await addStudyStatus({
-    study_name: studyName,
+    study_id: study?.id,
     requested_by: user,
     status: 'need_changes',
     reason: changeFeedback,
     path: url,
   });
-
-  const resolvedForChanges = await resolveStudyFromName(studyName);
-  const study = resolvedForChanges?.study as unknown as ResearchStudy | null;
 
   if (study?.created_by) {
     try {

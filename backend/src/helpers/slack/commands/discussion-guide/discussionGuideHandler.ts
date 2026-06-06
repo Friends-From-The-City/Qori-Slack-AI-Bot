@@ -462,7 +462,7 @@ async function handleDiscussionGuideSubmission({ ack, body, view, client }: Slac
   await sendStudyResultMessage(client, targetChannel, studyName, blocks, 'discussion');
 
   await addStudyStatus({
-    study_name: studyName,
+    study_id: studyId,
     path: url,
     status: 'created',
     created_by: body.user?.id || null,

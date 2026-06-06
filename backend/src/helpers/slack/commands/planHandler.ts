@@ -277,7 +277,7 @@ async function handlePlanSubmission({ ack, body, view, client }: SlackViewMiddle
   } catch (dmErr) { const dmMessage = dmErr instanceof Error ? dmErr.message : String(dmErr); console.error('Failed to send plan DM:', dmMessage); }
 
   await addStudyStatus({
-    study_name: studyName,
+    study_id: studyId,
     path: url,
     status: 'created',
     created_by: body.user?.id || null,

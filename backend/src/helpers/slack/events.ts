@@ -340,7 +340,7 @@ slackApp.command('/qori-brief', async ({ ack, client, command }) => {
     await client.chat.postEphemeral({
       channel: command.channel_id,
       user: command.user_id,
-      text: `This channel isn't linked to a project yet.\n\n*Option 1:* Run \`/qori-start\` to create a new project with a dedicated channel.\n*Option 2:* Use the brief button from a project's next-steps modal after creating one.`,
+      text: `This channel isn't linked to a project yet.\n\n*Option 1:* Run \`/qori-start\` to create a new project with a dedicated channel, then run \`/qori-brief\` there.\n*Option 2:* Run \`/qori-brief\` in an existing project channel.`,
     });
     return;
   }

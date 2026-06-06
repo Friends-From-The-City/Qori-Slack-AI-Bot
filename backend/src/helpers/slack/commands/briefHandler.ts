@@ -77,6 +77,11 @@ interface BriefQuestion {
   priority: string;
 }
 
+interface BriefObjective {
+  id: string;
+  objective: string;
+}
+
 // ─── Template input contract ────────────────────────────────────
 
 /** Data shape passed to the research_brief YAML template. Co-located with handler. */
@@ -102,7 +107,7 @@ interface BriefTemplateInput {
   // Handler-assigned structured data (from pre-render LLM JSON tasks + ID assignment)
   target_barriers: BriefBarrier[];
   research_questions: BriefQuestion[];
-  research_objectives: string[];
+  research_objectives: BriefObjective[];
   // Cascade summary counts
   objectives_count: number;
   research_questions_count: number;
@@ -456,11 +461,15 @@ async function handleBriefSubmission({ ack, body, view, client }: SlackViewMiddl
     priority: q.priority || 'Primary',
   }));
 
-  // Research objectives: split learning objectives into individual items
-  const researchObjectives: string[] = learningObjectives
+  // Research objectives: split learning objectives into individual items and assign IDs
+  const researchObjectives: BriefObjective[] = learningObjectives
     .split(/\n/)
     .map(line => line.replace(/^[-•*\d.]+\s*/, '').trim())
-    .filter(Boolean);
+    .filter(Boolean)
+    .map((objective, idx) => ({
+      id: `OBJ-${String(idx + 1).padStart(3, '0')}`,
+      objective,
+    }));
 
   console.log(`📋 Structured data assembled: ${targetBarriers.length} barriers, ${researchQuestions.length} questions, ${researchObjectives.length} objectives`);
 
@@ -569,7 +578,7 @@ async function handleBriefSubmission({ ack, body, view, client }: SlackViewMiddl
   }
 
   await addStudyStatus({
-    study_name: studyName,
+    study_id: studyId,
     path: url,
     status: 'created',
     created_by: body.user?.id || null,

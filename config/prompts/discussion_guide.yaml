@@ -86,7 +86,17 @@ emits:
       type: array
       items:
         $ref: schemas/task_scenario.yaml
-    extract_from: "ALL task sections — extract EVERY task scenario as a separate array item"
+    extract_from: |
+      ALL task/topic/concept/observation sections. For EACH task, extract:
+      - id: Format task-01, task-02, etc.
+      - task_description: What the participant is asked to do
+      - success_criteria: How to determine completion
+      - validates_barriers: REQUIRED — Extract TB-XXX IDs from [targets TB-XXX] markers in task headers.
+        Example: "### Task 01 ... [targets TB-001]" → validates_barriers: ["TB-001"]
+      - addresses_questions: REQUIRED — Extract RQ-XXX IDs from [RQ-XXX] markers in task headers.
+        Example: "### Task 01 ... [RQ-001] [RQ-002]" → addresses_questions: ["RQ-001", "RQ-002"]
+      CRITICAL: Every task MUST have non-empty validates_barriers and addresses_questions arrays.
+      Parse the markers from the generated document text — they are inline in the task headers.
   - key: probes
     pool: false
     pool_strategy: replace
@@ -95,7 +105,13 @@ emits:
       type: array
       items:
         $ref: schemas/probe.yaml
-    extract_from: "ALL probe/follow-up questions — extract EVERY probe as a separate array item"
+    extract_from: |
+      ALL probe/follow-up questions from each task/topic section. For EACH probe:
+      - id: Format probe-01, probe-02, etc.
+      - probe_text: The actual follow-up question
+      - addresses_question: REQUIRED — The RQ-XXX from the parent task's header.
+        A probe inherits its research question from the task it belongs to.
+      CRITICAL: Every probe MUST have a non-empty addresses_question field.
 
 # ═══════════════════════════════════════════════════════════
 # AI GENERATION

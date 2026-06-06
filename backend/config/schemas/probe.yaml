@@ -1,7 +1,12 @@
 # Probe — follow-up question in discussion guide
 # Emitted by: discussion_guide
+#
+# v2.0 (June 6, 2026): TRACEABLE ROLE-TRANSFORMATION
+#   addresses_question is now REQUIRED.
+#   Every probe must trace to an upstream research question.
+#   This enables bidirectional queries: "which probes address RQ-001?"
 type: object
-required: [id, probe_text]
+required: [id, probe_text, addresses_question]
 properties:
   id:
     type: string
@@ -15,8 +20,7 @@ properties:
     description: "When to use this probe"
   addresses_question:
     type: string
-    nullable: true
-    description: "Research question ID (RQ-XXX) this probe targets"
+    description: "REQUIRED: Research question ID (RQ-XXX) this probe targets. Extract from task/topic context."
   follow_ups:
     type: array
     nullable: true
