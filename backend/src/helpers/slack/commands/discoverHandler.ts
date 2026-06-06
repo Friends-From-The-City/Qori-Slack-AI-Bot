@@ -250,7 +250,7 @@ async function discoverHandler({ ack, body, client, command }: SlackCommandMiddl
     await client.chat.postEphemeral({
       channel: channelId,
       user: command.user_id,
-      text: `This channel isn't linked to a project yet.\n\n*Option 1:* Run \`/qori-start\` to create a new project with a dedicated channel.\n*Option 2:* Use the discovery button from a project's next-steps modal after creating one.`,
+      text: `This channel isn't linked to a project yet.\n\n*Option 1:* Run \`/qori-start\` to create a new project with a dedicated channel, then run \`/qori-discover\` there.\n*Option 2:* Run \`/qori-discover\` in an existing project channel.`,
     });
     return;
   }

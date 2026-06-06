@@ -5,8 +5,13 @@
 # v2.0 (May 6, 2026): Cascade-aware deepening. Added supporting_themes,
 #   supporting_nuggets, participant_coverage, affected_personas, barrier/question
 #   linkage, representative_quote. Renamed finding_number→id.
+#
+# v3.0 (June 6, 2026): TRACEABLE ROLE-TRANSFORMATION
+#   supporting_themes and supporting_nuggets are now REQUIRED.
+#   Every finding must trace to upstream themes and nuggets.
+#   This enables bidirectional queries: "which findings cite theme-01?"
 type: object
-required: [id, finding, severity, evidence_strength]
+required: [id, finding, severity, evidence_strength, supporting_themes, supporting_nuggets]
 properties:
   id:
     type: string
@@ -26,16 +31,14 @@ properties:
     enum: [Strong, Moderate, Limited]
   supporting_themes:
     type: array
-    nullable: true
     items:
       type: string
-    description: "Validated theme IDs (theme-XX) that ground this finding"
+    description: "REQUIRED: Validated theme IDs (theme-XX) that ground this finding. Every finding must trace to themes."
   supporting_nuggets:
     type: array
-    nullable: true
     items:
       type: string
-    description: "Nugget IDs that provide evidence"
+    description: "REQUIRED: Nugget IDs that provide evidence. Every finding must trace to raw observations."
   participant_coverage:
     type: string
     nullable: true

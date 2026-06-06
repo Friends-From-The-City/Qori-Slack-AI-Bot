@@ -80,8 +80,12 @@ emits:
     schema:
       type: array
       items:
-        type: string
-    extract_from: "What we'll learn section — each objective bullet"
+        $ref: schemas/research_objective.yaml
+    extract_from: |
+      What we'll learn section — each objective bullet. For EACH objective:
+      - id: Format OBJ-001, OBJ-002, etc. (sequential)
+      - objective: The learning goal text
+      CRITICAL: Every objective MUST have a unique OBJ-XXX ID.
   - key: research_questions
     pool: false
     pool_strategy: replace
@@ -448,7 +452,7 @@ output_template: |
   ## What we'll learn
 
   {{#each research_objectives}}
-  - {{this}}
+  - **[{{this.id}}]** {{this.objective}}
   {{/each}}
 
   **Research questions:**

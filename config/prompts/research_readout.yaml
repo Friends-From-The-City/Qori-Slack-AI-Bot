@@ -137,7 +137,18 @@ emits:
       type: array
       items:
         $ref: schemas/prioritized_finding.yaml
-    extract_from: "ALL numbered findings sections — extract EVERY finding as a separate array item"
+    extract_from: |
+      ALL numbered findings sections (## 01, ## 02, etc.). For EACH finding, extract:
+      - id: Format finding-01, finding-02, etc.
+      - finding: The insight statement
+      - severity: 1-4 scale from Evidence table
+      - evidence_strength: Strong/Moderate/Limited from Confidence rating
+      - supporting_themes: REQUIRED — Extract theme-XX IDs from evidence citations.
+        Look for "Evidence chain: theme-01, theme-02" or similar references.
+      - supporting_nuggets: REQUIRED — Extract nugget-XX-XXX IDs from evidence citations.
+        Look for "nugget-PT-001-001" or similar references in the Evidence table.
+      CRITICAL: Every finding MUST have non-empty supporting_themes AND supporting_nuggets arrays.
+      Parse the IDs from Evidence chain/Sources citations in each finding section.
   - key: prioritized_recommendations
     pool: false
     pool_strategy: replace
@@ -146,7 +157,14 @@ emits:
       type: array
       items:
         $ref: schemas/prioritized_recommendation.yaml
-    extract_from: "ALL recommendations — extract EVERY recommendation as a separate array item"
+    extract_from: |
+      ALL recommendations from the Recommended Actions section. For EACH recommendation:
+      - id: Format rec-01, rec-02, etc.
+      - recommendation: The specific action
+      - priority: P0-P3 from Priority column
+      - addresses_findings: REQUIRED — Extract finding-XX IDs from "Addresses" column.
+        Example: "Addresses: Finding 01, Finding 03" → addresses_findings: ["finding-01", "finding-03"]
+      CRITICAL: Every recommendation MUST have a non-empty addresses_findings array.
   - key: decision_inputs
     pool: false
     pool_strategy: replace

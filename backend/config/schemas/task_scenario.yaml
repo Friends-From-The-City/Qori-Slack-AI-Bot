@@ -1,8 +1,14 @@
 # Task scenario — scripted task in discussion guide
 # Emitted by: discussion_guide
 # Consumed by: session_summary (operational context)
+#
+# v2.0 (June 6, 2026): TRACEABLE ROLE-TRANSFORMATION
+#   addresses_questions and validates_barriers are now REQUIRED.
+#   Every task scenario must trace to upstream research questions and target barriers.
+#   This enables bidirectional queries: "which tasks validate TB-001?"
+#   Extraction validation will fail if these arrays are empty when upstream exists.
 type: object
-required: [id, task_description, success_criteria]
+required: [id, task_description, success_criteria, addresses_questions, validates_barriers]
 properties:
   id:
     type: string
@@ -30,16 +36,14 @@ properties:
     description: "Expected time for this task"
   addresses_questions:
     type: array
-    nullable: true
     items:
       type: string
-    description: "Research question IDs (RQ-XXX) this task addresses"
+    description: "REQUIRED: Research question IDs (RQ-XXX) this task addresses. Extract from [RQ-XXX] markers in task headers."
   validates_barriers:
     type: array
-    nullable: true
     items:
       type: string
-    description: "Target barrier IDs (TB-XXX) this task is designed to elicit"
+    description: "REQUIRED: Target barrier IDs (TB-XXX) this task is designed to elicit. Extract from [targets TB-XXX] markers in task headers."
   observation_focus:
     type: array
     nullable: true

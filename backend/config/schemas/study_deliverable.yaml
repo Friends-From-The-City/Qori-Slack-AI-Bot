@@ -1,7 +1,12 @@
 # Study deliverable — output from research plan
 # Emitted by: research_plan
+#
+# v2.0 (June 6, 2026): TRACEABLE ROLE-TRANSFORMATION
+#   addresses_objective is now REQUIRED.
+#   Every deliverable must trace to an upstream research objective.
+#   This enables bidirectional queries: "which deliverables serve OBJ-001?"
 type: object
-required: [id, deliverable_name, format]
+required: [id, deliverable_name, format, addresses_objective]
 properties:
   id:
     type: string
@@ -22,5 +27,4 @@ properties:
     description: "Who receives this deliverable"
   addresses_objective:
     type: string
-    nullable: true
-    description: "Research objective ID this deliverable serves"
+    description: "REQUIRED: Research objective ID (OBJ-XXX) this deliverable serves. Every deliverable must trace to an objective."

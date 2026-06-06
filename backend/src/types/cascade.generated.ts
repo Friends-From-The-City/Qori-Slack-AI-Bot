@@ -509,10 +509,10 @@ export interface PrioritizedFinding {
   /** 1-4 severity scale */
   severity: number;
   evidence_strength: 'Strong' | 'Moderate' | 'Limited';
-  /** Validated theme IDs (theme-XX) that ground this finding */
-  supporting_themes: string[] | null;
-  /** Nugget IDs that provide evidence */
-  supporting_nuggets: string[] | null;
+  /** REQUIRED: Validated theme IDs (theme-XX) that ground this finding. Every finding must trace to themes. */
+  supporting_themes: string[];
+  /** REQUIRED: Nugget IDs that provide evidence. Every finding must trace to raw observations. */
+  supporting_nuggets: string[];
   /** X of Y participants format */
   participant_coverage: string | null;
   /** Persona IDs affected by this finding */
@@ -581,8 +581,8 @@ export interface PrioritizedRecommendation {
   recommendation: string;
   /** Why this recommendation matters */
   rationale: string | null;
-  /** Finding IDs (finding-XX) this addresses */
-  addresses_findings: string[] | null;
+  /** REQUIRED: Finding IDs (finding-XX) this addresses. Every recommendation must trace to findings. */
+  addresses_findings: string[];
   priority: 'P0' | 'P1' | 'P2' | 'P3';
   effort_estimate: 'High' | 'Medium' | 'Low' | null;
   /** What changes if this is implemented */
@@ -603,10 +603,18 @@ export interface Probe {
   probe_text: string;
   /** When to use this probe */
   context: string | null;
-  /** Research question ID (RQ-XXX) this probe targets */
-  addresses_question: string | null;
+  /** REQUIRED: Research question ID (RQ-XXX) this probe targets. Extract from task/topic context. */
+  addresses_question: string;
   /** Additional follow-up prompts if participant is unclear */
   follow_ups: string[] | null;
+}
+
+/** Generated from research_objective.yaml */
+export interface ResearchObjective {
+  /** Stable ID, format: OBJ-001, OBJ-002, etc. */
+  id: string;
+  /** What we aim to learn through this research */
+  objective: string;
 }
 
 /** Generated from research_question.yaml */
@@ -690,8 +698,8 @@ export interface StudyDeliverable {
   due_date: string | null;
   /** Who receives this deliverable */
   audience: string | null;
-  /** Research objective ID this deliverable serves */
-  addresses_objective: string | null;
+  /** REQUIRED: Research objective ID (OBJ-XXX) this deliverable serves. Every deliverable must trace to an objective. */
+  addresses_objective: string;
 }
 
 /** Generated from study_methodology.yaml */
@@ -848,10 +856,10 @@ export interface TaskScenario {
   success_criteria: string;
   /** Expected time for this task */
   estimated_duration: string | null;
-  /** Research question IDs (RQ-XXX) this task addresses */
-  addresses_questions: string[] | null;
-  /** Target barrier IDs (TB-XXX) this task is designed to elicit */
-  validates_barriers: string[] | null;
+  /** REQUIRED: Research question IDs (RQ-XXX) this task addresses. Extract from [RQ-XXX] markers in task headers. */
+  addresses_questions: string[];
+  /** REQUIRED: Target barrier IDs (TB-XXX) this task is designed to elicit. Extract from [targets TB-XXX] markers in task headers. */
+  validates_barriers: string[];
   /** What to watch for during this task */
   observation_focus: string[] | null;
 }
@@ -978,6 +986,7 @@ export interface CascadeVariableMapGenerated {
   // prioritized_issue → PrioritizedIssue
   // prioritized_recommendation → PrioritizedRecommendation
   // probe → Probe
+  // research_objective → ResearchObjective
   // research_question → ResearchQuestion
   // stakeholder_constraint → StakeholderConstraint
   // stakeholder_priority → StakeholderPriority

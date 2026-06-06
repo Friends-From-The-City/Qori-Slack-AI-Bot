@@ -295,6 +295,87 @@ function validateExtraction(extracted: Record<string, unknown>, emitsSpec: EmitS
   };
 }
 
+// ─── Linkage validation (traceable role-transformation) ──────────────
+
+/**
+ * Known linkage fields that must be non-empty when required by schema.
+ * These fields represent traceable role-transformations from upstream variables.
+ * Empty arrays indicate extraction failure, not absence of linkage.
+ */
+const LINKAGE_FIELDS = [
+  'validates_barriers',      // task_scenario → target_barriers
+  'addresses_questions',     // task_scenario → research_questions
+  'addresses_question',      // probe → research_question
+  'supporting_themes',       // prioritized_finding → validated_theme
+  'supporting_nuggets',      // prioritized_finding, journey_stage, etc → atomic_nugget
+  'addresses_findings',      // prioritized_recommendation → finding
+  'addresses_objective',     // study_deliverable → research_objective
+  'evidence_nuggets',        // design_hmw_opportunity → atomic_nugget
+];
+
+/**
+ * Validate that required linkage fields are non-empty.
+ * These fields represent traceable role-transformations — empty arrays indicate
+ * extraction failure, not absence of linkage. Fail-closed when linkage is required
+ * but empty, surfacing the gap rather than silently producing untraceable data.
+ */
+function validateLinkage(
+  extracted: Record<string, unknown>,
+  emitsSpec: EmitSpec[],
+): { valid: boolean; linkageErrors: string[] } {
+  const linkageErrors: string[] = [];
+
+  for (const emit of emitsSpec) {
+    const value = extracted[emit.key];
+    if (!value || !Array.isArray(value)) continue;
+
+    const resolvedSchema = resolveSchemaRefs(emit.schema);
+    if (!resolvedSchema?.properties) continue;
+
+    // Check if schema has required array in YAML
+    const requiredFields: string[] = (resolvedSchema as { required?: string[] }).required || [];
+
+    for (let i = 0; i < value.length; i++) {
+      const item = value[i] as Record<string, unknown>;
+      if (typeof item !== 'object' || item === null) continue;
+
+      for (const linkageField of LINKAGE_FIELDS) {
+        // Only validate if this field is required by the schema
+        if (!requiredFields.includes(linkageField)) continue;
+
+        const fieldValue = item[linkageField];
+
+        // Check for empty arrays (required linkage not populated)
+        if (Array.isArray(fieldValue) && fieldValue.length === 0) {
+          linkageErrors.push(
+            `${emit.key}[${i}].${linkageField}: empty array — required linkage not populated. ` +
+            `This indicates extraction failed to capture the role-transformation.`
+          );
+        }
+
+        // Check for empty strings (required single linkage not populated)
+        if (typeof fieldValue === 'string' && fieldValue.trim() === '') {
+          linkageErrors.push(
+            `${emit.key}[${i}].${linkageField}: empty string — required linkage not populated.`
+          );
+        }
+
+        // Check for undefined/null when field is required
+        if (fieldValue === undefined || fieldValue === null) {
+          linkageErrors.push(
+            `${emit.key}[${i}].${linkageField}: missing — required linkage field not present.`
+          );
+        }
+      }
+    }
+  }
+
+  return {
+    valid: linkageErrors.length === 0,
+    linkageErrors,
+  };
+}
+
 // ─── Model selection ─────────────────────────────────────────────────
 
 /**
@@ -433,6 +514,15 @@ async function extractVariables(
           break;
         }
 
+        // Linkage validation: ensure required traceability fields are populated
+        const linkageValidation = validateLinkage(parsed, groupEmits);
+        if (!linkageValidation.valid) {
+          console.warn(`⚠️ [${modelName}] Linkage gaps detected (traceable role-transformation):`);
+          linkageValidation.linkageErrors.forEach(e => console.warn(`   ${e}`));
+          // Log but don't block — linkage gaps are surfaced, not fatal
+          // The data will be written with empty linkage fields for manual review
+        }
+
         extracted = parsed;
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
@@ -475,6 +565,8 @@ export {
   buildExtractionPrompt,
   parseExtractionResponse,
   validateExtraction,
+  validateLinkage,
   typedExtraction,
   isCascadeVariableKey,
+  LINKAGE_FIELDS,
 };

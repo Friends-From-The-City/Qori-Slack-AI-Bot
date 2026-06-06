@@ -138,7 +138,15 @@ emits:
       type: array
       items:
         $ref: schemas/study_deliverable.yaml
-    extract_from: "ALL deliverables — extract EVERY deliverable as a separate array item"
+    extract_from: |
+      ALL deliverables from the Deliverables section. For EACH deliverable:
+      - id: Format deliverable-01, deliverable-02, etc.
+      - deliverable_name: Name of the output artifact
+      - format: Output format (Markdown report, etc.)
+      - addresses_objective: REQUIRED — The research objective ID (OBJ-XXX) this deliverable serves.
+        Each deliverable exists to fulfill a research objective from the brief.
+        Infer from context: Session summaries serve OBJ-001 (primary findings), Readout serves OBJ-002 (synthesis), etc.
+      CRITICAL: Every deliverable MUST have a non-empty addresses_objective field.
 
 # ═══════════════════════════════════════════════════════════
 # AI GENERATION — focused, bounded tasks

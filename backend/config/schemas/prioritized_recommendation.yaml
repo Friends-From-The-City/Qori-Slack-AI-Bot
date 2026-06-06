@@ -4,8 +4,13 @@
 #
 # v2.0 (May 6, 2026): Cascade-aware deepening. Added addresses_findings,
 #   expected_impact, implementation_notes, source_implications, addresses_barrier.
+#
+# v3.0 (June 6, 2026): TRACEABLE ROLE-TRANSFORMATION
+#   addresses_findings is now REQUIRED.
+#   Every recommendation must trace to upstream findings.
+#   This enables bidirectional queries: "which recommendations address finding-01?"
 type: object
-required: [id, recommendation, priority]
+required: [id, recommendation, priority, addresses_findings]
 properties:
   id:
     type: string
@@ -19,10 +24,9 @@ properties:
     description: "Why this recommendation matters"
   addresses_findings:
     type: array
-    nullable: true
     items:
       type: string
-    description: "Finding IDs (finding-XX) this addresses"
+    description: "REQUIRED: Finding IDs (finding-XX) this addresses. Every recommendation must trace to findings."
   priority:
     type: string
     enum: [P0, P1, P2, P3]

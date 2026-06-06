@@ -1,0 +1,16 @@
+# Research objective — learning goal for the study
+# Emitted by: research_brief
+# Consumed by: research_plan (deliverables.addresses_objective)
+#
+# v1.0 (June 6, 2026): Added explicit ID field for traceable linkage.
+# Previously objectives were plain strings; now they have stable IDs
+# so deliverables can reference them with addresses_objective: "OBJ-001".
+type: object
+required: [id, objective]
+properties:
+  id:
+    type: string
+    description: "Stable ID, format: OBJ-001, OBJ-002, etc."
+  objective:
+    type: string
+    description: "What we aim to learn through this research"
