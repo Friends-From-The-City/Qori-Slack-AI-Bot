@@ -412,7 +412,30 @@ emits:
       type: array
       items:
         $ref: schemas/discovered_barrier.yaml
-    extract_from: "Key Themes and Executive Summary — barriers, challenges, pain points. Assign sequential IDs (barrier-001). Include title, summary, magnitude with numbers, evidence as array of supporting quotes/metrics, affected_population, source_document name, confidence level."
+    extract_from: |
+      Key Themes and Executive Summary — barriers, challenges, pain points.
+      Assign sequential IDs (barrier-001).
+      Include: title, summary, magnitude with numbers, evidence as array of
+      supporting quotes/metrics, affected_population, source_document name,
+      confidence level.
+
+      CRITICAL — barrier_categories (REQUIRED, array of 1+ values):
+      Classify each barrier by research-method category. Use ALL that apply
+      (barriers are multi-dimensional — e.g., screen-reader navigation is
+      BOTH ia AND accessibility):
+        - ia: navigation, findability, mental models, labeling, information architecture
+        - accessibility: assistive tech, WCAG, screen readers, motor/vision impairments
+        - performance: speed, latency, load times, system responsiveness
+        - content: readability, comprehension, terminology, tone, info quality
+        - task-flow: task completion, workflow steps, error recovery, form design
+        - cognitive: mental load, decision complexity, memory demands, learning curve
+        - other: ONLY if no category genuinely applies — do not force-fit a barrier
+          into a category it doesn't belong to. Prefer a real category when one fits;
+          use 'other' when none do.
+
+      Example: A barrier about "Veterans can't find benefit status" = [ia, task-flow].
+      A barrier about "Screen reader announces wrong labels" = [ia, accessibility].
+      A barrier about "Page loads too slowly on mobile" = [performance].
 
   - key: discovered_metrics
     pool: true

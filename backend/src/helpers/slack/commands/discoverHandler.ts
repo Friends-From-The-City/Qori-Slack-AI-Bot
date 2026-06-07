@@ -14,10 +14,9 @@
 import type { AllMiddlewareArgs, SlackActionMiddlewareArgs, SlackCommandMiddlewareArgs, SlackViewMiddlewareArgs, BlockAction, ViewSubmitAction } from '@slack/bolt';
 import type { View } from '@slack/types';
 
-import { discoverHubModal, DISCOVERY_GUIDANCE_BLOCK_ID, DISCOVERY_ARTIFACTS_BLOCK_ID } from '../ui/discoverHubModal';
+import { discoverHubModal, DISCOVERY_ARTIFACTS_BLOCK_ID } from '../ui/discoverHubModal';
 import { DISCOVER_TYPE_MODALS } from '../ui/discoverTypeModals';
 import { loadDiscoveryArtifacts, type DiscoveryArtifact } from '../../discoveryLoader';
-import { formatVariableCategories } from '../../cascadeVariableCategories';
 import { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo, createOrUpdateFileOnGitHub, fetchFileFromRepoByPath } from '../../github';
 import { format } from 'date-fns';
 import { processYamlTemplate } from '../../yamlProcessor';
@@ -190,7 +189,7 @@ async function scaffoldDiscoveryFolders(projectSlug: string): Promise<void> {
 
 // ─── D1: Discovery visibility helpers ──────────────────────────
 
-/** Format artifact list for the hub's visibility section. Max 5, concrete categories. */
+/** Format artifact list for the hub's visibility section. Max 5, trimmed to essentials. */
 function buildArtifactDisplayText(artifacts: DiscoveryArtifact[]): string {
   if (artifacts.length === 0) {
     return '_No discovery research yet. Start with desk research to build your team\'s knowledge base._';
@@ -198,10 +197,8 @@ function buildArtifactDisplayText(artifacts: DiscoveryArtifact[]): string {
 
   const shown = artifacts.slice(0, 5);
   const lines = shown.map(a => {
-    const varKeys = Object.keys(a.variables);
-    const categories = formatVariableCategories(varKeys);
     const dateStr = a.date || '';
-    return `${a.icon} ${a.slug}${dateStr ? ` · ${dateStr}` : ''}${categories ? ` · ${categories}` : ''}`;
+    return `${a.icon} ${a.slug} · ${a.label}${dateStr ? ` · ${dateStr}` : ''}`;
   });
 
   if (artifacts.length > 5) {
@@ -211,30 +208,6 @@ function buildArtifactDisplayText(artifacts: DiscoveryArtifact[]): string {
   }
 
   return lines.join('\n');
-}
-
-// ─── D2: Next-step guidance ────────────────────────────────────
-
-/** Build guidance text based on which discovery types have artifacts. */
-function buildGuidanceText(artifacts: DiscoveryArtifact[]): string {
-  const hasDesk = artifacts.some(a => a.type === 'desk-research');
-  const hasStakeholder = artifacts.some(a => a.type === 'stakeholder-interviews');
-  const hasSurvey = artifacts.some(a => a.type === 'survey-synthesis');
-
-  const key = `${hasDesk ? '1' : '0'}-${hasStakeholder ? '1' : '0'}-${hasSurvey ? '1' : '0'}`;
-
-  const GUIDANCE: Record<string, string> = {
-    '0-0-0': '_Start with desk research — reports and background docs build the foundation._',
-    '1-0-0': '_Desk research done. Stakeholder interviews add constraints and priorities._',
-    '0-1-0': '_Stakeholder context captured. Add desk research for broader grounding._',
-    '0-0-1': '_Survey data captured. Add desk research or stakeholder context to round out discovery._',
-    '1-1-0': '_Ready for /qori-brief, or add survey data first._',
-    '1-0-1': '_Ready for /qori-brief, or add stakeholder interviews for constraints._',
-    '0-1-1': '_Ready for /qori-brief, or add desk research for broader grounding._',
-    '1-1-1': '_Discovery complete. Run /qori-brief to start your study._',
-  };
-
-  return GUIDANCE[key] || '_Discovery in progress. Run /qori-brief when you\'re ready to start your study._';
 }
 
 // ─── Command handler ────────────────────────────────────────────
@@ -268,20 +241,6 @@ async function discoverHandler({ ack, body, client, command }: SlackCommandMiddl
     // Build dynamic hub blocks — loose typing for Block Kit manipulation
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const blocks: any[] = [...discoverHubModal.blocks];
-
-    // Inject D2 guidance
-    const guidanceIdx = blocks.findIndex(b => b.block_id === DISCOVERY_GUIDANCE_BLOCK_ID);
-    if (guidanceIdx !== -1) {
-      blocks[guidanceIdx] = {
-        ...blocks[guidanceIdx],
-        elements: [
-          {
-            type: "mrkdwn",
-            text: buildGuidanceText(artifacts),
-          },
-        ],
-      };
-    }
 
     // Inject D1 artifact visibility
     const artifactsIdx = blocks.findIndex(b => b.block_id === DISCOVERY_ARTIFACTS_BLOCK_ID);
@@ -609,6 +568,5 @@ export {
   discoverHandler,
   openDiscoverTypeModal,
   handleDiscoverSubmission,
-  buildGuidanceText,
   buildArtifactDisplayText,
 };

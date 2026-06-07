@@ -76,7 +76,27 @@ emits:
       type: array
       items:
         $ref: schemas/discovered_barrier.yaml
-    extract_from: "Negative-sentiment themes as barriers. Assign sequential IDs (barrier-001). Use theme pattern as summary, frequency as magnitude, respondent quotes as evidence array, survey name as source_document."
+    extract_from: |
+      Negative-sentiment themes as barriers. Assign sequential IDs (barrier-001).
+      Use theme pattern as summary, frequency as magnitude, respondent quotes as
+      evidence array, survey name as source_document.
+
+      CRITICAL — barrier_categories (REQUIRED, array of 1+ values):
+      Classify each barrier by research-method category. Use ALL that apply
+      (barriers are multi-dimensional):
+        - ia: navigation, findability, mental models, labeling, information architecture
+        - accessibility: assistive tech, WCAG, screen readers, motor/vision impairments
+        - performance: speed, latency, load times, system responsiveness
+        - content: readability, comprehension, terminology, tone, info quality
+        - task-flow: task completion, workflow steps, error recovery, form design
+        - cognitive: mental load, decision complexity, memory demands, learning curve
+        - other: ONLY if no category genuinely applies — do not force-fit a barrier
+          into a category it doesn't belong to. Prefer a real category when one fits;
+          use 'other' when none do.
+
+      Example: "Can't find benefit status" = [ia, task-flow].
+      "App crashes frequently" = [performance].
+      "Instructions confusing" = [content, cognitive].
 
   - key: discovered_metrics
     pool: true

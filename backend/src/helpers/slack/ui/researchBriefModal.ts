@@ -216,7 +216,7 @@ export const researchBriefModal = {
       optional: true,
       label: {
         type: "plain_text",
-        text: "Or specify custom method (e.g., combined approaches)",
+        text: "Custom method (optional)",
       },
       element: {
         type: "plain_text_input",
