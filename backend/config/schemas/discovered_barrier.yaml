@@ -1,6 +1,15 @@
 # Discovered barrier — pain point or obstacle from desk research or survey
-# Emitted by: desk_research, survey_synthesis
-# Consumed by: stakeholder_synthesis, research_brief, research_plan
+# Emitted by: desk_research, survey_synthesis, stakeholder_synthesis
+# Consumed by: research_brief, research_plan
+#
+# barrier_categories enables method-aware derivation: barriers outside the
+# chosen method's coverage become suggested out-of-scope items with traceable
+# reason. Array (not single value) because barriers are multi-dimensional.
+#
+# LAYER 3 RULE (for method-aware derivation):
+# - 'other'-tagged barriers match NO method's coverage map
+# - They must SURFACE FOR MANUAL researcher categorization
+# - NOT auto-included, NOT auto-excluded from scope — flagged, not silently routed
 type: object
 properties:
   id:
@@ -12,6 +21,22 @@ properties:
   summary:
     type: string
     description: "1-2 sentence description of the barrier"
+  barrier_categories:
+    type: array
+    items:
+      type: string
+      enum: [ia, accessibility, performance, content, task-flow, cognitive, other]
+    description: |
+      Research-method categories this barrier falls under. Array because barriers
+      are multi-dimensional (e.g., screen-reader navigation is BOTH ia AND accessibility).
+      Categories:
+      - ia: Information architecture, navigation, findability, mental models, labeling
+      - accessibility: Assistive technology, WCAG compliance, screen readers, motor/vision
+      - performance: Speed, latency, load times, system responsiveness
+      - content: Readability, comprehension, terminology, tone, information quality
+      - task-flow: Task completion, workflow steps, error recovery, form design
+      - cognitive: Mental load, decision complexity, memory demands, learning curve
+      - other: Escape hatch when no category genuinely applies (surfaces for manual review)
   magnitude:
     type: string
     nullable: true

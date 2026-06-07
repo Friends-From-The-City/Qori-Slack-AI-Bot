@@ -4,8 +4,8 @@
  * Per ADR 0025: Unified interface for destructive operations,
  * gated to project owners only.
  *
- * Phase 1 ACTIVE: DSAR, Delete Study, Manage Stakeholder
- * Phase 1 PREVIEW (disabled): Close Study, Legal Holds
+ * Phase 1: DSAR, Delete Study, Manage Stakeholder
+ * Phases 2-3 (Close Study, Legal Holds) tracked in ADR 0025 backlog.
  */
 
 import type { View } from '@slack/types';
@@ -24,8 +24,7 @@ export type StakeholderInfo = {
 /**
  * Admin Center modal for project owners.
  *
- * Shows active actions (DSAR, Delete Study, Manage Stakeholder) and preview actions
- * (Close Study, Legal Holds) that are visibly disabled.
+ * Shows active actions: DSAR, Delete Study, Manage Stakeholder.
  */
 export function buildAdminCenterModal(project: Project, stakeholder: StakeholderInfo): View {
   const metadata: AdminCenterMetadata = {
@@ -117,35 +116,6 @@ export function buildAdminCenterModal(project: Project, stakeholder: Stakeholder
           action_id: 'admin-delete-study-open',
           style: 'danger',
         },
-      },
-
-      { type: 'divider' },
-
-      // === PREVIEW ACTIONS (Future — visibly disabled) ===
-      {
-        type: 'context',
-        elements: [
-          {
-            type: 'mrkdwn',
-            text: '_Coming in a future release:_',
-          },
-        ],
-      },
-      {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: '~*Close Study*~\n_Mark study complete and start the data retention period._',
-        },
-        // NO accessory button — visibly absent
-      },
-      {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: '~*Legal Holds*~\n_View active holds on this project._',
-        },
-        // NO accessory button — visibly absent
       },
 
       { type: 'divider' },

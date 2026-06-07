@@ -18,6 +18,7 @@ export interface BriefEntryModalMetadata {
 interface CascadeFields {
   method?: string;
   participants?: string;
+  recruitment?: string;
   questions?: string;
   outOfScope?: string;
 }
@@ -70,25 +71,14 @@ function synthesizeCascadeFields(upstream: Record<string, string>, _artifacts: D
     }
   }
 
-  // Out of scope — items discovery already established
-  const barriers = upstream.upstream_discovered_barriers;
-  if (barriers) {
-    const established: string[] = [];
-    // Look for high-confidence barriers that are already proven
-    const barrierLines = barriers.split('\n').filter((l: string) => l.trim());
-    for (const line of barrierLines) {
-      const titleMatch = line.match(/title:\s*(.+)/i);
-      if (titleMatch) {
-        established.push(titleMatch[1].trim());
-      }
-    }
-    if (established.length > 0) {
-      result.outOfScope = established.slice(0, 2).map(e => `${e} (already established by discovery)`).join('\n');
-    }
-  }
+  // Out of scope — NOT pre-filled from discovery barriers (that was semantically wrong).
+  // Barriers are inputs to research, not scope exclusions. Layer 3 will derive
+  // method-aware exclusions once barrier typing is proven. For now, leave empty
+  // for researcher input. The LLM task has correct guidance for real scope boundaries.
 
-  // Participants — synthesize from discovery evidence
+  // Participants — synthesize COMPOSITION from discovery evidence (no recruitment)
   const segments: string[] = [];
+  const recruitmentChannels: string[] = [];
 
   // Check for AT user evidence from constraints or survey
   const constraintText = upstream.upstream_stakeholder_constraints || '';
@@ -100,6 +90,9 @@ function synthesizeCascadeFields(upstream: Record<string, string>, _artifacts: D
       barrierText.match(/screen.reader|assistive.tech|accessibility/i)) {
     segments.push('3 screen reader users');
     segments.push('2 voice control users');
+    // Accessibility evidence suggests these recruitment channels
+    recruitmentChannels.push('VA Section 508 Office');
+    recruitmentChannels.push('MHV coordinators');
   }
 
   // Check for age-related patterns
@@ -108,8 +101,14 @@ function synthesizeCascadeFields(upstream: Record<string, string>, _artifacts: D
     segments.push('at least 3 aged 65+');
   }
 
+  // Composition only — no recruitment text
   if (segments.length > 0) {
-    result.participants = `8-12 Veterans, including ${segments.join(', ')}. Mix of iOS and Android users. Recruited via VA Section 508 Office and MHV coordinators.`;
+    result.participants = `8-12 Veterans, including ${segments.join(', ')}. Mix of iOS and Android users.`;
+  }
+
+  // Recruitment separately
+  if (recruitmentChannels.length > 0) {
+    result.recruitment = recruitmentChannels.join(', ');
   }
 
   return result;
@@ -416,7 +415,7 @@ export async function buildBriefEntryModal(options: BuildBriefEntryModalOptions)
         }
       }
 
-      // Pre-populate participants
+      // Pre-populate participants (composition only)
       if (cascade.participants) {
         const partIdx = modalBlocks.findIndex((b: Record<string, unknown>) => b.block_id === 'participant_approach_block');
         if (partIdx !== -1) {
@@ -425,6 +424,20 @@ export async function buildBriefEntryModal(options: BuildBriefEntryModalOptions)
             element: {
               ...(modalBlocks[partIdx].element as Record<string, unknown>),
               initial_value: cascade.participants,
+            },
+          };
+        }
+      }
+
+      // Pre-populate recruitment sources (separate from composition)
+      if (cascade.recruitment) {
+        const recruitIdx = modalBlocks.findIndex((b: Record<string, unknown>) => b.block_id === 'recruitment_sources_block');
+        if (recruitIdx !== -1) {
+          modalBlocks[recruitIdx] = {
+            ...modalBlocks[recruitIdx],
+            element: {
+              ...(modalBlocks[recruitIdx].element as Record<string, unknown>),
+              initial_value: cascade.recruitment,
             },
           };
         }

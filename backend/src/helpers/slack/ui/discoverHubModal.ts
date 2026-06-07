@@ -3,12 +3,10 @@
  *
  * Sections-with-accessories pattern (matches /qori-plan hub).
  * No input blocks → no submit button required.
- * Discovery visibility section and guidance injected dynamically
- * by the command handler.
+ * Artifact list is injected dynamically by the command handler.
  */
 
 /** Block IDs used by the command handler to inject dynamic content. */
-export const DISCOVERY_GUIDANCE_BLOCK_ID = 'discovery_guidance_block';
 export const DISCOVERY_ARTIFACTS_BLOCK_ID = 'discovery_artifacts_block';
 
 export const discoverHubModal = {
@@ -29,20 +27,6 @@ export const discoverHubModal = {
         {
           type: "mrkdwn",
           text: "Pre-study research that informs your brief. Upload documents and Qori synthesizes themes, barriers, and recommendations.",
-        },
-      ],
-    },
-    {
-      type: "divider",
-    },
-    // D2 guidance — replaced dynamically by command handler
-    {
-      type: "context",
-      block_id: DISCOVERY_GUIDANCE_BLOCK_ID,
-      elements: [
-        {
-          type: "mrkdwn",
-          text: "_Start with desk research — reports and background docs build the foundation._",
         },
       ],
     },
