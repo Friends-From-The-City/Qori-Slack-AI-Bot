@@ -6,8 +6,12 @@ import { requestStudyChangesModal } from './ui/requestStudyChangesModal';
 // resolveStudyFromName retained for other flows (request changes, non-brief approvals) — migrate in future step
 import { getStudyByProjectAndName, resolveStudyFromName } from '../../services/research_study.service';
 import { getProjectByChannelId } from '../../services/project.service';
+import sequelize from '../../database';
+import type { ResearchStudy as ResearchStudyModel } from '../../database/models/research_study';
 
 import { addStudyStatus, getStudyStatusByStudyId } from '../../services/study-status.service';
+
+const ResearchStudyModelClass = sequelize.models.ResearchStudy as typeof ResearchStudyModel;
 
 type DocumentType = 'plan' | 'brief' | 'discussion';
 
@@ -58,6 +62,32 @@ export async function handleApprove(
   const { studyName, channelId, url, briefData } = JSON.parse(
     (body.actions[0] as { value: string }).value,
   ) as ActionValue;
+
+  // ── Stale button guard for briefs ──
+  if (type === 'brief') {
+    const project = await getProjectByChannelId(channelId);
+    if (project) {
+      const study = await getStudyByProjectAndName(project.id, studyName);
+      if (study?.brief_status === 'approved') {
+        // Already approved — stale button
+        await client.chat.postEphemeral({
+          channel: body.channel?.id || body.user.id,
+          user: body.user.id,
+          text: `This brief has already been approved. No action needed.`,
+        });
+        return;
+      }
+      if (study?.brief_status === 'changes_requested') {
+        // Waiting for researcher resubmit — can't approve old version
+        await client.chat.postEphemeral({
+          channel: body.channel?.id || body.user.id,
+          user: body.user.id,
+          text: `You've already requested changes on this brief. Wait for the researcher to resubmit.`,
+        });
+        return;
+      }
+    }
+  }
 
   await client.views.open({
     trigger_id: body.trigger_id,
@@ -112,6 +142,28 @@ export async function handleApproveSubmission(
       if (study && study.path) {
         existingStudy = study as unknown as ResearchStudy;
         studyId = study.id;
+
+        // ── STALE BUTTON GUARD: Check current status before approving ──
+        if (study.brief_status === 'approved') {
+          console.log(`[GUARD] Blocked stale approve: study ${studyId} already approved`);
+          try {
+            await client.chat.postMessage({
+              channel: user,
+              text: `This brief has already been approved. No action needed.`,
+            });
+          } catch { /* DM failed */ }
+          return;
+        }
+        if (study.brief_status === 'changes_requested') {
+          console.log(`[GUARD] Blocked stale approve: study ${studyId} awaiting resubmit`);
+          try {
+            await client.chat.postMessage({
+              channel: user,
+              text: `You've already requested changes on this brief. Wait for the researcher to resubmit before approving.`,
+            });
+          } catch { /* DM failed */ }
+          return;
+        }
       }
     }
   } else {
@@ -131,75 +183,77 @@ export async function handleApproveSubmission(
   });
 
   if (type === 'brief') {
-    const researchTeamChannelId = process.env.RESEARCH_TEAM_CHANNEL_ID || channelId;
-
-    // Study always exists at brief-approval time (created via /qori-start).
+    // Brief approval: DM only — no channel posts
     // Guard against missing context (edge case: old brief buttons before Phase 2D).
     if (!studyId || !projectId) {
       console.error(`❌ Brief approval missing context: studyId=${studyId}, projectId=${projectId}`);
-      await client.chat.postMessage({
-        channel: researchTeamChannelId,
-        text: `✅ *${studyName}* brief approved by <@${user}>.\n\n⚠️ Cannot offer "Create Research Plan" button — study context missing. Run \`/qori-plan\` manually.`,
-      });
+      // Still notify researcher via DM
+      if (existingStudy?.created_by) {
+        try {
+          const im = await client.conversations.open({ users: existingStudy.created_by });
+          await client.chat.postMessage({
+            channel: (im.channel as { id: string }).id,
+            text: `✅ *${studyName}* brief approved by <@${user}>.\n\n⚠️ Cannot offer "Create Research Plan" button — study context missing. Run \`/qori-plan\` manually.`,
+          });
+        } catch { /* DM failed, nothing more we can do */ }
+      }
       return;
     }
 
-    const ctaButton = {
-      type: 'button',
-      text: { type: 'plain_text', text: 'Create Research Plan', emoji: true },
-      style: 'primary',
-      action_id: 'create_research_plan_from_brief',
-      value: JSON.stringify({ studyName, studyId, projectId, briefUrl: url, channelId: researchTeamChannelId }),
-    };
-
-    const nextStepText = 'The research brief has been approved. Next step: create the research plan.';
-
+    // ── Update brief_status to approved ──
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const blocks: any[] = [
-        {
-          type: 'header',
-          text: {
-            type: 'plain_text',
-            text: `Research Brief Approved \u2014 ${studyName}`,
-            emoji: true,
-          },
-        },
-        {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: `*Approved by:* <@${user}>\n*Brief:* <${url}|View on GitHub>`,
-          },
-        },
-        {
-          type: 'section',
-          text: { type: 'mrkdwn', text: nextStepText },
-        },
-        {
-          type: 'actions',
-          elements: [ctaButton],
-        },
-      ];
-      await client.chat.postMessage({
-        channel: researchTeamChannelId,
-        text: `*Research Brief Approved*\n\n*Study:* ${studyName}\n*Approved by:* <@${user}>`,
-        blocks,
-      });
-    } catch (err: unknown) {
-      console.error('Failed to send approval message to research team:', err);
-      await client.chat.postMessage({
-        channel: channelId,
-        text: `*${studyName}* ${typeLabelMap[type]} approved by <@${user}>!`,
-      });
+      await ResearchStudyModelClass.update(
+        { brief_status: 'approved' },
+        { where: { id: studyId } },
+      );
+      console.log(`✅ Brief status set to approved for study ${studyId}`);
+    } catch (updateErr) {
+      console.error('Failed to update brief status to approved:', updateErr);
+      // Non-fatal: approval is processed, just status tracking failed
     }
 
+    // Send approval notification to researcher via DM (not channel)
     if (existingStudy && existingStudy.created_by) {
+      const ctaButton = {
+        type: 'button',
+        text: { type: 'plain_text', text: 'Create Research Plan', emoji: true },
+        style: 'primary',
+        action_id: 'create_research_plan_from_brief',
+        value: JSON.stringify({ studyName, studyId, projectId, briefUrl: url, channelId }),
+      };
+
       try {
         const im = await client.conversations.open({ users: existingStudy.created_by });
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const blocks: any[] = [
+          {
+            type: 'header',
+            text: {
+              type: 'plain_text',
+              text: `Research Brief Approved — ${studyName}`,
+              emoji: true,
+            },
+          },
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: `*Approved by:* <@${user}>\n*Brief:* <${url}|View on GitHub>`,
+            },
+          },
+          {
+            type: 'section',
+            text: { type: 'mrkdwn', text: 'The research brief has been approved. Next step: create the research plan.' },
+          },
+          {
+            type: 'actions',
+            elements: [ctaButton],
+          },
+        ];
         await client.chat.postMessage({
           channel: (im.channel as { id: string }).id,
           text: `*${studyName}* research brief approved by <@${user}>! You can now create the research plan.`,
+          blocks,
         });
       } catch (err: unknown) {
         console.error('Failed to send DM to study creator:', err);
@@ -234,6 +288,32 @@ export async function handleRequestChanges(
   const { studyName, channelId, url } = JSON.parse(
     (body.actions[0] as { value: string }).value,
   ) as ActionValue;
+
+  // ── Stale button guard for briefs ──
+  if (type === 'brief') {
+    const project = await getProjectByChannelId(channelId);
+    if (project) {
+      const study = await getStudyByProjectAndName(project.id, studyName);
+      if (study?.brief_status === 'approved') {
+        // Already approved — stale button
+        await client.chat.postEphemeral({
+          channel: body.channel?.id || body.user.id,
+          user: body.user.id,
+          text: `This brief has already been approved. No action needed.`,
+        });
+        return;
+      }
+      if (study?.brief_status === 'changes_requested') {
+        // Already requested changes — stale button
+        await client.chat.postEphemeral({
+          channel: body.channel?.id || body.user.id,
+          user: body.user.id,
+          text: `You've already requested changes on this brief. Wait for the researcher to resubmit.`,
+        });
+        return;
+      }
+    }
+  }
 
   let fileOptions: FileOption[] = [];
   try {
@@ -330,21 +410,76 @@ export async function handleRequestChangesSubmission(
   console.log('Raw view.state.values:', Object.keys(values).length, 'blocks');
 
   // Resolve study first to get study_id for addStudyStatus (required by NOT NULL constraint)
-  const resolvedForChanges = await resolveStudyFromName(studyName);
-  const study = resolvedForChanges?.study as unknown as ResearchStudy | null;
+  let studyId: number | undefined;
+  let studyCreatedBy: string | undefined;
+
+  if (type === 'brief') {
+    // Brief: use project-based lookup (consistent with approval flow)
+    const project = await getProjectByChannelId(channelId);
+    if (project) {
+      const study = await getStudyByProjectAndName(project.id, studyName);
+      if (study) {
+        // ── STALE BUTTON GUARD: Check current status before requesting changes ──
+        if (study.brief_status === 'approved') {
+          console.log(`[GUARD] Blocked stale request-changes: study ${study.id} already approved`);
+          try {
+            await client.chat.postMessage({
+              channel: user,
+              text: `This brief has already been approved. No changes can be requested.`,
+            });
+          } catch { /* DM failed */ }
+          return;
+        }
+        if (study.brief_status === 'changes_requested') {
+          console.log(`[GUARD] Blocked stale request-changes: study ${study.id} already awaiting resubmit`);
+          try {
+            await client.chat.postMessage({
+              channel: user,
+              text: `You've already requested changes on this brief. Wait for the researcher to resubmit.`,
+            });
+          } catch { /* DM failed */ }
+          return;
+        }
+
+        studyId = study.id;
+        studyCreatedBy = study.created_by;
+
+        // ── Update brief_status to changes_requested and store feedback ──
+        try {
+          await ResearchStudyModelClass.update(
+            {
+              brief_status: 'changes_requested',
+              brief_change_feedback: changeFeedback,
+            },
+            { where: { id: study.id } },
+          );
+          console.log(`📋 Brief status set to changes_requested, feedback stored for study ${study.id}`);
+        } catch (updateErr) {
+          console.error('Failed to update brief status to changes_requested:', updateErr);
+        }
+      }
+    }
+  } else {
+    // Plan/discussion: use name-based lookup
+    const resolvedForChanges = await resolveStudyFromName(studyName);
+    if (resolvedForChanges?.study) {
+      studyId = resolvedForChanges.studyId;
+      studyCreatedBy = (resolvedForChanges.study as unknown as ResearchStudy).created_by;
+    }
+  }
 
   await addStudyStatus({
-    study_id: study?.id,
+    study_id: studyId,
     requested_by: user,
     status: 'need_changes',
     reason: changeFeedback,
     path: url,
   });
 
-  if (study?.created_by) {
+  if (studyCreatedBy) {
     try {
       const im = await client.conversations.open({
-        users: study.created_by,
+        users: studyCreatedBy,
       });
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const dmBlocks: any[] = [
@@ -391,6 +526,40 @@ export async function handleRequestChangesSubmission(
           },
         },
       ];
+
+      // ── For briefs, add Resubmit CTA button ──
+      if (type === 'brief' && studyId) {
+        dmBlocks.push(
+          {
+            type: 'context',
+            elements: [
+              {
+                type: 'mrkdwn',
+                text: '_Edit the brief directly in GitHub, then click Resubmit when ready for re-review._',
+              },
+            ],
+          },
+          {
+            type: 'actions',
+            elements: [
+              {
+                type: 'button',
+                text: { type: 'plain_text', text: 'Resubmit for Approval', emoji: true },
+                style: 'primary',
+                action_id: 'brief_resubmit',
+                value: JSON.stringify({
+                  studyId,
+                  studyName,
+                  channelId,
+                  url,
+                  documentType: 'brief',
+                }),
+              },
+            ],
+          },
+        );
+      }
+
       await client.chat.postMessage({
         channel: (im.channel as { id: string }).id,
         text: `Changes requested for *${studyName}* ${type} by <@${user}>`,

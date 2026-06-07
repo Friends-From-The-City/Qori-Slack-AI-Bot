@@ -90,6 +90,27 @@ export function projectCreationModal(channelId: string) {
         },
       },
       {
+        type: "input",
+        block_id: "project_stakeholder",
+        optional: true,
+        label: {
+          type: "plain_text",
+          text: "Who approves research briefs for this team?",
+        },
+        hint: {
+          type: "plain_text",
+          text: "The stakeholder who reviews and approves briefs before research begins. Leave blank if you (the owner) will approve.",
+        },
+        element: {
+          type: "users_select",
+          action_id: "stakeholder_select",
+          placeholder: {
+            type: "plain_text",
+            text: "Select a stakeholder",
+          },
+        },
+      },
+      {
         type: "divider",
       },
       {

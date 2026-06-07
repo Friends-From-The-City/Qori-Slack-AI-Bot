@@ -20,10 +20,8 @@ import type { ResearchQuestion, TargetBarrier } from '../../../types/cascade';
 
 import { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo } from '../../github';
 import { getStudyById } from '../../../services/research_study.service';
-import { getProjectById } from '../../../services/project.service';
 import { processYamlTemplate } from '../../yamlProcessor';
 import { addStudyStatus } from '../../../services/study-status.service';
-import { sendStudyResultMessage, generateStudyResultBlocks } from '../ui/studyResultBlocks';
 import { calculatePerPersonCompensation } from '../../../utils/compensationCalculator';
 import { buildTimelinePhases, buildTimelineSummary, type TimelinePhase } from '../../../utils/timelineComputation';
 import { readUpstreamVariablesByContext, type VariableContext } from '../../studyVariables';
@@ -86,6 +84,17 @@ async function handlePlanSubmission({ ack, body, view, client }: SlackViewMiddle
 
   console.log('🚀 ~ Research Plan Generator ~ studyName:', studyName, 'studyId:', studyId, 'projectId:', projectId);
 
+  // Post "working" message to researcher's DM (consistent with completion DM)
+  try {
+    await client.chat.postMessage({
+      channel: body.user.id,
+      text: `:hourglass_flowing_sand: Creating research plan for *${studyName}*... This may take a moment.`,
+    });
+  } catch (err) {
+    const progressErr = err instanceof Error ? err.message : String(err);
+    console.warn('Could not post plan progress message:', progressErr);
+  }
+
   // Fetch study by ID (not name) — Phase 2D pattern
   const study = await getStudyById(studyId);
   if (!study) {
@@ -115,12 +124,6 @@ async function handlePlanSubmission({ ack, body, view, client }: SlackViewMiddle
 
   // Build VariableContext from validated metadata
   const variableContext: VariableContext = { projectId, studyId };
-
-  // Resolve target channel: project's bound channel takes priority over trigger channel
-  // This ensures success messages land in the project's dedicated channel, not where
-  // the modal was triggered from (which may be a different project's channel).
-  const projectForChannel = await getProjectById(projectId);
-  const targetChannel = projectForChannel?.channel_id || channelId;
 
   // Form extraction helper — Bolt's view state values are loosely typed
   const extract = (blockId: string, actionId: string): string | string[] | null => {
@@ -261,10 +264,8 @@ async function handlePlanSubmission({ ack, body, view, client }: SlackViewMiddle
     created_by: userId || body.user.id,
   };
   await research_planService.createResearchPlan(planData);
-  const blocks = generateStudyResultBlocks(studyName, study, url, targetChannel, 'plan');
-  await sendStudyResultMessage(client, targetChannel, studyName, blocks, 'plan');
 
-  // Send DM with next-step suggestion
+  // Notify researcher via DM (primary notification — no channel posting)
   const dmUserId = userId || body.user.id;
   try {
     const im = await client.conversations.open({ users: dmUserId });

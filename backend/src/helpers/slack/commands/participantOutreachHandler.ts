@@ -1091,8 +1091,8 @@ async function handleAddParticipantSubmit({ ack, body, view, client }: SlackView
     const savedParticipant = await studyParticipantService.createParticipant(participantData, fileData as any);
     console.log("🚀 ~ handleAddParticipantSubmit ~ savedParticipant:", savedParticipant);
 
-    // Check if this participant brings the total to 3 and send milestone message
-    const milestoneCheck = await studyParticipantService.checkStudyMilestone(study.id);
+    // Check if this participant brings the total to 5 and send milestone message
+    const milestoneCheck = await studyParticipantService.checkStudyMilestone(study.id, 5);
     const githubUrl = `https://github.com/${process.env.GITHUB_OWNER}/${process.env.GITHUB_REPO}/tree/main/${study.path}/03-fieldwork/${study.name}_participant_tracker.md`;
     if (milestoneCheck.hasReachedMilestone) {
       // Generate a milestone message for the channel
@@ -1135,6 +1135,7 @@ async function handleAddParticipantSubmit({ ack, body, view, client }: SlackView
           }
         ]
       };
+      // Observer recruitment CTA posts to channel intentionally (recruiting observers)
       await client.chat.postMessage({
         channel: channelId,
         ...milestoneMessage

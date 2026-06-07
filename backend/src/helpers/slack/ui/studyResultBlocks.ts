@@ -2,6 +2,7 @@ import type { KnownBlock } from '@slack/types';
 import type { WebClient } from '@slack/web-api';
 import type { ResearchStudyUserRole } from '../../../database/models/research_study_user_role';
 import { resolveStudyFromName } from '../../../services/research_study.service';
+import { getProjectApprover, type ApproverInfo } from '../../../services/authorization.service';
 
 interface UserRole {
   user_id: string;
@@ -25,23 +26,9 @@ export const generateStudyResultBlocks = (
   channelId: string,
   documentType: string,
 ) => {
+  // Plan approval removed per user request — brief (scope) is the only approval gate.
+  // Plan is execution detail; researcher owns it without a second approval step.
   const actionButtons: Record<string, Record<string, unknown>[]> = {
-    plan: [
-      {
-        type: 'button',
-        text: { type: 'plain_text', text: 'Approve Plan' },
-        style: 'primary',
-        action_id: 'approve_plan',
-        value: JSON.stringify({ studyName, channelId, url }),
-      },
-      {
-        type: 'button',
-        text: { type: 'plain_text', text: 'Request Plan Changes' },
-        style: 'danger',
-        action_id: 'request_changes_plan',
-        value: JSON.stringify({ studyName, channelId, url }),
-      },
-    ],
     brief: [
       {
         type: 'button',
@@ -182,7 +169,18 @@ const generateChannelBlocks = (studyName: string, study: StudyWithRoles | null, 
   return blocks;
 };
 
-// Generic function to send study result message
+/**
+ * Send approval request to the project's designated approver.
+ *
+ * Routing ladder (per stakeholder role design):
+ * 1. Stakeholder (role='stakeholder') — the designated approver
+ * 2. Owner (role='owner') — fallback if no stakeholder set
+ * 3. Channel — final fallback (should never fire per ADR 0025 owner guarantee)
+ *
+ * The message includes correct role labeling:
+ * - "...as the stakeholder for [project]" if routing to stakeholder
+ * - "...as the owner for [project]" if routing to owner (fallback)
+ */
 export const sendStudyResultMessage = async (
   client: WebClient,
   channelId: string,
@@ -194,76 +192,64 @@ export const sendStudyResultMessage = async (
   const fallbackText = `Here's your research ${documentType} for *${studyName}*`;
 
   try {
-    // Get the study object first (may be null for briefs from requests)
-    let study: StudyWithRoles | null = null;
+    // Resolve study to get project ID for approver lookup
+    let projectId: number | null = null;
+    let projectName = studyName;
     try {
       const resolved = await resolveStudyFromName(studyName);
-      study = resolved?.study as StudyWithRoles | null;
-      console.log("🚀 ~ sendStudyResultMessage ~ study:", study);
+      projectId = resolved?.projectId || null;
+      // Use study name as fallback for project name (study inherits project name in Phase 2D)
+      projectName = resolved?.study?.name || studyName;
+      console.log("🚀 ~ sendStudyResultMessage ~ projectId:", projectId);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
       console.log("⚠️ Study not found (may be from request):", message);
-      // Study might not exist yet (e.g., brief from request)
     }
 
-    // Extract URL from the blocks - find the section with GitHub URL
-    const urlSection = blocks.find(block =>
-      block.type === 'section' &&
-      block.text &&
-      (block.text as Record<string, unknown>).text &&
-      ((block.text as Record<string, unknown>).text as string).includes('github.com')
-    );
-
-    if (!urlSection) {
-      throw new Error('Could not find GitHub URL in blocks');
+    // Look up project approver (stakeholder → owner → channel fallback)
+    let approver: ApproverInfo | null = null;
+    if (projectId) {
+      approver = await getProjectApprover(projectId);
+      console.log("🚀 ~ sendStudyResultMessage ~ approver:", approver);
     }
 
-    const urlMatch = ((urlSection.text as Record<string, unknown>).text as string).match(/<(.*?)\|/);
-    if (!urlMatch) {
-      throw new Error('Could not extract URL from GitHub section');
-    }
+    if (approver) {
+      // Route to the approver's DM with role-labeled message
+      const roleLabel = approver.source === 'stakeholder' ? 'stakeholder' : 'owner';
+      const contextMessage = `You're receiving this as the *${roleLabel}* for *${projectName}*.`;
 
-    const url = urlMatch[1];
-    console.log("🚀 ~ sendStudyResultMessage ~ url:", url);
+      try {
+        const im = await client.conversations.open({ users: approver.userId });
 
-    // Send simplified message to channel (without action buttons)
-    const channelBlocks = generateChannelBlocks(studyName, study, url, documentType);
-    console.log("🚀 ~ sendStudyResultMessage ~ channelBlocks:", channelBlocks);
+        if (im.channel?.id) {
+          // Add context block at the top of the message
+          const blocksWithContext: Record<string, unknown>[] = [
+            {
+              type: 'context',
+              elements: [
+                {
+                  type: 'mrkdwn',
+                  text: contextMessage,
+                },
+              ],
+            },
+            ...blocks,
+          ];
 
-    // await client.chat.postMessage({
-    //   channel: channelId,
-    //   text: fallbackText,
-    //   blocks: channelBlocks,
-    // });
-
-    // Send complete message with action buttons to each user in userRoles via DM
-    // Only if study exists and has userRoles
-    if (study && study.userRoles && Array.isArray(study.userRoles) && study.userRoles.length > 0) {
-      // Use Promise.all to send DMs concurrently
-      await Promise.all(
-        study.userRoles.map(async ({ user_id: userId }: UserRole) => {
-          try {
-            // Open DM with user
-            const im = await client.conversations.open({
-              users: userId,
-            });
-
-            // Send complete message with action buttons
-            if (im.channel?.id) {
-              await client.chat.postMessage({
-                channel: im.channel.id,
-                text: `🔔 New ${documentType} for *${studyName}* - Please review and take action`,
-                blocks: blocks as unknown as KnownBlock[],
-              });
-            }
-          } catch (error) {
-            console.error(`Failed to send DM to user ${userId}:`, error);
-          }
-        }),
-      );
+          await client.chat.postMessage({
+            channel: im.channel.id,
+            text: `🔔 New ${documentType} for *${studyName}* - Please review and take action`,
+            blocks: blocksWithContext as unknown as KnownBlock[],
+          });
+          console.log(`✅ Sent approval request to ${roleLabel} ${approver.userId}`);
+        }
+      } catch (error) {
+        console.error(`Failed to send DM to ${roleLabel} ${approver.userId}:`, error);
+        // Fall through to channel fallback
+      }
     } else {
-      // If no study or userRoles, send to channel instead
-      console.log("⚠️ No study or userRoles found, sending to channel instead");
+      // No approver found — channel fallback (should not happen per ADR 0025)
+      console.log("⚠️ No approver found, sending to channel instead");
       await client.chat.postMessage({
         channel: channelId,
         text: fallbackText,

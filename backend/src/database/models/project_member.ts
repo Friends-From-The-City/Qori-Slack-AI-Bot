@@ -18,8 +18,11 @@ import type { Project } from './project';
 
 /**
  * Membership role values.
- * - owner: Project creator, can delete project
+ * - owner: Project creator, can delete project and access Admin Center
  * - member: Can access all studies in project
+ *
+ * Note: Stakeholder is a SEPARATE FLAG (is_stakeholder), not a role.
+ * An owner can also be the stakeholder. The flag doesn't affect role.
  */
 export type MembershipRole = 'owner' | 'member';
 
@@ -43,6 +46,7 @@ class ProjectMember extends Model<
   declare role: CreationOptional<MembershipRole>;
   declare source: CreationOptional<MembershipSource>;
   declare added_at: CreationOptional<Date>;
+  declare is_stakeholder: CreationOptional<boolean>;
 
   // — Association mixins —
   declare getProject: BelongsToGetAssociationMixin<Project>;
@@ -98,6 +102,11 @@ export default (sequelize: Sequelize) => {
         type: DataTypes.DATE,
         allowNull: false,
         defaultValue: sequelize.literal('CURRENT_TIMESTAMP'),
+      },
+      is_stakeholder: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
       },
     },
     {

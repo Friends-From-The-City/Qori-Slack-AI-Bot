@@ -101,7 +101,7 @@ const addResearchStudyWithRoles = async (data: StudyInput): Promise<ResearchStud
 const getStudyById = async (studyId: number): Promise<ResearchStudy | null> => {
   const study = await ResearchStudyModel.findOne({
     where: { id: studyId },
-    attributes: ['id', 'project_id', 'name', 'slug', 'description', 'path', 'created_by', 'researcher_name', 'researcher_email', 'created_at', 'updated_at', 'link', 'parsed_budget_amount', 'target_participants', 'session_timezone'],
+    attributes: ['id', 'project_id', 'name', 'slug', 'description', 'path', 'created_by', 'researcher_name', 'researcher_email', 'created_at', 'updated_at', 'link', 'parsed_budget_amount', 'target_participants', 'session_timezone', 'brief_status', 'brief_change_feedback', 'brief_reviewer_id'],
     include: [
       { model: UserRoleModel, as: 'userRoles', attributes: ['user_id', 'role', 'created_at'] },
       { model: ProjectModel, as: 'project', attributes: ['id', 'name', 'slug'] },
@@ -125,7 +125,7 @@ const getStudyById = async (studyId: number): Promise<ResearchStudy | null> => {
 const getStudyByProjectAndName = async (projectId: number, name: string): Promise<ResearchStudy | null> => {
   const study = await ResearchStudyModel.findOne({
     where: { project_id: projectId, name },
-    attributes: ['id', 'project_id', 'name', 'slug', 'description', 'path', 'created_by', 'researcher_name', 'researcher_email', 'created_at', 'updated_at', 'link', 'parsed_budget_amount', 'target_participants', 'session_timezone'],
+    attributes: ['id', 'project_id', 'name', 'slug', 'description', 'path', 'created_by', 'researcher_name', 'researcher_email', 'created_at', 'updated_at', 'link', 'parsed_budget_amount', 'target_participants', 'session_timezone', 'brief_status', 'brief_change_feedback', 'brief_reviewer_id'],
     include: [
       { model: UserRoleModel, as: 'userRoles', attributes: ['user_id', 'role', 'created_at'] },
       { model: ProjectModel, as: 'project', attributes: ['id', 'name', 'slug'] },

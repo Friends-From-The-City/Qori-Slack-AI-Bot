@@ -4,7 +4,7 @@
  * Per ADR 0025: Unified interface for destructive operations,
  * gated to project owners only.
  *
- * Phase 1 ACTIVE: DSAR, Delete Study
+ * Phase 1 ACTIVE: DSAR, Delete Study, Manage Stakeholder
  * Phase 1 PREVIEW (disabled): Close Study, Legal Holds
  */
 
@@ -16,17 +16,29 @@ export interface AdminCenterMetadata {
   projectName: string;
 }
 
+export type StakeholderInfo = {
+  userId: string;
+  displayName: string;
+} | null;
+
 /**
  * Admin Center modal for project owners.
  *
- * Shows active actions (DSAR, Delete Study) and preview actions
+ * Shows active actions (DSAR, Delete Study, Manage Stakeholder) and preview actions
  * (Close Study, Legal Holds) that are visibly disabled.
  */
-export function buildAdminCenterModal(project: Project): View {
+export function buildAdminCenterModal(project: Project, stakeholder: StakeholderInfo): View {
   const metadata: AdminCenterMetadata = {
     projectId: project.id,
     projectName: project.name,
   };
+
+  // Build stakeholder status text
+  const stakeholderText = stakeholder
+    ? `*Stakeholder:* ${stakeholder.displayName}\nApproves research briefs for this project.`
+    : '*Stakeholder:* Not set\n_Brief approvals route to the project owner._';
+
+  const stakeholderButtonText = stakeholder ? 'Change' : 'Designate';
 
   return {
     type: 'modal',
@@ -45,7 +57,41 @@ export function buildAdminCenterModal(project: Project): View {
       },
       { type: 'divider' },
 
-      // === ACTIVE ACTIONS (Phase 1) ===
+      // === TEAM GOVERNANCE ===
+      {
+        type: 'context',
+        elements: [
+          {
+            type: 'mrkdwn',
+            text: '*Team Governance*',
+          },
+        ],
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: stakeholderText,
+        },
+        accessory: {
+          type: 'button',
+          text: { type: 'plain_text', text: stakeholderButtonText },
+          action_id: 'admin-stakeholder-manage',
+        },
+      },
+
+      { type: 'divider' },
+
+      // === DATA MANAGEMENT ===
+      {
+        type: 'context',
+        elements: [
+          {
+            type: 'mrkdwn',
+            text: '*Data Management*',
+          },
+        ],
+      },
       {
         type: 'section',
         text: {

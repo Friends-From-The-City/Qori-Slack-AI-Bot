@@ -1,6 +1,8 @@
 import { researchBriefModal } from './researchBriefModal';
 import { loadDiscoveryArtifacts, aggregateDiscoveryVariables, type DiscoveryArtifact } from '../../discoveryLoader';
 import { formatVariableCategories } from '../../cascadeVariableCategories';
+import { getProjectApprover } from '../../../services/authorization.service';
+import type { WebClient } from '@slack/web-api';
 
 // ─── Modal metadata contract ─────────────────────────────────────
 
@@ -27,6 +29,7 @@ interface BuildBriefEntryModalOptions {
   projectName: string;
   projectSlug: string;
   source: 'qori_brief_command' | 'project_next_steps';
+  client: WebClient;
 }
 
 /**
@@ -119,7 +122,7 @@ function synthesizeCascadeFields(upstream: Record<string, string>, _artifacts: D
  * Phase 2D: Requires projectId. Study name is inherited from project (no study_name_block).
  */
 export async function buildBriefEntryModal(options: BuildBriefEntryModalOptions) {
-  const { leadResearcher, channelId, projectId, projectName, projectSlug, source } = options;
+  const { leadResearcher, channelId, projectId, projectName, projectSlug, source, client } = options;
   const modalBlocks: Record<string, unknown>[] = JSON.parse(JSON.stringify(researchBriefModal.blocks));
 
   // Remove study_name_block — study inherits project name
@@ -141,6 +144,45 @@ export async function buildBriefEntryModal(options: BuildBriefEntryModalOptions)
   };
   // Insert after first block (usually a header context)
   modalBlocks.splice(1, 0, projectContextBlock);
+
+  // Replace editable stakeholder_select with read-only inherited stakeholder display
+  // Look up project approver (stakeholder, or owner as fallback)
+  const approverInfo = await getProjectApprover(projectId);
+  let approverDisplay = 'Not set';
+  let approverRoleLabel = 'project owner';
+
+  if (approverInfo) {
+    // Resolve display name from Slack
+    try {
+      const userInfo = await client.users.info({ user: approverInfo.userId });
+      const user = userInfo.user as Record<string, unknown> | undefined;
+      const profile = user?.profile as Record<string, unknown> | undefined;
+      approverDisplay = (user?.real_name || profile?.display_name || user?.name || approverInfo.userId) as string;
+    } catch {
+      approverDisplay = `<@${approverInfo.userId}>`;
+    }
+
+    if (approverInfo.source === 'stakeholder') {
+      approverRoleLabel = 'stakeholder';
+    } else {
+      approverRoleLabel = 'project owner';
+    }
+  }
+
+  // Replace stakeholder_block with read-only context block
+  const stakeholderIdx = modalBlocks.findIndex((b: Record<string, unknown>) => b.block_id === 'stakeholder_block');
+  if (stakeholderIdx !== -1) {
+    modalBlocks[stakeholderIdx] = {
+      type: "context",
+      block_id: "stakeholder_display_block",
+      elements: [
+        {
+          type: "mrkdwn",
+          text: `:bust_in_silhouette: *Approver:* ${approverDisplay} (${approverRoleLabel} — approves this brief)`,
+        },
+      ],
+    };
+  }
 
   // Pre-fill lead researcher if available
   if (leadResearcher) {

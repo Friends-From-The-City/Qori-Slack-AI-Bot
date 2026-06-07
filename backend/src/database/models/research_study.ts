@@ -21,6 +21,14 @@ import type { StudyNotes } from './study_notes';
 import type { ResearchPlan } from './research_plan';
 import type { SessionSummary } from './session_summary';
 
+/**
+ * Brief approval status values.
+ * - pending_approval: Brief submitted, awaiting approver decision
+ * - changes_requested: Approver requested changes, awaiting researcher resubmit
+ * - approved: Brief approved, study can proceed
+ */
+export type BriefStatus = 'pending_approval' | 'changes_requested' | 'approved';
+
 class ResearchStudy extends Model<
   InferAttributes<ResearchStudy>,
   InferCreationAttributes<ResearchStudy>
@@ -45,6 +53,12 @@ class ResearchStudy extends Model<
   declare target_participants: number | null;
   declare created_at: CreationOptional<Date>;
   declare updated_at: CreationOptional<Date>;
+  /** Brief approval status: pending_approval | changes_requested | approved */
+  declare brief_status: CreationOptional<BriefStatus | null>;
+  /** Last feedback from approver (preserved after approval for audit trail) */
+  declare brief_change_feedback: CreationOptional<string | null>;
+  /** Slack user ID of the reviewer (for re-notify on resubmit) */
+  declare brief_reviewer_id: CreationOptional<string | null>;
 
   // — Association mixins (participants) —
   declare getParticipants: HasManyGetAssociationsMixin<StudyParticipant>;
@@ -185,6 +199,22 @@ export default (sequelize: Sequelize) => {
         type: DataTypes.DATE,
         allowNull: false,
         defaultValue: sequelize.literal('CURRENT_TIMESTAMP'),
+      },
+      brief_status: {
+        type: DataTypes.STRING(20),
+        allowNull: true,
+        defaultValue: null,
+        validate: {
+          isIn: [['pending_approval', 'changes_requested', 'approved']],
+        },
+      },
+      brief_change_feedback: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+      },
+      brief_reviewer_id: {
+        type: DataTypes.STRING(50),
+        allowNull: true,
       },
     },
     {

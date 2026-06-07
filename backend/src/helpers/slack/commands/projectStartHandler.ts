@@ -12,6 +12,7 @@ import type { WebClient } from '@slack/web-api';
 
 import { createProjectFromName, bindProjectToChannel } from '../../../services/project.service';
 import { scaffoldProject } from '../../../services/scaffolding.service';
+import { addProjectMember, setProjectStakeholder } from '../../../services/authorization.service';
 import { projectCreationModal, type ProjectCreationModalMetadata } from '../ui/projectCreationModal';
 
 // ─── Channel naming utilities ────────────────────────────────────
@@ -112,6 +113,10 @@ async function handleProjectCreateSubmission({ ack, body, view, client }: SlackV
     (opt: { value: string }) => opt.value === 'create_channel'
   );
 
+  // Extract stakeholder (optional — owner is fallback approver)
+  const stakeholderUserId: string | null =
+    values.project_stakeholder?.stakeholder_select?.selected_user || null;
+
   // Validate project name
   if (!projectName) {
     await ack({
@@ -143,6 +148,15 @@ async function handleProjectCreateSubmission({ ack, body, view, client }: SlackV
       created_by: body.user.id,
       status: 'active',
     });
+
+    // Add creator as project owner
+    await addProjectMember(project.id, body.user.id, 'creator', 'owner');
+
+    // Set stakeholder if provided (can be same as owner — flag doesn't affect role)
+    if (stakeholderUserId) {
+      await setProjectStakeholder(project.id, stakeholderUserId);
+      console.log(`✅ Set stakeholder ${stakeholderUserId} for project ${project.slug}`);
+    }
 
     // Scaffold project folder in GitHub with README
     // Phase B-0.5: Uses scaffolding service instead of inline README creation

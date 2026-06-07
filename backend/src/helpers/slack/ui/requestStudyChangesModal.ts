@@ -123,14 +123,5 @@ export const requestStudyChangesModal = (fileOptionsArray: FileOption[]) => ({
         },
       ],
     },
-    {
-      type: "context",
-      elements: [
-        {
-          type: "mrkdwn",
-          text: "🎯 A GitHub issue will be created to track these changes and ensure nothing is missed.",
-        },
-      ],
-    },
   ],
 });

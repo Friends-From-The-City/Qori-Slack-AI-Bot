@@ -563,35 +563,7 @@ const handleResearchSynthesisSubmission = async ({ ack, body, view, client }: Sl
         ],
       });
 
-      if (study?.channel_name) {
-        await client.chat.postMessage({
-          channel: study.channel_name,
-          text: `*Research Synthesis Complete!*`,
-          blocks: [
-            {
-              type: 'section',
-              text: {
-                type: 'mrkdwn',
-                text: firstTwoLines,
-              },
-            },
-            {
-              type: 'section',
-              text: {
-                type: 'mrkdwn',
-                text: `*Study:* ${selectedStudyName}\n*Method:* ${analysisMethod.replace(/_/g, ' ')}`,
-              },
-            },
-            {
-              type: 'section',
-              text: {
-                type: 'mrkdwn',
-                text: `To see the complete synthesis and detailed insights, please visit:\n<${renderedAnalysis.result.url}|:github: View Full Analysis on GitHub>`,
-              },
-            },
-          ],
-        });
-      }
+      // Channel notification removed — DM notification above is sufficient
 
     } catch (error) {
       const errObj = error instanceof Error ? error : new Error(String(error));

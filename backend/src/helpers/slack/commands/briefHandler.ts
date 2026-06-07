@@ -26,7 +26,8 @@ import type { VariableContext } from '../../studyVariables';
 import { processYamlTemplate } from '../../yamlProcessor';
 import { executeAiGenerationTasks } from '../../langchain';
 import { addStudyStatus } from '../../../services/study-status.service';
-import { sendStudyResultMessage, generateStudyResultBlocks } from '../ui/studyResultBlocks';
+import { getProjectApprover } from '../../../services/authorization.service';
+import { generateStudyResultBlocks, sendStudyResultMessage } from '../ui/studyResultBlocks';
 import { loadDiscoveryArtifacts, aggregateDiscoveryVariables, type DiscoveryArtifact } from '../../discoveryLoader';
 import { parseBudget, parseParticipantTarget } from '../../../utils/budgetParser';
 import {
@@ -220,12 +221,6 @@ async function handleBriefSubmission({ ack, body, view, client }: SlackViewMiddl
     return;
   }
 
-  // Resolve target channel: project's bound channel takes priority over trigger channel
-  // This ensures success messages land in the project's dedicated channel, not where
-  // the modal was triggered from (which may be a different project's channel).
-  const projectForChannel = await getProjectById(projectId);
-  const targetChannel = projectForChannel?.channel_id || channelId;
-
   // Helper function to extract values from different input types.
   const extract = (blockId: string, actionId: string): unknown => {
     const block = values[blockId];
@@ -244,14 +239,12 @@ async function handleBriefSubmission({ ack, body, view, client }: SlackViewMiddl
 
   console.log(`🚀 ~ Research Brief ~ studyName: ${studyName} (from project: ${projectName})`);
 
-  // Post "Generating..." progress message to project's bound channel
-  let progressTs: string | undefined;
+  // Post "working" message to researcher's DM (consistent with completion DM)
   try {
-    const progressResult = await client.chat.postMessage({
-      channel: targetChannel,
-      text: `:hourglass_flowing_sand: Creating research brief for *${studyName}*...`,
+    await client.chat.postMessage({
+      channel: body.user.id,
+      text: `:hourglass_flowing_sand: Creating research brief for *${studyName}*... This may take a moment.`,
     });
-    progressTs = progressResult.ts;
   } catch (err) {
     const progressErr = err instanceof Error ? err.message : String(err);
     console.warn('Could not post brief progress message:', progressErr);
@@ -547,30 +540,45 @@ async function handleBriefSubmission({ ack, body, view, client }: SlackViewMiddl
 
   const url: string = renderedYaml.result.url;
 
-  // Update progress message → completion (in project's bound channel)
-  if (progressTs) {
-    try {
-      await client.chat.update({
-        channel: targetChannel,
-        ts: progressTs,
-        text: `:memo: Research brief for *${studyName}* is ready — <${url}|view on GitHub>`,
-      });
-    } catch (err) {
-      const updateErr = err instanceof Error ? err.message : String(err);
-      console.warn('Could not update brief progress message:', updateErr);
-    }
+  // ── Send brief approval request to stakeholder (or owner fallback) ──
+  // This is the CRITICAL approval routing that was missing
+  const briefBlocks = generateStudyResultBlocks(studyName, study, url, channelId || '', 'brief');
+  await sendStudyResultMessage(client, channelId || '', studyName, briefBlocks, 'brief');
+
+  // ── Update brief status to pending_approval ──
+  const approverInfo = await getProjectApprover(projectId);
+  try {
+    await study.update({
+      brief_status: 'pending_approval',
+      brief_reviewer_id: approverInfo?.userId || null,
+    });
+    console.log(`📋 Brief status set to pending_approval, reviewer: ${approverInfo?.userId || 'none'}`);
+  } catch (updateErr) {
+    console.error('Failed to update brief status:', updateErr);
+    // Non-fatal: brief was created, just status tracking failed
   }
 
-  const blocks = generateStudyResultBlocks(studyName, study, url, targetChannel, 'brief');
-  await sendStudyResultMessage(client, targetChannel, studyName, blocks, 'brief');
-
-  // Notify researcher via DM
+  // ── Notify researcher via DM with specific approver info ──
   try {
+    let approverDisplay = 'the project owner';
+    let approverRole = 'owner';
+    if (approverInfo) {
+      approverRole = approverInfo.source === 'stakeholder' ? 'stakeholder' : 'owner';
+      try {
+        const userInfo = await client.users.info({ user: approverInfo.userId });
+        const user = userInfo.user as Record<string, unknown> | undefined;
+        const profile = user?.profile as Record<string, unknown> | undefined;
+        approverDisplay = (user?.real_name || profile?.display_name || user?.name || `<@${approverInfo.userId}>`) as string;
+      } catch {
+        approverDisplay = `<@${approverInfo.userId}>`;
+      }
+    }
+
     const im = await client.conversations.open({ users: body.user.id });
     if (im.channel?.id) {
       await client.chat.postMessage({
         channel: im.channel.id,
-        text: `✅ *Research Brief Created*\n\n*Study:* ${studyName}\n*View:* <${url}|GitHub>\n\nThe brief has been sent to the study team for approval.\n\n*Next:* Run \`/qori-plan\` to create an execution plan once approved.`,
+        text: `✅ *Research Brief Created*\n\n*Study:* ${studyName}\n*View:* <${url}|GitHub>\n\nBrief sent to *${approverDisplay}* (${approverRole}) for approval.\n\n*Next:* Run \`/qori-plan\` to create an execution plan once approved.`,
       });
     }
   } catch (error) {
