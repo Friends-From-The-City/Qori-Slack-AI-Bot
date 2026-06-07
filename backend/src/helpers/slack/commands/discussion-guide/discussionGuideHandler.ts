@@ -17,11 +17,9 @@ import type { View } from '@slack/types';
 
 import { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo } from '../../../github';
 import { getStudyById } from '../../../../services/research_study.service';
-import { getProjectById } from '../../../../services/project.service';
 import { assertStudyAccess } from '../../../../services/authorization.service';
 import { processYamlTemplate } from '../../../yamlProcessor';
 import { addStudyStatus } from '../../../../services/study-status.service';
-import { sendStudyResultMessage, generateStudyResultBlocks } from '../../ui/studyResultBlocks';
 import { readStudyVariablesByContext, type VariableContext } from '../../../studyVariables';
 import { buildCascadeReadiness, buildCascadeBlocks } from '../../ui/cascadeReadinessBlocks';
 import {
@@ -383,12 +381,6 @@ async function handleDiscussionGuideSubmission({ ack, body, view, client }: Slac
   // Build VariableContext from validated metadata
   const variableContext: VariableContext = { projectId, studyId };
 
-  // Resolve target channel: project's bound channel takes priority over trigger channel
-  // This ensures success messages land in the project's dedicated channel, not where
-  // the modal was triggered from (which may be a different project's channel).
-  const projectForChannel = await getProjectById(projectId);
-  const targetChannel = projectForChannel?.channel_id || channelId;
-
   const extract = (blockId: string, actionId: string): string | null => {
     const block = values[blockId];
     if (!block) return null;
@@ -415,14 +407,12 @@ async function handleDiscussionGuideSubmission({ ack, body, view, client }: Slac
     }
   }
 
-  // Post "Generating..." progress message to project's bound channel
-  let progressTs: string | undefined;
+  // Post "working" message to researcher's DM (consistent with completion DM)
   try {
-    const progressResult = await client.chat.postMessage({
-      channel: targetChannel,
-      text: `:hourglass_flowing_sand: Generating discussion guide for *${studyName}*...`,
+    await client.chat.postMessage({
+      channel: body.user.id,
+      text: `:hourglass_flowing_sand: Generating discussion guide for *${studyName}*... This may take a moment.`,
     });
-    progressTs = progressResult.ts;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.warn('Could not post progress message:', message);
@@ -444,22 +434,19 @@ async function handleDiscussionGuideSubmission({ ack, body, view, client }: Slac
 
   const url: string = renderedYaml.result.url;
 
-  // Update progress message → completion notification (in project's bound channel)
-  if (progressTs) {
-    try {
-      await client.chat.update({
-        channel: targetChannel,
-        ts: progressTs,
-        text: `:speech_balloon: Discussion guide for *${studyName}* is ready — <${url}|view on GitHub>`,
+  // Notify researcher via DM (primary notification — no channel posting)
+  try {
+    const im = await client.conversations.open({ users: body.user.id });
+    if (im.channel?.id) {
+      await client.chat.postMessage({
+        channel: im.channel.id,
+        text: `✅ *Discussion Guide Created*\n\n*Study:* ${studyName}\n*View:* <${url}|GitHub>\n\n*Next:* Run \`/qori-fieldwork\` to manage participants and outreach, or \`/qori-analyze\` after sessions complete.`,
       });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      console.warn('Could not update progress message:', message);
     }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('Failed to send discussion guide DM:', message);
   }
-
-  const blocks = generateStudyResultBlocks(studyName, study, url, targetChannel, 'discussion');
-  await sendStudyResultMessage(client, targetChannel, studyName, blocks, 'discussion');
 
   await addStudyStatus({
     study_id: studyId,

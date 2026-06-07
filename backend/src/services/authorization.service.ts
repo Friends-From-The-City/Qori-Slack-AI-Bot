@@ -403,6 +403,9 @@ export async function assertStudyOwner(
  * Add a user to a project.
  * Used when auto-adding via channel membership or explicit add.
  *
+ * Note: Stakeholder is set separately via setProjectStakeholder().
+ * Role is only 'owner' or 'member' — stakeholder is a flag, not a role.
+ *
  * @param projectId - Project database ID
  * @param userId - Slack user ID
  * @param source - How the membership was granted
@@ -419,6 +422,49 @@ export async function addProjectMember(
     defaults: { project_id: projectId, user_id: userId, role, source },
   });
   return member;
+}
+
+/**
+ * Set or clear the stakeholder for a project.
+ * The stakeholder is a flag on a member row — does NOT change their role.
+ * An owner can be the stakeholder (owner + is_stakeholder=true).
+ *
+ * @param projectId - Project database ID
+ * @param userId - Slack user ID to designate as stakeholder (null to clear)
+ */
+export async function setProjectStakeholder(
+  projectId: number,
+  userId: string | null,
+): Promise<void> {
+  // Clear any existing stakeholder flag
+  await ProjectMemberModel.update(
+    { is_stakeholder: false },
+    { where: { project_id: projectId, is_stakeholder: true } },
+  );
+
+  if (userId) {
+    // Set the new stakeholder
+    const member = await ProjectMemberModel.findOne({
+      where: { project_id: projectId, user_id: userId },
+    });
+
+    if (member) {
+      await member.update({ is_stakeholder: true });
+      console.log(`[AUTH] Set stakeholder for project=${projectId}: ${userId} (role=${member.role})`);
+    } else {
+      // User isn't a member yet — add them as member with stakeholder flag
+      await ProjectMemberModel.create({
+        project_id: projectId,
+        user_id: userId,
+        role: 'member',
+        source: 'explicit' as MembershipSource,
+        is_stakeholder: true,
+      });
+      console.log(`[AUTH] Added new stakeholder for project=${projectId}: ${userId}`);
+    }
+  } else {
+    console.log(`[AUTH] Cleared stakeholder for project=${projectId}`);
+  }
 }
 
 /**
@@ -467,4 +513,91 @@ export async function getProjectsForMember(userId: string): Promise<Project[]> {
     where: { id: projectIds },
     order: [['created_at', 'DESC']],
   });
+}
+
+// ─── Stakeholder/Approver Lookup ──────────────────────────────────────
+
+/**
+ * Result of stakeholder lookup, includes fallback context.
+ */
+export interface ApproverInfo {
+  userId: string;
+  role: 'stakeholder' | 'owner';
+  source: 'stakeholder' | 'owner_fallback';
+}
+
+/**
+ * Get the approver for a project (stakeholder, or owner as fallback).
+ *
+ * Lookup order:
+ * 1. Member with is_stakeholder=true — the designated approver
+ * 2. Owner (role='owner') — fallback if no stakeholder set
+ *
+ * Note: The stakeholder may ALSO be the owner (same person, both flags).
+ *
+ * Returns null only if neither stakeholder nor owner exists (should never
+ * happen per ADR 0025 owner coverage guarantee).
+ *
+ * @param projectId - Project database ID
+ */
+export async function getProjectApprover(projectId: number): Promise<ApproverInfo | null> {
+  try {
+    // First, try to find a stakeholder (is_stakeholder flag)
+    const stakeholder = await ProjectMemberModel.findOne({
+      where: { project_id: projectId, is_stakeholder: true },
+    });
+
+    if (stakeholder) {
+      return {
+        userId: stakeholder.user_id,
+        role: 'stakeholder',
+        source: 'stakeholder',
+      };
+    }
+
+    // Fallback to owner
+    const owner = await ProjectMemberModel.findOne({
+      where: { project_id: projectId, role: 'owner' },
+    });
+
+    if (owner) {
+      return {
+        userId: owner.user_id,
+        role: 'owner',
+        source: 'owner_fallback',
+      };
+    }
+
+    // Neither found (should not happen per ADR 0025)
+    console.warn(`[AUTH] No stakeholder or owner found for project=${projectId}`);
+    return null;
+  } catch (error) {
+    console.error(
+      `[AUTH] getProjectApprover failed for project=${projectId}:`,
+      error instanceof Error ? error.message : error,
+    );
+    return null;
+  }
+}
+
+/**
+ * Get the stakeholder for a project (without fallback).
+ * Returns null if no stakeholder is set.
+ *
+ * Stakeholder is identified by is_stakeholder=true flag, not by role.
+ *
+ * @param projectId - Project database ID
+ */
+export async function getProjectStakeholder(projectId: number): Promise<ProjectMember | null> {
+  try {
+    return await ProjectMemberModel.findOne({
+      where: { project_id: projectId, is_stakeholder: true },
+    });
+  } catch (error) {
+    console.error(
+      `[AUTH] getProjectStakeholder failed for project=${projectId}:`,
+      error instanceof Error ? error.message : error,
+    );
+    return null;
+  }
 }

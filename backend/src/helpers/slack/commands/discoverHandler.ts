@@ -316,8 +316,9 @@ async function discoverHandler({ ack, body, client, command }: SlackCommandMiddl
     const message = err instanceof Error ? err.message : String(err);
     const detail = (err as Record<string, unknown>)?.data ?? message;
     console.error('Error opening discover hub:', detail);
-    await client.chat.postMessage({
+    await client.chat.postEphemeral({
       channel: channelId,
+      user: command.user_id,
       text: '❌ Failed to open the discovery hub. Please try again.',
     });
   }
@@ -377,12 +378,10 @@ async function handleDiscoverSubmission({ ack, view, body, client }: SlackViewMi
   const { channelId, projectId, projectSlug, discoveryType } = meta;
   const userId: string = body.user?.id || '';
 
-  const replyChannel: string = channelId || userId;
-
   // Validate project context (Phase 2D)
   if (!projectId || !projectSlug) {
     await client.chat.postMessage({
-      channel: replyChannel,
+      channel: userId,
       text: '❌ Project context missing. Please run `/qori-discover` from a project-linked channel.',
     });
     return;
@@ -391,7 +390,7 @@ async function handleDiscoverSubmission({ ack, view, body, client }: SlackViewMi
   // Read discovery type from private_metadata (set by action handler)
   if (!discoveryType || !DISCOVERY_TYPES[discoveryType as DiscoveryTypeKey]) {
     await client.chat.postMessage({
-      channel: replyChannel,
+      channel: userId,
       text: '❌ Discovery type missing. Please try again from /qori-discover.',
     });
     return;
@@ -413,7 +412,7 @@ async function handleDiscoverSubmission({ ack, view, body, client }: SlackViewMi
   // Validate required fields
   if (!topic) {
     await client.chat.postMessage({
-      channel: replyChannel,
+      channel: userId,
       text: '❌ Topic is required for discovery research.',
     });
     return;
@@ -421,7 +420,7 @@ async function handleDiscoverSubmission({ ack, view, body, client }: SlackViewMi
 
   if (!slugifyTopic(topic)) {
     await client.chat.postMessage({
-      channel: replyChannel,
+      channel: userId,
       text: '❌ Topic must contain alphanumeric characters.',
     });
     return;
@@ -429,7 +428,7 @@ async function handleDiscoverSubmission({ ack, view, body, client }: SlackViewMi
 
   if (uploadedFiles.length === 0) {
     await client.chat.postMessage({
-      channel: replyChannel,
+      channel: userId,
       text: '❌ Please upload at least one file to analyze.',
     });
     return;
@@ -455,7 +454,7 @@ async function handleDiscoverSubmission({ ack, view, body, client }: SlackViewMi
   console.log(`🔍 Discovery: project=${projectSlug}, type=${discoveryType}, topic="${topic}", slug="${topicSlug}", files=${uploadedFiles.length}`);
 
   await client.chat.postMessage({
-    channel: replyChannel,
+    channel: userId,
     text: `🔍 Running ${typeConfig.label} for "${topic}"... This may take a minute.`,
   });
 
@@ -473,7 +472,7 @@ async function handleDiscoverSubmission({ ack, view, body, client }: SlackViewMi
     const validation: ValidationResult = validateDocuments(documents);
     if (!validation.isValid) {
       await client.chat.postMessage({
-        channel: replyChannel,
+        channel: userId,
         text: `❌ ${validation.message}`,
       });
       return;
@@ -517,7 +516,7 @@ async function handleDiscoverSubmission({ ack, view, body, client }: SlackViewMi
 
     // Stakeholder-specific fields
     if (discoveryType === 'stakeholder_synthesis') {
-      data.study_channel = replyChannel;
+      data.study_channel = channelId || userId;
       data.researcher_contact = `<@${userId}>`;
       data.detected_files = documents.map(d => d.name).join('\n- ');
       (data as any).file_list = documents.map(d => d.name);
@@ -554,7 +553,7 @@ async function handleDiscoverSubmission({ ack, view, body, client }: SlackViewMi
       || 'Run `/qori-brief` to start your study.';
 
     await client.chat.postMessage({
-      channel: replyChannel,
+      channel: userId,
       blocks: [
         {
           type: 'section',
@@ -600,7 +599,7 @@ async function handleDiscoverSubmission({ ack, view, body, client }: SlackViewMi
     const message = error instanceof Error ? error.message : String(error);
     console.error('Error processing discovery:', error);
     await client.chat.postMessage({
-      channel: replyChannel,
+      channel: userId,
       text: `❌ Error running ${typeConfig.label}: ${message}\n\nPlease try again or contact support.`,
     });
   }

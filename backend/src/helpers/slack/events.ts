@@ -37,6 +37,8 @@ import {
   handleDeleteStudyOpen,
   handleDeleteStudySelect,
   handleDeleteStudyConfirm,
+  handleStakeholderManage,
+  handleStakeholderSubmit,
 } from './commands/admin/adminActionsHandler';
 
 // Research brief
@@ -50,9 +52,10 @@ import { handlePlanSubmission } from './commands/planHandler';
 // Brief → plan/study transitions
 import { openPlanFromBrief } from './commands/modal-openers/briefToStudyHandler';
 
-// Approval flows
-import { handleApprovePlan as approvePlan, handleConfirmApprovePlan as confirmApprovePlan, handleRequestChangesPlan as requestChangesPlan, handleRequestChangesPlanModal as requestChangesPlanSubmission, handleApproveBrief as approveBrief, handleConfirmApproveBrief as confirmApproveBrief, handleRequestChangesBrief as requestChangesBrief, handleRequestChangesBriefModal as requestChangesBriefSubmission } from './commands/approval/approvalFlowHandler';
+// Approval flows (plan approval removed — brief is the only gate)
+import { handleApproveBrief as approveBrief, handleConfirmApproveBrief as confirmApproveBrief, handleRequestChangesBrief as requestChangesBrief, handleRequestChangesBriefModal as requestChangesBriefSubmission } from './commands/approval/approvalFlowHandler';
 import { handleMarkChangesCompleteAction, handleMarkChangesCompleteModal, handleApproveChanges } from './markChangesCompleteHandler';
+import { handleBriefResubmit } from './resubmitBriefHandler';
 
 // Discussion guide
 import { openDiscussionGuideModal, handleDiscussionGuideSubmission } from './commands/discussion-guide/discussionGuideHandler';
@@ -362,6 +365,7 @@ slackApp.command('/qori-brief', async ({ ack, client, command }) => {
       projectName: project.name,
       projectSlug: project.slug,
       source: 'qori_brief_command',
+      client,
     });
     // @ts-expect-error — modal blocks are Record<string,unknown>[] from JSON.parse; structurally valid at runtime
     await client.views.open({ trigger_id: command.trigger_id, view: modal });
@@ -430,6 +434,10 @@ slackApp.view('admin-dsar-delete-confirm', handleDsarDeleteConfirm);
 slackApp.view('admin-delete-study-select', handleDeleteStudySelect);
 slackApp.view('admin-delete-study-confirm', handleDeleteStudyConfirm);
 
+// Stakeholder management
+slackApp.action('admin-stakeholder-manage', handleStakeholderManage);
+slackApp.view('admin-stakeholder-submit', handleStakeholderSubmit);
+
 // ─── Research brief ─────────────────────────────────────────────
 
 slackApp.action('create_research_brief', openResearchBriefModal);
@@ -446,15 +454,13 @@ slackApp.view('research_plan_modal', handlePlanSubmission);
 slackApp.action('create_research_plan_from_brief', openPlanFromBrief);
 
 // ─── Approval flows ────────────────────────────────────────────
+// Plan approval removed — brief (scope) is the only approval gate.
 
-slackApp.action('approve_plan', approvePlan);
-slackApp.view('confirm_approve_plan', confirmApprovePlan);
-slackApp.action('request_changes_plan', requestChangesPlan);
-slackApp.view('request_changes_plan_modal', requestChangesPlanSubmission);
 slackApp.action('approve_brief', approveBrief);
 slackApp.view('confirm_approve_brief', confirmApproveBrief);
 slackApp.action('request_changes_brief', requestChangesBrief);
 slackApp.view('request_changes_brief_modal', requestChangesBriefSubmission);
+slackApp.action('brief_resubmit', handleBriefResubmit);
 slackApp.action('mark_changes_complete', handleMarkChangesCompleteAction);
 slackApp.view('mark_changes_complete_modal', handleMarkChangesCompleteModal);
 slackApp.action('approve_changes', handleApproveChanges);

@@ -16,7 +16,8 @@ import sequelize from '../../../../database';
 import type { Project } from '../../../../database/models/project';
 import type { ResearchStudy } from '../../../../database/models/research_study';
 import type { StudyParticipant } from '../../../../database/models/study_participant';
-import type { AdminCenterMetadata } from '../../ui/adminCenterModal';
+import type { AdminCenterMetadata, StakeholderInfo } from '../../ui/adminCenterModal';
+import { setProjectStakeholder, assertProjectOwner, getProjectStakeholder } from '../../../../services/authorization.service';
 
 const ProjectModel = sequelize.models.Project as typeof Project;
 const ResearchStudyModel = sequelize.models.ResearchStudy as typeof ResearchStudy;
@@ -997,6 +998,318 @@ export async function handleDeleteStudyConfirm({
             text: {
               type: 'mrkdwn',
               text: `:x: Deletion failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            },
+          },
+        ],
+      },
+    });
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// STAKEHOLDER MANAGEMENT FLOW
+// ═══════════════════════════════════════════════════════════════════════
+
+interface StakeholderMetadata extends AdminCenterMetadata {
+  currentStakeholderId?: string;
+  currentStakeholderName?: string;
+}
+
+/**
+ * Open Stakeholder Management modal
+ * Shows current stakeholder (if any) and allows designate/change/clear.
+ */
+export async function handleStakeholderManage({
+  ack,
+  body,
+  client,
+}: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs): Promise<void> {
+  await ack();
+
+  const userId = body.user.id;
+  const metadata: AdminCenterMetadata = JSON.parse((body as any).view?.private_metadata || '{}');
+
+  try {
+    // Verify ownership (double-check, though modal should only be shown to owners)
+    await assertProjectOwner(userId, metadata.projectId);
+
+    // Get current stakeholder if any
+    const currentStakeholder = await getProjectStakeholder(metadata.projectId);
+    let stakeholderInfo: StakeholderInfo = null;
+
+    if (currentStakeholder) {
+      // Resolve display name
+      let displayName = currentStakeholder.user_id;
+      try {
+        const userInfo = await client.users.info({ user: currentStakeholder.user_id });
+        const user = userInfo.user as Record<string, unknown> | undefined;
+        const profile = user?.profile as Record<string, unknown> | undefined;
+        displayName = (user?.real_name || profile?.display_name || user?.name || currentStakeholder.user_id) as string;
+      } catch {
+        displayName = `<@${currentStakeholder.user_id}>`;
+      }
+      stakeholderInfo = { userId: currentStakeholder.user_id, displayName };
+    }
+
+    const extendedMetadata: StakeholderMetadata = {
+      ...metadata,
+      currentStakeholderId: stakeholderInfo?.userId,
+      currentStakeholderName: stakeholderInfo?.displayName,
+    };
+
+    // Build modal based on whether stakeholder exists
+    const blocks: Record<string, unknown>[] = [];
+
+    if (stakeholderInfo) {
+      // Current stakeholder exists - show them and offer change/clear
+      blocks.push(
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `*Current Stakeholder:* ${stakeholderInfo.displayName}\n\nThe stakeholder approves research briefs for this project.`,
+          },
+        },
+        { type: 'divider' },
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: '*Change stakeholder:*',
+          },
+        },
+        {
+          type: 'input',
+          block_id: 'new_stakeholder_block',
+          optional: true,
+          label: { type: 'plain_text', text: 'Select new stakeholder' },
+          element: {
+            type: 'users_select',
+            action_id: 'new_stakeholder_select',
+            placeholder: { type: 'plain_text', text: 'Select a team member...' },
+          },
+        },
+        { type: 'divider' },
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: '*Or clear stakeholder:*\n_Brief approvals will route to the project owner instead._',
+          },
+        },
+        {
+          type: 'input',
+          block_id: 'clear_stakeholder_block',
+          optional: true,
+          label: { type: 'plain_text', text: 'Clear current stakeholder?' },
+          element: {
+            type: 'checkboxes',
+            action_id: 'clear_stakeholder_check',
+            options: [
+              {
+                text: { type: 'plain_text', text: 'Remove stakeholder (approvals go to owner)' },
+                value: 'clear',
+              },
+            ],
+          },
+        },
+      );
+    } else {
+      // No stakeholder - offer to designate one
+      blocks.push(
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: '*No stakeholder designated*\n\nBrief approvals currently route to the project owner.\n\nDesignate a stakeholder to receive brief approval requests instead.',
+          },
+        },
+        { type: 'divider' },
+        {
+          type: 'input',
+          block_id: 'new_stakeholder_block',
+          optional: false,
+          label: { type: 'plain_text', text: 'Designate stakeholder' },
+          element: {
+            type: 'users_select',
+            action_id: 'new_stakeholder_select',
+            placeholder: { type: 'plain_text', text: 'Select a team member...' },
+          },
+        },
+      );
+    }
+
+    await client.views.push({
+      trigger_id: (body as any).trigger_id,
+      view: {
+        type: 'modal',
+        callback_id: 'admin-stakeholder-submit',
+        title: { type: 'plain_text', text: 'Manage Stakeholder' },
+        submit: { type: 'plain_text', text: stakeholderInfo ? 'Update' : 'Designate' },
+        close: { type: 'plain_text', text: 'Cancel' },
+        private_metadata: JSON.stringify(extendedMetadata),
+        blocks: blocks as any,
+      },
+    });
+  } catch (error) {
+    console.error('[ADMIN] Error opening stakeholder modal:', error);
+
+    if (error instanceof AuthorizationError) {
+      await client.views.push({
+        trigger_id: (body as any).trigger_id,
+        view: {
+          type: 'modal',
+          callback_id: 'admin-stakeholder-error',
+          title: { type: 'plain_text', text: 'Access Denied' },
+          close: { type: 'plain_text', text: 'Close' },
+          blocks: [
+            {
+              type: 'section',
+              text: {
+                type: 'mrkdwn',
+                text: ':lock: Only project owners can manage stakeholders.',
+              },
+            },
+          ],
+        },
+      });
+    }
+  }
+}
+
+/**
+ * Handle stakeholder management submission
+ */
+export async function handleStakeholderSubmit({
+  ack,
+  body,
+  view,
+  client,
+}: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs): Promise<void> {
+  const userId = body.user.id;
+  const metadata: StakeholderMetadata = JSON.parse(view.private_metadata || '{}');
+
+  // Parse form values
+  const newStakeholderId =
+    (view.state.values as any).new_stakeholder_block?.new_stakeholder_select?.selected_user || null;
+  const clearChecked =
+    ((view.state.values as any).clear_stakeholder_block?.clear_stakeholder_check?.selected_options || [])
+      .some((opt: any) => opt.value === 'clear');
+
+  // Validate: can't both select new and clear
+  if (newStakeholderId && clearChecked) {
+    await ack({
+      response_action: 'errors',
+      errors: { clear_stakeholder_block: 'Cannot both select a new stakeholder and clear. Choose one.' },
+    });
+    return;
+  }
+
+  // If no stakeholder exists and no new one selected, error
+  if (!metadata.currentStakeholderId && !newStakeholderId) {
+    await ack({
+      response_action: 'errors',
+      errors: { new_stakeholder_block: 'Please select a stakeholder' },
+    });
+    return;
+  }
+
+  // If stakeholder exists but neither change nor clear selected, just close
+  if (metadata.currentStakeholderId && !newStakeholderId && !clearChecked) {
+    await ack();
+    return;
+  }
+
+  try {
+    // Verify ownership
+    await assertProjectOwner(userId, metadata.projectId);
+
+    console.log(`[ADMIN] Stakeholder submit: newStakeholderId=${newStakeholderId}, clearChecked=${clearChecked}, currentStakeholder=${metadata.currentStakeholderId}`);
+
+    if (clearChecked && metadata.currentStakeholderId) {
+      // Clear stakeholder flag (doesn't affect role — owner stays owner)
+      await setProjectStakeholder(metadata.projectId, null);
+    } else if (newStakeholderId) {
+      // Set new stakeholder (clears old, sets flag on new — doesn't affect roles)
+      await setProjectStakeholder(metadata.projectId, newStakeholderId);
+    }
+
+    // Fetch updated stakeholder for confirmation display
+    const updatedStakeholder = await getProjectStakeholder(metadata.projectId);
+    let stakeholderInfo: StakeholderInfo = null;
+
+    if (updatedStakeholder) {
+      let displayName = updatedStakeholder.user_id;
+      try {
+        const userInfo = await client.users.info({ user: updatedStakeholder.user_id });
+        const user = userInfo.user as Record<string, unknown> | undefined;
+        const profile = user?.profile as Record<string, unknown> | undefined;
+        displayName = (user?.real_name || profile?.display_name || user?.name || updatedStakeholder.user_id) as string;
+      } catch {
+        displayName = `<@${updatedStakeholder.user_id}>`;
+      }
+      stakeholderInfo = { userId: updatedStakeholder.user_id, displayName };
+    }
+
+    // Close the modal stack - change is complete
+    await ack({ response_action: 'clear' });
+
+    // Send confirmation via DM to the user who made the change
+    const confirmMessage = clearChecked
+      ? `Stakeholder cleared for *${metadata.projectName}*. Brief approvals will now route to the project owner.`
+      : stakeholderInfo
+        ? `*${stakeholderInfo.displayName}* is now the stakeholder for *${metadata.projectName}*.`
+        : `Stakeholder updated for *${metadata.projectName}*.`;
+
+    try {
+      await client.chat.postMessage({
+        channel: userId,
+        text: `:white_check_mark: ${confirmMessage}`,
+      });
+    } catch {
+      // DM failed, not critical
+    }
+
+    // Notify the new stakeholder (if one was assigned, not cleared)
+    if (stakeholderInfo && stakeholderInfo.userId !== userId) {
+      // Get the assigner's display name
+      let assignerName = userId;
+      try {
+        const assignerInfo = await client.users.info({ user: userId });
+        const assigner = assignerInfo.user as Record<string, unknown> | undefined;
+        const assignerProfile = assigner?.profile as Record<string, unknown> | undefined;
+        assignerName = (assigner?.real_name || assignerProfile?.display_name || assigner?.name || userId) as string;
+      } catch {
+        assignerName = `<@${userId}>`;
+      }
+
+      try {
+        await client.chat.postMessage({
+          channel: stakeholderInfo.userId,
+          text: `:clipboard: *${assignerName}* assigned you as stakeholder for *${metadata.projectName}*. You'll receive brief approval requests for studies in this project.`,
+        });
+      } catch {
+        // DM to stakeholder failed, not critical
+      }
+    }
+
+    console.log(`[ADMIN] Stakeholder submit: completed, modal closed`);
+  } catch (error) {
+    console.error('[ADMIN] Error updating stakeholder:', error);
+
+    await ack({
+      response_action: 'update',
+      view: {
+        type: 'modal',
+        callback_id: 'admin-stakeholder-error',
+        title: { type: 'plain_text', text: 'Update Failed' },
+        close: { type: 'plain_text', text: 'Close' },
+        blocks: [
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: `:x: Failed to update stakeholder: ${error instanceof Error ? error.message : 'Unknown error'}`,
             },
           },
         ],
