@@ -254,6 +254,18 @@ export interface DiscoveredBarrier {
   title: string | null;
   /** 1-2 sentence description of the barrier */
   summary: string | null;
+  /** Research-method categories this barrier falls under. Array because barriers
+are multi-dimensional (e.g., screen-reader navigation is BOTH ia AND accessibility).
+Categories:
+- ia: Information architecture, navigation, findability, mental models, labeling
+- accessibility: Assistive technology, WCAG compliance, screen readers, motor/vision
+- performance: Speed, latency, load times, system responsiveness
+- content: Readability, comprehension, terminology, tone, information quality
+- task-flow: Task completion, workflow steps, error recovery, form design
+- cognitive: Mental load, decision complexity, memory demands, learning curve
+- other: Escape hatch when no category genuinely applies (surfaces for manual review)
+ */
+  barrier_categories: 'ia' | 'accessibility' | 'performance' | 'content' | 'task-flow' | 'cognitive' | 'other'[] | null;
   /** Scope or severity — '30% QoQ increase' or '45% abandonment' */
   magnitude: string | null;
   /** Supporting metrics or verbatim quotes from source */
