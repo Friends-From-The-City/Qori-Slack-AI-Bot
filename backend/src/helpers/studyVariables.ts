@@ -1282,9 +1282,6 @@ async function writeDiscoveryToPostgresByProject(
           await StudyVariable.create({
             project_id: projectId,
             study_id: null,
-            // Discovery variables use synthetic study_name since study_id is null
-            // Pattern: discovery:{projectId}:{artifactId} for traceability
-            study_name: `discovery:${projectId}:${artifactId}`,
             variable_key: key,
             variable_type: isPool ? 'pool' : 'singleton',
             item_key: (typeof item === 'object' && item !== null && (item as Record<string, unknown>).id as string) || null,
