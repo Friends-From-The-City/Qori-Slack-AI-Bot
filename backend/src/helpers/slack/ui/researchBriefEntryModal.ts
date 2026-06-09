@@ -94,33 +94,50 @@ function synthesizeCascadeFields(
   let barriers: DiscoveredBarrier[] = [];
 
   if (barrierText) {
-    try {
-      // Try parsing as JSON array first (structured format)
-      const parsed = JSON.parse(barrierText);
-      if (Array.isArray(parsed)) {
-        barriers = parsed as DiscoveredBarrier[];
-      }
-    } catch {
-      // Not JSON — try extracting from formatted text
-      // Format: id, title, barrier_categories, etc. on separate lines
-      const barrierBlocks = barrierText.split(/(?=id:\s*barrier-)/i);
-      for (const block of barrierBlocks) {
-        if (!block.trim()) continue;
-        const idMatch = block.match(/id:\s*(barrier-\d+)/i);
-        const titleMatch = block.match(/title:\s*(.+?)(?:\n|$)/i);
-        const catMatch = block.match(/barrier_categories:\s*\[([^\]]+)\]/i);
-        if (idMatch && titleMatch) {
-          const categories = catMatch
-            ? catMatch[1].split(',').map(c => c.trim().replace(/['"]/g, ''))
-            : [];
-          barriers.push({
-            id: idMatch[1],
-            title: titleMatch[1].trim(),
-            barrier_categories: categories as DiscoveredBarrier['barrier_categories'],
-          });
+    // Barriers are formatted as markdown by formatObjectAsMarkdown:
+    // **1.** Screen-transition latency exceeds abandonment threshold
+    //   id: barrier-001
+    //   summary: ...
+    //   barrier_categories: performance
+    //
+    // **2.** Navigation structure misaligns with user mental models
+    //   id: barrier-002
+    //   barrier_categories: ia, task-flow
+
+    // Split on numbered headers: **1.**, **2.**, etc.
+    const barrierBlocks = barrierText.split(/(?=\*\*\d+\.\*\*)/);
+
+    for (const block of barrierBlocks) {
+      if (!block.trim()) continue;
+
+      // Extract title from header: **1.** Title here
+      const headerMatch = block.match(/\*\*\d+\.\*\*\s*(.+?)(?:\n|$)/);
+      // Extract id: barrier-001 (with optional leading whitespace)
+      const idMatch = block.match(/^\s*id:\s*(barrier-\d+)/im);
+      // Extract barrier_categories: ia, task-flow (comma-separated, not JSON array)
+      const catMatch = block.match(/^\s*barrier_categories:\s*(.+?)(?:\n|$)/im);
+
+      if (headerMatch) {
+        const title = headerMatch[1].trim();
+        const id = idMatch ? idMatch[1] : `barrier-${barriers.length + 1}`;
+
+        // Parse categories - could be comma-separated or single value
+        let categories: string[] = [];
+        if (catMatch) {
+          const catStr = catMatch[1].trim();
+          // Handle both "ia, task-flow" and "performance" formats
+          categories = catStr.split(',').map(c => c.trim().replace(/['"[\]]/g, ''));
         }
+
+        barriers.push({
+          id,
+          title,
+          barrier_categories: categories as DiscoveredBarrier['barrier_categories'],
+        });
       }
     }
+
+    console.log(`📊 Layer 3: Parsed ${barriers.length} barriers from discovery for coverage analysis`);
   }
 
   // Derive coverage if we have barriers and a method
@@ -370,6 +387,8 @@ export async function buildBriefEntryModal(options: BuildBriefEntryModalOptions)
       let resolvedMethodKey: string | undefined;
       let methodSuggestion: string | undefined;
 
+      console.log(`📊 Layer 3: Discovery variables loaded: ${Object.keys(upstream).join(', ')}`);
+
       const methodRecs = upstream.upstream_methodology_recommendations;
       if (methodRecs) {
         const methods = methodRecs.split('\n').filter((l: string) => l.trim().startsWith('**') || l.trim().startsWith('-'));
@@ -409,7 +428,9 @@ export async function buildBriefEntryModal(options: BuildBriefEntryModalOptions)
       }
 
       // Now call synthesizeCascadeFields WITH the resolved method key
+      console.log(`📊 Layer 3: Method resolved to '${resolvedMethodKey || 'none'}' from suggestion '${methodSuggestion || 'none'}'`);
       const cascade = synthesizeCascadeFields(upstream, artifacts, resolvedMethodKey);
+      console.log(`📊 Layer 3: Cascade fields derived: outOfScope=${!!cascade.outOfScope}, participants=${!!cascade.participants}, method=${!!cascade.method}`);
 
       // Pre-populate method — hybrid radio + override (reuse resolution above)
       if (methodSuggestion) {
