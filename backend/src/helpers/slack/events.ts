@@ -110,11 +110,14 @@ const slackExpressRouter = express.Router();
 
 // ── Initialize Bolt app ─────────────────────────────────────────
 
+import { LogLevel } from '@slack/bolt';
+
 const slackApp = new App({
   token: process.env.SLACK_BOT_TOKEN,
   appToken: process.env.SLACK_APP_TOKEN,
   socketMode: true,
   extendedErrorHandler: true,
+  logLevel: process.env.NODE_ENV === 'production' ? LogLevel.INFO : LogLevel.DEBUG,
 });
 
 // ── Alerts channel configuration ─────────────────────────────────
