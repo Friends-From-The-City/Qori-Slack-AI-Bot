@@ -13,7 +13,7 @@
  */
 
 import express from 'express';
-import { App } from '@slack/bolt';
+import { App, LogLevel } from '@slack/bolt';
 import * as Sentry from '@sentry/node';
 import { scrubPII } from '../../config/sentry';
 import type { View } from '@slack/types';
@@ -110,11 +110,18 @@ const slackExpressRouter = express.Router();
 
 // ── Initialize Bolt app ─────────────────────────────────────────
 
+// Log Socket Mode connection events to help diagnose connection issues
+console.log('Initializing Bolt app with Socket Mode...');
+console.log(`Bot token present: ${!!process.env.SLACK_BOT_TOKEN}`);
+console.log(`App token present: ${!!process.env.SLACK_APP_TOKEN}`);
+
 const slackApp = new App({
   token: process.env.SLACK_BOT_TOKEN,
   appToken: process.env.SLACK_APP_TOKEN,
   socketMode: true,
   extendedErrorHandler: true,
+  // Enable INFO logging in production to see Socket Mode connection status
+  logLevel: LogLevel.INFO,
 });
 
 // ── Alerts channel configuration ─────────────────────────────────
