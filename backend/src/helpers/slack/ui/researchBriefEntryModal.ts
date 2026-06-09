@@ -110,16 +110,22 @@ function synthesizeCascadeFields(
     for (const block of barrierBlocks) {
       if (!block.trim()) continue;
 
-      // Extract title from header: **1.** Title here
+      // The markdown format from formatObjectAsMarkdown puts the ID in the header:
+      // **1.** barrier-001
+      //   title: Screen-transition latency exceeds abandonment threshold
+      //   barrier_categories: performance
+
+      // Extract id from header: **1.** barrier-001
       const headerMatch = block.match(/\*\*\d+\.\*\*\s*(.+?)(?:\n|$)/);
-      // Extract id: barrier-001 (with optional leading whitespace)
-      const idMatch = block.match(/^\s*id:\s*(barrier-\d+)/im);
+      // Extract title from the title: line
+      const titleMatch = block.match(/^\s*title:\s*(.+?)(?:\n|$)/im);
       // Extract barrier_categories: ia, task-flow (comma-separated, not JSON array)
       const catMatch = block.match(/^\s*barrier_categories:\s*(.+?)(?:\n|$)/im);
 
-      if (headerMatch) {
-        const title = headerMatch[1].trim();
-        const id = idMatch ? idMatch[1] : `barrier-${barriers.length + 1}`;
+      if (headerMatch || titleMatch) {
+        // Use title from the title: line, fall back to header content
+        const title = titleMatch ? titleMatch[1].trim() : (headerMatch ? headerMatch[1].trim() : 'Unknown barrier');
+        const id = headerMatch ? headerMatch[1].trim() : `barrier-${barriers.length + 1}`;
 
         // Parse categories - could be comma-separated or single value
         let categories: string[] = [];
