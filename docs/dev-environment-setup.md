@@ -90,13 +90,20 @@ OAuth & Permissions → Bot Token Scopes:
 ### 1.4 Create Slash Commands
 
 Slash Commands → Create New Command for each:
-- `/qori-plan`
+- `/qori`
+- `/qori-start`
 - `/qori-brief`
+- `/qori-plan`
 - `/qori-discover`
+- `/qori-fieldwork`
 - `/qori-analyze`
-- `/qori-readout`
-- `/qori-guide`
-- `/qori-help`
+- `/qori-synthesis`
+- `/qori-report`
+- `/qori-tickets`
+- `/qori-ask`
+- `/qori-learn`
+- `/qori-repo`
+- `/qori-sync`
 - `/qori-admin`
 
 For Socket Mode apps, Request URL is not needed.
@@ -168,7 +175,7 @@ Railway will auto-deploy to the dev environment.
 ### 2.4 Verify
 
 1. Check Railway deploy logs — should show migrations running
-2. Test a slash command in the dev Slack workspace
+2. Test a slash command in the dev Slack workspace (e.g., `/qori`)
 3. Verify data appears in the dev Postgres (Railway Data tab)
 
 ---
