@@ -16,7 +16,11 @@
 
 require('@babel/register')({
   extensions: ['.js', '.ts'],
-  presets: ['@babel/preset-env', '@babel/preset-typescript'],
+  babelrc: false, // Ignore .babelrc to avoid config conflicts
+  presets: [
+    '@babel/preset-env',
+    ['@babel/preset-typescript', { allowDeclareFields: true }],
+  ],
 });
 
 const { Sequelize } = require('sequelize');
