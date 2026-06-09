@@ -2,6 +2,12 @@ import { researchBriefModal } from './researchBriefModal';
 import { loadDiscoveryArtifacts, aggregateDiscoveryVariables, type DiscoveryArtifact } from '../../discoveryLoader';
 import { formatVariableCategories } from '../../cascadeVariableCategories';
 import { getProjectApprover } from '../../../services/authorization.service';
+import {
+  deriveBarrierCoverage,
+  formatOutOfScopeSuggestions,
+  formatParticipantHints,
+  type DiscoveredBarrier,
+} from '../../barrierCoverageDerivation';
 import type { WebClient } from '@slack/web-api';
 
 // ─── Modal metadata contract ─────────────────────────────────────
@@ -36,9 +42,20 @@ interface BuildBriefEntryModalOptions {
 /**
  * Synthesize pre-population values from aggregated discovery variables.
  * Returns { method, participants, questions, outOfScope } for field pre-fills.
- * Risks are NOT pre-filled here — they're consumed by brief generation (research_brief.yaml).
+ *
+ * LAYER 3 DERIVATION (2026-06-09):
+ * - Out-of-scope: derived from barrier coverage analysis (method vs. barrier categories)
+ * - Participants: vague category-level hints only — NO fabricated numbers, orgs, or specifics
+ * - Risks are NOT pre-filled here — consumed by brief generation (research_brief.yaml)
+ *
+ * FABRICATION REMOVED: No longer invents "3 screen reader users", "VA Section 508 Office", etc.
+ * If discovery doesn't support a real implication → leave empty (honest-empty).
  */
-function synthesizeCascadeFields(upstream: Record<string, string>, _artifacts: DiscoveryArtifact[]): CascadeFields {
+function synthesizeCascadeFields(
+  upstream: Record<string, string>,
+  _artifacts: DiscoveryArtifact[],
+  methodKey?: string
+): CascadeFields {
   const result: CascadeFields = {};
 
   // Method — from methodology_recommendations
@@ -71,45 +88,60 @@ function synthesizeCascadeFields(upstream: Record<string, string>, _artifacts: D
     }
   }
 
-  // Out of scope — NOT pre-filled from discovery barriers (that was semantically wrong).
-  // Barriers are inputs to research, not scope exclusions. Layer 3 will derive
-  // method-aware exclusions once barrier typing is proven. For now, leave empty
-  // for researcher input. The LLM task has correct guidance for real scope boundaries.
-
-  // Participants — synthesize COMPOSITION from discovery evidence (no recruitment)
-  const segments: string[] = [];
-  const recruitmentChannels: string[] = [];
-
-  // Check for AT user evidence from constraints or survey
-  const constraintText = upstream.upstream_stakeholder_constraints || '';
-  const surveyText = upstream.upstream_survey_themes || '';
+  // ─── LAYER 3: Barrier coverage derivation ───────────────────────
+  // Parse discovered barriers for coverage analysis
   const barrierText = upstream.upstream_discovered_barriers || '';
+  let barriers: DiscoveredBarrier[] = [];
 
-  if (constraintText.match(/screen.reader|assistive.tech|508|accessibility/i) ||
-      surveyText.match(/screen.reader|assistive.tech|accessibility/i) ||
-      barrierText.match(/screen.reader|assistive.tech|accessibility/i)) {
-    segments.push('3 screen reader users');
-    segments.push('2 voice control users');
-    // Accessibility evidence suggests these recruitment channels
-    recruitmentChannels.push('VA Section 508 Office');
-    recruitmentChannels.push('MHV coordinators');
+  if (barrierText) {
+    try {
+      // Try parsing as JSON array first (structured format)
+      const parsed = JSON.parse(barrierText);
+      if (Array.isArray(parsed)) {
+        barriers = parsed as DiscoveredBarrier[];
+      }
+    } catch {
+      // Not JSON — try extracting from formatted text
+      // Format: id, title, barrier_categories, etc. on separate lines
+      const barrierBlocks = barrierText.split(/(?=id:\s*barrier-)/i);
+      for (const block of barrierBlocks) {
+        if (!block.trim()) continue;
+        const idMatch = block.match(/id:\s*(barrier-\d+)/i);
+        const titleMatch = block.match(/title:\s*(.+?)(?:\n|$)/i);
+        const catMatch = block.match(/barrier_categories:\s*\[([^\]]+)\]/i);
+        if (idMatch && titleMatch) {
+          const categories = catMatch
+            ? catMatch[1].split(',').map(c => c.trim().replace(/['"]/g, ''))
+            : [];
+          barriers.push({
+            id: idMatch[1],
+            title: titleMatch[1].trim(),
+            barrier_categories: categories as DiscoveredBarrier['barrier_categories'],
+          });
+        }
+      }
+    }
   }
 
-  // Check for age-related patterns
-  if (barrierText.match(/age|older|65\+|senior/i) ||
-      surveyText.match(/age|older|65\+|senior/i)) {
-    segments.push('at least 3 aged 65+');
+  // Derive coverage if we have barriers and a method
+  if (barriers.length > 0 && methodKey) {
+    const derivation = deriveBarrierCoverage(barriers, methodKey);
+
+    // Out-of-scope suggestions (method-aware, traceable)
+    if (derivation.outOfScope.length > 0) {
+      result.outOfScope = formatOutOfScopeSuggestions(derivation.outOfScope, derivation.methodLabel);
+    }
+
+    // Participant hints (vague category-level only, NO fabrication)
+    if (derivation.participantHints.length > 0) {
+      result.participants = formatParticipantHints(derivation.participantHints);
+    }
   }
 
-  // Composition only — no recruitment text
-  if (segments.length > 0) {
-    result.participants = `8-12 Veterans, including ${segments.join(', ')}. Mix of iOS and Android users.`;
-  }
-
-  // Recruitment separately
-  if (recruitmentChannels.length > 0) {
-    result.recruitment = recruitmentChannels.join(', ');
-  }
+  // ─── NO FABRICATION ─────────────────────────────────────────────
+  // Old code invented: "3 screen reader users", "VA Section 508 Office", etc.
+  // REMOVED. If typed barriers don't support a real implication → leave empty.
+  // Researcher fills in specifics based on their study needs.
 
   return result;
 }
@@ -295,54 +327,95 @@ export async function buildBriefEntryModal(options: BuildBriefEntryModalOptions)
 
       // Aggregate variables for pre-population (pre-fills only, no narration blocks)
       const upstream = aggregateDiscoveryVariables(artifacts) as Record<string, string>;
-      const cascade = synthesizeCascadeFields(upstream, artifacts);
 
-      // Pre-populate method — hybrid radio + override
-      if (cascade.method) {
-        const radioOptions: Record<string, string> = {
-          // Usability Testing
-          'usability testing': 'usability_testing',
-          'usability test': 'usability_testing',
-          'usability study': 'usability_testing',
-          'moderated usability testing': 'usability_testing',
-          'moderated usability test': 'usability_testing',
-          'unmoderated usability testing': 'usability_testing',
-          // User Interviews
-          'user interviews': 'user_interviews',
-          'user interview': 'user_interviews',
-          'interviews': 'user_interviews',
-          'interview': 'user_interviews',
-          // Contextual Inquiry
-          'contextual inquiry': 'contextual_inquiry',
-          'contextual inquiries': 'contextual_inquiry',
-          // Concept Testing
-          'concept testing': 'concept_testing',
-          'concept test': 'concept_testing',
-          'concept validation': 'concept_testing',
-          // Survey Research
-          'survey': 'survey',
-          'survey research': 'survey',
-          'surveys': 'survey',
-          // Card Sorting
-          'card sorting': 'card_sorting',
-          'card sort': 'card_sorting',
-          'card sorts': 'card_sorting',
-          // Tree Testing
-          'tree testing': 'tree_testing',
-          'tree test': 'tree_testing',
-          'tree tests': 'tree_testing',
-          // Mixed Methods
-          'mixed methods': 'mixed_methods',
-          'mixed method': 'mixed_methods',
-        };
-        const methodLower = cascade.method.toLowerCase();
+      // ─── Method resolution (needed for barrier coverage derivation) ───
+      const radioOptions: Record<string, string> = {
+        // Usability Testing
+        'usability testing': 'usability_testing',
+        'usability test': 'usability_testing',
+        'usability study': 'usability_testing',
+        'moderated usability testing': 'usability_testing',
+        'moderated usability test': 'usability_testing',
+        'unmoderated usability testing': 'usability_testing',
+        // User Interviews
+        'user interviews': 'user_interviews',
+        'user interview': 'user_interviews',
+        'interviews': 'user_interviews',
+        'interview': 'user_interviews',
+        // Contextual Inquiry
+        'contextual inquiry': 'contextual_inquiry',
+        'contextual inquiries': 'contextual_inquiry',
+        // Concept Testing
+        'concept testing': 'concept_testing',
+        'concept test': 'concept_testing',
+        'concept validation': 'concept_testing',
+        // Survey Research
+        'survey': 'survey',
+        'survey research': 'survey',
+        'surveys': 'survey',
+        // Card Sorting
+        'card sorting': 'card_sorting',
+        'card sort': 'card_sorting',
+        'card sorts': 'card_sorting',
+        // Tree Testing
+        'tree testing': 'tree_testing',
+        'tree test': 'tree_testing',
+        'tree tests': 'tree_testing',
+        // Mixed Methods
+        'mixed methods': 'mixed_methods',
+        'mixed method': 'mixed_methods',
+      };
 
+      // Extract method suggestion from upstream, resolve to method key
+      let resolvedMethodKey: string | undefined;
+      let methodSuggestion: string | undefined;
+
+      const methodRecs = upstream.upstream_methodology_recommendations;
+      if (methodRecs) {
+        const methods = methodRecs.split('\n').filter((l: string) => l.trim().startsWith('**') || l.trim().startsWith('-'));
+        if (methods.length > 0) {
+          const firstMethod = methods[0].replace(/^\*\*\d+\.\*\*\s*/, '').replace(/^-\s*/, '').split('\n')[0];
+          const methodName = firstMethod.match(/method(?:_name)?:\s*(.+?)(?:,|$)/i)?.[1] || firstMethod.substring(0, 80);
+          methodSuggestion = methodName.trim();
+        }
+      }
+
+      if (methodSuggestion) {
+        const methodLower = methodSuggestion.toLowerCase();
         // Check for exact match first
-        let matchedRadio = radioOptions[methodLower];
-
+        resolvedMethodKey = radioOptions[methodLower];
         // If no exact match, check if method string CONTAINS any known method name
+        if (!resolvedMethodKey) {
+          const orderedKeys = Object.keys(radioOptions).sort((a, b) => b.length - a.length);
+          for (const key of orderedKeys) {
+            if (methodLower.includes(key)) {
+              resolvedMethodKey = radioOptions[key];
+              break;
+            }
+          }
+        }
+        // Check for combined/mixed methods indicators
+        if (!resolvedMethodKey) {
+          const combinedIndicators = ['followed by', 'then', ' + ', ' and ', 'combined with'];
+          const isCombined = combinedIndicators.some(ind => methodLower.includes(ind));
+          if (isCombined) {
+            resolvedMethodKey = 'mixed_methods';
+          }
+        }
+        // If still no match, it's a custom method
+        if (!resolvedMethodKey) {
+          resolvedMethodKey = 'custom';
+        }
+      }
+
+      // Now call synthesizeCascadeFields WITH the resolved method key
+      const cascade = synthesizeCascadeFields(upstream, artifacts, resolvedMethodKey);
+
+      // Pre-populate method — hybrid radio + override (reuse resolution above)
+      if (methodSuggestion) {
+        const methodLower = methodSuggestion.toLowerCase();
+        let matchedRadio = radioOptions[methodLower];
         if (!matchedRadio) {
-          // Priority order: longer matches first to avoid "interview" matching before "user interview"
           const orderedKeys = Object.keys(radioOptions).sort((a, b) => b.length - a.length);
           for (const key of orderedKeys) {
             if (methodLower.includes(key)) {
@@ -351,8 +424,6 @@ export async function buildBriefEntryModal(options: BuildBriefEntryModalOptions)
             }
           }
         }
-
-        // If still no match, check for combined/mixed methods indicators
         if (!matchedRadio) {
           const combinedIndicators = ['followed by', 'then', ' + ', ' and ', 'combined with'];
           const isCombined = combinedIndicators.some(ind => methodLower.includes(ind));
