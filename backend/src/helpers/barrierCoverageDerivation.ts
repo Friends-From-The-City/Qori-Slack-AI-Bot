@@ -71,6 +71,7 @@ interface MethodConfig {
   manual_review_required?: boolean;
   requires_component_specification?: boolean;
   manual_review_until_specified?: boolean;
+  participant_guidance?: string;
 }
 
 interface CoverageMapConfig {
@@ -271,8 +272,8 @@ export function deriveBarrierCoverage(
   const outOfScope = results.filter((r) => r.coverageState === 'none');
   const manualReview = results.filter((r) => r.coverageState === 'manual_review');
 
-  // Generate participant hints (OUTPUT B: vague category-level only)
-  const participantHints = deriveParticipantHints(barriers, config);
+  // Generate participant hints (OUTPUT B: method guidance + category composition)
+  const participantHints = deriveParticipantHints(barriers, config, methodKey);
 
   return {
     method: methodKey,
@@ -288,51 +289,56 @@ export function deriveBarrierCoverage(
 // ─── Participant hints (OUTPUT B) ────────────────────────────────
 
 /**
- * Derive VAGUE category-level participant composition hints from barriers.
+ * Derive participant composition hints from method guidance + barrier categories.
  *
- * CRITICAL: Never invent numbers, org names, or specifics.
- * Output is a SUGGESTION the researcher confirms/edits.
+ * Uses methodology-grounded guidance from the coverage map (e.g., "5-8 participants
+ * for usability testing") combined with category-specific composition notes.
+ *
+ * CRITICAL: Never invent study-specific numbers, org names, or fabricated specifics.
+ * The guidance comes from established methodology norms, not made-up details.
  */
 function deriveParticipantHints(
   barriers: DiscoveredBarrier[],
-  _config: CoverageMapConfig
+  config: CoverageMapConfig,
+  methodKey?: string
 ): string[] {
   const hints: string[] = [];
-  const categorySet = new Set<BarrierCategory>();
 
-  // Collect all categories across barriers
+  // 1. Method-specific guidance (from coverage map)
+  if (methodKey && config.methods[methodKey]?.participant_guidance) {
+    hints.push(config.methods[methodKey].participant_guidance!);
+  }
+
+  // 2. Category-specific composition recommendations (based on barriers)
+  const categorySet = new Set<BarrierCategory>();
   for (const barrier of barriers) {
     for (const cat of barrier.barrier_categories || []) {
       categorySet.add(cat);
     }
   }
 
-  // Generate category-level hints (NO specifics, NO numbers, NO org names)
+  // Add composition notes for specific barrier categories
   if (categorySet.has('accessibility')) {
     hints.push(
-      'Discovery surfaced accessibility barriers; consider including participants who use assistive technology.'
+      'Discovery surfaced accessibility barriers — include participants who use assistive technology.'
     );
   }
 
-  if (categorySet.has('cognitive')) {
+  if (categorySet.has('cognitive') && !hints.some(h => h.includes('proficiency'))) {
     hints.push(
-      'Discovery surfaced cognitive load barriers; consider including participants with varying tech proficiency levels.'
+      'Cognitive barriers present — include participants with varying tech proficiency levels.'
     );
   }
 
   if (categorySet.has('content')) {
     hints.push(
-      'Discovery surfaced content comprehension barriers; consider including participants with varying reading levels.'
+      'Content barriers present — include participants with varying reading levels.'
     );
   }
 
-  if (categorySet.has('performance')) {
-    hints.push(
-      'Discovery surfaced performance barriers; note that participant testing may not reproduce real-world latency conditions.'
-    );
-  }
+  // Note: performance barriers don't affect participant composition
+  // (the method either can or can't test performance)
 
-  // If no specific hints generated, return empty (honest-empty)
   return hints;
 }
 

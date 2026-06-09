@@ -77,6 +77,7 @@ methods:
       - accessibility  # Requires AT-specific testing setup
       - performance    # Cannot reproduce real latency in test session
     rationale: "Moderated task observation validates IA, content comprehension, task completion, and cognitive barriers through direct observation of user behavior."
+    participant_guidance: "5-8 participants typically reveal 80% of major usability issues. Prioritize participants who represent primary user segments."
 
   user_interviews:
     label: "User Interviews"
@@ -89,6 +90,7 @@ methods:
       - accessibility  # Interviews surface but don't VALIDATE a11y barriers (Lapedra ruling)
       - performance    # Self-report unreliable for latency perception
     rationale: "Interviews capture user perspectives on IA mental models, content understanding, and cognitive load, but cannot validate accessibility barriers (hearing a report ≠ observing AT fail)."
+    participant_guidance: "8-12 participants for thematic saturation. Include mix of experience levels and usage patterns."
 
   contextual_inquiry:
     label: "Contextual Inquiry"
@@ -101,6 +103,7 @@ methods:
     does_not_cover:
       - performance  # Real-world performance varies; hard to isolate
     rationale: "Real-environment observation captures IA, accessibility (via actual AT use), content, task-flow, and cognitive barriers. Only method that validates accessibility through direct AT observation."
+    participant_guidance: "4-6 participants in their real environment. Schedule 90-120 min sessions to observe natural workflows."
 
   concept_testing:
     label: "Concept Testing"
@@ -113,6 +116,7 @@ methods:
       - performance  # Concepts don't have latency
       - task-flow    # Concepts aren't full task flows
     rationale: "Validates comprehension and cognitive load / understandability of concepts/designs before implementation."
+    participant_guidance: "6-10 participants per concept variant. Include decision-makers if testing concepts that require buy-in."
 
   survey:
     label: "Survey Research"
@@ -125,6 +129,7 @@ methods:
       - content      # Surveys measure attitudes, not comprehension
       - task-flow    # Surveys measure perception, not behavior
     rationale: "Quantifies self-reported / perceived cognitive load at scale. Does not observe mental load directly — captures user perception of difficulty, not behavior."
+    participant_guidance: "100+ responses for statistical reliability. Aim for 5% margin of error at 95% confidence."
 
   card_sorting:
     label: "Card Sorting"
@@ -137,6 +142,7 @@ methods:
       - content      # Card labels ≠ content comprehension
       - task-flow    # Sorting ≠ task completion
     rationale: "Validates information architecture through user mental model elicitation."
+    participant_guidance: "15-30 participants for reliable categorization patterns. Include mix of novice and experienced users."
 
   tree_testing:
     label: "Tree Testing"
@@ -149,6 +155,7 @@ methods:
       - content      # Tests structure, not content comprehension
       - cognitive    # Structure navigation ≠ cognitive load measurement
     rationale: "Validates findability within an information structure. Ends when user locates the correct node — does not observe task completion, error recovery, or workflow behavior."
+    participant_guidance: "50+ participants for statistically meaningful findability scores. Can run unmoderated at scale."
 
   mixed_methods:
     label: "Mixed Methods"
