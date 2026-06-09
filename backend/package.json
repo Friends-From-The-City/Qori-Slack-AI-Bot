@@ -24,6 +24,7 @@
     "test:mocha": "NODE_ENV=test mocha --require @babel/register --exit",
     "test:watch": "NODE_ENV=test jest --config jest.config.js --watch",
     "db:migrate": "npx sequelize-cli db:migrate",
+    "db:validate": "node scripts/validate-schema.js",
     "adr": "../scripts/new-adr.sh",
     "adr:lesson": "../scripts/new-adr-lesson.sh",
     "build:cascade": "npx ts-node scripts/build-cascade-registry.ts"

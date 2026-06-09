@@ -2,9 +2,9 @@ name: CI
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, dev]
   push:
-    branches: [main]
+    branches: [main, dev]
 
 jobs:
   test:
@@ -55,6 +55,58 @@ jobs:
       - name: Run unit tests
         working-directory: backend
         run: npm test
+
+      - name: Verify migrations
+        working-directory: backend
+        env:
+          DB_HOST: localhost
+          DB_PORT: '5432'
+          DB_USER: qori_test
+          DB_PASSWORD: test
+          DB_NAME: qori_test
+          DB_DIALECT: postgres
+        run: |
+          echo "Running migrations..."
+          npx sequelize-cli db:migrate
+
+          echo "Verifying migration state..."
+          EXPECTED_COUNT=$(ls -1 src/database/migrations/*.js | wc -l | tr -d ' ')
+          APPLIED_COUNT=$(node -e "
+            const { Sequelize } = require('sequelize');
+            const seq = new Sequelize({
+              dialect: 'postgres',
+              host: 'localhost',
+              port: 5432,
+              database: 'qori_test',
+              username: 'qori_test',
+              password: 'test',
+              logging: false
+            });
+            seq.query('SELECT COUNT(*) as count FROM \"SequelizeMeta\"', { type: seq.QueryTypes.SELECT })
+              .then(r => { console.log(r[0].count); seq.close(); })
+              .catch(e => { console.error(e.message); process.exit(1); });
+          ")
+
+          echo "Migration count: $APPLIED_COUNT applied, $EXPECTED_COUNT expected"
+
+          if [ "$APPLIED_COUNT" != "$EXPECTED_COUNT" ]; then
+            echo "::error::Migration count mismatch! Applied: $APPLIED_COUNT, Expected: $EXPECTED_COUNT"
+            echo "::error::This may indicate missing migrations or migrations that failed silently."
+            exit 1
+          fi
+
+          echo "Migration state verified."
+
+      - name: Verify schema matches models
+        working-directory: backend
+        env:
+          DB_HOST: localhost
+          DB_PORT: '5432'
+          DB_USER: qori_test
+          DB_PASSWORD: test
+          DB_NAME: qori_test
+          DB_DIALECT: postgres
+        run: node scripts/validate-schema.js
 
       - name: Run integration tests
         working-directory: backend

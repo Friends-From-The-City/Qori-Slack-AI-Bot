@@ -21,6 +21,7 @@ EXPOSE 3000
 # Set environment
 ENV NODE_ENV=development
 
-# Use nodemon for hot reload
-CMD ["npm", "run", "dev"]
+# Run migrations on startup, then start dev server with hot reload
+# Note: docker-compose-dev.yml mounts src/ as a volume for hot reload
+CMD ["sh", "-c", "npx sequelize-cli db:migrate && npm run dev"]
 
