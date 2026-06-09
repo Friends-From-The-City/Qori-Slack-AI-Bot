@@ -26,6 +26,8 @@ class ChannelConfig extends Model<
   declare repo: string | null;
   declare product_folder_name: string | null;
   declare sub_folder_name: string | null;
+  // FAIL-STOP TEST: This column does not exist in the database
+  declare fake_nonexistent_column: string | null;
   declare created_at: CreationOptional<Date>;
   declare updated_at: CreationOptional<Date>;
 
@@ -80,6 +82,11 @@ export default (sequelize: Sequelize) => {
         allowNull: true,
       },
       sub_folder_name: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      // FAIL-STOP TEST: This column does not exist in the database
+      fake_nonexistent_column: {
         type: DataTypes.STRING,
         allowNull: true,
       },
