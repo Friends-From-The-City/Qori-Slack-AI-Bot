@@ -90,11 +90,22 @@ let cachedConfig: CoverageMapConfig | null = null;
 function loadCoverageConfig(): CoverageMapConfig {
   if (cachedConfig) return cachedConfig;
 
-  // Path from dist/helpers/ to config/ (which is at /app/config/ in Docker)
-  const configPath = join(__dirname, '../../../config/method-coverage-map.yaml');
+  // Path to config/ - try multiple approaches for Docker compatibility
+  // In Docker: /app/dist/helpers/ → ../../config/ = /app/config/
+  // Fallback to process.cwd() which should be /app/
+  const relativePath = join(__dirname, '../../config/method-coverage-map.yaml');
+  const cwdPath = join(process.cwd(), 'config/method-coverage-map.yaml');
+
+  // Try relative path first, then cwd-based path
+  let configPath = relativePath;
+  try {
+    require('fs').accessSync(relativePath);
+  } catch {
+    configPath = cwdPath;
+  }
 
   try {
-    console.log(`📊 Layer 3: Loading coverage config from ${configPath}`);
+    console.log(`📊 Layer 3: Loading coverage config from ${configPath} (cwd: ${process.cwd()}, __dirname: ${__dirname})`);
     const raw = readFileSync(configPath, 'utf8');
     cachedConfig = yamlLoad(raw) as CoverageMapConfig;
     console.log(`📊 Layer 3: Loaded ${Object.keys(cachedConfig.methods || {}).length} methods from coverage config`);
