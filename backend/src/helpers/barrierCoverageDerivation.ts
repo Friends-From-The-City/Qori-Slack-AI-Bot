@@ -90,11 +90,25 @@ let cachedConfig: CoverageMapConfig | null = null;
 function loadCoverageConfig(): CoverageMapConfig {
   if (cachedConfig) return cachedConfig;
 
-  // Path from src/helpers/ to config/ (which is at backend/config/)
+  // Path from dist/helpers/ to config/ (which is at /app/config/ in Docker)
   const configPath = join(__dirname, '../../../config/method-coverage-map.yaml');
-  const raw = readFileSync(configPath, 'utf8');
-  cachedConfig = yamlLoad(raw) as CoverageMapConfig;
-  return cachedConfig;
+
+  try {
+    console.log(`📊 Layer 3: Loading coverage config from ${configPath}`);
+    const raw = readFileSync(configPath, 'utf8');
+    cachedConfig = yamlLoad(raw) as CoverageMapConfig;
+    console.log(`📊 Layer 3: Loaded ${Object.keys(cachedConfig.methods || {}).length} methods from coverage config`);
+    return cachedConfig;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`❌ Layer 3: Failed to load coverage config from ${configPath}: ${message}`);
+    // Return a minimal fallback config to prevent crashes
+    return {
+      schema_version: '1.0',
+      methods: {},
+      barrier_categories: {},
+    };
+  }
 }
 
 /**

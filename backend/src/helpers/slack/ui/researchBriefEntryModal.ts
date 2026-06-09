@@ -142,16 +142,26 @@ function synthesizeCascadeFields(
 
   // Derive coverage if we have barriers and a method
   if (barriers.length > 0 && methodKey) {
-    const derivation = deriveBarrierCoverage(barriers, methodKey);
+    try {
+      console.log(`📊 Layer 3: Deriving coverage for ${barriers.length} barriers with method '${methodKey}'`);
+      const derivation = deriveBarrierCoverage(barriers, methodKey);
+      console.log(`📊 Layer 3: Derivation complete: ${derivation.inScope.length} in-scope, ${derivation.outOfScope.length} out-of-scope, ${derivation.manualReview.length} manual-review`);
 
-    // Out-of-scope suggestions (method-aware, traceable)
-    if (derivation.outOfScope.length > 0) {
-      result.outOfScope = formatOutOfScopeSuggestions(derivation.outOfScope, derivation.methodLabel);
-    }
+      // Out-of-scope suggestions (method-aware, traceable)
+      if (derivation.outOfScope.length > 0) {
+        result.outOfScope = formatOutOfScopeSuggestions(derivation.outOfScope, derivation.methodLabel);
+        console.log(`📊 Layer 3: Generated out-of-scope text: ${result.outOfScope.substring(0, 100)}...`);
+      }
 
-    // Participant hints (vague category-level only, NO fabrication)
-    if (derivation.participantHints.length > 0) {
-      result.participants = formatParticipantHints(derivation.participantHints);
+      // Participant hints (vague category-level only, NO fabrication)
+      if (derivation.participantHints.length > 0) {
+        result.participants = formatParticipantHints(derivation.participantHints);
+        console.log(`📊 Layer 3: Generated participant hints: ${result.participants.substring(0, 100)}...`);
+      }
+    } catch (derivationError) {
+      const message = derivationError instanceof Error ? derivationError.message : String(derivationError);
+      console.error(`❌ Layer 3: Derivation failed: ${message}`);
+      // Continue without derivation - don't crash the modal
     }
   }
 
