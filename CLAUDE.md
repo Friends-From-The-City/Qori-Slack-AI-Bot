@@ -72,28 +72,48 @@ docker-compose up    # Starts app (3000), postgres (5432), redis (6379)
 
 **Environment:** Copy `backend/.env.example` to `backend/.env`. Required variables: Slack tokens (`SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET`, `SLACK_APP_TOKEN`), `GITHUB_TOKEN`/`GITHUB_OWNER`/`GITHUB_REPO`, `ANTHROPIC_API_KEY`, database credentials. See `.env.example` for the full list with descriptions.
 
-## Railway Deployment (Production)
+## Railway Deployment
 
-**Migrated 2026-04-23. Verified end-to-end 2026-04-24.** The backend runs on Railway with Postgres and Redis as managed services. Slack commands work end-to-end on the Railway URL (~95% of flows working as of 2026-04-24 alpha test).
+**Two environments:** Production (`main` branch) and Development (`dev` branch). Each has its own Postgres, Redis, and Slack app.
 
-**Services:**
-- **Backend** — Node.js service, deployed from `backend/` on push to `main`
-- **Postgres** — Railway-managed, connection string provided as `DATABASE_URL`. All 33 migrations run successfully. You can browse tables directly in Railway's Data tab.
-- **Redis** — Railway-managed, connection string provided as `REDIS_URL`
+| Environment | Branch | Slack App | Workspace |
+|-------------|--------|-----------|-----------|
+| Production | `main` | `Qori` | Research team workspace |
+| Development | `dev` | `Qori Dev` | Dev/test workspace |
 
-**Environment variables** are set in Railway's Variables tab per service. All the same vars from `.env.example` apply. Three gotchas to know:
+**Migrations run automatically on deploy.** The Dockerfile CMD is `scripts/start.sh`, which:
+1. Waits for database connection
+2. Runs `npx sequelize-cli db:migrate`
+3. Verifies migration count matches expected
+4. Starts the app
 
-1. **No spaces around `=` in Railway variables.** Railway's UI trims values, but if you paste `DB_DIALECT = postgres` (with spaces) from another source, the value becomes ` postgres` (leading space) and Sequelize will fail with "Dialect needs to be explicitly supplied." Always use `DB_DIALECT=postgres` with no spaces.
+This ensures code and schema always deploy together — the root cause of the June 2026 outage was code deploying without its migration.
 
-2. **Token values can get truncated/malformed on paste.** Both `SLACK_APP_TOKEN` and `GITHUB_TOKEN` were broken on initial setup because the value was truncated when pasted into Railway's Variables UI. If a token-based service fails to authenticate, re-paste the full value and verify character count matches the source.
+**Full setup guide:** See `docs/dev-environment-setup.md` for complete instructions on setting up the dev environment, including Slack app creation and Railway configuration.
 
-3. **Postgres public URL for migrations.** Railway's internal Postgres hostname (`postgres.railway.internal`) only resolves inside the private network. To run `npx sequelize-cli db:migrate` from your local machine or via `railway run`, use the **public** connection URL (with `DATABASE_PUBLIC_URL` fields) from the Postgres service's Connect tab (it has a `railway.app` hostname and a mapped port). The internal URL works for the backend service at runtime since it's on the same private network.
+**Services (per environment):**
+- **Backend** — Node.js service, auto-deploys from branch
+- **Postgres** — Railway-managed, migrations run on startup
+- **Redis** — Railway-managed
 
-**Start command:** Railway uses a Dockerfile (`backend/Dockerfile`) which runs `npm run build` during image creation and `node ./dist/app.js` at runtime. Clear the Custom Start Command in Railway's UI — the Dockerfile CMD handles it. Do **not** use `npm run prod` (runs raw source, can't load `.ts` files). Do **not** use `npm start` (`dist/bin/www.js` has broken relative paths).
+**Environment variables** are set in Railway's Variables tab per environment. Key gotchas:
 
-**Deploy flow:** Push to `main` → Railway auto-deploys. GitHub Actions CI runs typecheck + tests on every PR.
+1. **No spaces around `=` in Railway variables.** `DB_DIALECT = postgres` (with spaces) breaks Sequelize.
 
-**Full deployment checklist:** See `docs/deployment-checklist.md` for fresh deployments. Includes Slack scope requirements (critical: `groups:read` for private channels), environment variable setup, and post-deployment verification steps.
+2. **Token values can get truncated/malformed on paste.** Verify character count matches source.
+
+3. **Postgres public URL for manual migrations.** Use the public URL (`railway.app` hostname) from the Postgres Connect tab, not the internal URL (`postgres.railway.internal`).
+
+**Deploy flow:**
+```
+feature/* → PR to dev → CI checks → merge → Railway dev auto-deploys
+                                           ↓
+                            test in dev Slack workspace
+                                           ↓
+                        PR from dev to main → merge → Railway prod auto-deploys
+```
+
+**CI verification:** GitHub Actions runs typecheck, unit tests, integration tests, AND migration verification on every PR. The migration check runs all pending migrations and verifies the count matches the expected number of migration files.
 
 ## Key Directories
 

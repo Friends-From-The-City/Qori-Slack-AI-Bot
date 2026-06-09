@@ -2,6 +2,12 @@ import { researchBriefModal } from './researchBriefModal';
 import { loadDiscoveryArtifacts, aggregateDiscoveryVariables, type DiscoveryArtifact } from '../../discoveryLoader';
 import { formatVariableCategories } from '../../cascadeVariableCategories';
 import { getProjectApprover } from '../../../services/authorization.service';
+import {
+  deriveBarrierCoverage,
+  formatOutOfScopeSuggestions,
+  formatParticipantHints,
+  type DiscoveredBarrier,
+} from '../../barrierCoverageDerivation';
 import type { WebClient } from '@slack/web-api';
 
 // ─── Modal metadata contract ─────────────────────────────────────
@@ -36,9 +42,20 @@ interface BuildBriefEntryModalOptions {
 /**
  * Synthesize pre-population values from aggregated discovery variables.
  * Returns { method, participants, questions, outOfScope } for field pre-fills.
- * Risks are NOT pre-filled here — they're consumed by brief generation (research_brief.yaml).
+ *
+ * LAYER 3 DERIVATION (2026-06-09):
+ * - Out-of-scope: derived from barrier coverage analysis (method vs. barrier categories)
+ * - Participants: vague category-level hints only — NO fabricated numbers, orgs, or specifics
+ * - Risks are NOT pre-filled here — consumed by brief generation (research_brief.yaml)
+ *
+ * FABRICATION REMOVED: No longer invents "3 screen reader users", "VA Section 508 Office", etc.
+ * If discovery doesn't support a real implication → leave empty (honest-empty).
  */
-function synthesizeCascadeFields(upstream: Record<string, string>, _artifacts: DiscoveryArtifact[]): CascadeFields {
+function synthesizeCascadeFields(
+  upstream: Record<string, string>,
+  _artifacts: DiscoveryArtifact[],
+  methodKey?: string
+): CascadeFields {
   const result: CascadeFields = {};
 
   // Method — from methodology_recommendations
@@ -71,45 +88,93 @@ function synthesizeCascadeFields(upstream: Record<string, string>, _artifacts: D
     }
   }
 
-  // Out of scope — NOT pre-filled from discovery barriers (that was semantically wrong).
-  // Barriers are inputs to research, not scope exclusions. Layer 3 will derive
-  // method-aware exclusions once barrier typing is proven. For now, leave empty
-  // for researcher input. The LLM task has correct guidance for real scope boundaries.
-
-  // Participants — synthesize COMPOSITION from discovery evidence (no recruitment)
-  const segments: string[] = [];
-  const recruitmentChannels: string[] = [];
-
-  // Check for AT user evidence from constraints or survey
-  const constraintText = upstream.upstream_stakeholder_constraints || '';
-  const surveyText = upstream.upstream_survey_themes || '';
+  // ─── LAYER 3: Barrier coverage derivation ───────────────────────
+  // Parse discovered barriers for coverage analysis
   const barrierText = upstream.upstream_discovered_barriers || '';
+  let barriers: DiscoveredBarrier[] = [];
 
-  if (constraintText.match(/screen.reader|assistive.tech|508|accessibility/i) ||
-      surveyText.match(/screen.reader|assistive.tech|accessibility/i) ||
-      barrierText.match(/screen.reader|assistive.tech|accessibility/i)) {
-    segments.push('3 screen reader users');
-    segments.push('2 voice control users');
-    // Accessibility evidence suggests these recruitment channels
-    recruitmentChannels.push('VA Section 508 Office');
-    recruitmentChannels.push('MHV coordinators');
+  if (barrierText) {
+    // Barriers are formatted as markdown by formatObjectAsMarkdown:
+    // **1.** Screen-transition latency exceeds abandonment threshold
+    //   id: barrier-001
+    //   summary: ...
+    //   barrier_categories: performance
+    //
+    // **2.** Navigation structure misaligns with user mental models
+    //   id: barrier-002
+    //   barrier_categories: ia, task-flow
+
+    // Split on numbered headers: **1.**, **2.**, etc.
+    const barrierBlocks = barrierText.split(/(?=\*\*\d+\.\*\*)/);
+
+    for (const block of barrierBlocks) {
+      if (!block.trim()) continue;
+
+      // The markdown format from formatObjectAsMarkdown puts the ID in the header:
+      // **1.** barrier-001
+      //   title: Screen-transition latency exceeds abandonment threshold
+      //   barrier_categories: performance
+
+      // Extract id from header: **1.** barrier-001
+      const headerMatch = block.match(/\*\*\d+\.\*\*\s*(.+?)(?:\n|$)/);
+      // Extract title from the title: line
+      const titleMatch = block.match(/^\s*title:\s*(.+?)(?:\n|$)/im);
+      // Extract barrier_categories: ia, task-flow (comma-separated, not JSON array)
+      const catMatch = block.match(/^\s*barrier_categories:\s*(.+?)(?:\n|$)/im);
+
+      if (headerMatch || titleMatch) {
+        // Use title from the title: line, fall back to header content
+        const title = titleMatch ? titleMatch[1].trim() : (headerMatch ? headerMatch[1].trim() : 'Unknown barrier');
+        const id = headerMatch ? headerMatch[1].trim() : `barrier-${barriers.length + 1}`;
+
+        // Parse categories - could be comma-separated or single value
+        let categories: string[] = [];
+        if (catMatch) {
+          const catStr = catMatch[1].trim();
+          // Handle both "ia, task-flow" and "performance" formats
+          categories = catStr.split(',').map(c => c.trim().replace(/['"[\]]/g, ''));
+        }
+
+        barriers.push({
+          id,
+          title,
+          barrier_categories: categories as DiscoveredBarrier['barrier_categories'],
+        });
+      }
+    }
+
+    console.log(`📊 Layer 3: Parsed ${barriers.length} barriers from discovery for coverage analysis`);
   }
 
-  // Check for age-related patterns
-  if (barrierText.match(/age|older|65\+|senior/i) ||
-      surveyText.match(/age|older|65\+|senior/i)) {
-    segments.push('at least 3 aged 65+');
+  // Derive coverage if we have barriers and a method
+  if (barriers.length > 0 && methodKey) {
+    try {
+      console.log(`📊 Layer 3: Deriving coverage for ${barriers.length} barriers with method '${methodKey}'`);
+      const derivation = deriveBarrierCoverage(barriers, methodKey);
+      console.log(`📊 Layer 3: Derivation complete: ${derivation.inScope.length} in-scope, ${derivation.outOfScope.length} out-of-scope, ${derivation.manualReview.length} manual-review`);
+
+      // Out-of-scope suggestions (method-aware, traceable)
+      if (derivation.outOfScope.length > 0) {
+        result.outOfScope = formatOutOfScopeSuggestions(derivation.outOfScope, derivation.methodLabel);
+        console.log(`📊 Layer 3: Generated out-of-scope text: ${result.outOfScope.substring(0, 100)}...`);
+      }
+
+      // Participant hints (vague category-level only, NO fabrication)
+      if (derivation.participantHints.length > 0) {
+        result.participants = formatParticipantHints(derivation.participantHints);
+        console.log(`📊 Layer 3: Generated participant hints: ${result.participants.substring(0, 100)}...`);
+      }
+    } catch (derivationError) {
+      const message = derivationError instanceof Error ? derivationError.message : String(derivationError);
+      console.error(`❌ Layer 3: Derivation failed: ${message}`);
+      // Continue without derivation - don't crash the modal
+    }
   }
 
-  // Composition only — no recruitment text
-  if (segments.length > 0) {
-    result.participants = `8-12 Veterans, including ${segments.join(', ')}. Mix of iOS and Android users.`;
-  }
-
-  // Recruitment separately
-  if (recruitmentChannels.length > 0) {
-    result.recruitment = recruitmentChannels.join(', ');
-  }
+  // ─── NO FABRICATION ─────────────────────────────────────────────
+  // Old code invented: "3 screen reader users", "VA Section 508 Office", etc.
+  // REMOVED. If typed barriers don't support a real implication → leave empty.
+  // Researcher fills in specifics based on their study needs.
 
   return result;
 }
@@ -295,54 +360,99 @@ export async function buildBriefEntryModal(options: BuildBriefEntryModalOptions)
 
       // Aggregate variables for pre-population (pre-fills only, no narration blocks)
       const upstream = aggregateDiscoveryVariables(artifacts) as Record<string, string>;
-      const cascade = synthesizeCascadeFields(upstream, artifacts);
 
-      // Pre-populate method — hybrid radio + override
-      if (cascade.method) {
-        const radioOptions: Record<string, string> = {
-          // Usability Testing
-          'usability testing': 'usability_testing',
-          'usability test': 'usability_testing',
-          'usability study': 'usability_testing',
-          'moderated usability testing': 'usability_testing',
-          'moderated usability test': 'usability_testing',
-          'unmoderated usability testing': 'usability_testing',
-          // User Interviews
-          'user interviews': 'user_interviews',
-          'user interview': 'user_interviews',
-          'interviews': 'user_interviews',
-          'interview': 'user_interviews',
-          // Contextual Inquiry
-          'contextual inquiry': 'contextual_inquiry',
-          'contextual inquiries': 'contextual_inquiry',
-          // Concept Testing
-          'concept testing': 'concept_testing',
-          'concept test': 'concept_testing',
-          'concept validation': 'concept_testing',
-          // Survey Research
-          'survey': 'survey',
-          'survey research': 'survey',
-          'surveys': 'survey',
-          // Card Sorting
-          'card sorting': 'card_sorting',
-          'card sort': 'card_sorting',
-          'card sorts': 'card_sorting',
-          // Tree Testing
-          'tree testing': 'tree_testing',
-          'tree test': 'tree_testing',
-          'tree tests': 'tree_testing',
-          // Mixed Methods
-          'mixed methods': 'mixed_methods',
-          'mixed method': 'mixed_methods',
-        };
-        const methodLower = cascade.method.toLowerCase();
+      // ─── Method resolution (needed for barrier coverage derivation) ───
+      const radioOptions: Record<string, string> = {
+        // Usability Testing
+        'usability testing': 'usability_testing',
+        'usability test': 'usability_testing',
+        'usability study': 'usability_testing',
+        'moderated usability testing': 'usability_testing',
+        'moderated usability test': 'usability_testing',
+        'unmoderated usability testing': 'usability_testing',
+        // User Interviews
+        'user interviews': 'user_interviews',
+        'user interview': 'user_interviews',
+        'interviews': 'user_interviews',
+        'interview': 'user_interviews',
+        // Contextual Inquiry
+        'contextual inquiry': 'contextual_inquiry',
+        'contextual inquiries': 'contextual_inquiry',
+        // Concept Testing
+        'concept testing': 'concept_testing',
+        'concept test': 'concept_testing',
+        'concept validation': 'concept_testing',
+        // Survey Research
+        'survey': 'survey',
+        'survey research': 'survey',
+        'surveys': 'survey',
+        // Card Sorting
+        'card sorting': 'card_sorting',
+        'card sort': 'card_sorting',
+        'card sorts': 'card_sorting',
+        // Tree Testing
+        'tree testing': 'tree_testing',
+        'tree test': 'tree_testing',
+        'tree tests': 'tree_testing',
+        // Mixed Methods
+        'mixed methods': 'mixed_methods',
+        'mixed method': 'mixed_methods',
+      };
 
+      // Extract method suggestion from upstream, resolve to method key
+      let resolvedMethodKey: string | undefined;
+      let methodSuggestion: string | undefined;
+
+      console.log(`📊 Layer 3: Discovery variables loaded: ${Object.keys(upstream).join(', ')}`);
+
+      const methodRecs = upstream.upstream_methodology_recommendations;
+      if (methodRecs) {
+        const methods = methodRecs.split('\n').filter((l: string) => l.trim().startsWith('**') || l.trim().startsWith('-'));
+        if (methods.length > 0) {
+          const firstMethod = methods[0].replace(/^\*\*\d+\.\*\*\s*/, '').replace(/^-\s*/, '').split('\n')[0];
+          const methodName = firstMethod.match(/method(?:_name)?:\s*(.+?)(?:,|$)/i)?.[1] || firstMethod.substring(0, 80);
+          methodSuggestion = methodName.trim();
+        }
+      }
+
+      if (methodSuggestion) {
+        const methodLower = methodSuggestion.toLowerCase();
         // Check for exact match first
-        let matchedRadio = radioOptions[methodLower];
-
+        resolvedMethodKey = radioOptions[methodLower];
         // If no exact match, check if method string CONTAINS any known method name
+        if (!resolvedMethodKey) {
+          const orderedKeys = Object.keys(radioOptions).sort((a, b) => b.length - a.length);
+          for (const key of orderedKeys) {
+            if (methodLower.includes(key)) {
+              resolvedMethodKey = radioOptions[key];
+              break;
+            }
+          }
+        }
+        // Check for combined/mixed methods indicators
+        if (!resolvedMethodKey) {
+          const combinedIndicators = ['followed by', 'then', ' + ', ' and ', 'combined with'];
+          const isCombined = combinedIndicators.some(ind => methodLower.includes(ind));
+          if (isCombined) {
+            resolvedMethodKey = 'mixed_methods';
+          }
+        }
+        // If still no match, it's a custom method
+        if (!resolvedMethodKey) {
+          resolvedMethodKey = 'custom';
+        }
+      }
+
+      // Now call synthesizeCascadeFields WITH the resolved method key
+      console.log(`📊 Layer 3: Method resolved to '${resolvedMethodKey || 'none'}' from suggestion '${methodSuggestion || 'none'}'`);
+      const cascade = synthesizeCascadeFields(upstream, artifacts, resolvedMethodKey);
+      console.log(`📊 Layer 3: Cascade fields derived: outOfScope=${!!cascade.outOfScope}, participants=${!!cascade.participants}, method=${!!cascade.method}`);
+
+      // Pre-populate method — hybrid radio + override (reuse resolution above)
+      if (methodSuggestion) {
+        const methodLower = methodSuggestion.toLowerCase();
+        let matchedRadio = radioOptions[methodLower];
         if (!matchedRadio) {
-          // Priority order: longer matches first to avoid "interview" matching before "user interview"
           const orderedKeys = Object.keys(radioOptions).sort((a, b) => b.length - a.length);
           for (const key of orderedKeys) {
             if (methodLower.includes(key)) {
@@ -351,8 +461,6 @@ export async function buildBriefEntryModal(options: BuildBriefEntryModalOptions)
             }
           }
         }
-
-        // If still no match, check for combined/mixed methods indicators
         if (!matchedRadio) {
           const combinedIndicators = ['followed by', 'then', ' + ', ' and ', 'combined with'];
           const isCombined = combinedIndicators.some(ind => methodLower.includes(ind));

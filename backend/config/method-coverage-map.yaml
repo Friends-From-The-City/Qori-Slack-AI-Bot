@@ -1,0 +1,239 @@
+# Method → Category Coverage Map (Layer 2)
+#
+# PURPOSE: Defines which research methods can validate which barrier categories.
+# Layer 3 consumes this to determine barrier coverage state (full/partial/none).
+#
+# COVERAGE LOGIC (three-state):
+#   - full:    ALL barrier categories are covered by the chosen method
+#   - partial: SOME barrier categories are covered (surfaces uncovered dimensions)
+#   - none:    NO barrier categories are covered → out-of-scope candidate
+#
+# MANUAL REVIEW TRIGGERS:
+#   - Barriers tagged 'other' → always manual (no method covers 'other')
+#   - Method 'custom' → always manual (free-text, nothing to map)
+#   - Method 'mixed_methods' without component spec → manual until specified
+#
+# DESIGN DECISIONS (Lapedra, 2026-06-09):
+#   - user_interviews does NOT cover accessibility (interviews surface but don't validate)
+#   - usability_testing DOES cover content (observed comprehension failure = validation)
+#   - usability_testing does NOT cover performance (can't reproduce real latency)
+#   - contextual_inquiry covers accessibility (real-environment AT observation)
+#   - No Qori method covers 'performance' → performance barriers frequently out-of-scope
+#   - No Qori method covers 'other' → always manual review
+#
+# HONEST GAPS (not bugs, correct behavior):
+#   - Qori offers no a11y-audit, content-testing, or performance-testing methods
+#   - Performance barriers will be out-of-scope unless custom method specified
+#   - Accessibility barriers require contextual_inquiry for full coverage
+
+schema_version: "1.0"
+last_updated: "2026-06-09"
+approved_by: "Lapedra"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# BARRIER CATEGORIES
+# ═══════════════════════════════════════════════════════════════════════════════
+# Reference definitions — matches discovered_barrier.yaml enum
+
+barrier_categories:
+  ia:
+    label: "Information Architecture"
+    description: "Navigation, findability, mental models, labeling"
+  accessibility:
+    label: "Accessibility"
+    description: "Assistive technology, WCAG compliance, screen readers, motor/vision"
+  performance:
+    label: "Performance"
+    description: "Speed, latency, load times, system responsiveness"
+  content:
+    label: "Content"
+    description: "Readability, comprehension, terminology, tone, information quality"
+  task-flow:
+    label: "Task Flow"
+    description: "Task completion, workflow steps, error recovery, form design"
+  cognitive:
+    label: "Cognitive"
+    description: "Mental load, decision complexity, memory demands, learning curve"
+  other:
+    label: "Other"
+    description: "Escape hatch — no UX category applies, requires manual review"
+    manual_review_required: true
+    reason: "Barriers tagged 'other' cannot be mapped to any research method"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# METHOD COVERAGE DEFINITIONS
+# ═══════════════════════════════════════════════════════════════════════════════
+# Each method lists which barrier categories it can VALIDATE (not just surface).
+
+methods:
+  usability_testing:
+    label: "Usability Testing"
+    covers:
+      - ia           # Observes navigation/findability failures
+      - content      # Observes comprehension failures during tasks (Lapedra ruling)
+      - task-flow    # Observes task completion/failure
+      - cognitive    # Observes confusion, hesitation, mental load
+    does_not_cover:
+      - accessibility  # Requires AT-specific testing setup
+      - performance    # Cannot reproduce real latency in test session
+    rationale: "Moderated task observation validates IA, content comprehension, task completion, and cognitive barriers through direct observation of user behavior."
+    participant_guidance: "5-8 participants typically reveal 80% of major usability issues. Prioritize participants who represent primary user segments."
+
+  user_interviews:
+    label: "User Interviews"
+    covers:
+      - ia           # Users describe mental models, expectations
+      - content      # Users explain what they understood/didn't
+      - task-flow    # Users describe workflow experiences
+      - cognitive    # Users articulate confusion, decision difficulty
+    does_not_cover:
+      - accessibility  # Interviews surface but don't VALIDATE a11y barriers (Lapedra ruling)
+      - performance    # Self-report unreliable for latency perception
+    rationale: "Interviews capture user perspectives on IA mental models, content understanding, and cognitive load, but cannot validate accessibility barriers (hearing a report ≠ observing AT fail)."
+    participant_guidance: "8-12 participants for thematic saturation. Include mix of experience levels and usage patterns."
+
+  contextual_inquiry:
+    label: "Contextual Inquiry"
+    covers:
+      - ia           # Observes real navigation in real context
+      - accessibility # Observes actual AT use in real environment (Lapedra confirmed)
+      - content      # Observes comprehension in real context
+      - task-flow    # Observes real workflows
+      - cognitive    # Observes real cognitive load indicators
+    does_not_cover:
+      - performance  # Real-world performance varies; hard to isolate
+    rationale: "Real-environment observation captures IA, accessibility (via actual AT use), content, task-flow, and cognitive barriers. Only method that validates accessibility through direct AT observation."
+    participant_guidance: "4-6 participants in their real environment. Schedule 90-120 min sessions to observe natural workflows."
+
+  concept_testing:
+    label: "Concept Testing"
+    covers:
+      - content      # Tests comprehension of concepts/designs
+      - cognitive    # Tests whether concepts are understandable
+    does_not_cover:
+      - ia           # Concepts aren't navigated
+      - accessibility # Concepts aren't experienced with AT
+      - performance  # Concepts don't have latency
+      - task-flow    # Concepts aren't full task flows
+    rationale: "Validates comprehension and cognitive load / understandability of concepts/designs before implementation."
+    participant_guidance: "6-10 participants per concept variant. Include decision-makers if testing concepts that require buy-in."
+
+  survey:
+    label: "Survey Research"
+    covers:
+      - cognitive    # Quantifies self-reported / perceived difficulty
+    does_not_cover:
+      - ia           # Self-report unreliable for navigation behavior
+      - accessibility # Cannot observe AT interactions
+      - performance  # Self-report unreliable for latency perception
+      - content      # Surveys measure attitudes, not comprehension
+      - task-flow    # Surveys measure perception, not behavior
+    rationale: "Quantifies self-reported / perceived cognitive load at scale. Does not observe mental load directly — captures user perception of difficulty, not behavior."
+    participant_guidance: "100+ responses for statistical reliability. Aim for 5% margin of error at 95% confidence."
+
+  card_sorting:
+    label: "Card Sorting"
+    covers:
+      - ia           # Reveals mental models, categorization expectations
+      - cognitive    # Reveals how users conceptualize relationships
+    does_not_cover:
+      - accessibility # Cards aren't AT-accessible artifacts
+      - performance  # No latency component
+      - content      # Card labels ≠ content comprehension
+      - task-flow    # Sorting ≠ task completion
+    rationale: "Validates information architecture through user mental model elicitation."
+    participant_guidance: "15-30 participants for reliable categorization patterns. Include mix of novice and experienced users."
+
+  tree_testing:
+    label: "Tree Testing"
+    covers:
+      - ia           # Validates findability in structure
+    does_not_cover:
+      - task-flow    # Tree test ends at click; doesn't observe task completion
+      - accessibility # Tree tests aren't AT-tested by default
+      - performance  # No latency component
+      - content      # Tests structure, not content comprehension
+      - cognitive    # Structure navigation ≠ cognitive load measurement
+    rationale: "Validates findability within an information structure. Ends when user locates the correct node — does not observe task completion, error recovery, or workflow behavior."
+    participant_guidance: "50+ participants for statistically meaningful findability scores. Can run unmoderated at scale."
+
+  mixed_methods:
+    label: "Mixed Methods"
+    requires_component_specification: true
+    manual_review_until_specified: true
+    covers: []  # Determined by union of component methods
+    rationale: "Coverage is the union of specified component methods. If components not specified, routes to manual review to prevent false confidence."
+
+  custom:
+    label: "Custom Method"
+    manual_review_required: true
+    covers: []  # Cannot pre-map free-text methods
+    rationale: "Free-text method cannot be pre-mapped. Researcher determines scope manually."
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# COVERAGE RESOLUTION RULES (Layer 3 consumes)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+coverage_rules:
+  # How to determine barrier coverage state
+  resolution:
+    full:
+      condition: "ALL barrier_categories are in method.covers"
+      result: "Barrier included in scope"
+      display: "✓ Covered by {method}"
+
+    partial:
+      condition: "SOME barrier_categories are in method.covers"
+      result: "Barrier partially addressed — flag uncovered dimensions"
+      display: "◐ Partially covered — {method} addresses {covered_categories} but not {uncovered_categories}"
+
+    none:
+      condition: "NO barrier_categories are in method.covers"
+      result: "Barrier is out-of-scope candidate"
+      display: "○ Not covered by {method} — suggest out-of-scope"
+
+  # Manual review triggers
+  manual_review:
+    - trigger: "barrier has 'other' in barrier_categories"
+      reason: "No research method covers 'other' — requires manual categorization"
+      display: "⚠ Manual review required — barrier tagged 'other'"
+
+    - trigger: "method is 'custom'"
+      reason: "Custom method cannot be pre-mapped"
+      display: "⚠ Manual review required — custom method specified"
+
+    - trigger: "method is 'mixed_methods' AND components not specified"
+      reason: "Mixed methods coverage depends on component methods"
+      display: "⚠ Manual review required — specify component methods for coverage calculation"
+
+  # Out-of-scope suggestion format
+  out_of_scope_reason_template: |
+    "{barrier_title}" is suggested out-of-scope because:
+    - Barrier categories: {barrier_categories}
+    - Method chosen: {method}
+    - Method covers: {method_covers}
+    - Gap: {method} does not validate {uncovered_categories}
+
+    To include this barrier, consider:
+    - Adding a complementary method that covers {uncovered_categories}
+    - Using a custom method with manual scope determination
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# COVERAGE MATRIX (computed reference — Layer 3 derives from methods above)
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+#                        | ia | a11y | perf | content | task-flow | cognitive |
+# -----------------------|----|------|------|---------|-----------|-----------|
+# usability_testing      | ✓  |      |      | ✓       | ✓         | ✓         |
+# user_interviews        | ✓  |      |      | ✓       | ✓         | ✓         |
+# contextual_inquiry     | ✓  | ✓    |      | ✓       | ✓         | ✓         |
+# concept_testing        |    |      |      | ✓       |           | ✓         |
+# survey                 |    |      |      |         |           | ✓         |
+# card_sorting           | ✓  |      |      |         |           | ✓         |
+# tree_testing           | ✓  |      |      |         |           |           |
+# mixed_methods          | ?  | ?    | ?    | ?       | ?         | ?         | → requires component spec
+# custom                 | ?  | ?    | ?    | ?       | ?         | ?         | → manual review
+#
+# GAPS (honest, not bugs):
+# - performance: NO method covers → always out-of-scope or manual
+# - accessibility: ONLY contextual_inquiry covers → frequently partial/none

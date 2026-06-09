@@ -53,7 +53,8 @@ services:
       # Mount source code for hot reload (if using nodemon in dev)
       - ./src:/app/src
       - ./package.json:/app/package.json
-    command: npm run dev
+    # Run migrations on startup, then start dev server
+    command: sh -c "npx sequelize-cli db:migrate && npm run dev"
 
   postgres:
     image: postgres:15-alpine
