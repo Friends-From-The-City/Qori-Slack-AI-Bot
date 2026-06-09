@@ -3,6 +3,8 @@
 # Runs migrations before starting the app, ensuring code+schema deploy together.
 # Used by Dockerfile CMD in both dev and prod Railway environments.
 
+echo ">>> START.SH IS RUNNING <<<"
+
 set -e
 
 echo "=== Qori Backend Startup ==="
