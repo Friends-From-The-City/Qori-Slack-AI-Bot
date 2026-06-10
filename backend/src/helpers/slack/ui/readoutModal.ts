@@ -197,10 +197,12 @@ export const buildReadoutModal = (state: ReadoutModalState = {}) => {
           type: 'static_select',
           action_id: 'study_selection_change',
           placeholder: { type: 'plain_text', text: 'Choose a research study...' },
-          options: (state.availableStudies || []).slice(0, 10).map(study => ({
-            text: { type: 'plain_text', text: study.name },
-            value: study.id.toString()
-          })),
+          options: (state.availableStudies || []).length > 0
+            ? (state.availableStudies || []).slice(0, 10).map(study => ({
+                text: { type: 'plain_text', text: study.name },
+                value: study.id.toString()
+              }))
+            : [{ text: { type: 'plain_text', text: 'No studies found' }, value: 'no_studies' }],
           initial_option: selectedStudy ? {
             text: { type: 'plain_text', text: selectedStudy.name },
             value: selectedStudy.id.toString()
