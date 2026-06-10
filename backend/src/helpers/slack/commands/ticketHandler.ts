@@ -13,6 +13,7 @@ import { getActiveStudy, setActiveStudy } from '../../../services/slack-user-sta
 import sequelize from '../../../database';
 import type { StudyVariableAttributes } from '../../../types/models';
 import { assertStudyAccess } from '../../../services/authorization.service';
+import { postEphemeralOrDM } from '../slackHelpers';
 
 // ─── Types ──────────────────────────────────────────────────────
 
@@ -133,11 +134,12 @@ const ticketHandler = async ({ ack, body, client, command }: SlackCommandMiddlew
     const studies = await getStudiesByUser(userId);
 
     if (!studies || studies.length === 0) {
-      await client.chat.postEphemeral({
-        channel: command.channel_id,
-        user: userId,
-        text: '❌ No studies found. Create a study first.',
-      });
+      await postEphemeralOrDM(
+        client,
+        command.channel_id,
+        userId,
+        '❌ No studies found. Create a study first.',
+      );
       return;
     }
 

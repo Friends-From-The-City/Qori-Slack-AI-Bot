@@ -17,6 +17,7 @@ import { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo, createOrUpdateFil
 import { processYamlTemplate } from "../../yamlProcessor";
 import { studyNotesService } from "../../../services";
 import { processSlackFiles } from "../../pdfProcessor";
+import { postEphemeralOrDM } from "../slackHelpers";
 
 // ─── Types ──────────────────────────────────────────────────────
 
@@ -116,11 +117,12 @@ const uploadNotesHandler = async ({ ack, body, client, command }: SlackCommandMi
     console.log("🚀 ~ uploadNotesHandler ~ sessions:", sessions);
 
     if (!sessions || sessions.length === 0) {
-      await client.chat.postEphemeral({
-        channel: command.channel_id,
-        user: command.user_id,
-        text: `❌ You don't have any approved sessions to observe. Please contact your research coordinator to be assigned to sessions.`
-      });
+      await postEphemeralOrDM(
+        client,
+        command.channel_id,
+        command.user_id,
+        `❌ You don't have any approved sessions to observe. Please contact your research coordinator to be assigned to sessions.`
+      );
       return;
     }
 
@@ -159,11 +161,12 @@ const uploadNotesHandler = async ({ ack, body, client, command }: SlackCommandMi
     console.error("Error opening upload notes modal:", error);
 
     try {
-      await client.chat.postEphemeral({
-        channel: command.channel_id,
-        user: command.user_id,
-        text: `❌ Failed to open upload notes modal: ${message}`,
-      });
+      await postEphemeralOrDM(
+        client,
+        command.channel_id,
+        command.user_id,
+        `❌ Failed to open upload notes modal: ${message}`,
+      );
     } catch (chatError) {
       console.error("Could not send error message to user:", chatError);
     }

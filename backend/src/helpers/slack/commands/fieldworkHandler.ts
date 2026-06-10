@@ -20,6 +20,7 @@ import { participantOutreachModal } from '../ui/outreach/participantOutreachModa
 import { buildSessionNotesView } from '../ui/sessionNotesModal';
 import type { View } from '@slack/types';
 import { assertStudyAccess } from '../../../services/authorization.service';
+import { postEphemeralOrDM } from '../slackHelpers';
 
 // ── Helpers ────────────────────────────────────────────────
 
@@ -94,11 +95,12 @@ async function fieldworkHandler({ ack, body, client, command }: SlackCommandMidd
     const studies = await getStudiesByUser(userId);
 
     if (!studies || studies.length === 0) {
-      await client.chat.postEphemeral({
-        channel: channelId,
-        user: userId,
-        text: 'No studies found. Create a study first with `/qori-brief`.',
-      });
+      await postEphemeralOrDM(
+        client,
+        channelId,
+        userId,
+        'No studies found. Create a study first with `/qori-brief`.',
+      );
       return;
     }
 
