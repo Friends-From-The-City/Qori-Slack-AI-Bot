@@ -21,6 +21,9 @@ const StudyParticipantModel = sequelize.models.StudyParticipant;
 const StudyNotesModel = sequelize.models.StudyNotes;
 const StudyVariableModel = sequelize.models.StudyVariable;
 const SessionObserverModel = sequelize.models.SessionObserver;
+const ResearchPlanModel = sequelize.models.ResearchPlan;
+const StudyStatusModel = sequelize.models.StudyStatus;
+const SessionSummaryModel = sequelize.models.SessionSummary;
 
 // ═══════════════════════════════════════════════════════════════════════
 // TYPES
@@ -109,16 +112,22 @@ export async function logDispositionAction(entry: AuditEntry): Promise<Dispositi
  * CALL THIS BEFORE DELETE — after delete, counts will be zero.
  */
 export async function gatherStudyRecordCounts(studyId: number): Promise<Record<string, number>> {
-  const [participants, notes, variables] = await Promise.all([
+  const [participants, notes, variables, plans, statuses, summaries] = await Promise.all([
     StudyParticipantModel.count({ where: { study_id: studyId } }),
     StudyNotesModel.count({ where: { study_id: studyId } }),
     StudyVariableModel.count({ where: { study_id: studyId } }),
+    ResearchPlanModel.count({ where: { study_id: studyId } }),
+    StudyStatusModel.count({ where: { study_id: studyId } }),
+    SessionSummaryModel.count({ where: { study_id: studyId } }),
   ]);
 
   return {
     participants,
     notes,
     variables,
+    plans,
+    statuses,
+    summaries,
   };
 }
 

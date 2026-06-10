@@ -826,7 +826,10 @@ export async function handleDeleteStudySelect({
                 `*Records to be deleted:*\n` +
                 `• ${counts.participants} participants\n` +
                 `• ${counts.notes} session notes/transcripts\n` +
+                `• ${counts.summaries || 0} session summaries\n` +
                 `• ${counts.variables} cascade variables\n` +
+                `• ${counts.plans || 0} research plans\n` +
+                `• ${counts.statuses || 0} approval records\n` +
                 `• GitHub files at \`${study.path || '(no path)'}\``,
             },
           },
