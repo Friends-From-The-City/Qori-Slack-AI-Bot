@@ -8,6 +8,7 @@
 import type { AllMiddlewareArgs, SlackCommandMiddlewareArgs } from '@slack/bolt';
 import { isProjectOwner, isProjectMember, getProjectStakeholder } from '../../../../services/authorization.service';
 import { buildAdminCenterModal, buildNonOwnerModal, type StakeholderInfo } from '../../ui/adminCenterModal';
+import { postEphemeralOrDM } from '../../slackHelpers';
 import sequelize from '../../../../database';
 
 import type { Project } from '../../../../database/models/project';
@@ -37,13 +38,13 @@ export async function adminCenterCommandHandler({
     });
 
     if (!project) {
-      await client.chat.postEphemeral({
-        channel: channelId,
-        user: userId,
-        text:
-          'This channel is not associated with a Qori project.\n\n' +
-          'Run `/qori-admin` from a project channel, or use `/qori-start` to create a new project.',
-      });
+      await postEphemeralOrDM(
+        client,
+        channelId,
+        userId,
+        'This channel is not associated with a Qori project.\n\n' +
+        'Run `/qori-admin` from a project channel, or use `/qori-start` to create a new project.'
+      );
       return;
     }
 
@@ -86,11 +87,12 @@ export async function adminCenterCommandHandler({
     }
   } catch (error) {
     console.error('[ADMIN] Error opening admin center:', error);
-    await client.chat.postEphemeral({
-      channel: channelId,
-      user: userId,
-      text: `Error opening Admin Center: ${error instanceof Error ? error.message : 'Unknown error'}`,
-    });
+    await postEphemeralOrDM(
+      client,
+      channelId,
+      userId,
+      `Error opening Admin Center: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
   }
 }
 
