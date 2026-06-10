@@ -24,6 +24,7 @@ import { processSlackFiles } from '../../pdfProcessor';
 import { parseDocuments, validateDocuments } from '../../documentParser';
 import { getProjectByChannelId } from '../../../services/project.service';
 import type { VariableContext } from '../../studyVariables';
+import { postEphemeralOrDM } from '../slackHelpers';
 
 // ─── Types ──────────────────────────────────────────────────────
 
@@ -216,15 +217,17 @@ async function discoverHandler({ ack, body, client, command }: SlackCommandMiddl
   await ack();
 
   const channelId = command.channel_id;
+  const userId = command.user_id;
 
   // Phase 2D: Check channel binding for project context
   const project = await getProjectByChannelId(channelId);
   if (!project) {
-    await client.chat.postEphemeral({
-      channel: channelId,
-      user: command.user_id,
-      text: `This channel isn't linked to a project yet.\n\n*Option 1:* Run \`/qori-start\` to create a new project with a dedicated channel, then run \`/qori-discover\` there.\n*Option 2:* Run \`/qori-discover\` in an existing project channel.`,
-    });
+    await postEphemeralOrDM(
+      client,
+      channelId,
+      userId,
+      `This channel isn't linked to a project yet.\n\n*Option 1:* Run \`/qori-start\` to create a new project with a dedicated channel, then run \`/qori-discover\` there.\n*Option 2:* Run \`/qori-discover\` in an existing project channel.`
+    );
     return;
   }
 
@@ -275,11 +278,12 @@ async function discoverHandler({ ack, body, client, command }: SlackCommandMiddl
     const message = err instanceof Error ? err.message : String(err);
     const detail = (err as Record<string, unknown>)?.data ?? message;
     console.error('Error opening discover hub:', detail);
-    await client.chat.postEphemeral({
-      channel: channelId,
-      user: command.user_id,
-      text: '❌ Failed to open the discovery hub. Please try again.',
-    });
+    await postEphemeralOrDM(
+      client,
+      channelId,
+      userId,
+      '❌ Failed to open the discovery hub. Please try again.'
+    );
   }
 }
 
