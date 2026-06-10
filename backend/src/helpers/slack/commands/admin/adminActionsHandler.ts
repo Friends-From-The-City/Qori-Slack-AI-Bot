@@ -916,6 +916,8 @@ export async function handleDeleteStudyConfirm({
   const counts = metadata.counts || (await gatherStudyRecordCounts(metadata.studyId));
 
   // Prepare audit entry
+  // Note: study_id is null because the study will be deleted before logging
+  // The study_name field preserves the identifier for audit purposes
   const auditEntry = {
     action: 'delete_study' as const,
     record_type: 'study_metadata',
@@ -923,7 +925,7 @@ export async function handleDeleteStudyConfirm({
     target_identifier: metadata.studyName,
     project_id: metadata.projectId,
     project_name: project?.name || metadata.projectName,
-    study_id: metadata.studyId,
+    study_id: undefined, // Study will be deleted; use study_name for traceability
     study_name: metadata.studyName,
     actor_user_id: userId,
     actor_role: 'owner',
