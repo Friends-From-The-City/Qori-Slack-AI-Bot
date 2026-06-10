@@ -45,6 +45,9 @@ import {
 import { openResearchBriefModal } from './commands/modal-openers/briefModalOpener';
 import { handleBriefSubmission } from './commands/briefHandler';
 
+// Shared helpers
+import { postEphemeralOrDM } from './slackHelpers';
+
 // Research plan
 import { openResearchPlanModal } from './commands/modal-openers/planModalOpener';
 import { handlePlanSubmission } from './commands/planHandler';
@@ -347,11 +350,12 @@ slackApp.command('/qori-brief', async ({ ack, client, command }) => {
   // Phase 2D: Check if channel is bound to a project
   const project = await getProjectByChannelId(command.channel_id);
   if (!project) {
-    await client.chat.postEphemeral({
-      channel: command.channel_id,
-      user: command.user_id,
-      text: `This channel isn't linked to a project yet.\n\n*Option 1:* Run \`/qori-start\` to create a new project with a dedicated channel, then run \`/qori-brief\` there.\n*Option 2:* Run \`/qori-brief\` in an existing project channel.`,
-    });
+    await postEphemeralOrDM(
+      client,
+      command.channel_id,
+      command.user_id,
+      `This channel isn't linked to a project yet.\n\n*Option 1:* Run \`/qori-start\` to create a new project with a dedicated channel, then run \`/qori-brief\` there.\n*Option 2:* Run \`/qori-brief\` in an existing project channel.`,
+    );
     return;
   }
 
@@ -384,11 +388,12 @@ slackApp.command('/qori-brief', async ({ ack, client, command }) => {
     if (messages?.messages) {
       console.error('Validation errors:', JSON.stringify(messages.messages, null, 2));
     }
-    await client.chat.postEphemeral({
-      channel: command.channel_id,
-      user: command.user_id,
-      text: `❌ Error opening research brief modal. Check server logs for details.`,
-    });
+    await postEphemeralOrDM(
+      client,
+      command.channel_id,
+      command.user_id,
+      `❌ Error opening research brief modal. Check server logs for details.`,
+    );
   }
 });
 slackApp.command('/qori-plan', async ({ ack, client, command }) => {
