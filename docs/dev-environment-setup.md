@@ -156,6 +156,7 @@ In the `dev` environment:
    - `SLACK_*` → use dev Slack app tokens
    - `GITHUB_REPO=qori-studies-dev` (or keep same if OK to mix)
    - `QORI_TEAM_SLUG=friends-lab-dev`
+   - `GITHUB_CONFIG_BRANCH=dev` ← **Critical for template testing**
 
 2. **Settings tab** — Configure deployment:
    - Deploy: `dev` branch
@@ -353,6 +354,18 @@ The startup script waits 60 seconds for the database. If it still fails:
 1. Check Railway Postgres service is running
 2. Verify DB credentials in environment variables
 3. Check if Postgres is still provisioning (can take a minute on first deploy)
+
+### Template changes not showing up in dev
+
+**Symptom:** You edited a YAML template in `config/prompts/`, pushed to dev branch, but dev environment still renders the old template.
+
+**Cause:** Templates are fetched from GitHub at runtime. Without `GITHUB_CONFIG_BRANCH` set, the backend fetches from the **default branch (main)**, not dev.
+
+**Fix:** Set `GITHUB_CONFIG_BRANCH=dev` in Railway dev environment variables.
+
+This is an invisible trap — dev tests dev's **code** but main's **templates** unless this variable is set. With it set, dev properly tests both dev code AND dev templates before promotion to main.
+
+**Note:** Production should NOT have this variable set (or set to `main`). Prod fetches from main, which is correct.
 
 ---
 
