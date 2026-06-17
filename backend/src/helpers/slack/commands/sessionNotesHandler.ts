@@ -651,9 +651,10 @@ const handleTranscriptReviewApprove = async ({ ack, body, view, client }: SlackV
     const quarantineSha = quarantineFile.data.sha;
 
     // 2. Flip PII marker from PENDING-REVIEW to REVIEWED-CLEARED
+    // Use regex for more robust matching (handles whitespace/encoding variations)
     const reviewedContent = rawContent
-      .replace('<!-- PII-STATUS: PENDING-REVIEW -->', '<!-- PII-STATUS: REVIEWED-CLEARED -->')
-      .replace('**PII Status:** Auto-scrubbed, pending human review', `**PII Status:** Reviewed and cleared by <@${body.user.id}>`);
+      .replace(/<!--\s*PII-STATUS:\s*PENDING-REVIEW\s*-->/gi, '<!-- PII-STATUS: REVIEWED-CLEARED -->')
+      .replace(/\*\*PII Status:\*\*\s*Auto-scrubbed,?\s*pending human review/gi, `**PII Status:** Reviewed and cleared by <@${body.user.id}>`);
 
     // 3. Write to final location with updated marker
     const finalResult = await createOrUpdateFileOnGitHub(finalPath, reviewedContent);
