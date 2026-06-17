@@ -96,7 +96,7 @@ import { repoCommand, repoSelected, folderSelected, folderOptions, subfolderOpti
 import { syncCommand, syncFolderSelected, syncFolderOptions, syncSubfolderSelected, syncSubfolderOptions, syncResearchOptions, handleSyncSubmission } from './commands/repo/syncHandler';
 
 // Messaging
-import { generateOtherMessageType, copyEmailFormatted } from './commands/messaging/messagingHandler';
+import { copyEmailFormatted } from './commands/messaging/messagingHandler';
 
 // Events
 import { handleMessageEvent } from './commands/messageEventHandler';
@@ -525,7 +525,6 @@ slackApp.view('outreach_session_confirmation_modal', handleSessionConfirmationSu
 slackApp.view('outreach_thank_you_modal', handleThankYouSubmit);
 slackApp.view('outreach_follow_up_modal', handleFollowUpSubmit);
 slackApp.view('outreach_session_reminder_modal', handleSessionReminderSubmit);
-slackApp.action('generate_other_message_type', generateOtherMessageType);
 slackApp.action('copy_email_formatted', copyEmailFormatted);
 
 // ─── Observers ──────────────────────────────────────────────────

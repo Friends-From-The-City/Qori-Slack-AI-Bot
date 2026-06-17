@@ -97,21 +97,21 @@ const buildFieldworkDashboard = (
     },
     {
       type: 'section',
-      text: { type: 'mrkdwn', text: rText },
-      accessory: {
-        type: 'button',
-        text: { type: 'plain_text', text: 'Send outreach' },
-        action_id: 'fieldwork_outreach',
-        value: btnValue,
-      },
-    },
-    {
-      type: 'section',
       text: { type: 'mrkdwn', text: pText },
       accessory: {
         type: 'button',
         text: { type: 'plain_text', text: 'Add participant' },
         action_id: 'fieldwork_add_participant',
+        value: btnValue,
+      },
+    },
+    {
+      type: 'section',
+      text: { type: 'mrkdwn', text: rText },
+      accessory: {
+        type: 'button',
+        text: { type: 'plain_text', text: 'Send outreach' },
+        action_id: 'fieldwork_outreach',
         value: btnValue,
       },
     },

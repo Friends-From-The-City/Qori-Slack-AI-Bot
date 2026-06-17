@@ -114,79 +114,13 @@ export const emailModal = (params: EmailModalParams = {}) => {
         ],
       },
       {
-        type: "section",
-        text: {
-          type: "mrkdwn",
-          text: `<${fileUrl}|:github: View on GitHub>`,
-        },
-      },
-      {
-        type: "divider",
-      },
-      {
-        type: "section",
-        text: {
-          type: "mrkdwn",
-          text: "*Generate for Another Participant*",
-        },
-      },
-      {
         type: "context",
         elements: [
           {
             type: "mrkdwn",
-            text: `Saved to \`${filePath}\``,
+            text: `<${fileUrl}|:github: View on GitHub> · Saved to \`${filePath}\``,
           },
         ],
-      },
-      {
-        type: "section",
-        block_id: "message_type_buttons",
-        text: {
-          type: "mrkdwn",
-          text: "*Generate other message types:*",
-        },
-        accessory: {
-          type: "overflow",
-          action_id: "generate_other_message_type",
-          options: [
-            {
-              text: {
-                type: "plain_text",
-                text: "Session Confirmation",
-              },
-              value: "session_confirmation",
-            },
-            {
-              text: {
-                type: "plain_text",
-                text: "Session Reminder",
-              },
-              value: "session_reminder",
-            },
-            {
-              text: {
-                type: "plain_text",
-                text: "Rescheduling Request",
-              },
-              value: "rescheduling_request",
-            },
-            {
-              text: {
-                type: "plain_text",
-                text: "Follow-up",
-              },
-              value: "follow_up",
-            },
-            {
-              text: {
-                type: "plain_text",
-                text: "Thank You",
-              },
-              value: "thank_you",
-            },
-          ],
-        },
       },
     ],
   }) as unknown as View;

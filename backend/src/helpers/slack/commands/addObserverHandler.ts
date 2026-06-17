@@ -268,15 +268,14 @@ async function handleSelfJoinObserver({ ack, body, client }: SlackActionMiddlewa
   await ack();
 
   try {
-    const { studyId, studyName, sessionIds } = JSON.parse((body.actions[0] as ButtonAction).value!);
+    const { studyId, studyName } = JSON.parse((body.actions[0] as ButtonAction).value!);
 
-    // Build session list with current counts for the picker
+    // Build session list with current counts — always fetch ALL current sessions at click time.
+    // (ADR: Don't filter by sessionIds stored in the CTA — that's a stale snapshot from when
+    // the CTA was created. New sessions added after CTA creation should be available.)
     const allSessions = await sessionObserverService.buildSessionsWithCounts(studyId);
-    const ctaSessions = sessionIds
-      ? allSessions.filter((s: any) => sessionIds.includes(s.id))
-      : allSessions;
 
-    if (ctaSessions.length === 0) {
+    if (allSessions.length === 0) {
       await client.chat.postEphemeral({
         channel: body.channel!.id,
         user: body.user.id,
@@ -285,7 +284,7 @@ async function handleSelfJoinObserver({ ack, body, client }: SlackActionMiddlewa
       return;
     }
 
-    const modal = buildSelfJoinSessionPickerModal(ctaSessions, studyName);
+    const modal = buildSelfJoinSessionPickerModal(allSessions, studyName);
     // @ts-expect-error — pre-existing type mismatch from require() → import migration
     modal.private_metadata = JSON.stringify({
       studyId,
