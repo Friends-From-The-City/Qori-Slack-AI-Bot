@@ -82,6 +82,7 @@ interface NoteDetail {
   id: number;
   filename: string;
   transcript: boolean;
+  pii_reviewed?: boolean;  // PII review gate: transcripts must be reviewed before analysis
   participant_id: number | null;  // H6: FK to study_participants
   session_date: Date | null;  // R2: DATEONLY returns Date
   created_by: string;
@@ -304,6 +305,22 @@ const handleAnalyzeNotesSubmission = async ({ ack, body, view, client }: SlackVi
     try {
       const transcript = await studyNotesService.getStudyNoteById(parseInt(selectedTranscriptId));
       if (transcript) {
+        // ── PII REVIEW GATE ──
+        // Transcripts must be PII-reviewed before analysis to prevent PII from
+        // propagating into cascade variables (nuggets, themes, findings).
+        // Manual notes (transcript=false) are exempt (structured observations, not raw transcript).
+        if (transcript.transcript && !transcript.pii_reviewed) {
+          await client.chat.postEphemeral({
+            channel: body.user.id,
+            user: body.user.id,
+            text: `❌ *PII Review Required*\n\nThis transcript has not been PII-reviewed. ` +
+              `To protect participant privacy, transcripts must go through the scrubbing and ` +
+              `review process before analysis.\n\n` +
+              `*To fix:* Re-upload the transcript using \`/qori-notes\` with the "Upload Transcript" tab. ` +
+              `Enter the participant's real name for scrubbing, then review and approve before saving.`,
+          });
+          return;
+        }
         noteDetails.push(transcript);
       }
     } catch (error) {

@@ -171,6 +171,33 @@ const manualBlocks = () => {
 const uploadBlocks = (method: string) => {
   const filesSelected = method === 'files';
   return [
+    // PII Scrubbing Section
+    {
+      type: 'header',
+      text: { type: 'plain_text', text: 'PII Scrubbing', emoji: true }
+    },
+    {
+      type: 'context',
+      elements: [
+        {
+          type: 'mrkdwn',
+          text: '⚠️ *Privacy protection:* Enter the participant\'s real name below. It will be replaced with their code (e.g., PT-001) in the transcript before saving. *This name is NOT stored* — it\'s used only for find/replace, then discarded.'
+        }
+      ]
+    },
+    {
+      type: 'input',
+      block_id: 'pii_real_name',
+      optional: true,
+      label: { type: 'plain_text', text: 'Participant\'s real name (for scrubbing)' },
+      hint: { type: 'plain_text', text: 'e.g., "David Chen" — will be replaced with PT-001. Leave blank if transcript is already anonymized.' },
+      element: {
+        type: 'plain_text_input',
+        action_id: 'real_name_input',
+        placeholder: { type: 'plain_text', text: 'First Last' }
+      }
+    },
+    { type: 'divider' },
     { type: 'section', text: { type: 'mrkdwn', text: '*Select Input Method*' } },
     // Files
     {

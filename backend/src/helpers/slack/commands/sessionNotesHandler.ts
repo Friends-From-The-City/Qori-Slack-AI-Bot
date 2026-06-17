@@ -9,6 +9,7 @@
 import type { AllMiddlewareArgs, SlackCommandMiddlewareArgs, SlackActionMiddlewareArgs, SlackViewMiddlewareArgs, BlockAction, ViewSubmitAction } from '@slack/bolt';
 
 import { buildSessionNotesView } from "../ui/sessionNotesModal";
+import { buildTranscriptReviewModal, type TranscriptReviewModalMetadata } from "../ui/transcriptReviewModal";
 import sessionObserverService from "../../../services/session_observer.service";
 import sessionParticipantService from "../../../services/study_participant.service";
 import { resolveStudyFromName } from "../../../services/research_study.service";
@@ -18,6 +19,7 @@ import { processYamlTemplate } from "../../yamlProcessor";
 import { studyNotesService } from "../../../services";
 import { processSlackFiles } from "../../pdfProcessor";
 import { postEphemeralOrDM } from "../slackHelpers";
+import { scrubTranscript, type ScrubContext } from "../../transcriptScrubber";
 
 // ─── Types ──────────────────────────────────────────────────────
 
@@ -371,18 +373,27 @@ const handleSessionNotesSubmission = async ({ ack, body, view, client }: SlackVi
 
       yamlTemplateName = "session_notes.yaml";
     } else {
+      // ── TRANSCRIPT UPLOAD PATH ──
+      // PII scrubbing happens here: extract real name, scrub, push review modal
       const filesInput = values.transcript_files?.files as { files?: Array<{ name: string; mimetype: string; url_private?: string; [key: string]: unknown }> } | undefined;
       const filesList = filesInput?.files || [];
       console.log("🚀 ~ handleSessionNotesSubmission ~ files:", filesList);
       const pastedText: string = values.transcript_paste?.text?.value || '';
 
+      // ── Extract participant real name for scrubbing (TRANSIENT — never stored) ──
+      // PRIVACY: This variable is used ONLY for in-memory find/replace.
+      // It is NEVER: logged, stored to DB, written to temp file, or included in error messages.
+      const participantRealName: string = values.pii_real_name?.real_name_input?.value?.trim() || '';
+      // NOTE: Do NOT log participantRealName — it's PII
+
+      let rawContent: string = '';
+
       if (filesList.length > 0) {
         const processedFiles: ProcessedFile[] = await processSlackFiles(filesList, process.env.SLACK_BOT_TOKEN!);
-        const fileContent: string = processedFiles.map((file: ProcessedFile) => file.content).join('\n\n---\n\n');
+        rawContent = processedFiles.map((file: ProcessedFile) => file.content).join('\n\n---\n\n');
 
         templateData = {
           ...templateData,
-          input_text: fileContent,
           transcript_files: filesList.map((f: { name: string }) => f.name).join(', '),
           filename: filesList[0]?.name || 'transcript_upload.md',
           folder_context: templateData.study_name || '',
@@ -391,9 +402,9 @@ const handleSessionNotesSubmission = async ({ ack, body, view, client }: SlackVi
           manual_notes_text_or_blank: '',
         };
       } else if (pastedText) {
+        rawContent = pastedText;
         templateData = {
           ...templateData,
-          input_text: pastedText,
           manual_notes_text_or_blank: pastedText
         };
       } else {
@@ -403,48 +414,87 @@ const handleSessionNotesSubmission = async ({ ack, body, view, client }: SlackVi
         });
         return;
       }
-    }
 
-    let result: GitHubResult;
-    let fileName: string;
+      // ── Run PII scrubbing ──
+      const scrubCtx: ScrubContext = {
+        participantRealName: participantRealName,
+        participantCode: templateData.participant_id,
+        moderatorName: templateData.researcher,
+      };
 
-    if (isManual) {
-      const resolved = await resolveStudyFromName(templateData.study_name);
-      if (!resolved) throw new Error(`Study "${templateData.study_name}" not found`);
-      const study = resolved.study;
-      const variableContext: VariableContext = { projectId: resolved.projectId, studyId: resolved.studyId };
-      const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, yamlTemplateName!);
-      renderedYaml = await processYamlTemplate(file.content, templateData, study!.path ?? '', '', false, variableContext);
-      console.log("🚀 ~ handleSessionNotesSubmission ~ renderedYaml:", renderedYaml);
-      result = renderedYaml!.result;
-      const urlParts: string[] = result.path.split('/');
-      fileName = urlParts[urlParts.length - 1];
-    } else {
-      const resolved = await resolveStudyFromName(templateData.study_name);
-      if (!resolved) throw new Error(`Study "${templateData.study_name}" not found`);
-      const study = resolved.study;
-      // @ts-expect-error — pre-existing type mismatch from require() → import migration
-      const baseFolder = decodeURIComponent(study!.path);
-      const transcriptFileName = `${templateData.participant_name}-transcript-${new Date().toISOString().split('T')[0]}.md`;
-      const transcriptPath = `${baseFolder}/03-fieldwork/transcripts/${transcriptFileName}`;
+      const scrubResult = scrubTranscript(rawContent, scrubCtx);
+      console.log(`[PII] Scrubbing complete: ${scrubResult.stats.participantName + scrubResult.stats.moderatorName + scrubResult.stats.speakerLabels + scrubResult.stats.phoneNumbers + scrubResult.stats.emailAddresses} items scrubbed`);
+      // NOTE: Do NOT log the actual content or names
 
-      const transcriptContent = `# Session Transcript: ${templateData.participant_name}
+      // ── Build scrubbed transcript content ──
+      const scrubbedTranscriptContent = `# Session Transcript: ${templateData.participant_id}
 
 **Study:** ${templateData.study_name}
 **Session date:** ${templateData.session_date}
 **Session time:** ${templateData.session_time}
-**Researcher:** ${templateData.researcher}
+**Researcher:** [Moderator]
 **Uploaded:** ${new Date().toISOString()}
+**PII Status:** Auto-scrubbed, pending human review
 
 ---
 
-${templateData.input_text}`;
+${scrubResult.content}`;
 
-      const githubResult: GitHubResult = await createOrUpdateFileOnGitHub(transcriptPath, transcriptContent);
-      result = githubResult;
-      fileName = transcriptFileName;
-      console.log("✅ Raw transcript saved to GitHub:", transcriptPath);
+      // ── Push review modal (participantRealName goes out of scope here — never stored) ──
+      const reviewMetadata: TranscriptReviewModalMetadata = {
+        scrubbedContent: scrubbedTranscriptContent,
+        templateData: {
+          session_id: templateData.session_id,
+          participant_name: templateData.participant_id, // Use code, not real name
+          study_name: templateData.study_name,
+          session_date: templateData.session_date,
+          session_time: templateData.session_time,
+          researcher: templateData.researcher,
+        },
+        sessionInfo: {
+          studyId: selectedSession.study?.id || null,
+          participantId: selectedSession.participant?.id || null,
+        },
+        userId: body.user.id,
+      };
+
+      const reviewModal = buildTranscriptReviewModal({
+        scrubbedPreview: scrubResult.content,
+        stats: scrubResult.stats,
+        warnings: scrubResult.warnings,
+        participantCode: templateData.participant_id,
+        studyName: templateData.study_name,
+      });
+
+      // Store metadata in private_metadata (scrubbed content only — no real names)
+      reviewModal.private_metadata = JSON.stringify(reviewMetadata);
+
+      await client.views.push({
+        trigger_id: body.trigger_id,
+        view: reviewModal,
+      });
+
+      // ── IMPORTANT: Return here. Transcript is NOT saved yet. ──
+      // The handleTranscriptReviewApprove handler will save after user approval.
+      // participantRealName variable is now out of scope — NEVER stored anywhere.
+      return;
     }
+
+    // ── MANUAL NOTES PATH (unchanged) ──
+    let result: GitHubResult;
+    let fileName: string;
+
+    // Manual notes don't go through PII scrubbing (structured observations, not raw transcript)
+    const resolved = await resolveStudyFromName(templateData.study_name);
+    if (!resolved) throw new Error(`Study "${templateData.study_name}" not found`);
+    const study = resolved.study;
+    const variableContext: VariableContext = { projectId: resolved.projectId, studyId: resolved.studyId };
+    const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, yamlTemplateName!);
+    renderedYaml = await processYamlTemplate(file.content, templateData, study!.path ?? '', '', false, variableContext);
+    console.log("🚀 ~ handleSessionNotesSubmission ~ renderedYaml:", renderedYaml);
+    result = renderedYaml!.result;
+    const urlParts: string[] = result.path.split('/');
+    fileName = urlParts[urlParts.length - 1];
 
     // Store the study note in the database
     // H6: Use participant_id FK instead of denormalized participant_name.
@@ -459,7 +509,10 @@ ${templateData.input_text}`;
       session_time: templateData.session_time,
       participant_id: selectedSession.participant?.id || null,
       created_by: body.user.id,
-      transcript: !isManual
+      transcript: false,
+      pii_reviewed: true,  // Manual notes don't need PII review
+      pii_reviewed_at: new Date(),
+      pii_reviewed_by: body.user.id,
     };
 
     console.log("Study note data to be stored:", studyNoteData);
@@ -506,10 +559,119 @@ ${templateData.input_text}`;
   }
 };
 
+// ─── Transcript Review Approval Handler ─────────────────────────
+
+/**
+ * Handle transcript review approval.
+ *
+ * Called when user clicks "Approve & Save" on the transcript review modal.
+ * Saves the scrubbed transcript to GitHub and marks as PII-reviewed.
+ */
+const handleTranscriptReviewApprove = async ({ ack, body, view, client }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs): Promise<void> => {
+  try {
+    await ack();
+
+    // Parse metadata (contains scrubbed content — no real names)
+    const metadata: TranscriptReviewModalMetadata = JSON.parse(view.private_metadata || '{}');
+    const { scrubbedContent, templateData, sessionInfo, userId } = metadata;
+
+    if (!scrubbedContent || !templateData) {
+      await client.chat.postMessage({
+        channel: body.user.id,
+        text: '❌ Error: Missing transcript data. Please try uploading again.',
+      });
+      return;
+    }
+
+    // Resolve study for path
+    const resolved = await resolveStudyFromName(templateData.study_name);
+    if (!resolved) {
+      throw new Error(`Study "${templateData.study_name}" not found`);
+    }
+    const study = resolved.study;
+
+    // Build file path (uses participant code, not real name)
+    // @ts-expect-error — pre-existing type mismatch from require() → import migration
+    const baseFolder = decodeURIComponent(study!.path);
+    const transcriptFileName = `${templateData.participant_name}-transcript-${new Date().toISOString().split('T')[0]}.md`;
+    const transcriptPath = `${baseFolder}/03-fieldwork/transcripts/${transcriptFileName}`;
+
+    // Save scrubbed transcript to GitHub
+    const githubResult: GitHubResult = await createOrUpdateFileOnGitHub(transcriptPath, scrubbedContent);
+    console.log("✅ PII-scrubbed transcript saved to GitHub:", transcriptPath);
+
+    // Store in database with PII review status
+    const studyNoteData = {
+      study_id: sessionInfo.studyId,
+      study_name: templateData.study_name,
+      filename: transcriptFileName,
+      file_path: githubResult.path,
+      file_url: githubResult.url,
+      session_date: templateData.session_date,
+      session_time: templateData.session_time,
+      participant_id: sessionInfo.participantId,
+      created_by: userId,
+      transcript: true,
+      pii_reviewed: true,
+      pii_reviewed_at: new Date(),
+      pii_reviewed_by: body.user.id,
+    };
+
+    try {
+      // @ts-expect-error — pre-existing type mismatch from require() → import migration
+      const createdNote = await studyNotesService.createStudyNote(studyNoteData);
+      console.log("✅ Study note stored with pii_reviewed=true:", createdNote.id);
+    } catch (dbError) {
+      console.error("Error storing study note in database:", dbError);
+    }
+
+    // Notify user
+    await client.chat.postMessage({
+      channel: body.user.id,
+      text: `✅ PII-scrubbed transcript saved`,
+      blocks: [
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `✅ *Transcript uploaded and PII-reviewed*\n\n*Study:* ${templateData.study_name}\n*Participant:* ${templateData.participant_name}`,
+          },
+        },
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `<${githubResult.url}|View on GitHub>`,
+          },
+        },
+        {
+          type: 'context',
+          elements: [
+            {
+              type: 'mrkdwn',
+              text: '✅ This transcript is now eligible for `/qori-analyze`.',
+            },
+          ],
+        },
+      ],
+    });
+
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("Error handling transcript review approval:", error);
+
+    await client.chat.postMessage({
+      channel: body.user.id,
+      text: `❌ Error saving transcript: ${message}`,
+    });
+  }
+};
+
 export {
   uploadNotesHandler,
   handleTabManual,
   handleTabUpload,
   handleSessionSelectionChange,
-  handleSessionNotesSubmission
+  handleSessionNotesSubmission,
+  handleTranscriptReviewApprove
 };
