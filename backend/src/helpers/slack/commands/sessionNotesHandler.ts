@@ -299,8 +299,6 @@ const handleSessionSelectionChange = async ({ ack, body, client }: SlackActionMi
 
 const handleSessionNotesSubmission = async ({ ack, body, view, client }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs): Promise<void> => {
   try {
-    await ack();
-
     const values = view.state.values;
     console.log("🚀 ~ handleSessionNotesSubmission ~ values:", values);
     const metadata = JSON.parse(view.private_metadata || '{}') as ViewMetadata;
@@ -328,6 +326,7 @@ const handleSessionNotesSubmission = async ({ ack, body, view, client }: SlackVi
     }
 
     if (!selectedSession || selectedSessionId === 'no_sessions') {
+      await ack();
       await client.chat.postMessage({
         channel: body.user.id,
         text: `❌ Please select a valid session before submitting notes. No sessions are currently available.`,
@@ -354,12 +353,16 @@ const handleSessionNotesSubmission = async ({ ack, body, view, client }: SlackVi
       const observations: string = values.observations?.observations_text?.value || '';
 
       if (!observations || observations.trim() === '') {
+        await ack();
         await client.chat.postMessage({
           channel: body.user.id,
           text: `❌ Please enter your observations before submitting.`,
         });
         return;
       }
+
+      // Ack early for manual notes (no review modal needed)
+      await ack();
 
       const now = new Date();
       const hours = String(now.getHours()).padStart(2, '0');
@@ -408,6 +411,7 @@ const handleSessionNotesSubmission = async ({ ack, body, view, client }: SlackVi
           manual_notes_text_or_blank: pastedText
         };
       } else {
+        await ack();
         await client.chat.postMessage({
           channel: body.user.id,
           text: `❌ Please either upload files or paste transcript content.`,
@@ -469,8 +473,11 @@ ${scrubResult.content}`;
       // Store metadata in private_metadata (scrubbed content only — no real names)
       reviewModal.private_metadata = JSON.stringify(reviewMetadata);
 
-      await client.views.push({
-        trigger_id: body.trigger_id,
+      // ── Push review modal via ack response_action ──
+      // IMPORTANT: Must use ack({ response_action: 'push' }) instead of client.views.push
+      // because trigger_id expires after 3 seconds and file processing takes time.
+      await ack({
+        response_action: 'push',
         view: reviewModal,
       });
 
