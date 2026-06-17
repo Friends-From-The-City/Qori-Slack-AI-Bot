@@ -236,7 +236,7 @@ ai_generation_tasks:
 
   - task_id: "participant_composition_prose"
     prompt: |
-      Write a brief participant requirements section with sample size and composition.
+      Write participant requirements content (sample size + composition).
 
       {% if upstream_participant_criteria %}
       APPROVED CRITERIA: {{upstream_participant_criteria}}
@@ -249,6 +249,7 @@ ai_generation_tasks:
       1. ONE sentence stating sample size and rationale (e.g., "Recruit 8-10 participants across five defined segments to ensure coverage of documented discovery barriers")
       2. A bullet list (use markdown dash -) with each segment on its own line, including count per segment and brief rationale
 
+      Output ONLY the content. NO header (the template provides the section header).
       Keep it actionable. Include accessibility segments and demographic diversity requirements if specified in the criteria.
 
   - task_id: "deliverables_narrative"
