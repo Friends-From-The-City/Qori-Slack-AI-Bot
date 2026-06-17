@@ -4,11 +4,12 @@
 id: research_plan
 name: run_research_plan
 label: "📋 Research Plan"
-version: "v7.0"
+version: "v7.1"
 
 description: |
   Transform your research concept into a stakeholder-ready execution plan.
   Lean output focused on methodology, participants, timeline, and deliverables.
+  v7.1: Fix participant duplication — glance value in summary, detail once in section.
   v7.0: Interleaved Handlebars/AI architecture — computed values render
   mechanically, LLM only writes bounded prose sections.
 
@@ -220,9 +221,22 @@ ai_generation_tasks:
       screen recording, observer notes, post-session interviews, etc.
       Be specific to the methodology.
 
+  - task_id: "participant_glance"
+    prompt: |
+      Write a ONE-LINE glance summary of participant composition for an at-a-glance table.
+
+      {% if upstream_participant_approach %}
+      FULL APPROACH: {{upstream_participant_approach}}
+      {% endif %}
+
+      Output ONLY a single line with count + segment names. Example format:
+      "8-10 veterans across five segments: appointments, benefits, assistive-tech, lower tech proficiency, VA terminology"
+
+      NO rationale, NO detail — just count and segment names. This is for a summary table cell.
+
   - task_id: "participant_composition_prose"
     prompt: |
-      Write a short bullet list explaining required participant composition.
+      Write a brief participant requirements section with sample size and composition.
 
       {% if upstream_participant_criteria %}
       APPROVED CRITERIA: {{upstream_participant_criteria}}
@@ -231,9 +245,11 @@ ai_generation_tasks:
       APPROACH: {{upstream_participant_approach}}
       {% endif %}
 
-      Output ONLY the bullet list (use markdown dash -). Each distinct
-      criterion gets its own bullet. Include accessibility needs and
-      demographic diversity requirements if relevant.
+      Structure:
+      1. ONE sentence stating sample size and rationale (e.g., "Recruit 8-10 participants across five defined segments to ensure coverage of documented discovery barriers")
+      2. A bullet list (use markdown dash -) with each segment on its own line, including count per segment and brief rationale
+
+      Keep it actionable. Include accessibility segments and demographic diversity requirements if specified in the criteria.
 
   - task_id: "deliverables_narrative"
     prompt: |
@@ -328,7 +344,7 @@ output_template: |
   | | |
   |---|---|
   | **Method** | {{methodology}} |
-  | **Participants** | {{target_participants}} |
+  | **Participants** | {{ai_generated.participant_glance}} |
   | **Timeline** | {{timeline_summary}} |
 
   ---
@@ -368,10 +384,6 @@ output_template: |
   ---
 
   ## Participants
-
-  **Sample size** — {{target_participants}}
-
-  **Required composition:**
 
   {{ai_generated.participant_composition_prose}}
 
@@ -421,8 +433,6 @@ output_template: |
   {{#each brief_operationalization}}
   | **{{this.commitment}}** | {{this.address}} |
   {{/each}}
-
-  ---
 
   ---
 
