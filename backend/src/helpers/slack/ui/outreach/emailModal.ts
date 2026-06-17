@@ -118,7 +118,7 @@ export const emailModal = (params: EmailModalParams = {}) => {
         elements: [
           {
             type: "mrkdwn",
-            text: `<${fileUrl}|:github: View on GitHub> · Saved to \`${filePath}\``,
+            text: `<${fileUrl}|:github: View on GitHub>`,
           },
         ],
       },
