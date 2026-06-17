@@ -298,6 +298,8 @@ const handleSessionSelectionChange = async ({ ack, body, client }: SlackActionMi
 // ─── Submission handler ─────────────────────────────────────────
 
 const handleSessionNotesSubmission = async ({ ack, body, view, client }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs): Promise<void> => {
+  let ackCalled = false;  // Track if ack was called to avoid double-ack
+
   try {
     const values = view.state.values;
     console.log("🚀 ~ handleSessionNotesSubmission ~ values:", values);
@@ -327,6 +329,7 @@ const handleSessionNotesSubmission = async ({ ack, body, view, client }: SlackVi
 
     if (!selectedSession || selectedSessionId === 'no_sessions') {
       await ack();
+      ackCalled = true;
       await client.chat.postMessage({
         channel: body.user.id,
         text: `❌ Please select a valid session before submitting notes. No sessions are currently available.`,
@@ -354,6 +357,7 @@ const handleSessionNotesSubmission = async ({ ack, body, view, client }: SlackVi
 
       if (!observations || observations.trim() === '') {
         await ack();
+        ackCalled = true;
         await client.chat.postMessage({
           channel: body.user.id,
           text: `❌ Please enter your observations before submitting.`,
@@ -363,6 +367,7 @@ const handleSessionNotesSubmission = async ({ ack, body, view, client }: SlackVi
 
       // Ack early for manual notes (no review modal needed)
       await ack();
+      ackCalled = true;
 
       const now = new Date();
       const hours = String(now.getHours()).padStart(2, '0');
@@ -412,6 +417,7 @@ const handleSessionNotesSubmission = async ({ ack, body, view, client }: SlackVi
         };
       } else {
         await ack();
+        ackCalled = true;
         await client.chat.postMessage({
           channel: body.user.id,
           text: `❌ Please either upload files or paste transcript content.`,
@@ -507,6 +513,7 @@ ${scrubResult.content}`;
         response_action: 'push',
         view: reviewModal,
       });
+      ackCalled = true;
 
       // ── participantRealName is now out of scope — NEVER stored anywhere ──
       return;
@@ -583,6 +590,15 @@ ${scrubResult.content}`;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error("Error handling session notes submission:", error);
+
+    // Must ack() before sending error message, otherwise Slack shows timeout error
+    if (!ackCalled) {
+      try {
+        await ack();
+      } catch {
+        // ack() might fail if already called or timed out, ignore
+      }
+    }
 
     await client.chat.postMessage({
       channel: body.user.id,
