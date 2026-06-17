@@ -237,7 +237,6 @@ async function handleBriefSubmission({ ack, body, view, client }: SlackViewMiddl
   // Study name inherits from project slug (Phase 2D: no study_name_block)
   const studyName = projectSlug;
 
-  console.log(`🚀 ~ Research Brief ~ studyName: ${studyName} (from project: ${projectName})`);
 
   // Post "working" message to researcher's DM (consistent with completion DM)
   try {

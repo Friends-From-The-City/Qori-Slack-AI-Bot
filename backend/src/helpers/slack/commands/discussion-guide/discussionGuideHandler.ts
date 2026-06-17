@@ -358,7 +358,6 @@ async function handleDiscussionGuideSubmission({ ack, body, view, client }: Slac
     return;
   }
 
-  console.log('🚀 ~ Discussion Guide Generator ~ studyName:', studyName, 'studyId:', studyId, 'projectId:', projectId);
 
   // Fetch study by ID (not name) — Phase 2D pattern
   const study = await getStudyById(studyId);

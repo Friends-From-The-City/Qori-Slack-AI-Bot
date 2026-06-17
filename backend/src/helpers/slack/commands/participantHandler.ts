@@ -22,7 +22,6 @@ async function resolveDisplayName(client: AllMiddlewareArgs['client'], userId: s
 
 async function participantHandler({ ack, body, client, command }: SlackCommandMiddlewareArgs & AllMiddlewareArgs): Promise<void> {
   try {
-    console.log("🚀 ~ participantHandler ~ body:", body);
     await ack();
 
     const channelId = command.channel_id;
@@ -30,7 +29,6 @@ async function participantHandler({ ack, body, client, command }: SlackCommandMi
 
     // Fetch studies for this user
     const studies = await getStudiesByUser(userId);
-    console.log("🚀 ~ participantHandler ~ studies:", studies)
 
     // Build the modal blocks
     let blocks = JSON.parse(JSON.stringify(addParticipantModal.blocks));
@@ -99,7 +97,6 @@ async function participantHandler({ ack, body, client, command }: SlackCommandMi
 
 async function updateParticipantHandler({ ack, body, client, command }: SlackCommandMiddlewareArgs & AllMiddlewareArgs): Promise<void> {
   try {
-    console.log("🚀 ~ updateParticipantHandler ~ body:", body);
     await ack();
 
     const channelId = command.channel_id;
@@ -107,7 +104,6 @@ async function updateParticipantHandler({ ack, body, client, command }: SlackCom
 
     // Fetch studies for this user
     const studies = await getStudiesByUser(userId);
-    console.log("🚀 ~ updateParticipantHandler ~ studies:", studies);
 
     // Build study dropdown options
     let studyDropdownBlock = null;
@@ -198,13 +194,11 @@ async function handleLoadParticipantsButton({ ack, body, client }: SlackActionMi
     // Authorization check: verify user has access to this study (ADR 0024)
     await assertStudyAccess(body.user.id, parseInt(studyId, 10), client);
 
-    console.log("🚀 ~ Loading participants for study:", studyId, studyName);
 
     // Fetch participants for the selected study
     let participants: any[] = [];
     try {
       participants = await studyParticipantService.getParticipantsByStudy(parseInt(studyId, 10));
-      console.log("🚀 ~ Participants found:", participants.length);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       console.warn("Warning: Could not fetch study participants:", message);
@@ -304,7 +298,6 @@ async function handleUpdateParticipantSubmission({ ack, body, view, client }: Sl
   try {
     await ack();
 
-    console.log("🚀 ~ handleUpdateParticipantSubmission ~ view:", view);
 
     // Extract form data
     const studyId = view.state.values.study_selection_block.update_participant_study_selection.selected_option?.value;
@@ -312,7 +305,6 @@ async function handleUpdateParticipantSubmission({ ack, body, view, client }: Sl
     const newStatus = view.state.values.status_update_block.status_update.selected_option?.value;
     const updateNotes = view.state.values.update_notes_block?.update_notes?.value || '';
 
-    console.log("🚀 ~ Extracted data:", { studyId, participantId, newStatus, updateNotes });
 
     // Validate required fields
     if (!studyId || studyId === "loading") {
@@ -334,7 +326,6 @@ async function handleUpdateParticipantSubmission({ ack, body, view, client }: Sl
     const studyName = view.state.values.study_selection_block.update_participant_study_selection.selected_option?.text?.text || "Unknown Study";
     const participantName = view.state.values.participant_selection_block.participant_selection.selected_option?.text?.text || "Unknown Participant";
 
-    console.log("🚀 ~ Updating participant:", { studyName, participantName, newStatus });
 
     // Update the participant in the database
     const updateData: Record<string, string> = {
@@ -356,7 +347,6 @@ async function handleUpdateParticipantSubmission({ ack, body, view, client }: Sl
     // Update the participant using the service
     const updatedParticipant = await studyParticipantService.updateParticipant(parseInt(participantId), updateData);
 
-    console.log("🚀 ~ Participant updated successfully:", updatedParticipant.id);
 
     // Optionally update the participant tracker file
     try {
@@ -386,7 +376,6 @@ async function handleUpdateParticipantSubmission({ ack, body, view, client }: Sl
 
           // @ts-expect-error — pre-existing type mismatch from require() → import migration
           await processParticipantYamlTemplate(yamlTemplateFile.content, templateData, study.path || '', '', allParticipants);
-          console.log("🚀 ~ Participant tracker updated successfully");
         }
       }
     } catch (yamlError) {

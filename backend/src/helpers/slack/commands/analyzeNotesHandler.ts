@@ -429,7 +429,6 @@ const handleAnalyzeNotesSubmission = async ({ ack, body, view, client }: SlackVi
       researcher_contact: study?.researcher_name || study?.researcher_email || '',
       analyzer: (body.user as Record<string, string>).username || body.user.name || body.user.id
     };
-    console.log("🚀 ~ handleAnalyzeNotesSubmission ~ templateData:", templateData);
 
     const yamlTemplateFile = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, "session_summary.yaml");
 
@@ -546,7 +545,6 @@ const handleStudySelectionChange = async ({ ack, body, client }: SlackActionMidd
     const selectedStudyOption = view.state.values.study_select_block?.study_select_test?.selected_option;
 
     if (!selectedStudyOption || selectedStudyOption.value === "no_studies") {
-      console.log("🚀 ~ No study selected, resetting to initial state");
       const studies = await getStudiesByUser(body.user.id);
       await client.views.update({
         view_id: view.id,
@@ -618,7 +616,6 @@ const handleSessionSelectionChange = async ({ ack, body, client }: SlackActionMi
     const sessionSelection = findSessionSelection(view.state.values as ViewStateValues);
 
     if (!selectedStudyOption || selectedStudyOption.value === "no_studies") {
-      console.log("🚀 ~ No study selected");
       return;
     }
 
@@ -638,7 +635,6 @@ const handleSessionSelectionChange = async ({ ack, body, client }: SlackActionMi
     const sessions = mapParticipantsToSessions(participantsResult as ParticipantRecord[]);
 
     if (!sessionSelection || sessionSelection.value === "no_sessions") {
-      console.log("🚀 ~ No session selected, showing sessions only");
       await client.views.update({
         view_id: view.id,
         hash: view.hash,

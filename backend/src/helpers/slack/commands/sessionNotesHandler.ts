@@ -109,14 +109,11 @@ function buildSessionDisplayName(session: SessionInfo): string {
 // ─── Command handler ────────────────────────────────────────────
 
 const uploadNotesHandler = async ({ ack, body, client, command }: SlackCommandMiddlewareArgs & AllMiddlewareArgs): Promise<void> => {
-  console.log("🚀 ~ uploadNotesHandler ~ body:", body);
-
   try {
     await ack();
 
     const userId = command.user_id;
     const sessions: any[] = await sessionObserverService.getObserverByUser(userId);
-    console.log("🚀 ~ uploadNotesHandler ~ sessions:", sessions);
 
     if (!sessions || sessions.length === 0) {
       await postEphemeralOrDM(
@@ -302,7 +299,6 @@ const handleSessionNotesSubmission = async ({ ack, body, view, client }: SlackVi
 
   try {
     const values = view.state.values;
-    console.log("🚀 ~ handleSessionNotesSubmission ~ values:", values);
     const metadata = JSON.parse(view.private_metadata || '{}') as ViewMetadata;
     const isManual = metadata.tab === 'manual';
 
@@ -385,7 +381,6 @@ const handleSessionNotesSubmission = async ({ ack, body, view, client }: SlackVi
       // PII scrubbing happens here: extract real name, scrub, push review modal
       const filesInput = values.transcript_files?.files as { files?: Array<{ name: string; mimetype: string; url_private?: string; [key: string]: unknown }> } | undefined;
       const filesList = filesInput?.files || [];
-      console.log("🚀 ~ handleSessionNotesSubmission ~ files:", filesList);
       const pastedText: string = values.transcript_paste?.text?.value || '';
 
       // ── Extract participant real name for scrubbing (TRANSIENT — never stored) ──
@@ -530,7 +525,6 @@ ${scrubResult.content}`;
     const variableContext: VariableContext = { projectId: resolved.projectId, studyId: resolved.studyId };
     const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, yamlTemplateName!);
     renderedYaml = await processYamlTemplate(file.content, templateData, study!.path ?? '', '', false, variableContext);
-    console.log("🚀 ~ handleSessionNotesSubmission ~ renderedYaml:", renderedYaml);
     result = renderedYaml!.result;
     const urlParts: string[] = result.path.split('/');
     fileName = urlParts[urlParts.length - 1];

@@ -92,7 +92,6 @@ let server;
     // await readFolderContents("startupDummy")
     // const response = await listAllTopLevelFolders("CivicMind-Slack-AI-Bot")
     // const response = await readFolders("startupDummyFolder", "civicmind-private")
-    // console.log("🚀 ~ response:", response)
     // console.log("✅ startupDummy folder + dummy files created in GitHub");
   } catch (err) {
     // console.error("❌ failed to create startupDummy folder:", err);

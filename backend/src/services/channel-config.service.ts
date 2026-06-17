@@ -33,7 +33,6 @@ const getChannelConfigByChannelId = async (channelId: string): Promise<ChannelCo
     const channelConfig = await ChannelConfigModel.findOne({
       where: { channel_id: channelId }
     });
-    console.log("🚀 ~ getChannelConfigByChannelId ~ channelConfig:", channelConfig);
     return channelConfig;
   } catch (error) {
     console.error("Error in getChannelConfigByChannelId:", error);

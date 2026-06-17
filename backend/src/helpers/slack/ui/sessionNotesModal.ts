@@ -33,7 +33,6 @@ interface SessionNotesState {
 }
 
 export const buildSessionNotesView = (state: SessionNotesState = {}) => {
-  console.log("🚀 ~ buildSessionNotesView ~ state:", state)
   const tab = state.tab || 'upload';                // 'manual' | 'upload'
   const method = state.method || 'files';           // 'files' | 'paste'
   const isManual = tab === 'manual';

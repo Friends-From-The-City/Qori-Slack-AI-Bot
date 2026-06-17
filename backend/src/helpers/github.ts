@@ -231,7 +231,6 @@ export async function createOrUpdateFileOnGitHub(
 }
 
 export async function readFolderContents(folderPath: string, repo: string): Promise<FolderEntry[]> {
-  console.log('🚀 ~ readFolderContents ~ folderPath:', folderPath, repo);
   const { Octokit } = await import('@octokit/rest');
   const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
   const owner = process.env.GITHUB_OWNER!;
@@ -243,7 +242,6 @@ export async function readFolderContents(folderPath: string, repo: string): Prom
 }
 
 export async function readFolders(folderPath: string, repo: string): Promise<RepoFile[]> {
-  console.log('🚀 ~ readFolders ~ folderPath:', folderPath);
   const { Octokit } = await import('@octokit/rest');
   const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
   const owner = process.env.GITHUB_OWNER!;
@@ -311,7 +309,6 @@ export async function fetchFileFromRepoByPath(repo: string, folderPath: string):
   try {
     const { data: fileData } = await octokit.rest.repos.getContent({ owner, repo, path: filePath, ref });
     const content = Buffer.from((fileData as GitHubContentItem).content!, 'base64').toString('utf8');
-    console.log(`🚀 ~ fetched ${filePath}:`, { path: filePath, content });
     return { path: filePath, content };
   } catch (err: unknown) {
     console.error(`Error fetching ${filePath} from ${owner}/${repo}:`, err);

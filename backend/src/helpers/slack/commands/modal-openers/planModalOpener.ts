@@ -50,7 +50,6 @@ async function openResearchPlanModal({ ack, body, client }: SlackActionMiddlewar
       return;
     }
 
-    console.log('🚀 ~ create_research_plan ~ body.view.private_metadata:', body.view.private_metadata);
 
     const meta = JSON.parse(body.view.private_metadata || '{}');
     // Get selected study from the input block

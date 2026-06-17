@@ -336,7 +336,6 @@ const handleStudySelectionChange = async ({ ack, body, client }: SlackActionMidd
     const studyName: string = selectedStudyOption.text.text;
     const currentAnalysisMethod: string | null = view.state.values.analysis_method_selection?.analysis_method?.selected_option?.value || 'affinity_mapping';
 
-    console.log(`🚀 ~ Study selected: ${studyName} (ID: ${studyId}), method: ${currentAnalysisMethod}`);
 
     const studies = await getStudiesByUser(body.user.id);
     const selectedStudy = studies.find((s: Study) => s.id.toString() === studyId.toString());
@@ -482,7 +481,6 @@ const handleResearchSynthesisSubmission = async ({ ack, body, view, client }: Sl
     // ─── LOAD STRUCTURED CASCADE VARIABLES ───────────────────────────
     // ADR 0018: The real wiring — read from variable store
 
-    console.log(`🚀 ~ Loading cascade variables for ${analysisMethod}...`);
     const upstreamVars: UpstreamVariables = await readUpstreamVariablesByContext(variableContext, consumesSpec);
     console.log(`✅ Loaded ${Object.keys(upstreamVars).length} cascade variables: ${Object.keys(upstreamVars).join(', ')}`);
 
