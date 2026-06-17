@@ -278,7 +278,7 @@ The prescription refill workflow demonstrates that accessible, logical navigatio
 | | |
 |---|---|
 | Generated | May 21, 2026 at 3:42 PM UTC |
-| Model | claude-sonnet-4-20250514 |
+| Model | claude-sonnet-4-5-20251022 |
 | Template | research_readout v5.4 |
 | Study | va-mobile-nav-2026 |
 | Max tokens | 8192 |

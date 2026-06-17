@@ -291,7 +291,7 @@ Shared QA team covers 5 products; mobile gets 2 weeks per 6-week cycle. Navigati
 | | |
 |---|---|
 | Generated | May 1, 2026 at 9:30 AM UTC |
-| Model | claude-sonnet-4-20250514 |
+| Model | claude-sonnet-4-5-20251022 |
 | Template | stakeholder_synthesis v3.0 |
 | Study | va-mobile-nav-2026 |
 | Max tokens | 8192 |

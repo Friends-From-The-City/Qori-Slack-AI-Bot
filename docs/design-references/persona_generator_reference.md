@@ -179,7 +179,7 @@ These design opportunities emerge from analyzing both personas together. Items t
 | | |
 |---|---|
 | Generated | April 29, 2026 at 6:14 PM UTC |
-| Model | claude-sonnet-4-20250514 |
+| Model | claude-sonnet-4-5-20251022 |
 | Template | persona_generator v4.3 |
 | Study | va-mobile-nav-2026 |
 | Max tokens | 8192 |

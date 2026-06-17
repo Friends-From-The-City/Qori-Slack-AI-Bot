@@ -137,7 +137,7 @@ All artifacts will be stored in the study's research folder for ongoing referenc
 | | |
 |---|---|
 | Generated | April 29, 2026 at 2:30 PM UTC |
-| Model | claude-sonnet-4-20250514 |
+| Model | claude-sonnet-4-5-20251022 |
 | Template | research_plan v4.6 |
 | Study | va-mobile-nav-2026 |
 | Max tokens | 8192 |

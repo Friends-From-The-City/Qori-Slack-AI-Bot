@@ -173,7 +173,7 @@ This analysis follows established qualitative research methods:
 | Field | Value |
 |-------|-------|
 | Generated | April 29, 2026 at 7:45 PM UTC |
-| Model | claude-sonnet-4-20250514 |
+| Model | claude-sonnet-4-5-20251022 |
 | Template | affinity_mapping v3.1 |
 | Study | va-mobile-nav-2026 |
 | Max tokens | 8192 |

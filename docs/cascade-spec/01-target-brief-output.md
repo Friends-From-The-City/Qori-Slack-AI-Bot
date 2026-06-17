@@ -139,7 +139,7 @@ Full discovery artifacts: see `_discovery/va-mobile-navigation/` in study reposi
 | Field | Value |
 |-------|-------|
 | Generated | May 3, 2026 |
-| Model | claude-sonnet-4-20250514 (Generate) + claude-haiku-4-5-20251001 (Extract) |
+| Model | claude-sonnet-4-5-20251022 (Generate) + claude-haiku-4-5-20251001 (Extract) |
 | Template | research_brief v6.0 |
 | Study | va-mobile-nav-2026 |
 | Cascade | Consumed 24 variables across 3 discovery sources; emits 12 variable types for downstream use |

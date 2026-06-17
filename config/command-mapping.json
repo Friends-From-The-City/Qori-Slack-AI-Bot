@@ -210,7 +210,7 @@
   "modal_directory": "config/modals",
 
   "defaults": {
-    "llm_model": "claude-sonnet-4-20250514",
+    "llm_model": "claude-sonnet-4-5-20251022",
     "temperature": 0.3,
     "max_tokens": 4000
   }

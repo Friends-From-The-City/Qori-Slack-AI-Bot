@@ -19,6 +19,7 @@ import sessionSummaryService from '../../../services/session-summary.service';
 import sequelize from '../../../database';
 import type { StudyVariableAttributes } from '../../../types/models';
 import { assertStudyAccess } from '../../../services/authorization.service';
+import { postEphemeralOrDM } from '../slackHelpers';
 
 // ─── Types ──────────────────────────────────────────────────────
 
@@ -162,11 +163,12 @@ const openReadoutModal = async ({ ack, body, client, command }: SlackCommandMidd
     const message = error instanceof Error ? error.message : String(error);
 
     try {
-      await client.chat.postEphemeral({
-        channel: command.channel_id,
-        user: command.user_id,
-        text: `❌ Error opening readout modal: ${message}`
-      });
+      await postEphemeralOrDM(
+        client,
+        command.channel_id,
+        command.user_id,
+        `❌ Error opening readout modal: ${message}`
+      );
     } catch (chatError) {
       console.error('Error sending error message:', chatError);
     }
