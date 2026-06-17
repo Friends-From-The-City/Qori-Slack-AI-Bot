@@ -56,17 +56,26 @@ interface DiscussionGuideTemplateInput {
 
 // ─── Cascade formatting helpers ─────────────────────────────────
 
+interface ResearchObjective {
+  id?: string;
+  objective?: string;
+}
+
 interface ResearchQuestion {
   id?: string;
   question?: string;
   priority?: string;
 }
 
-/** Format research_objectives (array of strings) as bullet list for pre-fill. */
+/** Format research_objectives (array of {id, objective}) as bullet list for pre-fill. */
 function formatObjectivesForPrefill(objectives: unknown): string {
   if (!Array.isArray(objectives)) return '';
   return objectives
-    .map(obj => typeof obj === 'string' ? `• ${obj}` : '')
+    .map((obj: ResearchObjective) => {
+      const id = obj.id || '';
+      const objective = obj.objective || '';
+      return id && objective ? `• ${id}: ${objective}` : objective ? `• ${objective}` : '';
+    })
     .filter(Boolean)
     .join('\n');
 }

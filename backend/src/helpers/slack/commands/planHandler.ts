@@ -39,7 +39,7 @@ interface PlanTemplateInput {
   operational_risks: string;
   per_participant_compensation: number | null;
   parsed_budget_amount: number | null;
-  target_participants: number | null;
+  target_participants: string;
   timeline_phases: TimelinePhase[];
   timeline_summary: string;
   start_date: string;
@@ -168,18 +168,20 @@ async function handlePlanSubmission({ ack, body, view, client }: SlackViewMiddle
     { key: 'timeline_preference', required: false },
     { key: 'start_date', required: false },
     { key: 'recruitment_sources', required: false },
+    { key: 'participant_approach', required: false },
   ]);
 
   // ── Cascade-owned fields (brief owns these — plan modal no longer has these fields) ──
   const timelinePref = (upstream.timeline_preference?.value as string) || 'standard';
   const startDate = (upstream.start_date?.value as string) || '';
   const recruitmentSources = (upstream.recruitment_sources?.value as string) || '';
+  const participantApproach = (upstream.participant_approach?.value as string) || '';
 
   // ── Timeline phases (mechanical) ──
   const timelinePhases = buildTimelinePhases(startDate, timelinePref);
   const timelineSummary = buildTimelineSummary(timelinePhases);
 
-  const upstreamObjectives = upstream.research_objectives?.value as string[] | undefined;
+  const upstreamObjectives = upstream.research_objectives?.value as { id?: string; objective?: string }[] | undefined;
   const upstreamQuestions = (upstream.research_questions?.value || []) as ResearchQuestion[];
   const upstreamBarriers = (upstream.target_barriers?.value || []) as TargetBarrier[];
   const methodology = (upstream.methodology_selection?.value || '') as string;
@@ -193,10 +195,10 @@ async function handlePlanSubmission({ ack, body, view, client }: SlackViewMiddle
     );
   }
 
-  // ── Transform objectives: brief emits plain strings (ADR 0006), plan needs {id, objective} ──
-  const objectives = upstreamObjectives.map((item: string, index: number) => ({
-    id: `OBJ-${String(index + 1).padStart(3, '0')}`,
-    objective: item,
+  // ── Brief emits {id, objective} objects (schema updated June 6, 2026) ──
+  const objectives = upstreamObjectives.map((item, index: number) => ({
+    id: item.id || `OBJ-${String(index + 1).padStart(3, '0')}`,
+    objective: item.objective || '',
   }));
 
   // ── Assemble the complete data object ──
@@ -209,7 +211,7 @@ async function handlePlanSubmission({ ack, body, view, client }: SlackViewMiddle
 
     per_participant_compensation: perParticipantComp,
     parsed_budget_amount: study!.parsed_budget_amount,
-    target_participants: study!.target_participants,
+    target_participants: participantApproach || (study!.target_participants ? String(study!.target_participants) : ''),
 
     timeline_phases: timelinePhases,
     timeline_summary: timelineSummary,
