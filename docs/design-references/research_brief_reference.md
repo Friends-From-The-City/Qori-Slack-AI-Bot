@@ -106,7 +106,7 @@ Once approved, the lead researcher will produce a detailed research plan coverin
 | | |
 |---|---|
 | Generated | April 30, 2026 at 9:54 PM UTC |
-| Model | claude-sonnet-4-5-20251022 |
+| Model | claude-sonnet-4-6 |
 | Template | research_brief v5.0 |
 | Study | va-mobile-nav-2026 |
 | Max tokens | 8192 |

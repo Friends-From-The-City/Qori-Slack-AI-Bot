@@ -193,7 +193,7 @@ Surface overall impressions, frustrations, and unmet needs. Connect to broader a
 | | |
 |---|---|
 | Generated | April 29, 2026 at 8:12 PM UTC |
-| Model | claude-sonnet-4-5-20251022 |
+| Model | claude-sonnet-4-6 |
 | Template | discussion_guide v6.1 |
 | Study | va-mobile-nav-2026 |
 | Max tokens | 8192 |
