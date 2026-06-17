@@ -98,7 +98,7 @@ User question: "${question}"`;
 async function formatResults(question: string, rows: VariableRow[], total: number, scope: string, studyName: string | undefined): Promise<string | null> {
   const sonnet = new ChatAnthropic({
     anthropicApiKey: process.env.ANTHROPIC_API_KEY,
-    modelName: process.env.ANTHROPIC_MODEL_NAME || 'claude-sonnet-4-20250514',
+    modelName: process.env.ANTHROPIC_MODEL_NAME || 'claude-sonnet-4-5-20251022',
     temperature: 0.3,
     maxTokens: 2048,
   });

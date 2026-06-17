@@ -385,7 +385,7 @@ function selectExtractionModel(emitConfig: EmitSpec, schema: SchemaDefinition | 
   // Explicit override from YAML config
   if (emitConfig.extraction_model) {
     if (emitConfig.extraction_model === 'sonnet') {
-      return process.env.EXTRACTION_MODEL_SONNET || 'claude-sonnet-4-20250514';
+      return process.env.EXTRACTION_MODEL_SONNET || 'claude-sonnet-4-5-20251022';
     }
     return process.env.EXTRACTION_MODEL_NAME || 'claude-haiku-4-5-20251001';
   }
@@ -397,7 +397,7 @@ function selectExtractionModel(emitConfig: EmitSpec, schema: SchemaDefinition | 
       (p): p is SchemaDefinition => !!(p && typeof p === 'object' && 'enum' in p && Array.isArray((p as SchemaDefinition).enum) && ((p as SchemaDefinition).enum!.length > 5))
     );
     if (propertyCount > 10 || hasMultiValueEnum) {
-      return process.env.EXTRACTION_MODEL_SONNET || 'claude-sonnet-4-20250514';
+      return process.env.EXTRACTION_MODEL_SONNET || 'claude-sonnet-4-5-20251022';
     }
   }
 

@@ -245,7 +245,7 @@ These questions emerged from the journey analysis and warrant team alignment bef
 | | |
 |---|---|
 | Generated | April 29, 2026 at 5:42 PM UTC |
-| Model | claude-sonnet-4-20250514 |
+| Model | claude-sonnet-4-5-20251022 |
 | Template | journey_mapping v3.12 |
 | Study | va-mobile-nav-2026 |
 | Max tokens | 8192 |

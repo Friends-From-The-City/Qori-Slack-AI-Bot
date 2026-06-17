@@ -79,7 +79,7 @@ export async function executeAiGenerationTasks(
   inputValues: Record<string, any>,
   piiContext?: PiiRedactionContext,
 ): Promise<AiResponses> {
-  const modelName = process.env.ANTHROPIC_MODEL_NAME || 'claude-sonnet-4-20250514';
+  const modelName = process.env.ANTHROPIC_MODEL_NAME || 'claude-sonnet-4-5-20251022';
   const temperature = parseFloat(process.env.ANTHROPIC_TEMPERATURE || '0.4');
   const maxTokens = parseInt(process.env.ANTHROPIC_MAX_TOKENS || '8192', 10);
 
