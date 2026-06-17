@@ -325,7 +325,7 @@ This frames later observations and lets you check that the screen sharing setup 
 | | |
 |---|---|
 | Generated | April 29, 2026 at 3:42 PM UTC |
-| Model | claude-sonnet-4-5-20251022 |
+| Model | claude-sonnet-4-6 |
 | Template | discussion_guide v6.2 |
 | Study | va-mobile-nav-2026 |
 | Max tokens | 8192 |

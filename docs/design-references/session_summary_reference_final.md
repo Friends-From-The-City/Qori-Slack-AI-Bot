@@ -177,7 +177,7 @@ Every screen requires additional swipes to navigate past headers, banners, and n
 | | |
 |---|---|
 | Generated | May 19, 2026 at 4:18 PM UTC |
-| Model | claude-sonnet-4-5-20251022 |
+| Model | claude-sonnet-4-6 |
 | Template | session_summary v1.6 |
 | Study | va-mobile-nav-2026 |
 | Participant | PT-001 |

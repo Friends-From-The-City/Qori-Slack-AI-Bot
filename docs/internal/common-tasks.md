@@ -19,7 +19,7 @@ description: |
   Description of what this feature does.
 
 llm_config:
-  model: "claude-sonnet-4-5-20251022"
+  model: "claude-sonnet-4-6"
   temperature: 0.3
   max_tokens: 2000
 

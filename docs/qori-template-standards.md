@@ -173,7 +173,7 @@ Same 2-column metadata table on every document. Five rows, followed by italic "G
 | | |
 |---|---|
 | Generated | [timestamp] |
-| Model | claude-sonnet-4-5-20251022 |
+| Model | claude-sonnet-4-6 |
 | Template | [template_name] v[version] |
 | Study | [study_name] |
 | Max tokens | 8192 |

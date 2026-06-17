@@ -38,7 +38,7 @@ Qori is an AI-powered research operations platform for VA (Veterans Affairs) UX 
 
 In code, config reads go through `getConfigRepo()` (defined in `github.js`), which returns `GITHUB_CONFIG_REPO || GITHUB_REPO`. Content writes use `GITHUB_REPO` directly.
 
-**Model resolution:** All `/qori-*` commands go through `backend/src/helpers/langchain.ts:77-95`, which creates a `ChatAnthropic` instance. Model is `ANTHROPIC_MODEL_NAME` env var, falling back to `claude-sonnet-4-5-20251022`. The `llm_config` blocks in YAML prompt files (some say `gpt-4o`) are parsed but **never read** — dead config.
+**Model resolution:** All `/qori-*` commands go through `backend/src/helpers/langchain.ts:77-95`, which creates a `ChatAnthropic` instance. Model is `ANTHROPIC_MODEL_NAME` env var, falling back to `claude-sonnet-4-6`. The `llm_config` blocks in YAML prompt files (some say `gpt-4o`) are parsed but **never read** — dead config.
 
 **RAG pipeline (currently disabled for alpha):** `backend/src/helpers/ragV2.js` contains a vector search Q&A pipeline using OpenAI (`gpt-4o-mini` + embeddings) and Supabase as the vector store. It is gated on env vars (`SUPABASE_URL`, `SUPABASE_ANON_KEY`, `OPENAI_API_KEY`) — if any are missing, the server boots cleanly and RAG commands respond with a "not available yet" message. The RAG command handlers in `events.js` (`/civicmind ask-study`, `/civicmind create-template-study`, `/ask-study` modal, `/civicmind ask`) are disabled and return a user-friendly message. See "How to re-enable RAG" below.
 
