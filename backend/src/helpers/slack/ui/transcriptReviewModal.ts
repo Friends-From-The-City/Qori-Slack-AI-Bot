@@ -10,7 +10,7 @@ export interface TranscriptReviewModalMetadata {
   participantCode: string;
   /** Study name */
   studyName: string;
-  /** GitHub file URL */
+  /** GitHub file URL for full transcript review */
   fileUrl: string;
 }
 
@@ -33,16 +33,19 @@ interface TranscriptReviewParams {
   participantCode: string;
   /** Study name */
   studyName: string;
+  /** GitHub URL to full transcript for review */
+  fileUrl: string;
 }
 
 /**
  * Build the transcript review modal.
  *
- * Shows the scrubbed transcript for human review before saving.
- * The researcher must approve or go back to edit.
+ * The transcript is already saved to GitHub (PII-scrubbed but not approved).
+ * Researcher must review the FULL transcript via the GitHub link before approving.
+ * Slack's modal char limits prevent showing the full text here.
  */
 export const buildTranscriptReviewModal = (params: TranscriptReviewParams): View => {
-  const { scrubbedPreview, stats, warnings, participantCode, studyName } = params;
+  const { scrubbedPreview, stats, warnings, participantCode, studyName, fileUrl } = params;
 
   // Build stats summary
   const totalScrubs = stats.participantName + stats.moderatorName +
@@ -60,17 +63,18 @@ export const buildTranscriptReviewModal = (params: TranscriptReviewParams): View
     : '⚠️ *No PII items were automatically scrubbed.* Please verify the transcript is already anonymized.';
 
   // Truncate preview for display (Slack has block limits)
-  const maxPreviewLength = 2500;
-  const truncatedPreview = scrubbedPreview.length > maxPreviewLength
-    ? scrubbedPreview.substring(0, maxPreviewLength) + '\n\n... [truncated for preview]'
+  const maxPreviewLength = 1500;
+  const isTruncated = scrubbedPreview.length > maxPreviewLength;
+  const truncatedPreview = isTruncated
+    ? scrubbedPreview.substring(0, maxPreviewLength) + '\n\n[... truncated ...]'
     : scrubbedPreview;
 
   return {
     type: 'modal',
     callback_id: 'transcript_review_approve',
     title: { type: 'plain_text', text: 'Review Transcript' },
-    submit: { type: 'plain_text', text: 'Approve & Save' },
-    close: { type: 'plain_text', text: 'Go Back' },
+    submit: { type: 'plain_text', text: 'Approve' },
+    close: { type: 'plain_text', text: 'Cancel' },
     blocks: [
       // Header
       {
@@ -92,28 +96,45 @@ export const buildTranscriptReviewModal = (params: TranscriptReviewParams): View
       },
       { type: 'divider' },
 
-      // Warnings
+      // CRITICAL: Review full transcript link
       {
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: '⚠️ *Please review for incidental PII:*\n' +
-            '• Names mentioned in conversation ("my wife Sarah...")\n' +
-            '• Locations ("the Denver VA...")\n' +
-            '• Dates with context ("my birthday is...")\n' +
-            '• Any other identifying information\n\n' +
-            '_Auto-scrub handles known names and patterns. Human review catches what it misses._'
+          text: '⚠️ *IMPORTANT: Review the FULL transcript before approving*\n\n' +
+            'The preview below is truncated. Auto-scrub may have missed incidental PII ' +
+            '(names mentioned in conversation, locations, dates). ' +
+            '*You must review the full transcript on GitHub* to catch anything the scrubber missed.'
+        },
+        accessory: {
+          type: 'button',
+          text: { type: 'plain_text', text: '📄 Review Full Transcript', emoji: true },
+          url: fileUrl,
+          action_id: 'review_full_transcript_link'
         }
+      },
+      { type: 'divider' },
+
+      // What to look for
+      {
+        type: 'context',
+        elements: [
+          {
+            type: 'mrkdwn',
+            text: '*Look for:* Names in conversation ("my wife Sarah...") · Locations ("the Denver VA...") · ' +
+              'Phone numbers · Email addresses · Dates with context ("my birthday is...")'
+          }
+        ]
       },
       { type: 'divider' },
 
       // Preview header
       {
         type: 'section',
-        text: { type: 'mrkdwn', text: '*📄 Scrubbed Transcript Preview:*' }
+        text: { type: 'mrkdwn', text: `*Preview* ${isTruncated ? '(truncated — review full on GitHub)' : ''}:` }
       },
 
-      // Preview content (in a context block for smaller text)
+      // Preview content
       {
         type: 'section',
         text: {
@@ -129,8 +150,8 @@ export const buildTranscriptReviewModal = (params: TranscriptReviewParams): View
         elements: [
           {
             type: 'mrkdwn',
-            text: '✅ *Approve & Save* commits this transcript to GitHub and marks it as PII-reviewed.\n' +
-              '↩️ *Go Back* returns to the upload form to make changes.'
+            text: '✅ *Approve* marks this transcript as PII-reviewed and eligible for analysis.\n' +
+              '❌ *Cancel* keeps the transcript in draft state (re-upload with `/qori-notes` to try again).'
           }
         ]
       }

@@ -493,6 +493,7 @@ ${scrubResult.content}`;
         warnings: scrubResult.warnings,
         participantCode: templateData.participant_id,
         studyName: templateData.study_name,
+        fileUrl: githubResult.url,
       });
 
       // Store minimal metadata in private_metadata (just IDs, not content)
@@ -599,13 +600,12 @@ ${scrubResult.content}`;
  */
 const handleTranscriptReviewApprove = async ({ ack, body, view, client }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs): Promise<void> => {
   try {
-    await ack();
-
-    // Parse metadata (minimal — just IDs)
+    // Parse metadata first (before ack, in case we need to handle errors)
     const metadata: TranscriptReviewModalMetadata = JSON.parse(view.private_metadata || '{}');
     const { noteId, participantCode, studyName, fileUrl } = metadata;
 
     if (!noteId) {
+      await ack();
       await client.chat.postMessage({
         channel: body.user.id,
         text: '❌ Error: Missing transcript record. Please try uploading again.',
@@ -620,6 +620,9 @@ const handleTranscriptReviewApprove = async ({ ack, body, view, client }: SlackV
       pii_reviewed_by: body.user.id,
     });
     console.log(`✅ Transcript marked as PII-reviewed: ID=${noteId}`);
+
+    // Close all modals (clear the modal stack) — this is a terminal action
+    await ack({ response_action: 'clear' });
 
     // Notify user
     await client.chat.postMessage({

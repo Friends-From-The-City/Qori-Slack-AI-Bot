@@ -2,8 +2,8 @@
  * transcriptScrubber.ts — Upload-time PII scrubbing for transcripts
  *
  * Scrubs KNOWN/STRUCTURED PII from transcripts BEFORE storage:
- * - Participant real name → participant code (PT-XXX)
- * - Moderator name → [Moderator]
+ * - Participant real name (full, first, last, honorifics) → participant code (PT-XXX)
+ * - Moderator name (full, first, last) → [Moderator]
  * - Speaker labels (DC:, TK:, etc.) → [Participant], [Moderator]
  * - Phone numbers → [PHONE]
  * - Email addresses → [EMAIL]
@@ -11,13 +11,6 @@
  * PRIVACY GUARANTEE: The participant's real name is passed as a parameter,
  * used ONLY for in-memory string replacement, and NEVER stored anywhere
  * (no DB, no log, no temp file, no error message).
- *
- * KNOWN LIMITATIONS (v1):
- * - Speaker label detection is best-effort (handles "XX:" format, not all tools)
- * - Incidental PII (names/locations mentioned mid-transcript) requires human review
- * - First-name-only mentions may not be caught if ambiguous
- *
- * The human-review step is the backstop for anything auto-scrub misses.
  */
 
 // ─── Types ───────────────────────────────────────────────────────
@@ -63,24 +56,57 @@ function getInitials(name: string): string | null {
 }
 
 /**
- * Extract first name from a full name.
- * "David Chen" → "David"
+ * Decompose a full name into all scrubable variants.
+ * "David Chen" → ["David Chen", "David", "Chen", "Mr. Chen", "Ms. Chen", "Mr Chen", "Ms Chen"]
  */
-function getFirstName(name: string): string | null {
-  const parts = name.trim().split(/\s+/);
-  return parts[0] || null;
+function decomposeNameVariants(fullName: string): string[] {
+  const parts = fullName.trim().split(/\s+/);
+  if (parts.length === 0) return [];
+
+  const variants: string[] = [];
+
+  // Full name (highest priority - replace first)
+  variants.push(fullName.trim());
+
+  // For multi-part names, add individual parts
+  if (parts.length >= 2) {
+    const firstName = parts[0];
+    const lastName = parts[parts.length - 1];
+
+    // First name alone (if >= 3 chars to avoid false positives)
+    if (firstName.length >= 3) {
+      variants.push(firstName);
+    }
+
+    // Last name alone (if >= 3 chars)
+    if (lastName.length >= 3) {
+      variants.push(lastName);
+    }
+
+    // Honorific + last name variants
+    variants.push(`Mr. ${lastName}`);
+    variants.push(`Ms. ${lastName}`);
+    variants.push(`Mrs. ${lastName}`);
+    variants.push(`Mr ${lastName}`);
+    variants.push(`Ms ${lastName}`);
+    variants.push(`Mrs ${lastName}`);
+  }
+
+  return variants;
 }
 
 // ─── Regex Patterns ──────────────────────────────────────────────
 
-// Phone: various US formats (XXX-XXX-XXXX, (XXX) XXX-XXXX, XXX.XXX.XXXX, etc.)
-const PHONE_PATTERN = /\b(?:\+?1[-.\s]?)?\(?[0-9]{3}\)?[-.\s]?[0-9]{3}[-.\s]?[0-9]{4}\b/g;
+// Phone: various formats including 7-digit local numbers
+// - XXX-XXX-XXXX, (XXX) XXX-XXXX, XXX.XXX.XXXX (10 digit)
+// - XXX-XXXX (7 digit local)
+const PHONE_PATTERN_10 = /\b(?:\+?1[-.\s]?)?\(?[0-9]{3}\)?[-.\s]?[0-9]{3}[-.\s]?[0-9]{4}\b/g;
+const PHONE_PATTERN_7 = /\b[0-9]{3}[-.\s]?[0-9]{4}\b/g;
 
 // Email: standard format
 const EMAIL_PATTERN = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g;
 
 // Speaker label: "XX:" at start of line or after timestamp, where XX is 2-4 uppercase letters
-// Captures the label so we can decide if it's participant or moderator
 const SPEAKER_LABEL_PATTERN = /^(\[[^\]]+\]\s*)?([A-Z]{2,4}):\s/gm;
 
 // ─── Main Scrubbing Function ─────────────────────────────────────
@@ -106,48 +132,55 @@ export function scrubTranscript(content: string, ctx: ScrubContext): ScrubResult
   const warnings: string[] = [];
 
   let scrubbed = content;
+  const code = ctx.participantCode;
 
-  // ── 1. Replace participant full name ────────────────────────────
+  // ── 1. Replace participant name variants ─────────────────────────
+  // Order matters: replace full name first, then parts
   if (ctx.participantRealName && ctx.participantRealName.trim().length > 2) {
-    const fullName = ctx.participantRealName.trim();
-    const pattern = new RegExp(`\\b${escapeRegex(fullName)}\\b`, 'gi');
-    scrubbed = scrubbed.replace(pattern, () => {
-      stats.participantName++;
-      return ctx.participantCode;
-    });
+    const variants = decomposeNameVariants(ctx.participantRealName);
 
-    // Also try first name with word boundary (but warn about ambiguity)
-    const firstName = getFirstName(fullName);
-    if (firstName && firstName.length > 2) {
-      // Only replace first name when it appears in greeting patterns
-      // e.g., "Hi David," "Hello David," "Thanks David"
-      const greetingPattern = new RegExp(
-        `\\b(Hi|Hello|Hey|Thanks|Thank you),?\\s+${escapeRegex(firstName)}\\b`,
+    for (const variant of variants) {
+      // Context-aware replacement: avoid creating "PT-001 PT-001"
+      // Pattern: replace variant but NOT when preceded by participant code
+      const escapedVariant = escapeRegex(variant);
+      const escapedCode = escapeRegex(code);
+
+      // First, handle "CODE NAME" → "CODE" (remove the name, don't duplicate code)
+      const codeNamePattern = new RegExp(
+        `(${escapedCode})\\s+${escapedVariant}\\b`,
         'gi'
       );
-      scrubbed = scrubbed.replace(greetingPattern, (match, greeting) => {
+      scrubbed = scrubbed.replace(codeNamePattern, (match, existingCode) => {
         stats.participantName++;
-        return `${greeting} ${ctx.participantCode}`;
+        return existingCode; // Keep just the code, remove the name
+      });
+
+      // Then, replace remaining occurrences of the name with code
+      const namePattern = new RegExp(`\\b${escapedVariant}\\b`, 'gi');
+      scrubbed = scrubbed.replace(namePattern, () => {
+        stats.participantName++;
+        return code;
       });
     }
   }
 
-  // ── 2. Replace moderator name ───────────────────────────────────
+  // ── 2. Replace moderator name variants ───────────────────────────
   if (ctx.moderatorName && ctx.moderatorName.trim().length > 2) {
-    const modName = ctx.moderatorName.trim();
-    const pattern = new RegExp(`\\b${escapeRegex(modName)}\\b`, 'gi');
-    scrubbed = scrubbed.replace(pattern, () => {
-      stats.moderatorName++;
-      return '[Moderator]';
-    });
+    const variants = decomposeNameVariants(ctx.moderatorName);
+
+    for (const variant of variants) {
+      const pattern = new RegExp(`\\b${escapeRegex(variant)}\\b`, 'gi');
+      scrubbed = scrubbed.replace(pattern, () => {
+        stats.moderatorName++;
+        return '[Moderator]';
+      });
+    }
   }
 
   // ── 3. Replace speaker labels (XX:) ─────────────────────────────
-  // Detect initials from the names we know
   const participantInitials = ctx.participantRealName ? getInitials(ctx.participantRealName) : null;
   const moderatorInitials = ctx.moderatorName ? getInitials(ctx.moderatorName) : null;
 
-  // Build a map of known initials to their replacements
   const initialsMap: Record<string, string> = {};
   if (participantInitials) {
     initialsMap[participantInitials.toUpperCase()] = '[Participant]';
@@ -156,7 +189,6 @@ export function scrubTranscript(content: string, ctx: ScrubContext): ScrubResult
     initialsMap[moderatorInitials.toUpperCase()] = '[Moderator]';
   }
 
-  // Replace known speaker labels
   scrubbed = scrubbed.replace(SPEAKER_LABEL_PATTERN, (match, timestamp, initials) => {
     const upper = initials.toUpperCase();
     if (initialsMap[upper]) {
@@ -171,7 +203,13 @@ export function scrubTranscript(content: string, ctx: ScrubContext): ScrubResult
   });
 
   // ── 4. Replace phone numbers ────────────────────────────────────
-  scrubbed = scrubbed.replace(PHONE_PATTERN, () => {
+  // 10-digit first (more specific)
+  scrubbed = scrubbed.replace(PHONE_PATTERN_10, () => {
+    stats.phoneNumbers++;
+    return '[PHONE]';
+  });
+  // Then 7-digit (local numbers)
+  scrubbed = scrubbed.replace(PHONE_PATTERN_7, () => {
     stats.phoneNumbers++;
     return '[PHONE]';
   });
@@ -211,16 +249,24 @@ export function validateScrubbing(
   const detected: string[] = [];
 
   if (participantRealName && participantRealName.trim().length > 2) {
-    const pattern = new RegExp(`\\b${escapeRegex(participantRealName.trim())}\\b`, 'gi');
-    if (pattern.test(content)) {
-      detected.push('participant_full_name');
+    const variants = decomposeNameVariants(participantRealName);
+    for (const variant of variants) {
+      const pattern = new RegExp(`\\b${escapeRegex(variant)}\\b`, 'gi');
+      if (pattern.test(content)) {
+        detected.push('participant_name_variant');
+        break;
+      }
     }
   }
 
   if (moderatorName && moderatorName.trim().length > 2) {
-    const pattern = new RegExp(`\\b${escapeRegex(moderatorName.trim())}\\b`, 'gi');
-    if (pattern.test(content)) {
-      detected.push('moderator_name');
+    const variants = decomposeNameVariants(moderatorName);
+    for (const variant of variants) {
+      const pattern = new RegExp(`\\b${escapeRegex(variant)}\\b`, 'gi');
+      if (pattern.test(content)) {
+        detected.push('moderator_name_variant');
+        break;
+      }
     }
   }
 
