@@ -4,24 +4,14 @@ import type { View } from '@slack/types';
 
 /** The shape of private_metadata for the transcript_review modal. */
 export interface TranscriptReviewModalMetadata {
-  /** Scrubbed transcript content (ready to save) */
-  scrubbedContent: string;
-  /** Original template data for saving */
-  templateData: {
-    session_id: string;
-    participant_name: string;
-    study_name: string;
-    session_date: string;
-    session_time: string;
-    researcher: string;
-  };
-  /** Session info for DB record */
-  sessionInfo: {
-    studyId: number | null;
-    participantId: number | null;
-  };
-  /** User who uploaded */
-  userId: string;
+  /** Database ID of the pending study_notes record */
+  noteId: number;
+  /** Participant code (e.g., "PT-001") */
+  participantCode: string;
+  /** Study name */
+  studyName: string;
+  /** GitHub file URL */
+  fileUrl: string;
 }
 
 export interface ScrubStats {

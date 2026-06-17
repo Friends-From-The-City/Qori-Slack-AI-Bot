@@ -444,22 +444,47 @@ const handleSessionNotesSubmission = async ({ ack, body, view, client }: SlackVi
 
 ${scrubResult.content}`;
 
-      // ── Push review modal (participantRealName goes out of scope here — never stored) ──
+      // ── Save scrubbed transcript to GitHub immediately ──
+      // Content is already PII-scrubbed, safe to save. We mark pii_reviewed=false in DB
+      // until human approves. Analysis gate blocks unreviewed transcripts.
+      const resolved = await resolveStudyFromName(templateData.study_name);
+      if (!resolved) throw new Error(`Study "${templateData.study_name}" not found`);
+
+      const transcriptFileName = `transcript_${templateData.session_id}_${Date.now()}.md`;
+      const transcriptPath = `${resolved.study?.path}/03-sessions/${transcriptFileName}`;
+
+      const githubResult = await createOrUpdateFileOnGitHub(
+        transcriptPath,
+        scrubbedTranscriptContent,
+      );
+
+      // Create DB record with pii_reviewed=false (blocks analysis until approved)
+      const studyNoteData = {
+        study_id: selectedSession.study?.id || null,
+        study_name: templateData.study_name,
+        filename: transcriptFileName,
+        file_path: transcriptPath,
+        file_url: githubResult.url,
+        session_date: templateData.session_date,
+        session_time: templateData.session_time,
+        participant_id: selectedSession.participant?.id || null,
+        created_by: body.user.id,
+        transcript: true,
+        pii_reviewed: false,  // Will be set true on approval
+        pii_reviewed_at: null,
+        pii_reviewed_by: null,
+      };
+
+      // @ts-expect-error — pre-existing type mismatch from require() → import migration
+      const createdNote = await studyNotesService.createStudyNote(studyNoteData);
+      console.log(`[PII] Transcript saved pending review: ID=${createdNote.id}`);
+
+      // ── Build review modal with minimal metadata (avoids 3001 char limit) ──
       const reviewMetadata: TranscriptReviewModalMetadata = {
-        scrubbedContent: scrubbedTranscriptContent,
-        templateData: {
-          session_id: templateData.session_id,
-          participant_name: templateData.participant_id, // Use code, not real name
-          study_name: templateData.study_name,
-          session_date: templateData.session_date,
-          session_time: templateData.session_time,
-          researcher: templateData.researcher,
-        },
-        sessionInfo: {
-          studyId: selectedSession.study?.id || null,
-          participantId: selectedSession.participant?.id || null,
-        },
-        userId: body.user.id,
+        noteId: createdNote.id,
+        participantCode: templateData.participant_id,
+        studyName: templateData.study_name,
+        fileUrl: githubResult.url,
       };
 
       const reviewModal = buildTranscriptReviewModal({
@@ -470,7 +495,7 @@ ${scrubResult.content}`;
         studyName: templateData.study_name,
       });
 
-      // Store metadata in private_metadata (scrubbed content only — no real names)
+      // Store minimal metadata in private_metadata (just IDs, not content)
       reviewModal.private_metadata = JSON.stringify(reviewMetadata);
 
       // ── Push review modal via ack response_action ──
@@ -481,9 +506,7 @@ ${scrubResult.content}`;
         view: reviewModal,
       });
 
-      // ── IMPORTANT: Return here. Transcript is NOT saved yet. ──
-      // The handleTranscriptReviewApprove handler will save after user approval.
-      // participantRealName variable is now out of scope — NEVER stored anywhere.
+      // ── participantRealName is now out of scope — NEVER stored anywhere ──
       return;
     }
 
@@ -572,83 +595,49 @@ ${scrubResult.content}`;
  * Handle transcript review approval.
  *
  * Called when user clicks "Approve & Save" on the transcript review modal.
- * Saves the scrubbed transcript to GitHub and marks as PII-reviewed.
+ * The transcript is already saved to GitHub; this just marks it as PII-reviewed.
  */
 const handleTranscriptReviewApprove = async ({ ack, body, view, client }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs): Promise<void> => {
   try {
     await ack();
 
-    // Parse metadata (contains scrubbed content — no real names)
+    // Parse metadata (minimal — just IDs)
     const metadata: TranscriptReviewModalMetadata = JSON.parse(view.private_metadata || '{}');
-    const { scrubbedContent, templateData, sessionInfo, userId } = metadata;
+    const { noteId, participantCode, studyName, fileUrl } = metadata;
 
-    if (!scrubbedContent || !templateData) {
+    if (!noteId) {
       await client.chat.postMessage({
         channel: body.user.id,
-        text: '❌ Error: Missing transcript data. Please try uploading again.',
+        text: '❌ Error: Missing transcript record. Please try uploading again.',
       });
       return;
     }
 
-    // Resolve study for path
-    const resolved = await resolveStudyFromName(templateData.study_name);
-    if (!resolved) {
-      throw new Error(`Study "${templateData.study_name}" not found`);
-    }
-    const study = resolved.study;
-
-    // Build file path (uses participant code, not real name)
-    // @ts-expect-error — pre-existing type mismatch from require() → import migration
-    const baseFolder = decodeURIComponent(study!.path);
-    const transcriptFileName = `${templateData.participant_name}-transcript-${new Date().toISOString().split('T')[0]}.md`;
-    const transcriptPath = `${baseFolder}/03-fieldwork/transcripts/${transcriptFileName}`;
-
-    // Save scrubbed transcript to GitHub
-    const githubResult: GitHubResult = await createOrUpdateFileOnGitHub(transcriptPath, scrubbedContent);
-    console.log("✅ PII-scrubbed transcript saved to GitHub:", transcriptPath);
-
-    // Store in database with PII review status
-    const studyNoteData = {
-      study_id: sessionInfo.studyId,
-      study_name: templateData.study_name,
-      filename: transcriptFileName,
-      file_path: githubResult.path,
-      file_url: githubResult.url,
-      session_date: templateData.session_date,
-      session_time: templateData.session_time,
-      participant_id: sessionInfo.participantId,
-      created_by: userId,
-      transcript: true,
+    // Update the existing record to mark as PII-reviewed
+    await studyNotesService.updateStudyNote(noteId, {
       pii_reviewed: true,
       pii_reviewed_at: new Date(),
       pii_reviewed_by: body.user.id,
-    };
-
-    try {
-      // @ts-expect-error — pre-existing type mismatch from require() → import migration
-      const createdNote = await studyNotesService.createStudyNote(studyNoteData);
-      console.log("✅ Study note stored with pii_reviewed=true:", createdNote.id);
-    } catch (dbError) {
-      console.error("Error storing study note in database:", dbError);
-    }
+    });
+    console.log(`✅ Transcript marked as PII-reviewed: ID=${noteId}`);
 
     // Notify user
     await client.chat.postMessage({
       channel: body.user.id,
-      text: `✅ PII-scrubbed transcript saved`,
+      text: `✅ PII-scrubbed transcript approved`,
       blocks: [
         {
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: `✅ *Transcript uploaded and PII-reviewed*\n\n*Study:* ${templateData.study_name}\n*Participant:* ${templateData.participant_name}`,
+            text: `✅ *Transcript uploaded and PII-reviewed*\n\n*Study:* ${studyName}\n*Participant:* ${participantCode}`,
           },
         },
         {
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: `<${githubResult.url}|View on GitHub>`,
+            text: `<${fileUrl}|View on GitHub>`,
           },
         },
         {
