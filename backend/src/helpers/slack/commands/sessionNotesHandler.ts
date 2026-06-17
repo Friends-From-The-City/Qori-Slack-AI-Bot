@@ -444,47 +444,44 @@ const handleSessionNotesSubmission = async ({ ack, body, view, client }: SlackVi
 
 ${scrubResult.content}`;
 
-      // ── Save scrubbed transcript to GitHub immediately ──
-      // Content is already PII-scrubbed, safe to save. We mark pii_reviewed=false in DB
-      // until human approves. Analysis gate blocks unreviewed transcripts.
+      // ── Save scrubbed transcript to QUARANTINE location ──
+      // IMPORTANT: Transcript goes to .pending-review/ NOT 03-sessions/.
+      // Human must review full transcript before it reaches the final location.
+      // Auto-scrub is PARTIAL by design (name variants, incidental PII slip through).
+      // Review GATES the commit to final location - it's not rubber-stamping.
       const resolved = await resolveStudyFromName(templateData.study_name);
       if (!resolved) throw new Error(`Study "${templateData.study_name}" not found`);
 
       const transcriptFileName = `transcript_${templateData.session_id}_${Date.now()}.md`;
-      const transcriptPath = `${resolved.study?.path}/03-sessions/${transcriptFileName}`;
+      // Quarantine path - NOT analyzable, NOT the final transcript location
+      const quarantinePath = `${resolved.study?.path}/.pending-review/${transcriptFileName}`;
+      // Final path - where it goes AFTER human approval
+      const finalPath = `${resolved.study?.path}/03-sessions/${transcriptFileName}`;
 
+      // Save to quarantine (NOT the final location)
       const githubResult = await createOrUpdateFileOnGitHub(
-        transcriptPath,
+        quarantinePath,
         scrubbedTranscriptContent,
       );
+      console.log(`[PII] Transcript saved to quarantine: ${quarantinePath}`);
 
-      // Create DB record with pii_reviewed=false (blocks analysis until approved)
-      const studyNoteData = {
-        study_id: selectedSession.study?.id || null,
-        study_name: templateData.study_name,
-        filename: transcriptFileName,
-        file_path: transcriptPath,
-        file_url: githubResult.url,
-        session_date: templateData.session_date,
-        session_time: templateData.session_time,
-        participant_id: selectedSession.participant?.id || null,
-        created_by: body.user.id,
-        transcript: true,
-        pii_reviewed: false,  // Will be set true on approval
-        pii_reviewed_at: null,
-        pii_reviewed_by: null,
-      };
+      // NO database record yet - record is created only on approval
+      // This ensures /qori-analyze cannot find this transcript until reviewed
 
-      // @ts-expect-error — pre-existing type mismatch from require() → import migration
-      const createdNote = await studyNotesService.createStudyNote(studyNoteData);
-      console.log(`[PII] Transcript saved pending review: ID=${createdNote.id}`);
-
-      // ── Build review modal with minimal metadata (avoids 3001 char limit) ──
+      // ── Build review modal with metadata for approval flow ──
+      // NO database record exists yet - created only on approval
       const reviewMetadata: TranscriptReviewModalMetadata = {
-        noteId: createdNote.id,
+        quarantinePath,
+        finalPath,
+        filename: transcriptFileName,
         participantCode: templateData.participant_id,
         studyName: templateData.study_name,
         fileUrl: githubResult.url,
+        studyId: selectedSession.study?.id || null,
+        participantId: selectedSession.participant?.id || null,
+        sessionDate: templateData.session_date,
+        sessionTime: templateData.session_time,
+        userId: body.user.id,
       };
 
       const reviewModal = buildTranscriptReviewModal({
@@ -595,52 +592,112 @@ ${scrubResult.content}`;
 /**
  * Handle transcript review approval.
  *
- * Called when user clicks "Approve & Save" on the transcript review modal.
- * The transcript is already saved to GitHub; this just marks it as PII-reviewed.
+ * Called when user clicks "Approve" on the transcript review modal.
+ * MOVES the transcript from quarantine (.pending-review/) to final location (03-sessions/).
+ * This is the gate - transcript only reaches final location AFTER human review.
  */
 const handleTranscriptReviewApprove = async ({ ack, body, view, client }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs): Promise<void> => {
   try {
-    // Parse metadata first (before ack, in case we need to handle errors)
+    // Parse metadata
     const metadata: TranscriptReviewModalMetadata = JSON.parse(view.private_metadata || '{}');
-    const { noteId, participantCode, studyName, fileUrl } = metadata;
+    const {
+      quarantinePath,
+      finalPath,
+      filename,
+      participantCode,
+      studyName,
+      studyId,
+      participantId,
+      sessionDate,
+      sessionTime,
+      userId,
+    } = metadata;
 
-    if (!noteId) {
+    if (!quarantinePath || !finalPath) {
       await ack();
       await client.chat.postMessage({
         channel: body.user.id,
-        text: '❌ Error: Missing transcript record. Please try uploading again.',
+        text: '❌ Error: Missing transcript paths. Please try uploading again.',
       });
       return;
     }
 
-    // Update the existing record to mark as PII-reviewed
-    await studyNotesService.updateStudyNote(noteId, {
+    // Close all modals first — this is a terminal action
+    await ack({ response_action: 'clear' });
+
+    // ── MOVE from quarantine to final location ──
+    // 1. Read content from quarantine
+    const { Octokit } = await import('@octokit/rest');
+    const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
+    const owner = process.env.GITHUB_OWNER!;
+    const repo = process.env.GITHUB_REPO!;
+
+    // Read quarantined file
+    const quarantineFile = await octokit.rest.repos.getContent({
+      owner,
+      repo,
+      path: quarantinePath,
+    });
+
+    if (!('content' in quarantineFile.data)) {
+      throw new Error('Quarantine file not found or is a directory');
+    }
+
+    const content = Buffer.from(quarantineFile.data.content, 'base64').toString('utf-8');
+    const quarantineSha = quarantineFile.data.sha;
+
+    // 2. Write to final location
+    const finalResult = await createOrUpdateFileOnGitHub(finalPath, content);
+    console.log(`✅ Transcript moved to final location: ${finalPath}`);
+
+    // 3. Delete quarantine file
+    await octokit.rest.repos.deleteFile({
+      owner,
+      repo,
+      path: quarantinePath,
+      message: `Remove quarantine file after PII review approval`,
+      sha: quarantineSha,
+    });
+    console.log(`✅ Quarantine file deleted: ${quarantinePath}`);
+
+    // 4. Create DB record NOW (only after approval)
+    const studyNoteData = {
+      study_id: studyId,
+      study_name: studyName,
+      filename,
+      file_path: finalPath,
+      file_url: finalResult.url,
+      session_date: sessionDate,
+      session_time: sessionTime,
+      participant_id: participantId,
+      created_by: userId,
+      transcript: true,
       pii_reviewed: true,
       pii_reviewed_at: new Date(),
       pii_reviewed_by: body.user.id,
-    });
-    console.log(`✅ Transcript marked as PII-reviewed: ID=${noteId}`);
+    };
 
-    // Close all modals (clear the modal stack) — this is a terminal action
-    await ack({ response_action: 'clear' });
+    // @ts-expect-error — pre-existing type mismatch from require() → import migration
+    const createdNote = await studyNotesService.createStudyNote(studyNoteData);
+    console.log(`✅ Study note created with pii_reviewed=true: ID=${createdNote.id}`);
 
     // Notify user
     await client.chat.postMessage({
       channel: body.user.id,
-      text: `✅ PII-scrubbed transcript approved`,
+      text: `✅ Transcript approved and saved`,
       blocks: [
         {
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: `✅ *Transcript uploaded and PII-reviewed*\n\n*Study:* ${studyName}\n*Participant:* ${participantCode}`,
+            text: `✅ *Transcript approved and saved*\n\n*Study:* ${studyName}\n*Participant:* ${participantCode}`,
           },
         },
         {
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: `<${fileUrl}|View on GitHub>`,
+            text: `<${finalResult.url}|View on GitHub>`,
           },
         },
         {

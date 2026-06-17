@@ -4,14 +4,28 @@ import type { View } from '@slack/types';
 
 /** The shape of private_metadata for the transcript_review modal. */
 export interface TranscriptReviewModalMetadata {
-  /** Database ID of the pending study_notes record */
-  noteId: number;
+  /** Path to quarantined file (pending review) */
+  quarantinePath: string;
+  /** Final path (where file goes after approval) */
+  finalPath: string;
+  /** Filename for DB record */
+  filename: string;
   /** Participant code (e.g., "PT-001") */
   participantCode: string;
   /** Study name */
   studyName: string;
-  /** GitHub file URL for full transcript review */
+  /** GitHub file URL for full transcript review (points to quarantine) */
   fileUrl: string;
+  /** Study ID for DB record */
+  studyId: number | null;
+  /** Participant ID for DB record */
+  participantId: number | null;
+  /** Session date for DB record */
+  sessionDate: string;
+  /** Session time for DB record */
+  sessionTime: string;
+  /** User who uploaded */
+  userId: string;
 }
 
 export interface ScrubStats {
