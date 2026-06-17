@@ -28,18 +28,14 @@ import { postEphemeralOrDM } from '../slackHelpers';
  * Derive outreach stats and dashboard context from raw participant list.
  */
 function buildDashboardContext(allParticipants: any[], study: any) {
+  // Count participants with outreach sent (honest metric — we know what we sent)
+  // NOTE: "responses_received" was removed (June 2026) — Qori generates outbound
+  // emails but has no inbound channel, so the count was really "status changes"
+  // not actual responses. Unpopulable by design.
   const outreachSent = allParticipants.filter((p) => p.outreach_sent_at).length;
-  const awaitingResponse = allParticipants.filter((p) =>
-    p.outreach_sent_at && p.status_select === PARTICIPANT_STATUS.CONTACTED
-  ).length;
-  const responsesReceived = allParticipants.filter((p) =>
-    p.outreach_sent_at && ![PARTICIPANT_STATUS.CONTACTED, PARTICIPANT_STATUS.NOT_CONTACTED].includes(p.status_select)
-  ).length;
 
   const outreachStats = {
     total_contacted: outreachSent,
-    awaiting_response: awaitingResponse,
-    responses_received: responsesReceived,
   };
 
   // Session date range from scheduled_date fields

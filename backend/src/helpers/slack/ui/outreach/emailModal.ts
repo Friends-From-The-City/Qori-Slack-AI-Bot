@@ -28,8 +28,8 @@ export const emailModal = (params: EmailModalParams = {}) => {
     tone = "Friendly",
     subject = `Research Opportunity: ${studyName} - Your Input Needed`,
     messageBody = "",
-    filePath = "02-participants/outreach/alex_m_initial_recruitment_2025-07-16.md",
-    fileUrl = "https://github.com/your-org/your-repo/blob/main/02-participants/outreach/alex_m_initial_recruitment_2025-07-16.md",
+    filePath = "03-fieldwork/outreach/",
+    fileUrl = "",
   } = params;
 
   return ({
