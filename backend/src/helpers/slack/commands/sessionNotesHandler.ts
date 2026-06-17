@@ -430,8 +430,13 @@ const handleSessionNotesSubmission = async ({ ack, body, view, client }: SlackVi
       console.log(`[PII] Scrubbing complete: ${scrubResult.stats.participantName + scrubResult.stats.moderatorName + scrubResult.stats.speakerLabels + scrubResult.stats.phoneNumbers + scrubResult.stats.emailAddresses} items scrubbed`);
       // NOTE: Do NOT log the actual content or names
 
-      // ── Build scrubbed transcript content ──
-      const scrubbedTranscriptContent = `# Session Transcript: ${templateData.participant_id}
+      // ── Build scrubbed transcript content with PII marker ──
+      // GREPPABLE MARKER: allows finding unreviewed files with a simple grep
+      // On approval, marker is flipped to REVIEWED-CLEARED
+      const piiMarkerPending = '<!-- PII-STATUS: PENDING-REVIEW -->';
+
+      const scrubbedTranscriptContent = `${piiMarkerPending}
+# Session Transcript: ${templateData.participant_id}
 
 **Study:** ${templateData.study_name}
 **Session date:** ${templateData.session_date}
@@ -452,7 +457,8 @@ ${scrubResult.content}`;
       const resolved = await resolveStudyFromName(templateData.study_name);
       if (!resolved) throw new Error(`Study "${templateData.study_name}" not found`);
 
-      const transcriptFileName = `transcript_${templateData.session_id}_${Date.now()}.md`;
+      // DETERMINISTIC filename: re-uploads of same session REPLACE the pending file
+      const transcriptFileName = `transcript_${templateData.session_id}.md`;
       // Quarantine path - NOT analyzable, NOT the final transcript location
       const quarantinePath = `${resolved.study?.path}/.pending-review/${transcriptFileName}`;
       // Final path - where it goes AFTER human approval
@@ -485,9 +491,7 @@ ${scrubResult.content}`;
       };
 
       const reviewModal = buildTranscriptReviewModal({
-        scrubbedPreview: scrubResult.content,
         stats: scrubResult.stats,
-        warnings: scrubResult.warnings,
         participantCode: templateData.participant_id,
         studyName: templateData.study_name,
         fileUrl: githubResult.url,
@@ -643,11 +647,16 @@ const handleTranscriptReviewApprove = async ({ ack, body, view, client }: SlackV
       throw new Error('Quarantine file not found or is a directory');
     }
 
-    const content = Buffer.from(quarantineFile.data.content, 'base64').toString('utf-8');
+    const rawContent = Buffer.from(quarantineFile.data.content, 'base64').toString('utf-8');
     const quarantineSha = quarantineFile.data.sha;
 
-    // 2. Write to final location
-    const finalResult = await createOrUpdateFileOnGitHub(finalPath, content);
+    // 2. Flip PII marker from PENDING-REVIEW to REVIEWED-CLEARED
+    const reviewedContent = rawContent
+      .replace('<!-- PII-STATUS: PENDING-REVIEW -->', '<!-- PII-STATUS: REVIEWED-CLEARED -->')
+      .replace('**PII Status:** Auto-scrubbed, pending human review', `**PII Status:** Reviewed and cleared by <@${body.user.id}>`);
+
+    // 3. Write to final location with updated marker
+    const finalResult = await createOrUpdateFileOnGitHub(finalPath, reviewedContent);
     console.log(`✅ Transcript moved to final location: ${finalPath}`);
 
     // 3. Delete quarantine file
