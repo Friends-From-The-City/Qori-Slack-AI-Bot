@@ -54,6 +54,8 @@ interface ModalState {
     user: string;
     ts?: string;
   };
+  mode?: 'researcher' | 'observer';
+  studyId?: string | null;
 }
 
 interface ViewMetadata {
@@ -64,6 +66,7 @@ interface ViewMetadata {
   teamId: string;
   channelId: string;
   selectedSessionId?: string;
+  studyId?: string;
 }
 
 /** Data shape passed to session_notes YAML template. */
@@ -174,11 +177,38 @@ const uploadNotesHandler = async ({ ack, body, client, command }: SlackCommandMi
 
 // ─── Tab handlers ───────────────────────────────────────────────
 
+// ─── Helper: load sessions based on mode ────────────────────
+
+async function loadSessionsForMode(metadata: ViewMetadata): Promise<any[]> {
+  // Observer path: user has observer sessions
+  const observerSessions = await sessionObserverService.getObserverByUser(metadata.userId);
+  if (observerSessions && observerSessions.length > 0) {
+    return observerSessions;
+  }
+
+  // Researcher fallback: use study participants if mode is researcher and studyId is available
+  if (metadata.mode === 'researcher' && metadata.studyId) {
+    const participants = await sessionParticipantService.getParticipantsByStudy(parseInt(metadata.studyId, 10));
+    if (participants && participants.length > 0) {
+      return participants.map((p: any) => ({
+        id: `p_${p.id}`,
+        study: p.study || { id: metadata.studyId, name: 'Unknown Study' },
+        participant: p,
+        session_id: p.participant_code,
+      }));
+    }
+  }
+
+  return [];
+}
+
+// ─── Tab handlers ───────────────────────────────────────────
+
 const handleTabManual = async ({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs): Promise<void> => {
   await ack();
   const metadata = JSON.parse(body.view?.private_metadata || '{}') as ViewMetadata;
 
-  const sessions: any[] = await sessionObserverService.getObserverByUser(metadata.userId);
+  const sessions: any[] = await loadSessionsForMode(metadata);
 
   const state: ModalState = {
     tab: 'manual',
@@ -188,7 +218,9 @@ const handleTabManual = async ({ ack, body, client }: SlackActionMiddlewareArgs<
       team: metadata.teamId,
       channel: metadata.channelId,
       user: metadata.userId
-    }
+    },
+    mode: metadata.mode,
+    studyId: metadata.studyId,
   };
 
   if (metadata.selectedSessionId) {
@@ -215,7 +247,7 @@ const handleTabUpload = async ({ ack, body, client }: SlackActionMiddlewareArgs<
   await ack();
   const metadata = JSON.parse(body.view?.private_metadata || '{}') as ViewMetadata;
 
-  const sessions: any[] = await sessionObserverService.getObserverByUser(metadata.userId);
+  const sessions: any[] = await loadSessionsForMode(metadata);
 
   const state: ModalState = {
     tab: 'upload',
@@ -225,7 +257,9 @@ const handleTabUpload = async ({ ack, body, client }: SlackActionMiddlewareArgs<
       team: metadata.teamId,
       channel: metadata.channelId,
       user: metadata.userId
-    }
+    },
+    mode: metadata.mode,
+    studyId: metadata.studyId,
   };
 
   if (metadata.selectedSessionId) {
@@ -257,7 +291,7 @@ const handleSessionSelectionChange = async ({ ack, body, client }: SlackActionMi
     const selectedSessionId: string = (body as unknown as { actions: Array<{ selected_option: { value: string } }> }).actions[0].selected_option.value;
     const metadata = JSON.parse(body.view?.private_metadata || '{}') as ViewMetadata;
 
-    const sessions: any[] = await sessionObserverService.getObserverByUser(metadata.userId);
+    const sessions: any[] = await loadSessionsForMode(metadata);
     const selectedSession = sessions.find((s: SessionInfo) => s.id.toString() === selectedSessionId);
 
     if (selectedSession) {
@@ -276,7 +310,9 @@ const handleSessionSelectionChange = async ({ ack, body, client }: SlackActionMi
           study: selectedSession.study,
           participant: selectedSession.participant,
           session_id: selectedSession.session_id
-        }
+        },
+        mode: metadata.mode,
+        studyId: metadata.studyId,
       };
 
       // @ts-expect-error — pre-existing type mismatch from require() → import migration
