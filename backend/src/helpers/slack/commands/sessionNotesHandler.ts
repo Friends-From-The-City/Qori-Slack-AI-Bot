@@ -15,7 +15,7 @@ import sessionParticipantService from "../../../services/study_participant.servi
 import { resolveStudyFromName } from "../../../services/research_study.service";
 import type { VariableContext } from "../../studyVariables";
 import { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo, createOrUpdateFileOnGitHub } from "../../github";
-import { processYamlTemplate } from "../../yamlProcessor";
+import { processYamlTemplate, type DryRunResult } from "../../yamlProcessor";
 import { studyNotesService } from "../../../services";
 import { processSlackFiles } from "../../pdfProcessor";
 import { postEphemeralOrDM } from "../slackHelpers";
@@ -397,9 +397,8 @@ const handleSessionNotesSubmission = async ({ ack, body, view, client }: SlackVi
         return;
       }
 
-      // Ack early for manual notes (no review modal needed)
-      await ack();
-      ackCalled = true;
+      // NOTE: Do NOT ack early — manual notes now go through PII review modal
+      // (same quarantine→review→approve pipeline as transcripts)
 
       const now = new Date();
       const hours = String(now.getHours()).padStart(2, '0');
@@ -550,72 +549,94 @@ ${scrubResult.content}`;
       return;
     }
 
-    // ── MANUAL NOTES PATH (unchanged) ──
-    let result: GitHubResult;
-    let fileName: string;
+    // ── MANUAL NOTES PATH — same quarantine→review→approve pipeline as transcripts ──
+    // Manual notes are MORE prone to incidental free-text PII ("her husband Mike",
+    // "near the Denver VA") that auto-scrub cannot catch. Human review is the
+    // primary protection here, not the auto-scrub.
 
-    // Manual notes don't go through PII scrubbing (structured observations, not raw transcript)
     const resolved = await resolveStudyFromName(templateData.study_name);
     if (!resolved) throw new Error(`Study "${templateData.study_name}" not found`);
     const study = resolved.study;
     const variableContext: VariableContext = { projectId: resolved.projectId, studyId: resolved.studyId };
     const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, yamlTemplateName!);
-    renderedYaml = await processYamlTemplate(file.content, templateData, study!.path ?? '', '', false, variableContext);
-    result = renderedYaml!.result;
-    const urlParts: string[] = result.path.split('/');
-    fileName = urlParts[urlParts.length - 1];
 
-    // Store the study note in the database
-    // H6: Use participant_id FK instead of denormalized participant_name.
-    // To get participant info, join to study_participants via participant_id.
-    const studyNoteData = {
-      study_id: selectedSession.study?.id || null,
-      study_name: templateData.study_name,
-      filename: fileName,
-      file_path: result.path,
-      file_url: result.url,
-      session_date: templateData.session_date,
-      session_time: templateData.session_time,
-      participant_id: selectedSession.participant?.id || null,
-      created_by: body.user.id,
-      transcript: false,
-      pii_reviewed: true,  // Manual notes don't need PII review
-      pii_reviewed_at: new Date(),
-      pii_reviewed_by: body.user.id,
+    // Use dryRun to get rendered content WITHOUT writing to GitHub
+    const dryResult = await processYamlTemplate(
+      file.content,
+      templateData,
+      study!.path ?? '',
+      '',
+      false,
+      variableContext,
+      undefined,
+      true, // dryRun = true
+    ) as DryRunResult;
+
+    // ── Run basic PII scrubbing (phone/email only) ──
+    // Manual notes typically use PT-XXX codes, so name decomposition finds little.
+    // But phone/email regex still applies. Human review is the main gate.
+    const scrubCtx: ScrubContext = {
+      participantRealName: '', // No real name to decompose for manual notes
+      participantCode: templateData.participant_id,
+      moderatorName: templateData.researcher,
     };
 
-    console.log("Study note data to be stored:", studyNoteData);
+    const scrubResult = scrubTranscript(dryResult.content, scrubCtx);
+    console.log(`[PII] Manual notes scrubbing: ${scrubResult.stats.phoneNumbers + scrubResult.stats.emailAddresses} items scrubbed (phone/email only)`);
 
-    try {
-      // @ts-expect-error — pre-existing type mismatch from require() → import migration
-      const createdNote = await studyNotesService.createStudyNote(studyNoteData);
-      console.log("Study note stored in database:", createdNote);
-    } catch (dbError) {
-      console.error("Error storing study note in database:", dbError);
-    }
+    // ── Build scrubbed content with PII marker ──
+    const piiMarkerPending = '<!-- PII-STATUS: PENDING-REVIEW -->';
+    const scrubbedContent = `${piiMarkerPending}\n${scrubResult.content}`;
 
-    const sessionInfo = `${selectedSession.session_id} - ${selectedSession.study?.name}`;
+    // ── Save to QUARANTINE location ──
+    // IMPORTANT: Manual notes go to .pending-review/ NOT final location.
+    // Human must review for incidental PII before it reaches the final location.
+    const notesFileName = `notes_${templateData.session_id}.md`;
+    const quarantinePath = `${study?.path}/.pending-review/${notesFileName}`;
+    // Final path is where the YAML would have written (from dryResult.path)
+    const finalPath = dryResult.path;
 
-    await client.chat.postMessage({
-      channel: body.user.id,
-      text: `✅ Session notes submitted successfully`,
-      blocks: [
-        {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: `✅ Session notes submitted successfully for session: ${sessionInfo}`,
-          },
-        },
-        {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: `<${result.url}|:github: View on GitHub>`,
-          },
-        },
-      ],
+    // Save to quarantine (NOT the final location)
+    const githubResult = await createOrUpdateFileOnGitHub(quarantinePath, scrubbedContent);
+    console.log(`[PII] Manual notes saved to quarantine: ${quarantinePath}`);
+
+    // NO database record yet — record is created only on approval
+    // This ensures /qori-analyze cannot find this note until reviewed
+
+    // ── Build review modal with metadata for approval flow ──
+    const reviewMetadata: TranscriptReviewModalMetadata = {
+      quarantinePath,
+      finalPath,
+      filename: notesFileName,
+      participantCode: templateData.participant_id,
+      studyName: templateData.study_name,
+      fileUrl: githubResult.url,
+      studyId: selectedSession.study?.id || null,
+      participantId: selectedSession.participant?.id || null,
+      sessionDate: templateData.session_date,
+      sessionTime: templateData.session_time,
+      userId: body.user.id,
+    };
+
+    const reviewModal = buildTranscriptReviewModal({
+      stats: scrubResult.stats,
+      participantCode: templateData.participant_id,
+      studyName: templateData.study_name,
+      fileUrl: githubResult.url,
     });
+
+    // Store minimal metadata in private_metadata (just IDs, not content)
+    reviewModal.private_metadata = JSON.stringify(reviewMetadata);
+
+    // ── Push review modal via ack response_action ──
+    await ack({
+      response_action: 'push',
+      view: reviewModal,
+    });
+    ackCalled = true;
+
+    // Manual notes now go through human review — no auto-approval
+    return;
 
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -704,7 +725,7 @@ const handleTranscriptReviewApprove = async ({ ack, body, view, client }: SlackV
 
     // 3. Write to final location with updated marker
     const finalResult = await createOrUpdateFileOnGitHub(finalPath, reviewedContent);
-    console.log(`✅ Transcript moved to final location: ${finalPath}`);
+    console.log(`✅ File moved to final location: ${finalPath}`);
 
     // 3. Delete quarantine file
     await octokit.rest.repos.deleteFile({
@@ -717,6 +738,8 @@ const handleTranscriptReviewApprove = async ({ ack, body, view, client }: SlackV
     console.log(`✅ Quarantine file deleted: ${quarantinePath}`);
 
     // 4. Create DB record NOW (only after approval)
+    // Detect transcript vs manual notes by filename pattern
+    const isTranscript = filename.startsWith('transcript_');
     const studyNoteData = {
       study_id: studyId,
       study_name: studyName,
@@ -727,7 +750,7 @@ const handleTranscriptReviewApprove = async ({ ack, body, view, client }: SlackV
       session_time: sessionTime,
       participant_id: participantId,
       created_by: userId,
-      transcript: true,
+      transcript: isTranscript,
       pii_reviewed: true,
       pii_reviewed_at: new Date(),
       pii_reviewed_by: body.user.id,

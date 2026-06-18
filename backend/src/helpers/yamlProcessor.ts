@@ -89,6 +89,20 @@ export interface ProcessResult {
   extractionPromise: Promise<ExtractionOutcome> | null;
 }
 
+/** Result when dryRun=true — content returned without GitHub write */
+export interface DryRunResult {
+  dryRun: true;
+  /** The full rendered content (with footer) */
+  content: string;
+  /** The computed output path (where it WOULD have been written) */
+  path: string;
+  /** The computed filename */
+  filename: string;
+  /** Raw output template (without footer) */
+  outputTemplate: string;
+  aiResponses?: Record<string, string>;
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -183,6 +197,29 @@ function generateOutputTemplate(
 // Main processor
 // ---------------------------------------------------------------------------
 
+// Function overloads for type-safe dryRun behavior
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function processYamlTemplate(
+  rawYamlContent: string,
+  inputValues: Record<string, any>,
+  baseFolderEncoded: string,
+  extraFolder: string,
+  aiCheck: boolean,
+  variableContext: VariableContext | undefined,
+  piiContext: PiiRedactionContext | undefined,
+  dryRun: true,
+): Promise<DryRunResult>;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function processYamlTemplate(
+  rawYamlContent: string,
+  inputValues: Record<string, any>,
+  baseFolderEncoded: string,
+  extraFolder?: string,
+  aiCheck?: boolean,
+  variableContext?: VariableContext,
+  piiContext?: PiiRedactionContext,
+  dryRun?: false,
+): Promise<ProcessResult>;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function processYamlTemplate(
   rawYamlContent: string,
@@ -192,7 +229,9 @@ export async function processYamlTemplate(
   aiCheck = false,
   variableContext?: VariableContext,
   piiContext?: PiiRedactionContext,
-): Promise<ProcessResult> {
+  /** When true, returns rendered content without writing to GitHub */
+  dryRun = false,
+): Promise<ProcessResult | DryRunResult> {
   // 1. Parse the raw YAML content first
   const yamlConfig = yaml.load(rawYamlContent) as YamlConfig | null;
   if (!yamlConfig) {
@@ -351,6 +390,19 @@ export async function processYamlTemplate(
   const footer = buildTraceabilityFooter(yamlConfig, inputValues);
   const fullContent = outputTemplate + footer;
   const fullPath = path.posix.join(baseFolder, extraFolder, filePath, filename);
+
+  // DRY RUN: Return content without writing to GitHub
+  // Used for PII review flow where content goes to quarantine first
+  if (dryRun) {
+    return {
+      dryRun: true,
+      content: fullContent,
+      path: fullPath,
+      filename,
+      outputTemplate,
+      aiResponses,
+    };
+  }
 
   const result = await createOrUpdateFileOnGitHub(fullPath, fullContent);
 
