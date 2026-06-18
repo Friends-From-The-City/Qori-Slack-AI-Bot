@@ -397,8 +397,16 @@ const handleSessionNotesSubmission = async ({ ack, body, view, client }: SlackVi
         return;
       }
 
-      // NOTE: Do NOT ack early — manual notes now go through PII review modal
-      // (same quarantine→review→approve pipeline as transcripts)
+      // Ack immediately to avoid Slack timeout (AI generation takes >3 sec)
+      // Review will be sent via DM after processing completes
+      await ack();
+      ackCalled = true;
+
+      // Send processing notification
+      await client.chat.postMessage({
+        channel: body.user.id,
+        text: '⏳ Processing your session notes... This will take a moment.',
+      });
 
       const now = new Date();
       const hours = String(now.getHours()).padStart(2, '0');
@@ -603,7 +611,7 @@ ${scrubResult.content}`;
     // NO database record yet — record is created only on approval
     // This ensures /qori-analyze cannot find this note until reviewed
 
-    // ── Build review modal with metadata for approval flow ──
+    // ── Build review metadata for approval flow ──
     const reviewMetadata: TranscriptReviewModalMetadata = {
       quarantinePath,
       finalPath,
@@ -618,24 +626,79 @@ ${scrubResult.content}`;
       userId: body.user.id,
     };
 
-    const reviewModal = buildTranscriptReviewModal({
-      stats: scrubResult.stats,
-      participantCode: templateData.participant_id,
-      studyName: templateData.study_name,
-      fileUrl: githubResult.url,
+    // Build scrub stats text
+    const totalScrubs = scrubResult.stats.phoneNumbers + scrubResult.stats.emailAddresses;
+    const statsText = totalScrubs > 0
+      ? `✅ *${totalScrubs} PII items scrubbed* (phone/email)`
+      : '⚠️ *No PII items auto-scrubbed.* Manual notes typically contain incidental PII that requires human review.';
+
+    // ── Send review message via DM (not modal — AI generation took too long for modal ack) ──
+    // This pattern matches other long-running operations in Qori
+    await client.chat.postMessage({
+      channel: body.user.id,
+      text: `🔍 PII Review Required: ${templateData.study_name} - ${templateData.participant_id}`,
+      blocks: [
+        {
+          type: 'header',
+          text: { type: 'plain_text', text: '🔍 PII Review Required', emoji: true }
+        },
+        {
+          type: 'context',
+          elements: [
+            { type: 'mrkdwn', text: `*Study:* ${templateData.study_name} · *Participant:* ${templateData.participant_id}` }
+          ]
+        },
+        { type: 'divider' },
+        {
+          type: 'section',
+          text: { type: 'mrkdwn', text: statsText }
+        },
+        { type: 'divider' },
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: '⚠️ *You MUST review the full notes before approving.*\n\n' +
+              'Manual notes often contain incidental PII that auto-scrub cannot detect:\n' +
+              '• Names mentioned in observations ("her husband Mike...")\n' +
+              '• Locations ("near the Denver VA...")\n' +
+              '• Dates with context ("mentioned her birthday...")\n\n' +
+              '*Click the button below to review the full notes on GitHub.*'
+          }
+        },
+        {
+          type: 'actions',
+          elements: [
+            {
+              type: 'button',
+              text: { type: 'plain_text', text: '📄 Review Full Notes on GitHub', emoji: true },
+              url: githubResult.url,
+              action_id: 'review_notes_link',
+            },
+            {
+              type: 'button',
+              text: { type: 'plain_text', text: '✅ Approve', emoji: true },
+              style: 'primary',
+              action_id: 'manual_notes_approve',
+              value: JSON.stringify(reviewMetadata),
+            }
+          ]
+        },
+        { type: 'divider' },
+        {
+          type: 'context',
+          elements: [
+            {
+              type: 'mrkdwn',
+              text: '✅ *Approve* — moves notes to final location, eligible for analysis.\n' +
+                '🗑️ *To reject* — delete the file from `.pending-review/` on GitHub.'
+            }
+          ]
+        }
+      ],
     });
 
-    // Store minimal metadata in private_metadata (just IDs, not content)
-    reviewModal.private_metadata = JSON.stringify(reviewMetadata);
-
-    // ── Push review modal via ack response_action ──
-    await ack({
-      response_action: 'push',
-      view: reviewModal,
-    });
-    ackCalled = true;
-
-    // Manual notes now go through human review — no auto-approval
+    // Manual notes now go through human review — approval via button click
     return;
 
   } catch (error) {
@@ -802,11 +865,152 @@ const handleTranscriptReviewApprove = async ({ ack, body, view, client }: SlackV
   }
 };
 
+// ─── Manual notes approval via button click ─────────────────────
+
+/**
+ * Handle manual notes approval via button click in DM.
+ * Same logic as handleTranscriptReviewApprove but triggered by button action.
+ */
+const handleManualNotesApprove = async ({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs): Promise<void> => {
+  await ack();
+
+  try {
+    // Extract metadata from button value
+    const action = body.actions[0] as { value?: string };
+    if (!action.value) {
+      throw new Error('Missing metadata in approval button');
+    }
+
+    const metadata: TranscriptReviewModalMetadata = JSON.parse(action.value);
+    const {
+      quarantinePath,
+      finalPath,
+      filename,
+      participantCode,
+      studyName,
+      studyId,
+      participantId,
+      sessionDate,
+      sessionTime,
+      userId,
+    } = metadata;
+
+    if (!quarantinePath || !finalPath) {
+      await client.chat.postMessage({
+        channel: body.user.id,
+        text: '❌ Error: Missing file paths. Please try uploading again.',
+      });
+      return;
+    }
+
+    // ── MOVE from quarantine to final location ──
+    const { Octokit } = await import('@octokit/rest');
+    const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
+    const owner = process.env.GITHUB_OWNER!;
+    const repo = process.env.GITHUB_REPO!;
+
+    // Read quarantined file
+    const quarantineFile = await octokit.rest.repos.getContent({
+      owner,
+      repo,
+      path: quarantinePath,
+    });
+
+    if (!('content' in quarantineFile.data)) {
+      throw new Error('Quarantine file not found or is a directory');
+    }
+
+    const rawContent = Buffer.from(quarantineFile.data.content, 'base64').toString('utf-8');
+    const quarantineSha = quarantineFile.data.sha;
+
+    // Flip PII marker from PENDING-REVIEW to REVIEWED-CLEARED
+    const reviewedContent = rawContent
+      .replace(/<!--\s*PII-STATUS:\s*PENDING-REVIEW\s*-->/gi, '<!-- PII-STATUS: REVIEWED-CLEARED -->')
+      .replace(/\*\*PII Status:\*\*\s*Auto-scrubbed,?\s*pending human review/gi, `**PII Status:** Reviewed and cleared by <@${body.user.id}>`);
+
+    // Write to final location with updated marker
+    const finalResult = await createOrUpdateFileOnGitHub(finalPath, reviewedContent);
+    console.log(`✅ Manual notes moved to final location: ${finalPath}`);
+
+    // Delete quarantine file
+    await octokit.rest.repos.deleteFile({
+      owner,
+      repo,
+      path: quarantinePath,
+      message: `Remove quarantine file after PII review approval`,
+      sha: quarantineSha,
+    });
+    console.log(`✅ Quarantine file deleted: ${quarantinePath}`);
+
+    // Create DB record NOW (only after approval)
+    const studyNoteData = {
+      study_id: studyId,
+      study_name: studyName,
+      filename,
+      file_path: finalPath,
+      file_url: finalResult.url,
+      session_date: sessionDate,
+      session_time: sessionTime,
+      participant_id: participantId,
+      created_by: userId,
+      transcript: false, // Manual notes, not transcript
+      pii_reviewed: true,
+      pii_reviewed_at: new Date(),
+      pii_reviewed_by: body.user.id,
+    };
+
+    // @ts-expect-error — pre-existing type mismatch from require() → import migration
+    const createdNote = await studyNotesService.createStudyNote(studyNoteData);
+    console.log(`✅ Study note created with pii_reviewed=true: ID=${createdNote.id}`);
+
+    // Notify user - update the original message to show approved
+    await client.chat.postMessage({
+      channel: body.user.id,
+      text: `✅ Notes approved and saved`,
+      blocks: [
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `✅ *Notes approved and saved*\n\n*Study:* ${studyName}\n*Participant:* ${participantCode}`,
+          },
+        },
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `<${finalResult.url}|View on GitHub>`,
+          },
+        },
+        {
+          type: 'context',
+          elements: [
+            {
+              type: 'mrkdwn',
+              text: '✅ These notes are now eligible for `/qori-analyze`.',
+            },
+          ],
+        },
+      ],
+    });
+
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("Error handling manual notes approval:", error);
+
+    await client.chat.postMessage({
+      channel: body.user.id,
+      text: `❌ Error saving notes: ${message}`,
+    });
+  }
+};
+
 export {
   uploadNotesHandler,
   handleTabManual,
   handleTabUpload,
   handleSessionSelectionChange,
   handleSessionNotesSubmission,
-  handleTranscriptReviewApprove
+  handleTranscriptReviewApprove,
+  handleManualNotesApprove,
 };
