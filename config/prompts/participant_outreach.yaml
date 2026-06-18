@@ -5,10 +5,15 @@
 id: participant_outreach
 name: run_participant_outreach
 label: "📧 Participant Outreach"
-version: "v4.1"
+version: "v4.2"
 
 description: |
   Generate professional participant outreach messages for research studies.
+
+  v4.2 Changes (privacy fix):
+  - All greetings now use neutral "Hello," — never use participant names or aliases
+  - Private alias field is for researcher use only, never sent to participant
+  - Prevents leaking internal labels like "screen-reader user" to participants
 
   v4.0 Changes:
   - Switched to Claude Sonnet
@@ -19,7 +24,7 @@ description: |
 
 author: Qori R&D
 created: 2025-07-07
-last_updated: 2026-04-29
+last_updated: 2026-06-17
 
 input_type: structured
 input_processing: dynamic_conditional
@@ -179,7 +184,7 @@ ai_generation_tasks:
       Signup Instructions: {{signup_instructions}}
 
       Structure:
-      1. Warm greeting to {{participant_id}}
+      1. Warm, neutral greeting (use "Hello," — NEVER use participant names or aliases)
       2. Brief intro of who you are
       3. What the study is about (1-2 sentences)
       4. What participation involves (time, format)
@@ -197,7 +202,7 @@ ai_generation_tasks:
       Meeting Link: {{meeting_link}}
 
       Structure:
-      1. Warm greeting confirming the session
+      1. Warm, neutral greeting (use "Hello," — NEVER use participant names or aliases)
       2. Session details box (date, time, duration, link)
       3. What to expect during the session
       4. How to join (click link, no download needed if applicable)
@@ -213,7 +218,7 @@ ai_generation_tasks:
       Meeting Link: {{meeting_link}}
 
       Structure:
-      1. Friendly reminder about tomorrow's/upcoming session
+      1. Friendly, neutral greeting (use "Hello," — NEVER use participant names or aliases)
       2. Session details box (date, time, link)
       3. Brief reminder of what to expect
       4. Contact info if anything comes up
@@ -227,7 +232,7 @@ ai_generation_tasks:
       New Options: {{new_options}}
 
       Structure:
-      1. Apologetic opening about needing to reschedule
+      1. Neutral greeting with apologetic opening (use "Hello," — NEVER use participant names or aliases)
       2. Mention original date if provided
       3. Offer new time options: {{new_options}}
       4. Ask them to reply with preferred time
@@ -239,7 +244,7 @@ ai_generation_tasks:
       FOLLOW-UP EMAIL (gentle, non-pushy)
 
       Structure:
-      1. Friendly check-in
+      1. Friendly, neutral check-in (use "Hello," — NEVER use participant names or aliases)
       2. Brief reminder about the study opportunity
       3. Mention compensation: {{incentive_amount}}
       4. Easy way to sign up or respond
@@ -251,8 +256,8 @@ ai_generation_tasks:
       THANK YOU EMAIL (post-session)
 
       Structure:
-      1. Warm thank you for their time
-      2. Acknowledge the value of their input
+      1. Warm, neutral greeting (use "Hello," — NEVER use participant names or aliases)
+      2. Thank them for their time and acknowledge the value of their input
       3. Compensation details: {{incentive_amount}} and when/how they'll receive it
       4. What happens next with the research
       5. Offer to share findings when available
@@ -275,10 +280,6 @@ output_template: |
   ---
 
   {{ai_generated.email_body}}
-
-  ---
-
-  *Saved to 02-participants/outreach/{{participant_id}}_{{message_type}}_{{current_date}}.md*
 
 output_options:
   path: "03-fieldwork/outreach/"

@@ -267,7 +267,6 @@ class SessionObserverService {
   }
 
   async getObserverByUser(userId: string): Promise<SessionObserver[]> {
-    console.log("🚀 ~ SessionObserverService ~ getObserverByUser ~ userId:", userId)
     try {
       // Fetch all active observers and filter where user is in requester_id array
       const allObservers = await SessionObserverModel.findAll({
@@ -286,7 +285,6 @@ class SessionObserverService {
         ],
         order: [['created_at', 'DESC']]
       });
-      console.log("🚀 ~ SessionObserverService ~ getObserverByUser ~ allObservers:", allObservers)
 
       // Filter using helper method - handle both getter property and raw dataValues
       const filtered = allObservers.filter((observer: SessionObserver) => {
@@ -297,16 +295,9 @@ class SessionObserverService {
 
         // Normalize to array (handles JSON strings, arrays, plain strings)
         const requesterIds = this._toArray(requesterId);
-        const includes = requesterIds.includes(userId);
-
-        if (includes) {
-          console.log(`✅ Found matching observer ${observer.id} for user ${userId}. Requesters:`, requesterIds);
-        }
-
-        return includes;
+        return requesterIds.includes(userId);
       });
 
-      console.log("🚀 ~ SessionObserverService ~ getObserverByUser ~ filtered count:", filtered.length);
       return filtered;
     } catch (error) {
       console.error('Error fetching observer by user:', error);

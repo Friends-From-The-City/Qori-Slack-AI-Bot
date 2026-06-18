@@ -509,7 +509,6 @@ function addNewParticipant(existingParticipants: ExtractedParticipant[], newPart
 }
 
 function updateFileWithParticipants(fileContent: string, participants: Array<ParticipantRecord | ExtractedParticipant>): string {
-  console.log('🚀 ~ updateFileWithParticipants ~ participants:', participants);
   const lines = fileContent.split('\n');
   const updatedLines: string[] = [];
   let inParticipantTable = false;
@@ -519,7 +518,6 @@ function updateFileWithParticipants(fileContent: string, participants: Array<Par
     const line = lines[i];
 
     if (line.includes('| ID | Name/Alias | Contact | Recruited Via |') && line.includes('| Status |')) {
-      console.log('🚀 ~ updateFileWithParticipants ~ Found participant table header');
       inParticipantTable = true;
       tableHeaderFound = true;
       updatedLines.push('| ID | Name/Alias | Contact | Recruited Via | Outreach Sent | Compensation | Scheduled | Status | Notes & Accommodations |');
@@ -532,7 +530,6 @@ function updateFileWithParticipants(fileContent: string, participants: Array<Par
         const compDisplay = participant.compensation_amount ? `$${parseFloat(String(participant.compensation_amount))}` : '\u2014';
         const statusDisplay = PARTICIPANT_STATUS_LABELS[participant.status_select as ParticipantStatus] || participant.status_select;
         const participantRow = `| ${participant.id} | ${participant.participant_name} | ${participant.contact_details} | ${participant.recruitment_source} | ${outreachDisplay} | ${compDisplay} | ${participant.scheduled_date} ${participant.scheduled_time || ''} | ${statusDisplay} | ${participant.notes_field} |`;
-        console.log('🚀 ~ updateFileWithParticipants ~ Adding participant row:', participantRow);
         updatedLines.push(participantRow);
       });
 
@@ -596,7 +593,6 @@ export async function processParticipantYamlTemplate(
 
   if (allParticipants && allParticipants.length > 0) {
     // Use database participants
-    console.log('🚀 ~ processParticipantYamlTemplate ~ Using database participants:', allParticipants.length);
 
     // Calculate various counts
     const totalParticipantsCount = allParticipants.length;
@@ -713,7 +709,6 @@ export async function processParticipantYamlTemplate(
     updatedContent = generateParticipantTemplate(yamlConfig.output_template, enhancedData);
   } else {
     // Fall back to file-based approach for backward compatibility
-    console.log('🚀 ~ processParticipantYamlTemplate ~ Using file-based approach');
 
     // Try to fetch existing file content
     let existingContent = '';
@@ -728,7 +723,6 @@ export async function processParticipantYamlTemplate(
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
-      console.log('🚀 ~ processParticipantYamlTemplate ~ No existing file found, will create new one. Error:', message);
     }
 
     // Extract existing participants or start with empty array

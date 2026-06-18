@@ -188,7 +188,6 @@ export const sendStudyResultMessage = async (
   blocks: Record<string, unknown>[],
   documentType: string,
 ) => {
-  console.log('🚀 ~ sendStudyResultMessage ~ blocks:', blocks);
   const fallbackText = `Here's your research ${documentType} for *${studyName}*`;
 
   try {
@@ -200,7 +199,6 @@ export const sendStudyResultMessage = async (
       projectId = resolved?.projectId || null;
       // Use study name as fallback for project name (study inherits project name in Phase 2D)
       projectName = resolved?.study?.name || studyName;
-      console.log("🚀 ~ sendStudyResultMessage ~ projectId:", projectId);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
       console.log("⚠️ Study not found (may be from request):", message);
@@ -210,7 +208,6 @@ export const sendStudyResultMessage = async (
     let approver: ApproverInfo | null = null;
     if (projectId) {
       approver = await getProjectApprover(projectId);
-      console.log("🚀 ~ sendStudyResultMessage ~ approver:", approver);
     }
 
     if (approver) {

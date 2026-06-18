@@ -32,6 +32,11 @@ class StudyNotes extends Model<
   declare created_at: CreationOptional<Date>;
   declare updated_at: CreationOptional<Date>;
   declare created_by: string;
+  declare pii_reviewed: CreationOptional<boolean>;
+  declare pii_reviewed_at: Date | null;
+  declare pii_reviewed_by: string | null;
+  /** Holds unreviewed content until approval. Cleared after git write. */
+  declare pending_content: string | null;
 
   // — Association mixins —
   declare getStudy: BelongsToGetAssociationMixin<ResearchStudy>;
@@ -120,6 +125,24 @@ export default (sequelize: Sequelize) => {
       created_by: {
         type: DataTypes.STRING,
         allowNull: false,
+      },
+      pii_reviewed: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+      },
+      pii_reviewed_at: {
+        type: DataTypes.DATE,
+        allowNull: true,
+      },
+      pii_reviewed_by: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      pending_content: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+        comment: 'Holds unreviewed content until approval. Cleared after git write.',
       },
     },
     {

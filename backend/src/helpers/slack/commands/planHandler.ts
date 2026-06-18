@@ -82,7 +82,6 @@ async function handlePlanSubmission({ ack, body, view, client }: SlackViewMiddle
     return;
   }
 
-  console.log('🚀 ~ Research Plan Generator ~ studyName:', studyName, 'studyId:', studyId, 'projectId:', projectId);
 
   // Post "working" message to researcher's DM (consistent with completion DM)
   try {

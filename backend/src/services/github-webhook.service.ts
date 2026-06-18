@@ -55,7 +55,6 @@ class GithubWebhookService {
   }
 
   async handleEvent(event: string, payload: PushPayload): Promise<void> {
-    console.log("🚀 ~ GithubWebhookService ~ handleEvent ~ payload:", payload)
     switch (event) {
       case 'push': {
         const commits = payload.commits || [];
@@ -74,10 +73,8 @@ class GithubWebhookService {
         // For each modified file, notify the user who created it
         for (const filePath of changedFiles.modified) {
           const fileName = GithubWebhookService.extractFileName(filePath);
-          console.log("🚀 ~ GithubWebhookService ~ handleEvent ~ fileName:", fileName)
           // @ts-expect-error — pre-existing type mismatch from require() → import migration
           const statuses: StudyStatus[] = await getStudyStatusByFileName(fileName);
-          console.log("🚀 ~ GithubWebhookService ~ handleEvent ~ statuses:", statuses)
           if (!statuses || statuses.length === 0) continue;
           const status = statuses[0]; // Most recent
           if (!status.created_by) continue;
@@ -119,7 +116,6 @@ class GithubWebhookService {
               ]
             }
           ];
-          console.log("🚀 ~ GithubWebhookService ~ handleEvent ~ blocks:", blocks)
 
           // Send DM
           await slackApiClient.post('chat.postMessage', {

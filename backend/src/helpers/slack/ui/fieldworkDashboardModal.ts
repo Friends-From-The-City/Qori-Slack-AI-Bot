@@ -44,7 +44,6 @@ interface ObserverStats {
 
 interface OutreachStats {
   total_contacted?: number;
-  responses_received?: number;
 }
 
 interface DashboardContext {
@@ -84,11 +83,11 @@ const buildFieldworkDashboard = (
     : `*Observers* — ${oActive} active`;
 
   // ── Outreach ────────────────────────────────────────────
+  // NOTE: Only show "sent" count — we can't track responses (no inbound channel)
   const rTotal = outreachStats.total_contacted || 0;
-  const rResponses = outreachStats.responses_received || 0;
   const rText = rTotal === 0
     ? '*Outreach* — no outreach sent'
-    : `*Outreach* — ${rTotal} sent, ${rResponses} responses`;
+    : `*Outreach* — ${rTotal} sent`;
 
   const blocks = [
     {
@@ -97,21 +96,21 @@ const buildFieldworkDashboard = (
     },
     {
       type: 'section',
-      text: { type: 'mrkdwn', text: rText },
-      accessory: {
-        type: 'button',
-        text: { type: 'plain_text', text: 'Send outreach' },
-        action_id: 'fieldwork_outreach',
-        value: btnValue,
-      },
-    },
-    {
-      type: 'section',
       text: { type: 'mrkdwn', text: pText },
       accessory: {
         type: 'button',
         text: { type: 'plain_text', text: 'Add participant' },
         action_id: 'fieldwork_add_participant',
+        value: btnValue,
+      },
+    },
+    {
+      type: 'section',
+      text: { type: 'mrkdwn', text: rText },
+      accessory: {
+        type: 'button',
+        text: { type: 'plain_text', text: 'Send outreach' },
+        action_id: 'fieldwork_outreach',
         value: btnValue,
       },
     },

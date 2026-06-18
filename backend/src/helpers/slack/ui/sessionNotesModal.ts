@@ -33,7 +33,6 @@ interface SessionNotesState {
 }
 
 export const buildSessionNotesView = (state: SessionNotesState = {}) => {
-  console.log("🚀 ~ buildSessionNotesView ~ state:", state)
   const tab = state.tab || 'upload';                // 'manual' | 'upload'
   const method = state.method || 'files';           // 'files' | 'paste'
   const isManual = tab === 'manual';
@@ -105,6 +104,8 @@ export const buildSessionNotesView = (state: SessionNotesState = {}) => {
               },
               value: 'no_sessions'
             }],
+          // initial_option must EXACTLY match one of the options (both text and value)
+          // so we use the same format as options - don't use state.session.displayName
           initial_option: state.session
             ? (() => {
               const code = state.session.session_id || 'Unknown';
@@ -113,7 +114,7 @@ export const buildSessionNotesView = (state: SessionNotesState = {}) => {
               return {
                 text: {
                   type: 'plain_text',
-                  text: state.session.displayName || `${state.session.study?.name || 'Unknown Study'} - ${displayName}`
+                  text: `${state.session.study?.name || 'Unknown Study'} - ${displayName}`
                 },
                 value: state.session.id.toString()
               };
@@ -171,6 +172,33 @@ const manualBlocks = () => {
 const uploadBlocks = (method: string) => {
   const filesSelected = method === 'files';
   return [
+    // PII Scrubbing Section
+    {
+      type: 'header',
+      text: { type: 'plain_text', text: 'PII Scrubbing', emoji: true }
+    },
+    {
+      type: 'context',
+      elements: [
+        {
+          type: 'mrkdwn',
+          text: '⚠️ *Privacy protection:* Enter the participant\'s real name below. It will be replaced with their code (e.g., PT-001) in the transcript before saving. *This name is NOT stored* — it\'s used only for find/replace, then discarded.'
+        }
+      ]
+    },
+    {
+      type: 'input',
+      block_id: 'pii_real_name',
+      optional: true,
+      label: { type: 'plain_text', text: 'Participant\'s real name (for scrubbing)' },
+      hint: { type: 'plain_text', text: 'e.g., "David Chen" — will be replaced with PT-001. Leave blank if transcript is already anonymized.' },
+      element: {
+        type: 'plain_text_input',
+        action_id: 'real_name_input',
+        placeholder: { type: 'plain_text', text: 'First Last' }
+      }
+    },
+    { type: 'divider' },
     { type: 'section', text: { type: 'mrkdwn', text: '*Select Input Method*' } },
     // Files
     {

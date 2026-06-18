@@ -82,6 +82,7 @@ interface NoteDetail {
   id: number;
   filename: string;
   transcript: boolean;
+  pii_reviewed?: boolean;  // PII review gate: transcripts must be reviewed before analysis
   participant_id: number | null;  // H6: FK to study_participants
   session_date: Date | null;  // R2: DATEONLY returns Date
   created_by: string;
@@ -304,6 +305,22 @@ const handleAnalyzeNotesSubmission = async ({ ack, body, view, client }: SlackVi
     try {
       const transcript = await studyNotesService.getStudyNoteById(parseInt(selectedTranscriptId));
       if (transcript) {
+        // ── PII REVIEW GATE ──
+        // Transcripts must be PII-reviewed before analysis to prevent PII from
+        // propagating into cascade variables (nuggets, themes, findings).
+        // Manual notes (transcript=false) are exempt (structured observations, not raw transcript).
+        if (transcript.transcript && !transcript.pii_reviewed) {
+          await client.chat.postEphemeral({
+            channel: body.user.id,
+            user: body.user.id,
+            text: `❌ *PII Review Required*\n\nThis transcript has not been PII-reviewed. ` +
+              `To protect participant privacy, transcripts must go through the scrubbing and ` +
+              `review process before analysis.\n\n` +
+              `*To fix:* Re-upload the transcript using \`/qori-notes\` with the "Upload Transcript" tab. ` +
+              `Enter the participant's real name for scrubbing, then review and approve before saving.`,
+          });
+          return;
+        }
         noteDetails.push(transcript);
       }
     } catch (error) {
@@ -412,7 +429,6 @@ const handleAnalyzeNotesSubmission = async ({ ack, body, view, client }: SlackVi
       researcher_contact: study?.researcher_name || study?.researcher_email || '',
       analyzer: (body.user as Record<string, string>).username || body.user.name || body.user.id
     };
-    console.log("🚀 ~ handleAnalyzeNotesSubmission ~ templateData:", templateData);
 
     const yamlTemplateFile = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, "session_summary.yaml");
 
@@ -529,7 +545,6 @@ const handleStudySelectionChange = async ({ ack, body, client }: SlackActionMidd
     const selectedStudyOption = view.state.values.study_select_block?.study_select_test?.selected_option;
 
     if (!selectedStudyOption || selectedStudyOption.value === "no_studies") {
-      console.log("🚀 ~ No study selected, resetting to initial state");
       const studies = await getStudiesByUser(body.user.id);
       await client.views.update({
         view_id: view.id,
@@ -601,7 +616,6 @@ const handleSessionSelectionChange = async ({ ack, body, client }: SlackActionMi
     const sessionSelection = findSessionSelection(view.state.values as ViewStateValues);
 
     if (!selectedStudyOption || selectedStudyOption.value === "no_studies") {
-      console.log("🚀 ~ No study selected");
       return;
     }
 
@@ -621,7 +635,6 @@ const handleSessionSelectionChange = async ({ ack, body, client }: SlackActionMi
     const sessions = mapParticipantsToSessions(participantsResult as ParticipantRecord[]);
 
     if (!sessionSelection || sessionSelection.value === "no_sessions") {
-      console.log("🚀 ~ No session selected, showing sessions only");
       await client.views.update({
         view_id: view.id,
         hash: view.hash,

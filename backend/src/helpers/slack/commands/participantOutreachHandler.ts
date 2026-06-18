@@ -23,7 +23,6 @@ import { assertStudyAccess } from '../../../services/authorization.service';
 
 async function participantOutreachHandler({ ack, body, client, command }: SlackCommandMiddlewareArgs & AllMiddlewareArgs): Promise<void> {
   try {
-    console.log("🚀 ~ participantOutreachHandler ~ body:", body);
     await ack();
     const channelId = command.channel_id;
     const userId = command.user_id;
@@ -72,9 +71,6 @@ async function participantOutreachHandler({ ack, body, client, command }: SlackC
 async function handleParticipantOutreachSubmit({ ack, body, view, client }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs): Promise<void> {
   // Don't acknowledge yet - we'll return a response with the next view
 
-  console.log("🚀 ~ handleParticipantOutreachSubmit called");
-  console.log("🚀 ~ view.state.values:", Object.keys(view.state.values).length, "blocks");
-  console.log("🚀 ~ view.private_metadata:", view.private_metadata);
 
   const values = view.state.values as any;
   const { channelId, userId } = JSON.parse(view.private_metadata || '{}');
@@ -83,8 +79,6 @@ async function handleParticipantOutreachSubmit({ ack, body, view, client }: Slac
   const selectedMessageType = values.message_type_block?.message_type?.selected_option;
   const selectedValue = selectedMessageType?.value;
 
-  console.log("🚀 ~ selectedMessageType:", selectedMessageType);
-  console.log("🚀 ~ selectedValue:", selectedValue);
 
   // Get the selected study from the dropdown (if it exists in the modal)
   // The study might be in study_select_block if it was added dynamically
@@ -92,8 +86,6 @@ async function handleParticipantOutreachSubmit({ ack, body, view, client }: Slac
                               values.study_select_block?.selected_study?.selected_option;
   const selectedStudy = selectedStudyOption?.value || selectedStudyOption?.text?.text;
 
-  console.log("🚀 ~ selectedStudyOption:", selectedStudyOption);
-  console.log("🚀 ~ selectedStudy:", selectedStudy);
 
   if (!selectedValue || !channelId || !userId) {
     console.error("❌ No message type selected or missing required data. selectedValue:", selectedValue, "channelId:", channelId, "userId:", userId);
@@ -110,7 +102,6 @@ async function handleParticipantOutreachSubmit({ ack, body, view, client }: Slac
   const studyFromMeta = view.private_metadata ? JSON.parse(view.private_metadata).studyName : null;
   const finalSelectedStudy = selectedStudy || studyFromMeta;
 
-  console.log("🚀 ~ finalSelectedStudy:", finalSelectedStudy);
 
   if (!finalSelectedStudy) {
     console.error("❌ No study selected.");
@@ -157,7 +148,6 @@ async function handleParticipantOutreachSubmit({ ack, body, view, client }: Slac
   }
 
   try {
-    console.log("🚀 ~ Opening next modal for:", selectedValue);
 
     // Load participants for the study to populate the dropdown
     const participants = await studyParticipantService.getParticipantsByStudy(study.id);
@@ -193,7 +183,6 @@ async function handleParticipantOutreachSubmit({ ack, body, view, client }: Slac
       },
     });
 
-    console.log("🚀 ~ Successfully pushed next modal");
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     const detail = (err as Record<string, unknown>)?.data ?? message;
@@ -209,8 +198,6 @@ async function handleParticipantOutreachSubmit({ ack, body, view, client }: Slac
 }
 
 async function handleInitialRecruitmentSubmit({ ack, body, view, client }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs): Promise<void> {
-  console.log("🚀 ~ handleInitialRecruitmentSubmit called");
-  console.log("🚀 ~ view.state.values:", Object.keys(view.state.values).length, "blocks");
 
   // Store view_id for later update
   const viewId = body.view.id;
@@ -275,7 +262,6 @@ async function handleInitialRecruitmentSubmit({ ack, body, view, client }: Slack
     }
     const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, "participant_outreach.yaml");
     const renderedYaml = await processYamlTemplate(file.content, data, study.path ?? '');
-    console.log("🚀 ~ handleInitialRecruitmentSubmit ~ renderedYaml:", renderedYaml)
 
     // Record outreach event on the participant row
     if (participantDbId && participantDbId !== 'no_participants') {
@@ -301,7 +287,6 @@ async function handleInitialRecruitmentSubmit({ ack, body, view, client }: Slack
           messageBody: renderedYaml.outputTemplate,
         }),
       });
-      console.log("🚀 ~ Successfully updated view with email modal");
     } catch (updateErr) {
       // If update fails (e.g., hash mismatch), try to get the current view and update again
       const updateErrMessage = updateErr instanceof Error ? updateErr.message : String(updateErr);
@@ -353,8 +338,6 @@ async function handleInitialRecruitmentSubmit({ ack, body, view, client }: Slack
 }
 
 async function handleReschedulingRequestSubmit({ ack, body, view, client }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs): Promise<void> {
-  console.log("🚀 ~ handleReschedulingRequestSubmit called");
-  console.log("🚀 ~ view.state.values:", Object.keys(view.state.values).length, "blocks");
 
   // Store view_id for later update
   const viewId = body.view.id;
@@ -412,7 +395,6 @@ async function handleReschedulingRequestSubmit({ ack, body, view, client }: Slac
 
     const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, "participant_outreach.yaml");
     const renderedYaml = await processYamlTemplate(file.content, data, study.path ?? '');
-    console.log("🚀 ~ handleReschedulingRequestSubmit ~ renderedYaml:", renderedYaml);
 
     if (participantDbId && participantDbId !== 'no_participants') {
       const participant = await studyParticipantService.getParticipantById(parseInt(participantDbId, 10));
@@ -435,7 +417,6 @@ async function handleReschedulingRequestSubmit({ ack, body, view, client }: Slac
           messageBody: renderedYaml.outputTemplate,
         }),
       });
-      console.log("🚀 ~ Successfully updated view with email modal");
     } catch (updateErr) {
       // If update fails (e.g., hash mismatch), try to get the current view and update again
       const updateErrMessage = updateErr instanceof Error ? updateErr.message : String(updateErr);
@@ -485,8 +466,6 @@ async function handleReschedulingRequestSubmit({ ack, body, view, client }: Slac
 }
 
 async function handleSessionConfirmationSubmit({ ack, body, view, client }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs): Promise<void> {
-  console.log("🚀 ~ handleSessionConfirmationSubmit called");
-  console.log("🚀 ~ view.state.values:", Object.keys(view.state.values).length, "blocks");
 
   // Store view_id for later update
   const viewId = body.view.id;
@@ -546,7 +525,6 @@ async function handleSessionConfirmationSubmit({ ack, body, view, client }: Slac
 
     const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, "participant_outreach.yaml");
     const renderedYaml = await processYamlTemplate(file.content, data, study.path ?? '');
-    console.log("🚀 ~ handleSessionConfirmationSubmit ~ renderedYaml:", renderedYaml);
 
     if (participantDbId && participantDbId !== 'no_participants') {
       const participant = await studyParticipantService.getParticipantById(parseInt(participantDbId, 10));
@@ -569,7 +547,6 @@ async function handleSessionConfirmationSubmit({ ack, body, view, client }: Slac
           messageBody: renderedYaml.outputTemplate,
         }),
       });
-      console.log("🚀 ~ Successfully updated view with email modal");
     } catch (updateErr) {
       // If update fails (e.g., hash mismatch), try to get the current view and update again
       const updateErrMessage = updateErr instanceof Error ? updateErr.message : String(updateErr);
@@ -619,8 +596,6 @@ async function handleSessionConfirmationSubmit({ ack, body, view, client }: Slac
 }
 
 async function handleThankYouSubmit({ ack, body, view, client }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs): Promise<void> {
-  console.log("🚀 ~ handleThankYouSubmit called");
-  console.log("🚀 ~ view.state.values:", Object.keys(view.state.values).length, "blocks");
 
   // Store view_id for later update
   const viewId = body.view.id;
@@ -677,7 +652,6 @@ async function handleThankYouSubmit({ ack, body, view, client }: SlackViewMiddle
 
     const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, "participant_outreach.yaml");
     const renderedYaml = await processYamlTemplate(file.content, data, study.path ?? '');
-    console.log("🚀 ~ handleThankYouSubmit ~ renderedYaml:", renderedYaml)
 
     if (participantDbId && participantDbId !== 'no_participants') {
       const participant = await studyParticipantService.getParticipantById(parseInt(participantDbId, 10));
@@ -699,7 +673,6 @@ async function handleThankYouSubmit({ ack, body, view, client }: SlackViewMiddle
           messageBody: renderedYaml.outputTemplate,
         }),
       });
-      console.log("🚀 ~ Successfully updated view with email modal");
     } catch (updateErr) {
       // If update fails (e.g., hash mismatch), try to get the current view and update again
       const updateErrMessage = updateErr instanceof Error ? updateErr.message : String(updateErr);
@@ -747,8 +720,6 @@ async function handleThankYouSubmit({ ack, body, view, client }: SlackViewMiddle
 }
 
 async function handleFollowUpSubmit({ ack, body, view, client }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs): Promise<void> {
-  console.log("🚀 ~ handleFollowUpSubmit called");
-  console.log("🚀 ~ view.state.values:", Object.keys(view.state.values).length, "blocks");
 
   // Store view_id for later update
   const viewId = body.view.id;
@@ -801,7 +772,6 @@ async function handleFollowUpSubmit({ ack, body, view, client }: SlackViewMiddle
 
     const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, "participant_outreach.yaml");
     const renderedYaml = await processYamlTemplate(file.content, data, study.path ?? '');
-    console.log("🚀 ~ handleFollowUpSubmit ~ renderedYaml:", renderedYaml)
 
     if (participantDbId && participantDbId !== 'no_participants') {
       const participant = await studyParticipantService.getParticipantById(parseInt(participantDbId, 10));
@@ -823,7 +793,6 @@ async function handleFollowUpSubmit({ ack, body, view, client }: SlackViewMiddle
           messageBody: renderedYaml.outputTemplate,
         }),
       });
-      console.log("🚀 ~ Successfully updated view with email modal");
     } catch (updateErr) {
       // If update fails (e.g., hash mismatch), try to get the current view and update again
       const updateErrMessage = updateErr instanceof Error ? updateErr.message : String(updateErr);
@@ -871,8 +840,6 @@ async function handleFollowUpSubmit({ ack, body, view, client }: SlackViewMiddle
 }
 
 async function handleSessionReminderSubmit({ ack, body, view, client }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs): Promise<void> {
-  console.log("🚀 ~ handleSessionReminderSubmit called");
-  console.log("🚀 ~ view.state.values:", Object.keys(view.state.values).length, "blocks");
 
   // Store view_id for later update
   const viewId = body.view.id;
@@ -932,7 +899,6 @@ async function handleSessionReminderSubmit({ ack, body, view, client }: SlackVie
 
     const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, "participant_outreach.yaml");
     const renderedYaml = await processYamlTemplate(file.content, data, study.path ?? '');
-    console.log("🚀 ~ handleSessionReminderSubmit ~ renderedYaml:", renderedYaml);
 
     if (participantDbId && participantDbId !== 'no_participants') {
       const participant = await studyParticipantService.getParticipantById(parseInt(participantDbId, 10));
@@ -955,7 +921,6 @@ async function handleSessionReminderSubmit({ ack, body, view, client }: SlackVie
           messageBody: renderedYaml.outputTemplate,
         }),
       });
-      console.log("🚀 ~ Successfully updated view with email modal");
     } catch (updateErr) {
       // If update fails (e.g., hash mismatch), try to get the current view and update again
       const updateErrMessage = updateErr instanceof Error ? updateErr.message : String(updateErr);
@@ -1059,7 +1024,6 @@ async function handleAddParticipantSubmit({ ack, body, view, client }: SlackView
       current_date,
       added_by: added_by_display
     }
-    console.log(`🚀 ~ handleAddParticipantSubmit: study=${data.study_name}, participant=${(data as any).participant_id}`);
 
     const resolved = await resolveStudyFromName(study_name);
     if (!resolved) throw new Error(`Study "${study_name}" not found`);
@@ -1089,7 +1053,6 @@ async function handleAddParticipantSubmit({ ack, body, view, client }: SlackView
       study_path: study.path ?? ''
     }
     const savedParticipant = await studyParticipantService.createParticipant(participantData, fileData as any);
-    console.log("🚀 ~ handleAddParticipantSubmit ~ savedParticipant:", savedParticipant);
 
     // Check if this participant brings the total to 5 and send milestone message
     const milestoneCheck = await studyParticipantService.checkStudyMilestone(study.id, 5);

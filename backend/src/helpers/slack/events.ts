@@ -73,7 +73,7 @@ import { handleParticipantOutreachSubmit, handleInitialRecruitmentSubmit, handle
 import { handleAddObserverSubmission, handleSelfJoinObserver, handleSelfJoinSubmission } from './commands/addObserverHandler';
 
 // Session notes
-import { handleTabManual, handleTabUpload, handleSessionSelectionChange, handleSessionNotesSubmission } from './commands/sessionNotesHandler';
+import { handleTabManual, handleTabUpload, handleSessionSelectionChange, handleSessionNotesSubmission, handleTranscriptReviewApprove, handleManualNotesApprove, handleManualNotesReject } from './commands/sessionNotesHandler';
 
 // Analysis
 import { analyzeNotesHandler, handleAnalyzeNotesSubmission, handleStudySelectionChange as handleAnalyzeNotesStudyChange, handleSessionSelectionChange as handleAnalyzeNotesSessionChange } from './commands/analyzeNotesHandler';
@@ -96,7 +96,7 @@ import { repoCommand, repoSelected, folderSelected, folderOptions, subfolderOpti
 import { syncCommand, syncFolderSelected, syncFolderOptions, syncSubfolderSelected, syncSubfolderOptions, syncResearchOptions, handleSyncSubmission } from './commands/repo/syncHandler';
 
 // Messaging
-import { generateOtherMessageType, copyEmailFormatted } from './commands/messaging/messagingHandler';
+import { copyEmailFormatted } from './commands/messaging/messagingHandler';
 
 // Events
 import { handleMessageEvent } from './commands/messageEventHandler';
@@ -525,7 +525,6 @@ slackApp.view('outreach_session_confirmation_modal', handleSessionConfirmationSu
 slackApp.view('outreach_thank_you_modal', handleThankYouSubmit);
 slackApp.view('outreach_follow_up_modal', handleFollowUpSubmit);
 slackApp.view('outreach_session_reminder_modal', handleSessionReminderSubmit);
-slackApp.action('generate_other_message_type', generateOtherMessageType);
 slackApp.action('copy_email_formatted', copyEmailFormatted);
 
 // ─── Observers ──────────────────────────────────────────────────
@@ -541,6 +540,9 @@ slackApp.action('tab_manual', handleTabManual);
 slackApp.action('tab_upload', handleTabUpload);
 slackApp.action('session_select_change', handleSessionSelectionChange);
 slackApp.view('session_notes_submit', handleSessionNotesSubmission);
+slackApp.view('transcript_review_approve', handleTranscriptReviewApprove);
+slackApp.action('manual_notes_approve', handleManualNotesApprove);
+slackApp.action('manual_notes_reject', handleManualNotesReject);
 
 // ─── Analysis ───────────────────────────────────────────────────
 

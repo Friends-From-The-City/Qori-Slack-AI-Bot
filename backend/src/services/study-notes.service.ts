@@ -27,6 +27,12 @@ interface NoteInput {
   filename?: string;
   created_at?: Date;
   updated_at?: Date;
+  // PII review fields
+  pii_reviewed?: boolean;
+  pii_reviewed_at?: Date | null;
+  pii_reviewed_by?: string | null;
+  // DB-held quarantine field (manual notes only)
+  pending_content?: string | null;
   [key: string]: unknown;
 }
 
@@ -217,8 +223,10 @@ class StudyNotesService {
       }
 
       // Bug fix preserved: scope by study_id to avoid cross-study data leakage.
+      // PII gate: only return approved notes (pii_reviewed=true) for analysis eligibility.
       const where: Record<string, unknown> = {
-        participant_id: participantId
+        participant_id: participantId,
+        pii_reviewed: true,  // Defense-in-depth: only approved notes are analyzable
       };
       if (studyId !== undefined) {
         where.study_id = studyId;
