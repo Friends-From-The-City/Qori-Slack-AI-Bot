@@ -104,6 +104,8 @@ export const buildSessionNotesView = (state: SessionNotesState = {}) => {
               },
               value: 'no_sessions'
             }],
+          // initial_option must EXACTLY match one of the options (both text and value)
+          // so we use the same format as options - don't use state.session.displayName
           initial_option: state.session
             ? (() => {
               const code = state.session.session_id || 'Unknown';
@@ -112,7 +114,7 @@ export const buildSessionNotesView = (state: SessionNotesState = {}) => {
               return {
                 text: {
                   type: 'plain_text',
-                  text: state.session.displayName || `${state.session.study?.name || 'Unknown Study'} - ${displayName}`
+                  text: `${state.session.study?.name || 'Unknown Study'} - ${displayName}`
                 },
                 value: state.session.id.toString()
               };
