@@ -217,8 +217,10 @@ class StudyNotesService {
       }
 
       // Bug fix preserved: scope by study_id to avoid cross-study data leakage.
+      // PII gate: only return approved notes (pii_reviewed=true) for analysis eligibility.
       const where: Record<string, unknown> = {
-        participant_id: participantId
+        participant_id: participantId,
+        pii_reviewed: true,  // Defense-in-depth: only approved notes are analyzable
       };
       if (studyId !== undefined) {
         where.study_id = studyId;
