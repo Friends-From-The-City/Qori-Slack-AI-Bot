@@ -27,6 +27,12 @@ interface NoteInput {
   filename?: string;
   created_at?: Date;
   updated_at?: Date;
+  // PII review fields
+  pii_reviewed?: boolean;
+  pii_reviewed_at?: Date | null;
+  pii_reviewed_by?: string | null;
+  // DB-held quarantine field (manual notes only)
+  pending_content?: string | null;
   [key: string]: unknown;
 }
 

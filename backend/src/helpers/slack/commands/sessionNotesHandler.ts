@@ -557,10 +557,14 @@ ${scrubResult.content}`;
       return;
     }
 
-    // ── MANUAL NOTES PATH — same quarantine→review→approve pipeline as transcripts ──
+    // ── MANUAL NOTES PATH — DB-held quarantine (no git until approval) ──
     // Manual notes are MORE prone to incidental free-text PII ("her husband Mike",
     // "near the Denver VA") that auto-scrub cannot catch. Human review is the
     // primary protection here, not the auto-scrub.
+    //
+    // DB-HELD QUARANTINE: Content stored in pending_content column, NOT git.
+    // Git history only contains approved/reviewed content (no quarantine commits).
+    // On approval: read from DB, write to git for FIRST time, clear pending_content.
 
     const resolved = await resolveStudyFromName(templateData.study_name);
     if (!resolved) throw new Error(`Study "${templateData.study_name}" not found`);
@@ -592,48 +596,68 @@ ${scrubResult.content}`;
     const scrubResult = scrubTranscript(dryResult.content, scrubCtx);
     console.log(`[PII] Manual notes scrubbing: ${scrubResult.stats.phoneNumbers + scrubResult.stats.emailAddresses} items scrubbed (phone/email only)`);
 
-    // ── Build scrubbed content with PII marker ──
-    const piiMarkerPending = '<!-- PII-STATUS: PENDING-REVIEW -->';
-    const scrubbedContent = `${piiMarkerPending}\n${scrubResult.content}`;
+    // ── Build scrubbed content (NO git write yet) ──
+    // DB-HELD: Content stays in DB until human approval, then first git commit
+    const scrubbedContent = scrubResult.content;
 
-    // ── Save to QUARANTINE location ──
-    // IMPORTANT: Manual notes go to .pending-review/ NOT final location.
-    // Human must review for incidental PII before it reaches the final location.
+    // ── Compute final path (where content will go AFTER approval) ──
     const notesFileName = `notes_${templateData.session_id}.md`;
-    const quarantinePath = `${study?.path}/.pending-review/${notesFileName}`;
-    // Final path is where the YAML would have written (from dryResult.path)
     const finalPath = dryResult.path;
 
-    // Save to quarantine (NOT the final location)
-    const githubResult = await createOrUpdateFileOnGitHub(quarantinePath, scrubbedContent);
-    console.log(`[PII] Manual notes saved to quarantine: ${quarantinePath}`);
+    // ── Store in DB with pending_content (NOT git) ──
+    // pii_reviewed=false: NOT eligible for /qori-analyze
+    // pending_content holds scrubbed content until approval
+    // NO git commit happens here — git history stays clean
+    const studyNoteData = {
+      study_id: selectedSession.study?.id,
+      study_name: templateData.study_name,
+      filename: notesFileName,
+      file_path: finalPath,
+      file_url: null, // No git URL yet — created on approval
+      session_date: templateData.session_date,
+      session_time: templateData.session_time,
+      participant_id: selectedSession.participant?.id,
+      created_by: body.user.id,
+      transcript: false, // Manual notes, not transcript
+      pii_reviewed: false, // NOT approved yet
+      pii_reviewed_at: null,
+      pii_reviewed_by: null,
+      pending_content: scrubbedContent, // DB-held until approval
+    };
 
-    // NO database record yet — record is created only on approval
-    // This ensures /qori-analyze cannot find this note until reviewed
+    const pendingNote = await studyNotesService.createStudyNote(studyNoteData);
+    console.log(`[PII] Manual notes saved to DB (pending_content): ID=${pendingNote.id}`);
 
     // ── Build review metadata for approval flow ──
-    const reviewMetadata: TranscriptReviewModalMetadata = {
-      quarantinePath,
+    // Uses note ID to retrieve pending_content on approval
+    interface ManualNotesApprovalMetadata {
+      noteId: number;
+      finalPath: string;
+      filename: string;
+      participantCode: string;
+      studyName: string;
+    }
+    const approvalMetadata: ManualNotesApprovalMetadata = {
+      noteId: pendingNote.id,
       finalPath,
       filename: notesFileName,
       participantCode: templateData.participant_id,
       studyName: templateData.study_name,
-      fileUrl: githubResult.url,
-      studyId: selectedSession.study?.id || null,
-      participantId: selectedSession.participant?.id || null,
-      sessionDate: templateData.session_date,
-      sessionTime: templateData.session_time,
-      userId: body.user.id,
     };
 
     // Build scrub stats text
     const totalScrubs = scrubResult.stats.phoneNumbers + scrubResult.stats.emailAddresses;
     const statsText = totalScrubs > 0
-      ? `✅ *${totalScrubs} PII items scrubbed* (phone/email)`
-      : '⚠️ *No PII items auto-scrubbed.* Manual notes typically contain incidental PII that requires human review.';
+      ? `*${totalScrubs} PII items scrubbed* (phone/email)`
+      : '*No PII items auto-scrubbed.* Manual notes typically contain incidental PII that requires human review.';
 
-    // ── Send review message via DM (not modal — AI generation took too long for modal ack) ──
-    // This pattern matches other long-running operations in Qori
+    // ── Truncate content for Slack display (Block Kit limit: 3000 chars) ──
+    const displayContent = scrubbedContent.length > 2800
+      ? scrubbedContent.slice(0, 2800) + '\n\n... (truncated for display)'
+      : scrubbedContent;
+
+    // ── Send review message via DM with INLINE content ──
+    // DB-held quarantine: content shown inline, no GitHub link (not committed yet)
     await client.chat.postMessage({
       channel: body.user.id,
       text: `🔍 PII Review Required: ${templateData.study_name} - ${templateData.participant_id}`,
@@ -658,40 +682,47 @@ ${scrubResult.content}`;
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: '⚠️ *You MUST review the full notes before approving.*\n\n' +
-              'Manual notes often contain incidental PII that auto-scrub cannot detect:\n' +
+            text: '⚠️ *Review the notes below for incidental PII before approving:*\n' +
               '• Names mentioned in observations ("her husband Mike...")\n' +
               '• Locations ("near the Denver VA...")\n' +
-              '• Dates with context ("mentioned her birthday...")\n\n' +
-              '*Click the button below to review the full notes on GitHub.*'
+              '• Dates with context ("mentioned her birthday...")'
           }
         },
+        { type: 'divider' },
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: '```\n' + displayContent + '\n```'
+          }
+        },
+        { type: 'divider' },
         {
           type: 'actions',
           elements: [
             {
               type: 'button',
-              text: { type: 'plain_text', text: '📄 Review Full Notes on GitHub', emoji: true },
-              url: githubResult.url,
-              action_id: 'review_notes_link',
+              text: { type: 'plain_text', text: '✅ Approve & Commit to Git', emoji: true },
+              style: 'primary',
+              action_id: 'manual_notes_approve',
+              value: JSON.stringify(approvalMetadata),
             },
             {
               type: 'button',
-              text: { type: 'plain_text', text: '✅ Approve', emoji: true },
-              style: 'primary',
-              action_id: 'manual_notes_approve',
-              value: JSON.stringify(reviewMetadata),
+              text: { type: 'plain_text', text: '🗑️ Reject', emoji: true },
+              style: 'danger',
+              action_id: 'manual_notes_reject',
+              value: JSON.stringify({ noteId: pendingNote.id }),
             }
           ]
         },
-        { type: 'divider' },
         {
           type: 'context',
           elements: [
             {
               type: 'mrkdwn',
-              text: '✅ *Approve* — moves notes to final location, eligible for analysis.\n' +
-                '🗑️ *To reject* — delete the file from `.pending-review/` on GitHub.'
+              text: '✅ *Approve* — commits to GitHub, eligible for analysis.\n' +
+                '🗑️ *Reject* — deletes from DB, nothing committed to git.'
             }
           ]
         }
@@ -865,11 +896,14 @@ const handleTranscriptReviewApprove = async ({ ack, body, view, client }: SlackV
   }
 };
 
-// ─── Manual notes approval via button click ─────────────────────
+// ─── Manual notes approval via button click (DB-held quarantine) ─────────────────────
 
 /**
  * Handle manual notes approval via button click in DM.
- * Same logic as handleTranscriptReviewApprove but triggered by button action.
+ *
+ * DB-HELD QUARANTINE: Reads pending_content from DB, writes to git for FIRST time,
+ * updates DB record (pii_reviewed=true, clears pending_content).
+ * Git history only contains approved content — no quarantine commits.
  */
 const handleManualNotesApprove = async ({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs): Promise<void> => {
   await ack();
@@ -881,89 +915,55 @@ const handleManualNotesApprove = async ({ ack, body, client }: SlackActionMiddle
       throw new Error('Missing metadata in approval button');
     }
 
-    const metadata: TranscriptReviewModalMetadata = JSON.parse(action.value);
-    const {
-      quarantinePath,
-      finalPath,
-      filename,
-      participantCode,
-      studyName,
-      studyId,
-      participantId,
-      sessionDate,
-      sessionTime,
-      userId,
-    } = metadata;
+    interface ManualNotesApprovalMetadata {
+      noteId: number;
+      finalPath: string;
+      filename: string;
+      participantCode: string;
+      studyName: string;
+    }
+    const metadata: ManualNotesApprovalMetadata = JSON.parse(action.value);
+    const { noteId, finalPath, filename, participantCode, studyName } = metadata;
 
-    if (!quarantinePath || !finalPath) {
+    if (!noteId || !finalPath) {
       await client.chat.postMessage({
         channel: body.user.id,
-        text: '❌ Error: Missing file paths. Please try uploading again.',
+        text: '❌ Error: Missing note information. Please try submitting again.',
       });
       return;
     }
 
-    // ── MOVE from quarantine to final location ──
-    const { Octokit } = await import('@octokit/rest');
-    const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
-    const owner = process.env.GITHUB_OWNER!;
-    const repo = process.env.GITHUB_REPO!;
+    // ── Read pending_content from DB ──
+    const note = await studyNotesService.getStudyNoteById(noteId);
+    const pendingContent: string | null = note.pending_content;
 
-    // Read quarantined file
-    const quarantineFile = await octokit.rest.repos.getContent({
-      owner,
-      repo,
-      path: quarantinePath,
-    });
-
-    if (!('content' in quarantineFile.data)) {
-      throw new Error('Quarantine file not found or is a directory');
+    if (!pendingContent) {
+      await client.chat.postMessage({
+        channel: body.user.id,
+        text: '❌ Error: Note content not found or already approved.',
+      });
+      return;
     }
 
-    const rawContent = Buffer.from(quarantineFile.data.content, 'base64').toString('utf-8');
-    const quarantineSha = quarantineFile.data.sha;
+    // ── Build final content with REVIEWED-CLEARED marker ──
+    const piiMarkerCleared = '<!-- PII-STATUS: REVIEWED-CLEARED -->';
+    const reviewedContent = `${piiMarkerCleared}\n${pendingContent}`;
 
-    // Flip PII marker from PENDING-REVIEW to REVIEWED-CLEARED
-    const reviewedContent = rawContent
-      .replace(/<!--\s*PII-STATUS:\s*PENDING-REVIEW\s*-->/gi, '<!-- PII-STATUS: REVIEWED-CLEARED -->')
-      .replace(/\*\*PII Status:\*\*\s*Auto-scrubbed,?\s*pending human review/gi, `**PII Status:** Reviewed and cleared by <@${body.user.id}>`);
-
-    // Write to final location with updated marker
+    // ── FIRST git commit — clean history, no quarantine commits ──
     const finalResult = await createOrUpdateFileOnGitHub(finalPath, reviewedContent);
-    console.log(`✅ Manual notes moved to final location: ${finalPath}`);
+    console.log(`✅ Manual notes committed to git (first commit): ${finalPath}`);
 
-    // Delete quarantine file
-    await octokit.rest.repos.deleteFile({
-      owner,
-      repo,
-      path: quarantinePath,
-      message: `Remove quarantine file after PII review approval`,
-      sha: quarantineSha,
-    });
-    console.log(`✅ Quarantine file deleted: ${quarantinePath}`);
-
-    // Create DB record NOW (only after approval)
-    const studyNoteData = {
-      study_id: studyId,
-      study_name: studyName,
-      filename,
-      file_path: finalPath,
+    // ── Update DB record: pii_reviewed=true, clear pending_content ──
+    await studyNotesService.updateStudyNote(noteId, {
       file_url: finalResult.url,
-      session_date: sessionDate,
-      session_time: sessionTime,
-      participant_id: participantId,
-      created_by: userId,
-      transcript: false, // Manual notes, not transcript
       pii_reviewed: true,
       pii_reviewed_at: new Date(),
       pii_reviewed_by: body.user.id,
-    };
+      pending_content: null, // Clear pending content
+    });
+    console.log(`✅ Study note updated: pii_reviewed=true, pending_content cleared: ID=${noteId}`);
 
-    // @ts-expect-error — pre-existing type mismatch from require() → import migration
-    const createdNote = await studyNotesService.createStudyNote(studyNoteData);
-    console.log(`✅ Study note created with pii_reviewed=true: ID=${createdNote.id}`);
-
-    // Notify user - update the original message to show approved
+    // Notify user
     await client.chat.postMessage({
       channel: body.user.id,
       text: `✅ Notes approved and saved`,
@@ -972,7 +972,7 @@ const handleManualNotesApprove = async ({ ack, body, client }: SlackActionMiddle
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: `✅ *Notes approved and saved*\n\n*Study:* ${studyName}\n*Participant:* ${participantCode}`,
+            text: `✅ *Notes approved and committed to GitHub*\n\n*Study:* ${studyName}\n*Participant:* ${participantCode}`,
           },
         },
         {
@@ -1005,6 +1005,54 @@ const handleManualNotesApprove = async ({ ack, body, client }: SlackActionMiddle
   }
 };
 
+// ─── Manual notes rejection via button click ─────────────────────
+
+/**
+ * Handle manual notes rejection via button click in DM.
+ * Deletes the pending DB record — nothing was ever committed to git.
+ */
+const handleManualNotesReject = async ({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs): Promise<void> => {
+  await ack();
+
+  try {
+    // Extract metadata from button value
+    const action = body.actions[0] as { value?: string };
+    if (!action.value) {
+      throw new Error('Missing metadata in reject button');
+    }
+
+    const metadata: { noteId: number } = JSON.parse(action.value);
+    const { noteId } = metadata;
+
+    if (!noteId) {
+      await client.chat.postMessage({
+        channel: body.user.id,
+        text: '❌ Error: Missing note information.',
+      });
+      return;
+    }
+
+    // ── Delete pending note from DB ──
+    await studyNotesService.deleteStudyNote(noteId);
+    console.log(`🗑️ Pending note rejected and deleted: ID=${noteId}`);
+
+    // Notify user
+    await client.chat.postMessage({
+      channel: body.user.id,
+      text: '🗑️ Notes rejected and discarded. Nothing was committed to GitHub.',
+    });
+
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("Error handling manual notes rejection:", error);
+
+    await client.chat.postMessage({
+      channel: body.user.id,
+      text: `❌ Error rejecting notes: ${message}`,
+    });
+  }
+};
+
 export {
   uploadNotesHandler,
   handleTabManual,
@@ -1013,4 +1061,5 @@ export {
   handleSessionNotesSubmission,
   handleTranscriptReviewApprove,
   handleManualNotesApprove,
+  handleManualNotesReject,
 };
