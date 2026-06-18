@@ -99,6 +99,7 @@ beforeEach(async () => {
     created_by: 'U12345',
     created_at: now,
     updated_at: now,
+    pii_reviewed: true,  // Required for getStudyNotesByParticipant query
   });
 
   await StudyNotes.create({
@@ -112,6 +113,7 @@ beforeEach(async () => {
     created_by: 'U12345',
     created_at: now,
     updated_at: now,
+    pii_reviewed: true,  // Required for getStudyNotesByParticipant query
   });
 
   await StudyNotes.create({
@@ -125,6 +127,7 @@ beforeEach(async () => {
     created_by: 'U12345',
     created_at: now,
     updated_at: now,
+    pii_reviewed: true,  // Required for getStudyNotesByParticipant query
   });
 });
 
@@ -192,6 +195,7 @@ describe('getStudyNotesByParticipant study_id scoping (H6 FK refactor)', () => {
       created_by: 'U12345',
       created_at: now,
       updated_at: now,
+      pii_reviewed: true,  // Required for getStudyNotesByParticipant query
     });
 
     // Query Bob's notes scoped to Study A — Bob doesn't exist in Study A, so should return empty
