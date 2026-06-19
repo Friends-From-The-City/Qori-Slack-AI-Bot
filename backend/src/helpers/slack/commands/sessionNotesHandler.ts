@@ -20,6 +20,7 @@ import { studyNotesService } from "../../../services";
 import { processSlackFiles } from "../../pdfProcessor";
 import { postEphemeralOrDM } from "../slackHelpers";
 import { scrubTranscript, type ScrubContext } from "../../transcriptScrubber";
+import { STUDY_FOLDERS } from "../../../config/folderStructure";
 
 // ─── Types ──────────────────────────────────────────────────────
 
@@ -494,7 +495,7 @@ const handleSessionNotesSubmission = async ({ ack, body, view, client }: SlackVi
 ${scrubResult.content}`;
 
       // ── Save scrubbed transcript to QUARANTINE location ──
-      // IMPORTANT: Transcript goes to .pending-review/ NOT 03-sessions/.
+      // IMPORTANT: Transcript goes to .pending-review/ first, NOT final location.
       // Human must review full transcript before it reaches the final location.
       // Auto-scrub is PARTIAL by design (name variants, incidental PII slip through).
       // Review GATES the commit to final location - it's not rubber-stamping.
@@ -505,8 +506,8 @@ ${scrubResult.content}`;
       const transcriptFileName = `transcript_${templateData.session_id}.md`;
       // Quarantine path - NOT analyzable, NOT the final transcript location
       const quarantinePath = `${resolved.study?.path}/.pending-review/${transcriptFileName}`;
-      // Final path - where it goes AFTER human approval
-      const finalPath = `${resolved.study?.path}/03-sessions/${transcriptFileName}`;
+      // Final path - where it goes AFTER human approval (matches readout scanner path)
+      const finalPath = `${resolved.study?.path}/${STUDY_FOLDERS.FIELDWORK_TRANSCRIPTS}/${transcriptFileName}`;
 
       // Save to quarantine (NOT the final location)
       const githubResult = await createOrUpdateFileOnGitHub(
@@ -758,7 +759,7 @@ ${scrubResult.content}`;
  * Handle transcript review approval.
  *
  * Called when user clicks "Approve" on the transcript review modal.
- * MOVES the transcript from quarantine (.pending-review/) to final location (03-sessions/).
+ * MOVES the transcript from quarantine (.pending-review/) to final location (03-fieldwork/transcripts/).
  * This is the gate - transcript only reaches final location AFTER human review.
  */
 const handleTranscriptReviewApprove = async ({ ack, body, view, client }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs): Promise<void> => {
