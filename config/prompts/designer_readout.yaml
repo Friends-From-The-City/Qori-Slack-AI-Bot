@@ -12,6 +12,10 @@ description: |
   v7.0: Interleaved Handlebars/AI — mechanical content rendered by template,
   LLM writes bounded analytical sections. Per ADR 0005/0016.
 
+  CONTRACT NOTE (2026-07-09): personas is required: true. A designer readout
+  without "who we're designing for" is not a valid readout. Studies should run
+  persona_generator before designer_readout. Reverses a4741262 per Lapedra.
+
 author: Qori R&D
 created: 2026-05-07
 last_updated: 2026-05-20
@@ -55,9 +59,9 @@ consumes:
     description: "Recommendations — designer translates into design work"
   - key: personas
     source: persona_generator
-    required: false
+    required: true
     inject_as: reference
-    description: "Personas — designer references for user context (optional)"
+    description: "Personas — designer needs to know who we're designing for"
   - key: journey_stages
     source: journey_mapping
     required: false
