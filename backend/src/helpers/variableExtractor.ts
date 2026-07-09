@@ -221,8 +221,135 @@ ${variableDescriptions.map(v => {
 // ─── Response parsing and validation ─────────────────────────────────
 
 /**
+ * Attempt to repair truncated or malformed JSON.
+ * Handles common LLM output issues:
+ * - Truncated responses (unclosed brackets/braces)
+ * - Trailing commas
+ * - Unescaped control characters in strings
+ */
+function repairJson(text: string): string {
+  let repaired = text;
+
+  // Remove trailing commas before closing brackets/braces
+  repaired = repaired.replace(/,(\s*[\]}])/g, '$1');
+
+  // Escape unescaped newlines and tabs within strings
+  // This regex finds strings and escapes control chars within them
+  repaired = repaired.replace(/"([^"\\]*(\\.[^"\\]*)*)"/g, (match) => {
+    return match
+      .replace(/\n/g, '\\n')
+      .replace(/\r/g, '\\r')
+      .replace(/\t/g, '\\t');
+  });
+
+  // Count brackets and braces to detect truncation
+  let braceCount = 0;
+  let bracketCount = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (const char of repaired) {
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (char === '\\') {
+      escaped = true;
+      continue;
+    }
+    if (char === '"') {
+      inString = !inString;
+      continue;
+    }
+    if (inString) continue;
+
+    if (char === '{') braceCount++;
+    else if (char === '}') braceCount--;
+    else if (char === '[') bracketCount++;
+    else if (char === ']') bracketCount--;
+  }
+
+  // If we ended inside a string, try to close it
+  if (inString) {
+    // Find last unclosed quote and truncate there, then close
+    const lastQuote = repaired.lastIndexOf('"');
+    if (lastQuote > 0) {
+      // Check if this quote is the start of an unfinished string value
+      const beforeQuote = repaired.slice(0, lastQuote);
+      const afterQuote = repaired.slice(lastQuote + 1);
+      // If afterQuote has content but no closing quote, truncate the string
+      if (afterQuote.length > 0 && !afterQuote.includes('"')) {
+        repaired = beforeQuote + '""';
+        // Recount after repair
+        braceCount = 0;
+        bracketCount = 0;
+        inString = false;
+        escaped = false;
+        for (const char of repaired) {
+          if (escaped) { escaped = false; continue; }
+          if (char === '\\') { escaped = true; continue; }
+          if (char === '"') { inString = !inString; continue; }
+          if (inString) continue;
+          if (char === '{') braceCount++;
+          else if (char === '}') braceCount--;
+          else if (char === '[') bracketCount++;
+          else if (char === ']') bracketCount--;
+        }
+      }
+    }
+  }
+
+  // Remove trailing partial content after last complete value
+  // Look for patterns like: `"key": "incomplete` or `, "key"` at the end
+  if (braceCount > 0 || bracketCount > 0) {
+    // Try to find a safe truncation point
+    const patterns = [
+      /,\s*"[^"]*"?\s*:?\s*"?[^"]*$/,  // Trailing incomplete key-value
+      /,\s*\{[^}]*$/,                    // Trailing incomplete object
+      /,\s*\[[^\]]*$/,                   // Trailing incomplete array
+      /,\s*$/,                           // Trailing comma
+    ];
+
+    for (const pattern of patterns) {
+      const match = repaired.match(pattern);
+      if (match && match.index !== undefined) {
+        repaired = repaired.slice(0, match.index);
+        // Recount
+        braceCount = 0;
+        bracketCount = 0;
+        inString = false;
+        escaped = false;
+        for (const char of repaired) {
+          if (escaped) { escaped = false; continue; }
+          if (char === '\\') { escaped = true; continue; }
+          if (char === '"') { inString = !inString; continue; }
+          if (inString) continue;
+          if (char === '{') braceCount++;
+          else if (char === '}') braceCount--;
+          else if (char === '[') bracketCount++;
+          else if (char === ']') bracketCount--;
+        }
+        break;
+      }
+    }
+  }
+
+  // Close unclosed brackets and braces
+  while (bracketCount > 0) {
+    repaired += ']';
+    bracketCount--;
+  }
+  while (braceCount > 0) {
+    repaired += '}';
+    braceCount--;
+  }
+
+  return repaired;
+}
+
+/**
  * Parse the Haiku response into structured variables.
- * Handles common LLM JSON formatting issues.
+ * Handles common LLM JSON formatting issues with repair logic.
  */
 function parseExtractionResponse(responseText: string): Record<string, unknown> | null {
   // Strip markdown code fences if present
@@ -237,12 +364,30 @@ function parseExtractionResponse(responseText: string): Record<string, unknown> 
   }
   cleaned = cleaned.trim();
 
+  // First attempt: parse as-is
   try {
     return JSON.parse(cleaned) as Record<string, unknown>;
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error('❌ Failed to parse extraction JSON:', message);
+  } catch (firstError: unknown) {
+    const firstMessage = firstError instanceof Error ? firstError.message : String(firstError);
+    console.warn(`⚠️ Initial JSON parse failed: ${firstMessage}`);
+
+    // Second attempt: repair and retry
+    try {
+      const repaired = repairJson(cleaned);
+      if (repaired !== cleaned) {
+        console.log(`🔧 Attempting JSON repair (truncated/malformed response)...`);
+        const result = JSON.parse(repaired) as Record<string, unknown>;
+        console.log(`✅ JSON repair succeeded`);
+        return result;
+      }
+    } catch (repairError: unknown) {
+      const repairMessage = repairError instanceof Error ? repairError.message : String(repairError);
+      console.error(`❌ JSON repair also failed: ${repairMessage}`);
+    }
+
+    console.error('❌ Failed to parse extraction JSON:', firstMessage);
     console.error('Raw response (first 500 chars):', cleaned.slice(0, 500));
+    console.error('Raw response (last 200 chars):', cleaned.slice(-200));
     return null;
   }
 }
