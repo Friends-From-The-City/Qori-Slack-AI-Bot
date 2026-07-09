@@ -417,7 +417,7 @@ slackApp.command('/qori-plan', async ({ ack, client, command }) => {
 slackApp.command('/qori-discover', discoverHandler);
 slackApp.command('/qori-fieldwork', fieldworkHandler);
 slackApp.command('/qori-analyze', analyzeNotesHandler);
-slackApp.command('/qori-synthesis', researchSynthesisHandler);
+slackApp.command('/qori-synthesize', researchSynthesisHandler);
 slackApp.command('/qori-report', openReadoutModal);
 slackApp.command('/qori-tickets', ticketHandler);
 slackApp.command('/qori-ask', askHandler);
