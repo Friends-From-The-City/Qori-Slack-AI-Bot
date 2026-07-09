@@ -117,17 +117,8 @@ export const analyzeNotesModal = (
 
   const blocks: Record<string, unknown>[] = [];
 
-  // Section 1: Select Research Study (always shown if showStudy is true)
+  // Section 1: Select Study (R3: no redundant wrapper, just the input)
   if (showStudy) {
-    blocks.push({
-      type: "section",
-      block_id: "research_study_header",
-      text: {
-        type: "mrkdwn",
-        text: "*Research Study*",
-      },
-    });
-
     const studySelectElement: Record<string, unknown> = {
       type: "static_select",
       action_id: "study_select_test",
@@ -177,46 +168,38 @@ export const analyzeNotesModal = (
     }
   }
 
-  // Cascade Context: Show upstream brief variables when available
+  // Cascade context: R5 — translate to researcher language, keep grounding, context block (subordinate)
   if (cascadeContext && showSession) {
-    blocks.push({
-      type: "divider",
-    });
-
-    const contextLines: string[] = [];
+    const contextParts: string[] = [];
     if (cascadeContext.barrierCount > 0) {
-      contextLines.push(`*${cascadeContext.barrierCount}* target barrier${cascadeContext.barrierCount !== 1 ? 's' : ''} to validate`);
+      contextParts.push(`${cascadeContext.barrierCount} barrier${cascadeContext.barrierCount !== 1 ? 's' : ''}`);
     }
     if (cascadeContext.questionCount > 0) {
-      contextLines.push(`*${cascadeContext.questionCount}* research question${cascadeContext.questionCount !== 1 ? 's' : ''} to address`);
+      contextParts.push(`${cascadeContext.questionCount} question${cascadeContext.questionCount !== 1 ? 's' : ''}`);
     }
     if (cascadeContext.methodology) {
-      contextLines.push(`Method: ${cascadeContext.methodology}`);
+      contextParts.push(cascadeContext.methodology);
     }
 
-    blocks.push({
-      type: "section",
-      block_id: "cascade_context_section",
-      text: {
-        type: "mrkdwn",
-        text: `*Cascade Context*\n\nBrief approved — analyzing against:\n${contextLines.map(l => `  •  ${l}`).join('\n')}\n\nSession summary will reference these upstream inputs.`,
-      },
-    });
+    if (contextParts.length > 0) {
+      blocks.push(
+        { type: "divider" },
+        {
+          type: "context",
+          block_id: "grounding_context",
+          elements: [{
+            type: "mrkdwn",
+            text: `*Analyzing against:*  ${contextParts.join(' • ')}`,
+          }],
+        }
+      );
+    }
   }
 
   // Section 2: Select Session (shown when showSession is true)
   if (showSession) {
     blocks.push({
       type: "divider",
-    });
-
-    blocks.push({
-      type: "section",
-      block_id: "session_header",
-      text: {
-        type: "mrkdwn",
-        text: "*Session*",
-      },
     });
 
     const sessionSelectElement: Record<string, unknown> = {

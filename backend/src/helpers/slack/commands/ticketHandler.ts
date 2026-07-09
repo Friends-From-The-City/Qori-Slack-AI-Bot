@@ -182,7 +182,7 @@ function buildStep1Modal(
       {
         type: 'input',
         block_id: 'study_select',
-        label: { type: 'plain_text', text: 'Study' },
+        label: { type: 'plain_text', text: 'Study *' },  // R7: required marking
         element: {
           type: 'static_select',
           action_id: 'study_select_action',
@@ -194,7 +194,7 @@ function buildStep1Modal(
       {
         type: 'input',
         block_id: 'audience_select',
-        label: { type: 'plain_text', text: 'Audience' },
+        label: { type: 'plain_text', text: 'Audience *' },  // R7: required marking
         element: {
           type: 'static_select',
           action_id: 'audience_select_action',
@@ -305,7 +305,7 @@ const handleStep1Submit = async ({ ack, body, view, client }: SlackViewMiddlewar
     const alreadyCreated = existingTicketIds.has(t.id);
     const findingsCount = Array.isArray(t.addresses_findings) ? t.addresses_findings.length : 0;
     const label = `*${t.id}* — ${t.title}`;
-    const desc = `${t.priority} · ${t.effort} · ${findingsCount} finding(s)${alreadyCreated ? ' · ✅ Already created' : ''}`;
+    const desc = `${t.priority} · ${t.effort} · ${findingsCount} finding${findingsCount !== 1 ? 's' : ''}${alreadyCreated ? ' · ✅ Already created' : ''}`;
 
     return {
       text: { type: 'mrkdwn' as const, text: label },
