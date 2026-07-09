@@ -87,40 +87,48 @@ export const researchSynthesisModal = (
     selectedAnalysisMethod,
   } satisfies SynthesisModalMetadata);
 
-  // Build session data blocks (R10: subordinate context blocks)
-  const sessionDataBlocks: Record<string, unknown>[] = [];
+  // Build grounding block — merged session data + enrichments (R10: one subordinate context block)
+  const groundingBlocks: Record<string, unknown>[] = [];
   if (cascadeData && isCascadeAware) {
     if (cascadeData.sessionStats && cascadeData.sessionStats.totalSessions > 0) {
-      // Session data available — R5: researcher language, R10: context block
       const stats = cascadeData.sessionStats;
-      const participantList = stats.participantBreakdown
-        .slice(0, 8)
-        .map(p => `• ${p.participantId}${p.sessionDate ? ` (${p.sessionDate})` : ''} — ${p.nuggetCount} nuggets`)
-        .join('\n');
-      const moreCount = stats.participantBreakdown.length > 8 ? stats.participantBreakdown.length - 8 : 0;
 
-      sessionDataBlocks.push(
+      // Session summary line
+      const sessionLine = `${stats.totalSessions} session${stats.totalSessions !== 1 ? 's' : ''} • ${stats.totalNuggets} nuggets`;
+
+      // R5: Translate enrichment labels to researcher language
+      // "participant metadata" → "participant", drop system suffixes
+      const translateLabel = (label: string): string => {
+        return label
+          .toLowerCase()
+          .replace(/ metadata$/, '')  // "participant metadata" → "participant"
+          .replace(/_/g, ' ');        // snake_case → spaces
+      };
+
+      // Build enrichments list if any
+      const enrichmentItems = cascadeData.enrichments.length > 0
+        ? cascadeData.enrichments.map(e => `${e.count} ${translateLabel(e.label)}`).join(' • ')
+        : '';
+
+      // Combine into one grounding line
+      const groundingLine = enrichmentItems
+        ? `${sessionLine} • ${enrichmentItems}`
+        : sessionLine;
+
+      groundingBlocks.push(
         { type: "divider" },
         {
           type: "context",
-          block_id: "session_data_status",
+          block_id: "grounding_info",
           elements: [{
             type: "mrkdwn",
-            text: `*Session Data*  ${stats.totalSessions} session${stats.totalSessions !== 1 ? 's' : ''} • ${stats.totalNuggets} nuggets`,
-          }],
-        },
-        {
-          type: "context",
-          block_id: "session_data_breakdown",
-          elements: [{
-            type: "mrkdwn",
-            text: participantList + (moreCount > 0 ? `\n_... and ${moreCount} more_` : ''),
+            text: `*Using:*  ${groundingLine}`,
           }],
         }
       );
     } else if (!cascadeData.readyToRun) {
       // No session data — hard fail state
-      sessionDataBlocks.push(
+      groundingBlocks.push(
         { type: "divider" },
         {
           type: "context",
@@ -132,26 +140,6 @@ export const researchSynthesisModal = (
         }
       );
     }
-  }
-
-  // Build enrichments blocks (R5: researcher language, R10: context blocks)
-  const enrichmentBlocks: Record<string, unknown>[] = [];
-  if (cascadeData && isCascadeAware && cascadeData.enrichments.length > 0) {
-    // R5: Translate to researcher language — "5 target barriers" not "Target barriers — 5 items from research_brief"
-    const enrichmentList = cascadeData.enrichments
-      .map(e => `• ${e.count} ${e.label.toLowerCase()}`)
-      .join('\n');
-
-    enrichmentBlocks.push(
-      {
-        type: "context",
-        block_id: "enrichments_header",
-        elements: [{
-          type: "mrkdwn",
-          text: `*Using from your brief and sessions:*\n${enrichmentList}`,
-        }],
-      }
-    );
   }
 
   // Build missing required warning (R10: context blocks)
@@ -276,11 +264,8 @@ export const researchSynthesisModal = (
         };
       })(),
 
-      // Session data status (cascade-aware)
-      ...sessionDataBlocks,
-
-      // Enrichments (opt-out checkboxes)
-      ...enrichmentBlocks,
+      // Grounding info — merged session data + enrichments (subordinate)
+      ...groundingBlocks,
 
       // Missing required warnings
       ...missingRequiredBlocks,
