@@ -35,7 +35,7 @@ export const sendObserverGuideDM = async (
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: `<${githubUrl}|:github: View Participant Tracker on GitHub>`,
+        text: `<${githubUrl}|View Participant Tracker on GitHub>`,
       },
     });
   }

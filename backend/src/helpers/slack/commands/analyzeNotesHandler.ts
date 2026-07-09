@@ -503,7 +503,7 @@ const handleAnalyzeNotesSubmission = async ({ ack, body, view, client }: SlackVi
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: `<${result.url}|:github: View Session Summary on GitHub>`,
+            text: `<${result.url}|View Session Summary on GitHub>`,
           },
         },
         { type: 'divider' },

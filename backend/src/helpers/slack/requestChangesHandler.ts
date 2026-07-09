@@ -522,7 +522,7 @@ export async function handleRequestChangesSubmission(
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: `<${url}|:github: View on GitHub>`,
+            text: `<${url}|View on GitHub>`,
           },
         },
       ];
