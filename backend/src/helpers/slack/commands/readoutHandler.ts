@@ -569,6 +569,17 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }: SlackVi
             const audienceReportData: ReadoutTemplateInput = { ...reportData, target_audience: audience };
             const rendered = await processYamlTemplate(file.content, audienceReportData, selectedStudy.path ?? '', '', false, variableContext);
 
+            // CRITICAL: Await extraction to ensure ticket_candidates are committed before notifying user.
+            // Without this, /qori-tickets won't find the tickets until extraction completes (can be 1+ min).
+            if (rendered.extractionPromise) {
+              const extractResult = await rendered.extractionPromise;
+              if (!extractResult.success) {
+                console.error(`❌ ${audience} extraction failed: ${extractResult.error}`);
+              } else {
+                console.log(`✅ ${audience} variables committed: ${extractResult.variableCount} items`);
+              }
+            }
+
             results.push({ audience, url: rendered.result.url, success: true });
 
             await client.chat.postMessage({
@@ -579,7 +590,7 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }: SlackVi
                   type: 'section',
                   text: {
                     type: 'mrkdwn',
-                    text: `✅ *${audience}* readout complete\n\n<${rendered.result.url}|View on GitHub>`,
+                    text: `✅ *${audience}* readout complete — tickets ready\n\n<${rendered.result.url}|View on GitHub>`,
                   },
                 },
               ],
