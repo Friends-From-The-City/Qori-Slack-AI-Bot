@@ -87,11 +87,11 @@ export const researchSynthesisModal = (
     selectedAnalysisMethod,
   } satisfies SynthesisModalMetadata);
 
-  // Build session data blocks
+  // Build session data blocks (R10: subordinate context blocks)
   const sessionDataBlocks: Record<string, unknown>[] = [];
   if (cascadeData && isCascadeAware) {
     if (cascadeData.sessionStats && cascadeData.sessionStats.totalSessions > 0) {
-      // Session data available
+      // Session data available — R5: researcher language, R10: context block
       const stats = cascadeData.sessionStats;
       const participantList = stats.participantBreakdown
         .slice(0, 8)
@@ -102,12 +102,12 @@ export const researchSynthesisModal = (
       sessionDataBlocks.push(
         { type: "divider" },
         {
-          type: "section",
+          type: "context",
           block_id: "session_data_status",
-          text: {
+          elements: [{
             type: "mrkdwn",
-            text: `📊 *Session Data Available*\n${stats.totalSessions} session${stats.totalSessions !== 1 ? 's' : ''} analyzed • ${stats.totalNuggets} atomic nuggets`,
-          },
+            text: `*Session Data*  ${stats.totalSessions} session${stats.totalSessions !== 1 ? 's' : ''} • ${stats.totalNuggets} nuggets`,
+          }],
         },
         {
           type: "context",
@@ -123,84 +123,58 @@ export const researchSynthesisModal = (
       sessionDataBlocks.push(
         { type: "divider" },
         {
-          type: "section",
-          block_id: "session_data_missing",
-          text: {
-            type: "mrkdwn",
-            text: `:warning: *Cannot run synthesis — no session data*`,
-          },
-        },
-        {
           type: "context",
-          block_id: "session_data_hint",
+          block_id: "session_data_missing",
           elements: [{
             type: "mrkdwn",
-            text: `Run \`/qori-analyze\` on session transcripts first to build the nugget pool.\nSynthesis requires atomic nuggets extracted from analyzed sessions.`,
+            text: `:warning: *No session data* — run \`/qori-analyze\` first`,
           }],
         }
       );
     }
   }
 
-  // Build enrichments blocks (read-only display — ADR 0018 amendment: no opt-out)
+  // Build enrichments blocks (R5: researcher language, R10: context blocks)
   const enrichmentBlocks: Record<string, unknown>[] = [];
   if (cascadeData && isCascadeAware && cascadeData.enrichments.length > 0) {
+    // R5: Translate to researcher language — "5 target barriers" not "Target barriers — 5 items from research_brief"
     const enrichmentList = cascadeData.enrichments
-      .map(e => `• *${e.label}* — ${e.count} item${e.count !== 1 ? 's' : ''} from ${e.source}`)
+      .map(e => `• ${e.count} ${e.label.toLowerCase()}`)
       .join('\n');
 
     enrichmentBlocks.push(
-      { type: "divider" },
-      {
-        type: "section",
-        block_id: "enrichments_header",
-        text: {
-          type: "mrkdwn",
-          text: `✅ *Cascade Enrichments* (feeding this synthesis)`,
-        },
-      },
       {
         type: "context",
-        block_id: "enrichments_list",
+        block_id: "enrichments_header",
         elements: [{
           type: "mrkdwn",
-          text: enrichmentList,
+          text: `*Using from your brief and sessions:*\n${enrichmentList}`,
         }],
       }
     );
   }
 
-  // Build missing required warning
+  // Build missing required warning (R10: context blocks)
   const missingRequiredBlocks: Record<string, unknown>[] = [];
   if (cascadeData && cascadeData.missingRequired.length > 0) {
     const missingList = cascadeData.missingRequired
-      .map(m => `:warning: *${m.label}* — ${m.hint}`)
+      .map(m => `• ${m.label} — ${m.hint}`)
       .join('\n');
 
     missingRequiredBlocks.push(
       { type: "divider" },
       {
-        type: "section",
-        block_id: "missing_required_header",
-        text: {
+        type: "context",
+        block_id: "missing_required_info",
+        elements: [{
           type: "mrkdwn",
-          text: `:warning: *Missing required inputs*`,
-        },
-      },
-      {
-        type: "context",
-        block_id: "missing_required_list",
-        elements: [{ type: "mrkdwn", text: missingList }],
-      },
-      {
-        type: "context",
-        block_id: "missing_required_action",
-        elements: [{ type: "mrkdwn", text: `_Complete the upstream steps above, then re-open this modal._` }],
+          text: `:warning: *Missing required inputs*\n${missingList}\n_Complete these steps, then re-open this modal._`,
+        }],
       }
     );
   }
 
-  // Build legacy method notice
+  // Build legacy method notice (R1: no decorative emoji, R10: context block)
   const legacyNoticeBlocks: Record<string, unknown>[] = [];
   if (isLegacyMethod) {
     legacyNoticeBlocks.push(
@@ -210,7 +184,7 @@ export const researchSynthesisModal = (
         block_id: "legacy_method_notice",
         elements: [{
           type: "mrkdwn",
-          text: `⚠️ *Service Blueprint* uses legacy file-based input. This synthesis method will be upgraded in a future release.`,
+          text: `*Service Blueprint* uses legacy file-based input. This method will be upgraded in a future release.`,
         }],
       }
     );
@@ -225,7 +199,7 @@ export const researchSynthesisModal = (
     },
     submit: {
       type: "plain_text",
-      text: "Run Analysis",
+      text: "Generate",  // R2: "Run Analysis" → "Generate"
     },
     close: {
       type: "plain_text",
@@ -233,12 +207,11 @@ export const researchSynthesisModal = (
     },
     private_metadata: privateMetadata,
     blocks: [
-      // Study Selection Section
-      { type: "section", text: { type: "mrkdwn", text: "📁 *Study*" } },
+      // Study Selection — PRIMARY (R1: no emoji, R7: required marking, R10: prominent)
       {
         type: "input",
         block_id: "study_select_block",
-        label: { type: "plain_text", text: "Study" },
+        label: { type: "plain_text", text: "Study *" },
         element: {
           type: "static_select",
           action_id: "study_select_synthesize",
@@ -255,55 +228,49 @@ export const researchSynthesisModal = (
 
       { type: "divider" },
 
-      // Analysis Type Section
-      { type: "section", text: { type: "mrkdwn", text: "🎯 *Analysis Type*" } },
-      { type: "context", elements: [{ type: "mrkdwn", text: "Choose the type of synthesis" }] },
+      // Synthesis Type — PRIMARY (R1: no emoji, R4: "Synthesis" not "Analysis", R7: required, R10: prominent)
       (() => {
-        const analysisMethodOptions = [
+        // R1: Remove ALL decorative emoji from options
+        const synthesisMethodOptions = [
           {
-            text: { type: "plain_text", text: "🗂️ Affinity Mapping • Group findings" },
+            text: { type: "plain_text", text: "Affinity Mapping • Group findings" },
             value: "affinity_mapping",
           },
           {
-            text: { type: "plain_text", text: "🗺️ Journey Mapping • Map experiences" },
+            text: { type: "plain_text", text: "Journey Mapping • Map experiences" },
             value: "journey_mapping",
           },
           {
-            text: { type: "plain_text", text: "👤 Persona Generation • Create personas" },
+            text: { type: "plain_text", text: "Persona Generation • Create personas" },
             value: "persona_generation",
           },
           {
-            text: { type: "plain_text", text: "🎯 Jobs to Be Done • Extract user jobs" },
+            text: { type: "plain_text", text: "Jobs to Be Done • Extract user jobs" },
             value: "jobs_to_be_done",
           },
           {
-            text: { type: "plain_text", text: "⚠️ Usability Issues • Prioritize problems" },
+            text: { type: "plain_text", text: "Usability Issues • Prioritize problems" },
             value: "usability_issues",
           },
           {
-            text: { type: "plain_text", text: "💡 Design Opportunities • Generate HMWs" },
+            text: { type: "plain_text", text: "Design Opportunities • Generate HMWs" },
             value: "design_opportunities",
           },
-          // Service blueprint excluded from cascade-aware modal per ADR 0018
-          // {
-          //   text: { type: "plain_text", text: "🔧 Service Blueprint • Map backstage" },
-          //   value: "service_blueprint",
-          // },
         ];
 
         const methodValue = selectedAnalysisMethod || "affinity_mapping";
-        const matchingOption = analysisMethodOptions.find(opt => opt.value === methodValue);
-        const initialOption = matchingOption || analysisMethodOptions[0];
+        const matchingOption = synthesisMethodOptions.find(opt => opt.value === methodValue);
+        const initialOption = matchingOption || synthesisMethodOptions[0];
 
         return {
           type: "input",
           block_id: "analysis_method_selection",
           dispatch_action: true, // Fire action on radio change to update enrichments
-          label: { type: "plain_text", text: "Analysis method" },
+          label: { type: "plain_text", text: "Synthesis method *" },  // R4 & R7
           element: {
             type: "radio_buttons",
             action_id: "analysis_method",
-            options: analysisMethodOptions,
+            options: synthesisMethodOptions,
             initial_option: initialOption,
           },
         };
