@@ -361,11 +361,12 @@ const handleSessionNotesSubmission = async ({ ack, body, view, client }: SlackVi
     }
 
     if (!selectedSession || selectedSessionId === 'no_sessions') {
-      await ack();
-      ackCalled = true;
-      await client.chat.postMessage({
-        channel: body.user.id,
-        text: `❌ Please select a valid session before submitting notes. No sessions are currently available.`,
+      // 5f pattern: inline errors instead of ack()+DM — modal stays open
+      await (ack as Function)({
+        response_action: "errors",
+        errors: {
+          session_select: "Please select a valid session. No sessions are currently available."
+        }
       });
       return;
     }
@@ -389,11 +390,12 @@ const handleSessionNotesSubmission = async ({ ack, body, view, client }: SlackVi
       const observations: string = values.observations?.observations_text?.value || '';
 
       if (!observations || observations.trim() === '') {
-        await ack();
-        ackCalled = true;
-        await client.chat.postMessage({
-          channel: body.user.id,
-          text: `❌ Please enter your observations before submitting.`,
+        // 5f pattern: inline errors instead of ack()+DM — modal stays open
+        await (ack as Function)({
+          response_action: "errors",
+          errors: {
+            observations: "Please enter your observations before submitting."
+          }
         });
         return;
       }
@@ -425,7 +427,10 @@ const handleSessionNotesSubmission = async ({ ack, body, view, client }: SlackVi
       // PII scrubbing happens here: extract real name, scrub, push review modal
       const filesInput = values.transcript_files?.files as { files?: Array<{ name: string; mimetype: string; url_private?: string; [key: string]: unknown }> } | undefined;
       const filesList = filesInput?.files || [];
-      const pastedText: string = values.transcript_paste?.text?.value || '';
+      // 5f fix (b): trim for validation only — whitespace-only must fail
+      // Raw content preserved for storage (both paste and file paths save unmodified input)
+      const pastedTextRaw: string = values.transcript_paste?.text?.value || '';
+      const pastedTextTrimmed: string = pastedTextRaw.trim();
 
       // ── Extract participant real name for scrubbing (TRANSIENT — never stored) ──
       // PRIVACY: This variable is used ONLY for in-memory find/replace.
@@ -439,6 +444,17 @@ const handleSessionNotesSubmission = async ({ ack, body, view, client }: SlackVi
         const processedFiles: ProcessedFile[] = await processSlackFiles(filesList, process.env.SLACK_BOT_TOKEN!);
         rawContent = processedFiles.map((file: ProcessedFile) => file.content).join('\n\n---\n\n');
 
+        // 5f fix (c): validate non-empty content AFTER download
+        if (!rawContent.trim()) {
+          await (ack as Function)({
+            response_action: "errors",
+            errors: {
+              transcript_files: "Uploaded file(s) contain no text content. Check that the file isn't empty or corrupted."
+            }
+          });
+          return;
+        }
+
         templateData = {
           ...templateData,
           transcript_files: filesList.map((f: { name: string }) => f.name).join(', '),
@@ -448,18 +464,20 @@ const handleSessionNotesSubmission = async ({ ack, body, view, client }: SlackVi
           transcript_source: 'file_upload',
           manual_notes_text_or_blank: '',
         };
-      } else if (pastedText) {
-        rawContent = pastedText;
+      } else if (pastedTextTrimmed) {
+        // Store raw content (preserves leading/trailing whitespace from user input)
+        rawContent = pastedTextRaw;
         templateData = {
           ...templateData,
-          manual_notes_text_or_blank: pastedText
+          manual_notes_text_or_blank: pastedTextRaw
         };
       } else {
-        await ack();
-        ackCalled = true;
-        await client.chat.postMessage({
-          channel: body.user.id,
-          text: `❌ Please either upload files or paste transcript content.`,
+        // 5f fix (a): inline errors instead of ack()+DM — modal stays open
+        await (ack as Function)({
+          response_action: "errors",
+          errors: {
+            transcript_paste: "Please either upload files or paste transcript content."
+          }
         });
         return;
       }
