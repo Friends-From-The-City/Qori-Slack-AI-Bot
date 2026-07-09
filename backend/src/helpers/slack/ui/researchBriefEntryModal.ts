@@ -202,7 +202,7 @@ export async function buildBriefEntryModal(options: BuildBriefEntryModalOptions)
     elements: [
       {
         type: "mrkdwn",
-        text: `:file_folder: Creating research brief for project *${projectName}*`,
+        text: `Creating research brief for project *${projectName}*`,
       },
     ],
   };
@@ -242,7 +242,7 @@ export async function buildBriefEntryModal(options: BuildBriefEntryModalOptions)
       elements: [
         {
           type: "mrkdwn",
-          text: `:bust_in_silhouette: *Approver:* ${approverDisplay} (${approverRoleLabel} — approves this brief)`,
+          text: `*Approver:* ${approverDisplay} (${approverRoleLabel} — approves this brief)`,
         },
       ],
     };
@@ -312,8 +312,8 @@ export async function buildBriefEntryModal(options: BuildBriefEntryModalOptions)
         const displaySlug = a.slug.length > maxSlugDisplay
           ? a.slug.substring(0, maxSlugDisplay - 1) + '…'
           : a.slug;
-        // Build compact display: "📊 *slug* · label · date"
-        const baseText = `${a.icon} *${displaySlug}* · ${a.label} · ${a.date}`;
+        // Build compact display: "*slug* · label · date"
+        const baseText = `*${displaySlug}* · ${a.label} · ${a.date}`;
         const displayText = baseText.length > 150
           ? baseText.substring(0, 147) + '…'
           : baseText;
@@ -333,7 +333,7 @@ export async function buildBriefEntryModal(options: BuildBriefEntryModalOptions)
         elements: [
           {
             type: "mrkdwn",
-            text: `✅ ${artifacts.length} discovery source${artifacts.length === 1 ? '' : 's'} available — auto-selected`,
+            text: `${artifacts.length} discovery source${artifacts.length === 1 ? '' : 's'} available — auto-selected`,
           },
         ],
       };

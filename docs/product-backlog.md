@@ -221,6 +221,14 @@ Plus newly filed during template restructure work:
 
 These items don't block product work or federal go-to-market. They make the codebase more robust over time. Worth picking up opportunistically when touching related code.
 
+### Modal design standard findings (2026-07-09)
+
+Filed from `backend/docs/qori-modal-design-standard.md` §6.10:
+
+- **Structured discovery provenance:** Store discovery artifact IDs used at brief generation on the brief's DB record. Currently traceability exists only in rendered markdown (`research_brief.yaml:534-543`). Enables audit trail, regeneration with same context, and impact analysis when discovery is re-run.
+
+- **Discovery naming-layer consolidation:** Three identifier layers per discovery type exist with a manual mapping table (`studyVariables.ts:18-29`): YAML template ID (`desk_research`), storage type (`desk-research`), loader ID (same as storage type). This is the substrate the PR #170 filter bug grew in. Consolidate to a single canonical identifier per discovery type.
+
 ---
 
 ## Federal go-to-market

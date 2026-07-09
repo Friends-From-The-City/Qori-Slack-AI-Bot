@@ -1073,7 +1073,7 @@ async function handleAddParticipantSubmit({ ack, body, view, client }: SlackView
             type: "section",
             text: {
               type: "mrkdwn",
-              text: `<${githubUrl}|:github: View Participant Tracker on GitHub>`,
+              text: `<${githubUrl}|View Participant Tracker on GitHub>`,
             },
           },
           {
@@ -1122,7 +1122,7 @@ async function handleAddParticipantSubmit({ ack, body, view, client }: SlackView
           type: "section",
           text: {
             type: "mrkdwn",
-            text: `<${githubUrl}|:github: View Participant Tracker on GitHub>`
+            text: `<${githubUrl}|View Participant Tracker on GitHub>`
           }
         },
         {

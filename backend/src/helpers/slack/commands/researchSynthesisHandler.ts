@@ -547,7 +547,7 @@ const handleResearchSynthesisSubmission = async ({ ack, body, view, client }: Sl
             type: 'section',
             text: {
               type: 'mrkdwn',
-              text: `<${renderedAnalysis.result.url}|:github: View on GitHub>`,
+              text: `<${renderedAnalysis.result.url}|View on GitHub>`,
             },
           },
           { type: 'divider' },

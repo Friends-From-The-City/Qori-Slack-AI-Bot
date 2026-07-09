@@ -62,7 +62,7 @@ const markChangesCompleteModal = (fileName: string, filePath: string, statusId: 
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: `<${filePath}|:github: View on GitHub>`,
+        text: `<${filePath}|View on GitHub>`,
       },
     },
     {

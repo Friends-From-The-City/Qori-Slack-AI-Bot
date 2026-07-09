@@ -105,7 +105,7 @@ export const generateStudyResultBlocks = (
     type: 'section',
     text: {
       type: 'mrkdwn',
-      text: `<${url}|:github: View on GitHub>`,
+      text: `<${url}|View on GitHub>`,
     },
   });
 
@@ -152,7 +152,7 @@ const generateChannelBlocks = (studyName: string, study: StudyWithRoles | null, 
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: `<${url}|:github: View on GitHub>`,
+        text: `<${url}|View on GitHub>`,
       },
     },
     {

@@ -55,9 +55,9 @@ consumes:
     description: "Recommendations — designer translates into design work"
   - key: personas
     source: persona_generator
-    required: true
+    required: false
     inject_as: reference
-    description: "Personas — designer needs to know who they're designing for"
+    description: "Personas — designer references for user context (optional)"
   - key: journey_stages
     source: journey_mapping
     required: false

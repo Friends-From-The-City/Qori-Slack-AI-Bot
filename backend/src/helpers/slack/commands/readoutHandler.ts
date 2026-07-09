@@ -569,6 +569,17 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }: SlackVi
             const audienceReportData: ReadoutTemplateInput = { ...reportData, target_audience: audience };
             const rendered = await processYamlTemplate(file.content, audienceReportData, selectedStudy.path ?? '', '', false, variableContext);
 
+            // CRITICAL: Await extraction to ensure ticket_candidates are committed before notifying user.
+            // Without this, /qori-tickets won't find the tickets until extraction completes (can be 1+ min).
+            if (rendered.extractionPromise) {
+              const extractResult = await rendered.extractionPromise;
+              if (!extractResult.success) {
+                console.error(`❌ ${audience} extraction failed: ${extractResult.error}`);
+              } else {
+                console.log(`✅ ${audience} variables committed: ${extractResult.variableCount} items`);
+              }
+            }
+
             results.push({ audience, url: rendered.result.url, success: true });
 
             await client.chat.postMessage({
@@ -579,7 +590,7 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }: SlackVi
                   type: 'section',
                   text: {
                     type: 'mrkdwn',
-                    text: `✅ *${audience}* readout complete\n\n<${rendered.result.url}|View on GitHub>`,
+                    text: `✅ *${audience}* readout complete — tickets ready\n\n<${rendered.result.url}|View on GitHub>`,
                   },
                 },
               ],
@@ -619,9 +630,29 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }: SlackVi
 
     } else {
       // Research readout (existing flow)
+      await client.chat.postMessage({
+        channel: body.user.id,
+        text: `🔄 Generating research readout for *${selectedStudyName}*... This may take a few minutes.`,
+      });
+
       const yamlTemplateName = 'research_readout.yaml';
       const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, yamlTemplateName);
       const renderedYaml = await processYamlTemplate(file.content, reportData, selectedStudy.path ?? '', '', false, variableContext);
+
+      // CRITICAL: Await extraction to ensure cascade variables (prioritized_findings) are committed.
+      // Without this, targeted readouts won't see the findings. See ADR 0019.
+      if (renderedYaml.extractionPromise) {
+        const extractResult = await renderedYaml.extractionPromise;
+        if (!extractResult.success) {
+          console.error(`❌ Readout extraction failed: ${extractResult.error}`);
+          await client.chat.postMessage({
+            channel: body.user.id,
+            text: `⚠️ Report generated but variable extraction failed: ${extractResult.error}\n\nTargeted readouts may not work until you regenerate.`,
+          });
+          return;
+        }
+        console.log(`✅ Readout variables committed: ${extractResult.variableCount} items (${extractResult.keys?.join(', ')})`);
+      }
 
       await client.chat.postMessage({
         channel: body.user.id,
@@ -639,7 +670,7 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }: SlackVi
             type: 'section',
             text: {
               type: 'mrkdwn',
-              text: `*Next:* Run \`/qori-tickets\` to create engineering issues from findings.`,
+              text: `*Next:* Run \`/qori-report\` again and select *Targeted Readouts* to generate audience-specific reports, or \`/qori-tickets\` to create engineering issues.`,
             },
           },
         ],
