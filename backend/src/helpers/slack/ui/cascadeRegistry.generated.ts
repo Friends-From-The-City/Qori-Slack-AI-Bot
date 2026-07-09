@@ -46,7 +46,7 @@ export const TEMPLATE_CONSUMES: Record<string, ConsumeSpec[]> = {
   designer_readout: [
     { key: 'prioritized_findings', required: true, label: 'Prioritized Findings', source_hint: 'Run research readout first' },
     { key: 'prioritized_recommendations', required: true, label: 'Prioritized Recommendations', source_hint: 'Run research readout first' },
-    { key: 'personas', required: true, label: 'Personas', source_hint: 'Run persona generation first' },
+    { key: 'personas', required: false, label: 'Personas', source_hint: 'Run persona generation first' },
     { key: 'journey_stages', required: false, label: 'Journey Stages', source_hint: 'Complete journey mapping first' },
     { key: 'validated_themes', required: false, label: 'Validated Themes', source_hint: 'Run affinity mapping first' },
     { key: 'target_barriers', required: false, label: 'Target Barriers', source_hint: 'Create research brief first' },
