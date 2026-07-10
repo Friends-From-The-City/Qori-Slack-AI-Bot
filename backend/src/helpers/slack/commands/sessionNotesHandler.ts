@@ -8,7 +8,7 @@
 
 import type { AllMiddlewareArgs, SlackCommandMiddlewareArgs, SlackActionMiddlewareArgs, SlackViewMiddlewareArgs, BlockAction, ViewSubmitAction } from '@slack/bolt';
 
-import { buildSessionNotesView } from "../ui/sessionNotesModal";
+import { buildSessionNotesView, type PreservedInputs } from "../ui/sessionNotesModal";
 import { buildTranscriptReviewModal, type TranscriptReviewModalMetadata } from "../ui/transcriptReviewModal";
 import sessionObserverService from "../../../services/session_observer.service";
 import sessionParticipantService from "../../../services/study_participant.service";
@@ -57,6 +57,7 @@ interface ModalState {
   };
   mode?: 'researcher' | 'observer';
   studyId?: string | null;
+  preserved?: PreservedInputs;
 }
 
 interface ViewMetadata {
@@ -68,6 +69,7 @@ interface ViewMetadata {
   channelId: string;
   selectedSessionId?: string;
   studyId?: string;
+  preserved?: PreservedInputs;
 }
 
 /** Data shape passed to session_notes YAML template. */
@@ -108,6 +110,33 @@ interface GitHubResult {
 
 function buildSessionDisplayName(session: SessionInfo): string {
   return `${session.study?.name || 'Unknown Study'} - ${session.participant?.participant_name || 'Unknown Participant'} (${session.session_id || 'Unknown Session'})`;
+}
+
+// ─── Helper: extract input values to preserve across view rebuilds ───
+// PRIVACY: piiRealName transits through private_metadata during rebuilds only.
+// It is used for scrubbing, then discarded — never persisted to database or logged.
+
+function extractPreservedInputs(values: Record<string, Record<string, { value?: string | null; selected_option?: { value: string } | null }>>): PreservedInputs {
+  // Extract only fields that exist in the current view's state.values.
+  // IMPORTANT: Only include keys that have actual values — undefined values would
+  // overwrite previously preserved values when merged with spread operator.
+  const result: PreservedInputs = {};
+
+  // Upload tab fields (only present when Upload tab is active)
+  const piiRealName = values.pii_real_name?.real_name_input?.value;
+  if (piiRealName) result.piiRealName = piiRealName;
+
+  const pastedText = values.transcript_paste?.text?.value;
+  if (pastedText) result.pastedText = pastedText;
+
+  const transcriptSource = values.transcript_source_block?.transcript_source?.selected_option?.value;
+  if (transcriptSource) result.transcriptSource = transcriptSource;
+
+  // Manual tab fields (only present when Manual tab is active)
+  const observations = values.observations?.observations_text?.value;
+  if (observations) result.observations = observations;
+
+  return result;
 }
 
 // ─── Command handler ────────────────────────────────────────────
@@ -208,6 +237,14 @@ async function loadSessionsForMode(metadata: ViewMetadata): Promise<any[]> {
 const handleTabManual = async ({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs): Promise<void> => {
   await ack();
   const metadata = JSON.parse(body.view?.private_metadata || '{}') as ViewMetadata;
+  const values = body.view?.state?.values || {};
+
+  // Preserve input values across tab switch (merge current + previously preserved)
+  // extractPreservedInputs only returns keys with actual values, so spread won't overwrite
+  const preserved = {
+    ...metadata.preserved,
+    ...extractPreservedInputs(values)
+  };
 
   const sessions: any[] = await loadSessionsForMode(metadata);
 
@@ -222,6 +259,7 @@ const handleTabManual = async ({ ack, body, client }: SlackActionMiddlewareArgs<
     },
     mode: metadata.mode,
     studyId: metadata.studyId,
+    preserved,
   };
 
   if (metadata.selectedSessionId) {
@@ -247,6 +285,14 @@ const handleTabManual = async ({ ack, body, client }: SlackActionMiddlewareArgs<
 const handleTabUpload = async ({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs): Promise<void> => {
   await ack();
   const metadata = JSON.parse(body.view?.private_metadata || '{}') as ViewMetadata;
+  const values = body.view?.state?.values || {};
+
+  // Preserve input values across tab switch (merge current + previously preserved)
+  // extractPreservedInputs only returns keys with actual values, so spread won't overwrite
+  const preserved = {
+    ...metadata.preserved,
+    ...extractPreservedInputs(values)
+  };
 
   const sessions: any[] = await loadSessionsForMode(metadata);
 
@@ -261,6 +307,7 @@ const handleTabUpload = async ({ ack, body, client }: SlackActionMiddlewareArgs<
     },
     mode: metadata.mode,
     studyId: metadata.studyId,
+    preserved,
   };
 
   if (metadata.selectedSessionId) {
@@ -291,6 +338,13 @@ const handleSessionSelectionChange = async ({ ack, body, client }: SlackActionMi
   try {
     const selectedSessionId: string = (body as unknown as { actions: Array<{ selected_option: { value: string } }> }).actions[0].selected_option.value;
     const metadata = JSON.parse(body.view?.private_metadata || '{}') as ViewMetadata;
+    const values = body.view?.state?.values || {};
+
+    // Preserve input values across session selection change
+    const preserved = {
+      ...metadata.preserved,
+      ...extractPreservedInputs(values)
+    };
 
     const sessions: any[] = await loadSessionsForMode(metadata);
     const selectedSession = sessions.find((s: SessionInfo) => s.id.toString() === selectedSessionId);
@@ -314,6 +368,7 @@ const handleSessionSelectionChange = async ({ ack, body, client }: SlackActionMi
         },
         mode: metadata.mode,
         studyId: metadata.studyId,
+        preserved,
       };
 
       // @ts-expect-error — pre-existing type mismatch from require() → import migration
@@ -429,6 +484,10 @@ const handleSessionNotesSubmission = async ({ ack, body, view, client }: SlackVi
       const filesList = filesInput?.files || [];
       // 5f fix (b): trim for validation only — whitespace-only must fail
       // Raw content preserved for storage (both paste and file paths save unmodified input)
+      // NOTE: Slack's plain_text_input strips leading/trailing whitespace at the API level.
+      // Confirmed via WHITESPACE-DIAG test (2026-07-10): even when user pastes content with
+      // a leading blank line, startsWithWhitespace=false arrives here. This is Slack behavior,
+      // not application code — we cannot preserve whitespace that Slack removes before delivery.
       const pastedTextRaw: string = values.transcript_paste?.text?.value || '';
       const pastedTextTrimmed: string = pastedTextRaw.trim();
 
