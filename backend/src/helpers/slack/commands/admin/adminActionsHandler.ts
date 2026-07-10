@@ -835,6 +835,13 @@ export async function handleDeleteStudySelect({
           },
           { type: 'divider' },
           {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: ':warning: *This action cannot be undone.*',
+            },
+          },
+          {
             type: 'input',
             block_id: 'confirm_block',
             label: { type: 'plain_text', text: 'Confirmation' },
