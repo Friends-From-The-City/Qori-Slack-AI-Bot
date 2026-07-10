@@ -8,7 +8,7 @@
 
 import type { AllMiddlewareArgs, SlackCommandMiddlewareArgs, SlackActionMiddlewareArgs, SlackViewMiddlewareArgs, BlockAction, ViewSubmitAction } from '@slack/bolt';
 
-import { buildSessionNotesView } from "../ui/sessionNotesModal";
+import { buildSessionNotesView, type PreservedInputs } from "../ui/sessionNotesModal";
 import { buildTranscriptReviewModal, type TranscriptReviewModalMetadata } from "../ui/transcriptReviewModal";
 import sessionObserverService from "../../../services/session_observer.service";
 import sessionParticipantService from "../../../services/study_participant.service";
@@ -57,6 +57,7 @@ interface ModalState {
   };
   mode?: 'researcher' | 'observer';
   studyId?: string | null;
+  preserved?: PreservedInputs;
 }
 
 interface ViewMetadata {
@@ -68,6 +69,7 @@ interface ViewMetadata {
   channelId: string;
   selectedSessionId?: string;
   studyId?: string;
+  preserved?: PreservedInputs;
 }
 
 /** Data shape passed to session_notes YAML template. */
@@ -108,6 +110,21 @@ interface GitHubResult {
 
 function buildSessionDisplayName(session: SessionInfo): string {
   return `${session.study?.name || 'Unknown Study'} - ${session.participant?.participant_name || 'Unknown Participant'} (${session.session_id || 'Unknown Session'})`;
+}
+
+// ─── Helper: extract input values to preserve across view rebuilds ───
+// PRIVACY: piiRealName transits through private_metadata during rebuilds only.
+// It is used for scrubbing, then discarded — never persisted to database or logged.
+
+function extractPreservedInputs(values: Record<string, Record<string, { value?: string | null; selected_option?: { value: string } | null }>>): PreservedInputs {
+  return {
+    // Upload tab fields
+    piiRealName: values.pii_real_name?.real_name_input?.value || undefined,
+    pastedText: values.transcript_paste?.text?.value || undefined,
+    transcriptSource: values.transcript_source_block?.transcript_source?.selected_option?.value || undefined,
+    // Manual tab fields
+    observations: values.observations?.observations_text?.value || undefined,
+  };
 }
 
 // ─── Command handler ────────────────────────────────────────────
@@ -208,6 +225,13 @@ async function loadSessionsForMode(metadata: ViewMetadata): Promise<any[]> {
 const handleTabManual = async ({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs): Promise<void> => {
   await ack();
   const metadata = JSON.parse(body.view?.private_metadata || '{}') as ViewMetadata;
+  const values = body.view?.state?.values || {};
+
+  // Preserve input values across tab switch (merge current + previously preserved)
+  const preserved = {
+    ...metadata.preserved,
+    ...extractPreservedInputs(values)
+  };
 
   const sessions: any[] = await loadSessionsForMode(metadata);
 
@@ -222,6 +246,7 @@ const handleTabManual = async ({ ack, body, client }: SlackActionMiddlewareArgs<
     },
     mode: metadata.mode,
     studyId: metadata.studyId,
+    preserved,
   };
 
   if (metadata.selectedSessionId) {
@@ -247,6 +272,13 @@ const handleTabManual = async ({ ack, body, client }: SlackActionMiddlewareArgs<
 const handleTabUpload = async ({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs): Promise<void> => {
   await ack();
   const metadata = JSON.parse(body.view?.private_metadata || '{}') as ViewMetadata;
+  const values = body.view?.state?.values || {};
+
+  // Preserve input values across tab switch (merge current + previously preserved)
+  const preserved = {
+    ...metadata.preserved,
+    ...extractPreservedInputs(values)
+  };
 
   const sessions: any[] = await loadSessionsForMode(metadata);
 
@@ -261,6 +293,7 @@ const handleTabUpload = async ({ ack, body, client }: SlackActionMiddlewareArgs<
     },
     mode: metadata.mode,
     studyId: metadata.studyId,
+    preserved,
   };
 
   if (metadata.selectedSessionId) {
@@ -291,6 +324,13 @@ const handleSessionSelectionChange = async ({ ack, body, client }: SlackActionMi
   try {
     const selectedSessionId: string = (body as unknown as { actions: Array<{ selected_option: { value: string } }> }).actions[0].selected_option.value;
     const metadata = JSON.parse(body.view?.private_metadata || '{}') as ViewMetadata;
+    const values = body.view?.state?.values || {};
+
+    // Preserve input values across session selection change
+    const preserved = {
+      ...metadata.preserved,
+      ...extractPreservedInputs(values)
+    };
 
     const sessions: any[] = await loadSessionsForMode(metadata);
     const selectedSession = sessions.find((s: SessionInfo) => s.id.toString() === selectedSessionId);
@@ -314,6 +354,7 @@ const handleSessionSelectionChange = async ({ ack, body, client }: SlackActionMi
         },
         mode: metadata.mode,
         studyId: metadata.studyId,
+        preserved,
       };
 
       // @ts-expect-error — pre-existing type mismatch from require() → import migration
@@ -437,13 +478,6 @@ const handleSessionNotesSubmission = async ({ ack, body, view, client }: SlackVi
       // It is NEVER: logged, stored to DB, written to temp file, or included in error messages.
       const participantRealName: string = values.pii_real_name?.real_name_input?.value?.trim() || '';
       // NOTE: Do NOT log participantRealName — it's PII
-
-      // DIAGNOSTIC: Trace extraction path (remove after bug fix)
-      console.log('[PII-DIAG] pii_real_name block exists:', !!values.pii_real_name);
-      console.log('[PII-DIAG] real_name_input action exists:', !!values.pii_real_name?.real_name_input);
-      console.log('[PII-DIAG] value property exists:', values.pii_real_name?.real_name_input?.value !== undefined);
-      console.log('[PII-DIAG] extracted length:', participantRealName.length);
-      console.log('[PII-DIAG] passes >2 check:', participantRealName.trim().length > 2);
 
       let rawContent: string = '';
 

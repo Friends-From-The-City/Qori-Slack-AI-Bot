@@ -1,6 +1,32 @@
 import type { View } from '@slack/types';
 
+// Helper to get display label for transcript source
+const SOURCE_LABELS: Record<string, string> = {
+  zoom: 'Zoom auto-generated',
+  otter: 'Otter.ai',
+  rev: 'Rev.com',
+  teams: 'Teams auto-generated',
+  other: 'Other'
+};
+const getSourceLabel = (value: string): string => SOURCE_LABELS[value] || 'Other';
+
 // ─── Modal metadata contract ─────────────────────────────────────
+
+/**
+ * Preserved input values that transit through private_metadata during view rebuilds.
+ * PRIVACY: piiRealName is TRANSIENT — used only for find/replace during scrubbing,
+ * then discarded. It is never persisted to database or logged.
+ */
+export interface PreservedInputs {
+  /** Participant's real name for PII scrubbing — TRANSIENT, never stored */
+  piiRealName?: string;
+  /** Pasted transcript content */
+  pastedText?: string;
+  /** Selected transcript source */
+  transcriptSource?: string;
+  /** Manual observations text */
+  observations?: string;
+}
 
 /** The shape of private_metadata for the session_notes_submit modal. */
 export interface SessionNotesModalMetadata {
@@ -12,6 +38,8 @@ export interface SessionNotesModalMetadata {
   selectedSessionId: number | string | undefined;
   mode: string;
   studyId: string | null;
+  /** Input values preserved across view rebuilds (tab switch, session change) */
+  preserved?: PreservedInputs;
 }
 
 interface SessionNotesSession {
@@ -30,6 +58,8 @@ interface SessionNotesState {
   sessions?: SessionNotesSession[];
   mode?: string;
   studyId?: string | null;
+  /** Input values to preserve/restore across view rebuilds */
+  preserved?: PreservedInputs;
 }
 
 export const buildSessionNotesView = (state: SessionNotesState = {}) => {
@@ -38,6 +68,7 @@ export const buildSessionNotesView = (state: SessionNotesState = {}) => {
   const isManual = tab === 'manual';
 
   // Store only essential data in private_metadata to avoid 3001 character limit
+  // PRIVACY: preserved.piiRealName transits here during rebuilds but is never persisted
   const essentialData: SessionNotesModalMetadata = {
     tab,
     method,
@@ -47,6 +78,7 @@ export const buildSessionNotesView = (state: SessionNotesState = {}) => {
     selectedSessionId: state.session?.id,
     mode: state.mode || 'observer',
     studyId: state.studyId || null,
+    preserved: state.preserved,
   };
 
   return {
@@ -123,13 +155,13 @@ export const buildSessionNotesView = (state: SessionNotesState = {}) => {
         }
       },
 
-      ...(isManual ? manualBlocks() : uploadBlocks(method)),
+      ...(isManual ? manualBlocks(state.preserved) : uploadBlocks(method, state.preserved)),
 
     ]
   } as unknown as View;
 }
 
-const manualBlocks = () => {
+const manualBlocks = (preserved?: PreservedInputs) => {
   return [
     // Tips for Better Notes Section
     {type: 'divider'},
@@ -163,13 +195,14 @@ const manualBlocks = () => {
         placeholder: {
           type: 'plain_text',
           text: 'Type or paste your session observations...'
-        }
+        },
+        ...(preserved?.observations ? { initial_value: preserved.observations } : {})
       }
     }
   ];
 }
 
-const uploadBlocks = (method: string) => {
+const uploadBlocks = (method: string, preserved?: PreservedInputs) => {
   const filesSelected = method === 'files';
   return [
     // PII Scrubbing Section
@@ -195,7 +228,8 @@ const uploadBlocks = (method: string) => {
       element: {
         type: 'plain_text_input',
         action_id: 'real_name_input',
-        placeholder: { type: 'plain_text', text: 'First Last' }
+        placeholder: { type: 'plain_text', text: 'First Last' },
+        ...(preserved?.piiRealName ? { initial_value: preserved.piiRealName } : {})
       }
     },
     { type: 'divider' },
@@ -264,7 +298,13 @@ const uploadBlocks = (method: string) => {
 						},
 						value: "other"
 					}
-				]
+				],
+				...(preserved?.transcriptSource ? {
+					initial_option: {
+						text: { type: "plain_text", text: getSourceLabel(preserved.transcriptSource) },
+						value: preserved.transcriptSource
+					}
+				} : {})
 			}
 		},
 		{
@@ -278,7 +318,8 @@ const uploadBlocks = (method: string) => {
       label: { type: 'plain_text', text: 'Or paste Transcript' },
       element: {
         type: 'plain_text_input', action_id: 'text', multiline: true,
-        placeholder: { type: 'plain_text', text: 'Paste transcript text here...' }
+        placeholder: { type: 'plain_text', text: 'Paste transcript text here...' },
+        ...(preserved?.pastedText ? { initial_value: preserved.pastedText } : {})
       }
     }
   ];

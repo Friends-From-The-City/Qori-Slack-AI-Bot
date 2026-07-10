@@ -131,21 +131,13 @@ export function scrubTranscript(content: string, ctx: ScrubContext): ScrubResult
   };
   const warnings: string[] = [];
 
-  // DIAGNOSTIC: Log what scrubTranscript receives (lengths only, no PII)
-  console.log('[SCRUB-DIAG] content length:', content.length);
-  console.log('[SCRUB-DIAG] participantRealName length:', ctx.participantRealName?.length ?? 0);
-  console.log('[SCRUB-DIAG] participantCode:', ctx.participantCode);
-  console.log('[SCRUB-DIAG] moderatorName length:', ctx.moderatorName?.length ?? 0);
-
   let scrubbed = content;
   const code = ctx.participantCode;
 
   // ── 1. Replace participant name variants ─────────────────────────
   // Order matters: replace full name first, then parts
-  console.log('[SCRUB-DIAG] name scrub condition:', ctx.participantRealName && ctx.participantRealName.trim().length > 2);
   if (ctx.participantRealName && ctx.participantRealName.trim().length > 2) {
     const variants = decomposeNameVariants(ctx.participantRealName);
-    console.log('[SCRUB-DIAG] variant count:', variants.length);
 
     for (const variant of variants) {
       // Context-aware replacement: avoid creating "PT-001 PT-001"
