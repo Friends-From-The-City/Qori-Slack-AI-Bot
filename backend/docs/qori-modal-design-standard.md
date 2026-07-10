@@ -24,6 +24,14 @@ Submit button text should describe the action, not just "Submit". Examples:
 - "Generate" (for synthesis modal)
 - "Create Brief" (for brief modal)
 
+**Verb table by action type:**
+
+| Action type | Verb |
+|-------------|------|
+| Primary generation | "Generate", "Create", "Analyze" |
+| Continue to next step | "Continue" |
+| Launches a sub-modal | "Open" (see R14) |
+
 **Status:** Enforced.
 
 ---
@@ -172,39 +180,61 @@ Use correct singular/plural forms:
 
 ---
 
+### R14: Hub Launcher Verb
+
+Rows in a hub modal that open a sub-modal use ONE verb product-wide: **"Open"**. This applies to:
+- Admin Center rows (Participant Data, Delete Study, etc.)
+- Discovery launcher rows
+
+Do not use "Start", "Launch", "View", or other verbs for sub-modal launchers.
+
+**Status:** Pending. Discovery launcher uses "Start" (violation). Admin Center rows use "Open" (conforms).
+
+---
+
+### R15: Danger Styling is Exclusive
+
+Destructive actions get Slack's `danger` (red) style. **Only** destructive actions get a filled style in a multi-action surface; all non-destructive launchers/buttons alongside them use `default` (outlined) style.
+
+One loud thing per surface.
+
+**Status:** Pending. Admin Center "Participant Data" row uses filled style alongside Delete Study (violation).
+
+---
+
 ## §5: Conformance Checklist
 
 Per-modal audit state. ✓ = conforms, — = violation found, ? = not audited, N/A = not applicable.
 
 Scores reflect CURRENT code state, not intended state. A cell flips to ✓ with PR number when the fix ships.
 
-| Modal | R1 | R2 | R3 | R4 | R5 | R6 | R7 | R8 | R9 | R10 | R11 | R12 | R13 |
-|-------|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:---:|:---:|:---:|:---:|
-| Research Brief | ✓ | ✓ | ✓ | ✓ | ✓ | N/A | — | ? | ✓ | ✓ | ? | ✓ | ✓ |
-| Analyze Session | — | ✓ | ✓ | ✓ | ✓ | N/A | — | ? | ✓ | ✓ | ? | ✓ | ✓ |
-| Research Synthesis | ✓ | ✓ | ✓ | ✓ | ✓ | N/A | ✓ | ? | ✓ | ✓ | ? | ✓ | ✓ |
-| Readout | ? | ? | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? |
-| Discussion Guide | ? | ? | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? |
-| Research Plan | ? | ? | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? |
-| Discovery Launcher | — | ? | ? | ? | ? | N/A | ? | — | ? | ? | — | ? | ? |
-| Discover: Desk Research | ? | ? | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? |
-| Discover: Stakeholder | ? | ? | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? |
-| Discover: Survey | ? | ? | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? |
-| Project Creation | ? | ? | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? |
-| Add Participant | — | ? | — | ? | ? | N/A | — | — | ? | ? | — | ? | ? |
-| Update Participant | — | ? | ? | ? | ? | N/A | — | ? | ? | — | ? | ? | ? |
-| Add Observer | — | — | ? | ? | ? | N/A | ✓ | ? | ? | ? | ? | ? | ? |
-| Session Notes | ✓ | — | — | ? | ? | N/A | ? | ? | ? | — | — | ? | ? |
-| Participant Outreach | — | — | — | ? | ? | N/A | — | — | ? | ? | ? | ? | ? |
-| Session Confirmation | — | — | ? | ? | ? | N/A | — | ? | ? | ? | ? | ? | ? |
-| Tickets | ✓ | ✓ | ✓ | ✓ | ✓ | N/A | ? | ? | ✓ | ✓ | ? | ✓ | ✓ |
-| PII Review (transcript) | — | ✓ | ✓ | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? |
-| PII Review (manual notes) | — | ? | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? |
-| Fieldwork Dashboard | ? | ✓ | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? |
-| Join Observer | — | ✓ | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? |
-| Admin Center Hub | ? | — | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? |
-| Admin — Delete Study | ? | — | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? |
-| Admin — Manage Stakeholder | ? | ✓ | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? |
+| Modal | R1 | R2 | R3 | R4 | R5 | R6 | R7 | R8 | R9 | R10 | R11 | R12 | R13 | R14 | R15 |
+|-------|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:---:|:---:|:---:|:---:|:---:|:---:|
+| Research Brief | ✓ | ✓ | ✓ | ✓ | ✓ | N/A | — | ? | ✓ | ✓ | ? | ✓ | ✓ | N/A | N/A |
+| Analyze Session | — | ✓ | ✓ | ✓ | ✓ | N/A | — | ? | ✓ | ✓ | ? | ✓ | ✓ | N/A | N/A |
+| Research Synthesis | ✓ | ✓ | ✓ | ✓ | ✓ | N/A | ✓ | ? | ✓ | ✓ | ? | ✓ | ✓ | N/A | N/A |
+| Readout | ? | ? | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? | N/A | N/A |
+| Discussion Guide | ? | ? | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? | N/A | N/A |
+| Research Plan | ? | ? | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? | N/A | N/A |
+| Discovery Launcher | — | ? | ? | ? | ? | N/A | ? | — | ? | ? | — | ? | ? | — | N/A |
+| Discover: Desk Research | ? | ? | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? | N/A | N/A |
+| Discover: Stakeholder | ? | ? | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? | N/A | N/A |
+| Discover: Survey | ? | ? | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? | N/A | N/A |
+| Project Creation | ? | ? | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? | N/A | N/A |
+| Add Participant | — | ? | — | ? | ? | N/A | — | — | ? | ? | — | ? | ? | N/A | N/A |
+| Update Participant | — | ? | ? | ? | ? | N/A | — | ? | ? | — | ? | ? | ? | N/A | N/A |
+| Add Observer | — | — | ? | ? | ? | N/A | ✓ | ? | ? | ? | ? | ? | ? | N/A | N/A |
+| Session Notes | ✓ | — | — | ? | ? | N/A | ? | ? | ? | — | — | ? | ? | N/A | N/A |
+| Participant Outreach | — | — | — | ? | ? | N/A | — | — | ? | ? | ? | ? | ? | N/A | N/A |
+| Session Confirmation | — | — | ? | ? | ? | N/A | — | ? | ? | ? | ? | ? | ? | N/A | N/A |
+| Tickets | ✓ | ✓ | ✓ | ✓ | ✓ | N/A | ? | ? | ✓ | ✓ | ? | ✓ | ✓ | N/A | N/A |
+| PII Review (transcript) | — | ✓ | ✓ | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? | N/A | N/A |
+| PII Review (manual notes) | — | ? | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? | N/A | N/A |
+| Fieldwork Dashboard | ? | ✓ | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? | N/A | N/A |
+| Join Observer | — | ✓ | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? | N/A | N/A |
+| Admin Center Hub | ? | — | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? | ✓ | — |
+| Admin — Delete Study | ? | — | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? | N/A | N/A |
+| Admin — Manage Stakeholder | ? | ✓ | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? | N/A | N/A |
 
 **Legend:**
 - ✓ Conforms

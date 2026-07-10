@@ -1231,12 +1231,59 @@ export async function handleStakeholderSubmit({
 
     console.log(`[ADMIN] Stakeholder submit: newStakeholderId=${newStakeholderId}, clearChecked=${clearChecked}, currentStakeholder=${metadata.currentStakeholderId}`);
 
+    // Capture before state for audit (with display name for readability)
+    const previousStakeholderId = metadata.currentStakeholderId || null;
+    const previousStakeholderName = metadata.currentStakeholderName || null;
+    const changeType = clearChecked ? 'cleared' : newStakeholderId ? 'assigned' : 'none';
+
+    // Helper to format staff identity for audit log: "Display Name (USLACKID)"
+    const formatStaffIdentity = (name: string | null, id: string | null): string => {
+      if (!id) return 'none';
+      return name ? `${name} (${id})` : id;
+    };
+
     if (clearChecked && metadata.currentStakeholderId) {
       // Clear stakeholder flag (doesn't affect role — owner stays owner)
       await setProjectStakeholder(metadata.projectId, null);
     } else if (newStakeholderId) {
       // Set new stakeholder (clears old, sets flag on new — doesn't affect roles)
       await setProjectStakeholder(metadata.projectId, newStakeholderId);
+    }
+
+    // Fetch new stakeholder display name for audit (if assigned)
+    let newStakeholderName: string | null = null;
+    if (newStakeholderId) {
+      try {
+        const userInfo = await client.users.info({ user: newStakeholderId });
+        const user = userInfo.user as Record<string, unknown> | undefined;
+        const profile = user?.profile as Record<string, unknown> | undefined;
+        newStakeholderName = (user?.real_name || profile?.display_name || user?.name || null) as string | null;
+      } catch {
+        // Slack lookup failed; ID-only is acceptable
+      }
+    }
+
+    // Log audit entry for stakeholder change
+    // Format: "Stakeholder assigned: Jane Doe (U0123ABC) (was: John Smith (U0456DEF))"
+    if (changeType !== 'none') {
+      const previousIdentity = formatStaffIdentity(previousStakeholderName, previousStakeholderId);
+      const newIdentity = formatStaffIdentity(newStakeholderName, newStakeholderId);
+
+      await logDispositionAction({
+        action: 'change_stakeholder',
+        record_type: 'project_stakeholder',
+        target_id: metadata.projectId,
+        target_identifier: metadata.projectName,
+        project_id: metadata.projectId,
+        project_name: metadata.projectName,
+        actor_user_id: userId,
+        actor_role: 'owner',
+        authorization_basis: 'Project owner per ADR 0025',
+        outcome: 'success',
+        outcome_detail: changeType === 'cleared'
+          ? `Stakeholder cleared (was: ${previousIdentity})`
+          : `Stakeholder assigned: ${newIdentity} (was: ${previousIdentity})`,
+      });
     }
 
     // Fetch updated stakeholder for confirmation display
@@ -1301,6 +1348,24 @@ export async function handleStakeholderSubmit({
     console.log(`[ADMIN] Stakeholder submit: completed, modal closed`);
   } catch (error) {
     console.error('[ADMIN] Error updating stakeholder:', error);
+
+    // Log audit entry for failed stakeholder change
+    const changeType = clearChecked ? 'cleared' : newStakeholderId ? 'assigned' : 'none';
+    if (changeType !== 'none') {
+      await logDispositionAction({
+        action: 'change_stakeholder',
+        record_type: 'project_stakeholder',
+        target_id: metadata.projectId,
+        target_identifier: metadata.projectName,
+        project_id: metadata.projectId,
+        project_name: metadata.projectName,
+        actor_user_id: userId,
+        actor_role: 'owner',
+        authorization_basis: 'Project owner per ADR 0025',
+        outcome: error instanceof AuthorizationError ? 'denied' : 'error',
+        outcome_detail: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
 
     await ack({
       response_action: 'update',

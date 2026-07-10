@@ -19,6 +19,7 @@ export type AuditAction =
   | 'delete_participant'
   | 'delete_study'
   | 'export_participant'
+  | 'change_stakeholder'
   | 'deletion_denied'
   | 'deletion_error';
 
