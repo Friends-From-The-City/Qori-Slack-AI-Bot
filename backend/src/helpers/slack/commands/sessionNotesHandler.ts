@@ -470,16 +470,12 @@ const handleSessionNotesSubmission = async ({ ack, body, view, client }: SlackVi
       const filesList = filesInput?.files || [];
       // 5f fix (b): trim for validation only — whitespace-only must fail
       // Raw content preserved for storage (both paste and file paths save unmodified input)
+      // NOTE: Slack's plain_text_input strips leading/trailing whitespace at the API level.
+      // Confirmed via WHITESPACE-DIAG test (2026-07-10): even when user pastes content with
+      // a leading blank line, startsWithWhitespace=false arrives here. This is Slack behavior,
+      // not application code — we cannot preserve whitespace that Slack removes before delivery.
       const pastedTextRaw: string = values.transcript_paste?.text?.value || '';
       const pastedTextTrimmed: string = pastedTextRaw.trim();
-
-      // ── WHITESPACE-DIAG: Temporary logging to prove Slack API whitespace behavior ──
-      // DELETE after confirming whether Slack strips leading/trailing whitespace
-      if (pastedTextRaw.length > 0) {
-        const startsWithWhitespace = /^\s/.test(pastedTextRaw);
-        const endsWithWhitespace = /\s$/.test(pastedTextRaw);
-        console.log('[WHITESPACE-DIAG] pastedTextRaw.length:', pastedTextRaw.length, '| startsWithWhitespace:', startsWithWhitespace, '| endsWithWhitespace:', endsWithWhitespace);
-      }
 
       // ── Extract participant real name for scrubbing (TRANSIENT — never stored) ──
       // PRIVACY: This variable is used ONLY for in-memory find/replace.
