@@ -44,7 +44,7 @@ export const discoverHubModal = {
         type: "button",
         text: {
           type: "plain_text",
-          text: "Start",
+          text: "Open",
         },
         action_id: "discover_desk_research",
         value: "desk_research",
@@ -60,7 +60,7 @@ export const discoverHubModal = {
         type: "button",
         text: {
           type: "plain_text",
-          text: "Start",
+          text: "Open",
         },
         action_id: "discover_stakeholder_synthesis",
         value: "stakeholder_synthesis",
@@ -76,7 +76,7 @@ export const discoverHubModal = {
         type: "button",
         text: {
           type: "plain_text",
-          text: "Start",
+          text: "Open",
         },
         action_id: "discover_survey_synthesis",
         value: "survey_synthesis",

@@ -101,7 +101,6 @@ export function buildAdminCenterModal(project: Project, stakeholder: Stakeholder
           type: 'button',
           text: { type: 'plain_text', text: 'Open' },
           action_id: 'admin-dsar-open',
-          style: 'primary',
         },
       },
       {
@@ -126,7 +125,7 @@ export function buildAdminCenterModal(project: Project, stakeholder: Stakeholder
         elements: [
           {
             type: 'mrkdwn',
-            text: ':warning: *Actions here cannot be undone.* All actions are logged for compliance.',
+            text: 'All actions are logged for compliance.',
           },
         ],
       },
