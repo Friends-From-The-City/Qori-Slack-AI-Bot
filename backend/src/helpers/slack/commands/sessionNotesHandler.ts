@@ -117,28 +117,26 @@ function buildSessionDisplayName(session: SessionInfo): string {
 // It is used for scrubbing, then discarded — never persisted to database or logged.
 
 function extractPreservedInputs(values: Record<string, Record<string, { value?: string | null; selected_option?: { value: string } | null }>>): PreservedInputs {
-  // ── PRESERVE-DIAG: Log what block_ids exist in values ──
-  const blockIds = Object.keys(values);
-  console.log('[PRESERVE-DIAG] extractPreservedInputs block_ids found:', blockIds);
+  // Extract only fields that exist in the current view's state.values.
+  // IMPORTANT: Only include keys that have actual values — undefined values would
+  // overwrite previously preserved values when merged with spread operator.
+  const result: PreservedInputs = {};
 
-  const extracted: PreservedInputs = {
-    // Upload tab fields
-    piiRealName: values.pii_real_name?.real_name_input?.value || undefined,
-    pastedText: values.transcript_paste?.text?.value || undefined,
-    transcriptSource: values.transcript_source_block?.transcript_source?.selected_option?.value || undefined,
-    // Manual tab fields
-    observations: values.observations?.observations_text?.value || undefined,
-  };
+  // Upload tab fields (only present when Upload tab is active)
+  const piiRealName = values.pii_real_name?.real_name_input?.value;
+  if (piiRealName) result.piiRealName = piiRealName;
 
-  // Log lengths only (no content for privacy)
-  console.log('[PRESERVE-DIAG] extracted lengths:', {
-    piiRealName: extracted.piiRealName?.length ?? 'undefined',
-    pastedText: extracted.pastedText?.length ?? 'undefined',
-    transcriptSource: extracted.transcriptSource?.length ?? 'undefined',
-    observations: extracted.observations?.length ?? 'undefined',
-  });
+  const pastedText = values.transcript_paste?.text?.value;
+  if (pastedText) result.pastedText = pastedText;
 
-  return extracted;
+  const transcriptSource = values.transcript_source_block?.transcript_source?.selected_option?.value;
+  if (transcriptSource) result.transcriptSource = transcriptSource;
+
+  // Manual tab fields (only present when Manual tab is active)
+  const observations = values.observations?.observations_text?.value;
+  if (observations) result.observations = observations;
+
+  return result;
 }
 
 // ─── Command handler ────────────────────────────────────────────
@@ -241,17 +239,8 @@ const handleTabManual = async ({ ack, body, client }: SlackActionMiddlewareArgs<
   const metadata = JSON.parse(body.view?.private_metadata || '{}') as ViewMetadata;
   const values = body.view?.state?.values || {};
 
-  // ── PRESERVE-DIAG: Check if state.values exists on block_actions ──
-  console.log('[PRESERVE-DIAG] handleTabManual: body.view?.state exists:', !!body.view?.state);
-  console.log('[PRESERVE-DIAG] handleTabManual: body.view?.state?.values exists:', !!body.view?.state?.values);
-  console.log('[PRESERVE-DIAG] handleTabManual: metadata.preserved from private_metadata:', {
-    piiRealName: metadata.preserved?.piiRealName?.length ?? 'undefined',
-    pastedText: metadata.preserved?.pastedText?.length ?? 'undefined',
-    transcriptSource: metadata.preserved?.transcriptSource?.length ?? 'undefined',
-    observations: metadata.preserved?.observations?.length ?? 'undefined',
-  });
-
   // Preserve input values across tab switch (merge current + previously preserved)
+  // extractPreservedInputs only returns keys with actual values, so spread won't overwrite
   const preserved = {
     ...metadata.preserved,
     ...extractPreservedInputs(values)
@@ -286,14 +275,6 @@ const handleTabManual = async ({ ack, body, client }: SlackActionMiddlewareArgs<
     }
   }
 
-  // ── PRESERVE-DIAG: Final preserved values being passed to view builder ──
-  console.log('[PRESERVE-DIAG] handleTabManual: final preserved to buildSessionNotesView:', {
-    piiRealName: state.preserved?.piiRealName?.length ?? 'undefined',
-    pastedText: state.preserved?.pastedText?.length ?? 'undefined',
-    transcriptSource: state.preserved?.transcriptSource?.length ?? 'undefined',
-    observations: state.preserved?.observations?.length ?? 'undefined',
-  });
-
   await client.views.update({
     view_id: body.view!.id,
     // @ts-expect-error — pre-existing type mismatch from require() → import migration
@@ -306,17 +287,8 @@ const handleTabUpload = async ({ ack, body, client }: SlackActionMiddlewareArgs<
   const metadata = JSON.parse(body.view?.private_metadata || '{}') as ViewMetadata;
   const values = body.view?.state?.values || {};
 
-  // ── PRESERVE-DIAG: Check if state.values exists on block_actions ──
-  console.log('[PRESERVE-DIAG] handleTabUpload: body.view?.state exists:', !!body.view?.state);
-  console.log('[PRESERVE-DIAG] handleTabUpload: body.view?.state?.values exists:', !!body.view?.state?.values);
-  console.log('[PRESERVE-DIAG] handleTabUpload: metadata.preserved from private_metadata:', {
-    piiRealName: metadata.preserved?.piiRealName?.length ?? 'undefined',
-    pastedText: metadata.preserved?.pastedText?.length ?? 'undefined',
-    transcriptSource: metadata.preserved?.transcriptSource?.length ?? 'undefined',
-    observations: metadata.preserved?.observations?.length ?? 'undefined',
-  });
-
   // Preserve input values across tab switch (merge current + previously preserved)
+  // extractPreservedInputs only returns keys with actual values, so spread won't overwrite
   const preserved = {
     ...metadata.preserved,
     ...extractPreservedInputs(values)
@@ -350,14 +322,6 @@ const handleTabUpload = async ({ ack, body, client }: SlackActionMiddlewareArgs<
       };
     }
   }
-
-  // ── PRESERVE-DIAG: Final preserved values being passed to view builder ──
-  console.log('[PRESERVE-DIAG] handleTabUpload: final preserved to buildSessionNotesView:', {
-    piiRealName: state.preserved?.piiRealName?.length ?? 'undefined',
-    pastedText: state.preserved?.pastedText?.length ?? 'undefined',
-    transcriptSource: state.preserved?.transcriptSource?.length ?? 'undefined',
-    observations: state.preserved?.observations?.length ?? 'undefined',
-  });
 
   await client.views.update({
     view_id: body.view!.id,
