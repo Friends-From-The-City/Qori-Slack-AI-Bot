@@ -473,6 +473,14 @@ const handleSessionNotesSubmission = async ({ ack, body, view, client }: SlackVi
       const pastedTextRaw: string = values.transcript_paste?.text?.value || '';
       const pastedTextTrimmed: string = pastedTextRaw.trim();
 
+      // ── WHITESPACE-DIAG: Temporary logging to prove Slack API whitespace behavior ──
+      // DELETE after confirming whether Slack strips leading/trailing whitespace
+      if (pastedTextRaw.length > 0) {
+        const startsWithWhitespace = /^\s/.test(pastedTextRaw);
+        const endsWithWhitespace = /\s$/.test(pastedTextRaw);
+        console.log('[WHITESPACE-DIAG] pastedTextRaw.length:', pastedTextRaw.length, '| startsWithWhitespace:', startsWithWhitespace, '| endsWithWhitespace:', endsWithWhitespace);
+      }
+
       // ── Extract participant real name for scrubbing (TRANSIENT — never stored) ──
       // PRIVACY: This variable is used ONLY for in-memory find/replace.
       // It is NEVER: logged, stored to DB, written to temp file, or included in error messages.
