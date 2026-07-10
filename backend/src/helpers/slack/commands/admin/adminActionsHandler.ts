@@ -835,13 +835,11 @@ export async function handleDeleteStudySelect({
           },
           { type: 'divider' },
           {
-            type: 'context',
-            elements: [
-              {
-                type: 'mrkdwn',
-                text: ':warning: *This action cannot be undone.*',
-              },
-            ],
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: ':warning: *This action cannot be undone.*',
+            },
           },
           {
             type: 'input',
