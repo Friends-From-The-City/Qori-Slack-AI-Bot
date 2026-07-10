@@ -203,6 +203,15 @@ const manualBlocks = (preserved?: PreservedInputs) => {
 }
 
 const uploadBlocks = (method: string, preserved?: PreservedInputs) => {
+  // ── PRESERVE-DIAG: Log what preserved values the modal builder receives ──
+  console.log('[PRESERVE-DIAG] uploadBlocks: preserved received:', {
+    piiRealName: preserved?.piiRealName?.length ?? 'undefined',
+    pastedText: preserved?.pastedText?.length ?? 'undefined',
+    transcriptSource: preserved?.transcriptSource?.length ?? 'undefined',
+  });
+  console.log('[PRESERVE-DIAG] uploadBlocks: will set initial_value for piiRealName:', !!preserved?.piiRealName);
+  console.log('[PRESERVE-DIAG] uploadBlocks: will set initial_value for pastedText:', !!preserved?.pastedText);
+
   const filesSelected = method === 'files';
   return [
     // PII Scrubbing Section
