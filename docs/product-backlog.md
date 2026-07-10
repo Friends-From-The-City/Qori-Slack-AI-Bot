@@ -229,6 +229,10 @@ Filed from `backend/docs/qori-modal-design-standard.md` §6.10:
 
 - **Discovery naming-layer consolidation:** Three identifier layers per discovery type exist with a manual mapping table (`studyVariables.ts:18-29`): YAML template ID (`desk_research`), storage type (`desk-research`), loader ID (same as storage type). This is the substrate the PR #170 filter bug grew in. Consolidate to a single canonical identifier per discovery type.
 
+### Modal design standard findings (2026-07-10)
+
+- **Project name display split:** Admin Center shows pretty name (`projects.name`: "Testing Mobile Design"), all study surfaces show slug (`research_studies.name`: "testing-mobile-design"). This is the Phase 2D architectural choice — `briefHandler.ts:238` sets `studyName = projectSlug`. Decision needed: standardize on one form or document the split as intentional. No code change now.
+
 ---
 
 ## Federal go-to-market
