@@ -709,6 +709,7 @@ Track specific violations found during audit, with fix status.
 
 | Date | Version | Changes |
 |------|---------|---------|
+| 2026-07-10 | 1.9 | Session Notes input preservation fix shipped (`37f50e43`): tab switches no longer clear typed inputs. PII scrubbing fix shipped (`15c0a49f`): participant name now correctly extracted and scrubbed. Whitespace behavior documented (`7b1f31c1`): Slack API strips leading/trailing whitespace from plain_text_input (not fixable). Merged to main as `e454740a`. |
 | 2026-07-09 | 1.8 | 5f fix spec implemented in sessionNotesHandler.ts: (a) inline errors, (b) trim paste, (c) validate content after download. Pending manual test. |
 | 2026-07-09 | 1.7 | §6.0.2 ID matching verified — SELECT confirms `desk_research`, `stakeholder_synthesis` only, no `_processor` values. |
 | 2026-07-09 | 1.6 | §6.8 full code context (lines 438-465), check semantics (presence vs content), 5f design finding (convert ack+DM to inline errors). §6.0.2 conclusion held open pending SELECT query. §6.10 moved to product-backlog.md. |
