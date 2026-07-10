@@ -438,6 +438,13 @@ const handleSessionNotesSubmission = async ({ ack, body, view, client }: SlackVi
       const participantRealName: string = values.pii_real_name?.real_name_input?.value?.trim() || '';
       // NOTE: Do NOT log participantRealName — it's PII
 
+      // DIAGNOSTIC: Trace extraction path (remove after bug fix)
+      console.log('[PII-DIAG] pii_real_name block exists:', !!values.pii_real_name);
+      console.log('[PII-DIAG] real_name_input action exists:', !!values.pii_real_name?.real_name_input);
+      console.log('[PII-DIAG] value property exists:', values.pii_real_name?.real_name_input?.value !== undefined);
+      console.log('[PII-DIAG] extracted length:', participantRealName.length);
+      console.log('[PII-DIAG] passes >2 check:', participantRealName.trim().length > 2);
+
       let rawContent: string = '';
 
       if (filesList.length > 0) {
