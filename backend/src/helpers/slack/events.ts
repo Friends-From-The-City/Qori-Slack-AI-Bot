@@ -123,8 +123,8 @@ const slackApp = new App({
   appToken: process.env.SLACK_APP_TOKEN,
   socketMode: true,
   extendedErrorHandler: true,
-  // Enable INFO logging in production to see Socket Mode connection status
-  logLevel: LogLevel.INFO,
+  // SLACK_LOG_LEVEL=DEBUG to see every Socket Mode envelope
+  logLevel: (process.env.SLACK_LOG_LEVEL === 'DEBUG' ? LogLevel.DEBUG : LogLevel.INFO),
 });
 
 // ── Alerts channel configuration ─────────────────────────────────
