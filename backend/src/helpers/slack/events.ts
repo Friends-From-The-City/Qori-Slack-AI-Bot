@@ -124,7 +124,7 @@ const slackApp = new App({
   socketMode: true,
   extendedErrorHandler: true,
   // SLACK_LOG_LEVEL=DEBUG to see every Socket Mode envelope
-  logLevel: (process.env.SLACK_LOG_LEVEL === 'DEBUG' ? LogLevel.DEBUG : LogLevel.INFO),
+  logLevel: (process.env.SLACK_LOG_LEVEL?.toUpperCase() === 'DEBUG' ? LogLevel.DEBUG : LogLevel.INFO),
 });
 
 // ── Alerts channel configuration ─────────────────────────────────
