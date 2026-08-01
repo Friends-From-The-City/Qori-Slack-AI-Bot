@@ -1060,13 +1060,13 @@ async function handleAddParticipantSubmit({ ack, body, view, client }: SlackView
     if (milestoneCheck.hasReachedMilestone) {
       // Generate a milestone message for the channel
       const milestoneMessage = {
-        text: `:tada: *Milestone reached!* The study *${milestoneCheck.studyName}* now has ${milestoneCheck.currentCount} participants.`,
+        text: `*Milestone reached!* The study *${milestoneCheck.studyName}* now has ${milestoneCheck.currentCount} participants.`,
         blocks: [
           {
             type: "section",
             text: {
               type: "mrkdwn",
-              text: `:tada: *Milestone reached!*\n\nThe study *${milestoneCheck.studyName}* now has *${milestoneCheck.currentCount}* participants.`
+              text: `*Milestone reached!*\n\nThe study *${milestoneCheck.studyName}* now has *${milestoneCheck.currentCount}* participants.`
             }
           },
           {
@@ -1109,13 +1109,13 @@ async function handleAddParticipantSubmit({ ack, body, view, client }: SlackView
     const assignedCode = savedParticipant.participant_code;
     await client.chat.postMessage({
       channel: userId, // Use original Slack user ID for DM channel
-      text: `:busts_in_silhouette: *New Participant Added*\n\n*Code:* ${assignedCode}\n*Name:* ${participant_name}\n*Study:* ${study_name}\n*Status:* ${status_select}`,
+      text: `*New Participant Added*\n\n*Code:* ${assignedCode}\n*Name:* ${participant_name}\n*Study:* ${study_name}\n*Status:* ${status_select}`,
       blocks: [
         {
           type: "section",
           text: {
             type: "mrkdwn",
-            text: `:busts_in_silhouette: *New Participant Added*\n\n*Code:* \`${assignedCode}\`\n*Name:* ${participant_name}\n*Study:* ${study_name}\n*Status:* ${status_select}\n*Recruitment Source:* ${recruitment_source}`
+            text: `*New Participant Added*\n\n*Code:* \`${assignedCode}\`\n*Name:* ${participant_name}\n*Study:* ${study_name}\n*Status:* ${status_select}\n*Recruitment Source:* ${recruitment_source}`
           }
         },
         {

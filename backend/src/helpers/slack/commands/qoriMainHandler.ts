@@ -19,7 +19,7 @@ async function qoriMainHandler({ ack, command, client }: SlackCommandMiddlewareA
       type: 'header',
       text: {
         type: 'plain_text',
-        text: '📚 Qori Commands Reference'
+        text: 'Qori Commands Reference'
       }
     },
     {
@@ -110,7 +110,7 @@ async function qoriMainHandler({ ack, command, client }: SlackCommandMiddlewareA
       elements: [
         {
           type: 'mrkdwn',
-          text: '💡 Need more details? Use `/qori-learn` for an interactive tutorial.'
+          text: 'Need more details? Use `/qori-learn` for an interactive tutorial.'
         }
       ]
     }
@@ -118,7 +118,7 @@ async function qoriMainHandler({ ack, command, client }: SlackCommandMiddlewareA
 
   await client.chat.postMessage({
     channel: channelId,
-    text: '📚 Qori Commands Reference',
+    text: 'Qori Commands Reference',
     blocks: commandBlocks
   });
 }

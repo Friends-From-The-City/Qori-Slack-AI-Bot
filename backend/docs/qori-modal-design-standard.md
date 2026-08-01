@@ -727,9 +727,9 @@ Track specific violations found during audit, with fix status.
 | Participant Outreach | R7 | Trailing asterisk | Pending |
 | Discovery Launcher | R1 | Emoji in option rows | Fixed (PR #241) |
 | Discovery Launcher | R8 | Italics in help text | Pending |
-| PII Review (transcript) | R1 | Decorative emoji in header (🔍) and button (📄); functional ✅⚠️❌ preserved | Fixed (PR #241) |
-| PII Review (manual notes) | R1 | Emoji in DM message (🔍✅⚠️) | Pending |
-| Join Observer | R1 | Emoji in role options (📝👁️📊🏛️) | Pending |
+| PII Review (transcript) | R1 | Decorative 🔍 header + 📄 button removed (PR #241); 🔍 DM removed (PR #240); functional ✅⚠️❌ preserved | Fixed (PR #241 + #240) |
+| PII Review (manual notes) | R1 | Decorative 🔍 removed from DM; functional ✅⚠️ preserved | Fixed (PR #240) |
+| Join Observer | R1 | Emoji in role options (📝👁️📊🏛️) removed from modal (PR #241) and handler (PR #240) | Fixed (PR #241 + #240) |
 | Admin Center Hub | R2 | "Open" button label (lines 102, 115) not action-oriented | Pending |
 | Admin — Delete Study | R2 | "Open" button label not action-oriented | Pending |
 | Plan Launcher | R1 | Emoji in section rows (:clipboard: :speech_balloon:) | Fixed (PR #241) |

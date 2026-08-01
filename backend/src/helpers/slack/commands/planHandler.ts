@@ -87,7 +87,7 @@ async function handlePlanSubmission({ ack, body, view, client }: SlackViewMiddle
   try {
     await client.chat.postMessage({
       channel: body.user.id,
-      text: `:hourglass_flowing_sand: Creating research plan for *${studyName}*... This may take a moment.`,
+      text: `Creating research plan for *${studyName}*... This may take a moment.`,
     });
   } catch (err) {
     const progressErr = err instanceof Error ? err.message : String(err);

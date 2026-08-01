@@ -166,7 +166,7 @@ async function openResearchPlanModal({ ack, body, client }: SlackActionMiddlewar
           elements: [
             {
               type: "mrkdwn",
-              text: `:clipboard: *${preselectStudyName}*`,
+              text: `*${preselectStudyName}*`,
             },
           ],
         },
@@ -201,7 +201,7 @@ async function openResearchPlanModal({ ack, body, client }: SlackActionMiddlewar
         elements: [
           {
             type: "mrkdwn",
-            text: `:clipboard: *${preselectStudyName}*\nGenerating an execution plan from your approved brief.`,
+            text: `*${preselectStudyName}*\nGenerating an execution plan from your approved brief.`,
           },
         ],
       };

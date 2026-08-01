@@ -228,7 +228,7 @@ async function openDiscussionGuideModal({ ack, body, client }: SlackActionMiddle
           elements: [
             {
               type: "mrkdwn",
-              text: `:speech_balloon: *${preselectStudyName}*`,
+              text: `*${preselectStudyName}*`,
             },
           ],
         },
@@ -260,7 +260,7 @@ async function openDiscussionGuideModal({ ack, body, client }: SlackActionMiddle
         elements: [
           {
             type: "mrkdwn",
-            text: `:speech_balloon: *${preselectStudyName}*\nBuilding a session guide from your approved brief.`,
+            text: `*${preselectStudyName}*\nBuilding a session guide from your approved brief.`,
           },
         ],
       };
@@ -419,7 +419,7 @@ async function handleDiscussionGuideSubmission({ ack, body, view, client }: Slac
   try {
     await client.chat.postMessage({
       channel: body.user.id,
-      text: `:hourglass_flowing_sand: Generating discussion guide for *${studyName}*... This may take a moment.`,
+      text: `Generating discussion guide for *${studyName}*... This may take a moment.`,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
