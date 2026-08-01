@@ -63,13 +63,13 @@ export function studySetupModalPlanStudy(studies: StudyOption[] | null, channelI
         type: "divider",
       },
       {
-        type: "input",
+        type: "section",
         block_id: "study_selection",
-        label: {
-          type: "plain_text",
-          text: "Which study?",
+        text: {
+          type: "mrkdwn",
+          text: "*Which study?*",
         },
-        element: {
+        accessory: {
           type: "static_select",
           action_id: "study_select",
           placeholder: {
