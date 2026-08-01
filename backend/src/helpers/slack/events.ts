@@ -127,6 +127,32 @@ const slackApp = new App({
   logLevel: (process.env.SLACK_LOG_LEVEL?.toUpperCase() === 'DEBUG' ? LogLevel.DEBUG : LogLevel.INFO),
 });
 
+// ── Graceful shutdown (incident 2026-07-28) ────────────────────
+// Explicitly disconnect Socket Mode on SIGTERM/SIGINT so the websocket
+// closes cleanly and Slack removes this connection immediately, instead
+// of leaving a zombie that steals command envelopes via round-robin.
+function gracefulShutdown(signal: string): void {
+  console.log(`Received ${signal} — disconnecting Socket Mode...`);
+  // receiver is private on App — cast through unknown to access it
+  const receiver = (slackApp as unknown as { receiver: SocketModeReceiver }).receiver;
+  // SocketModeClient.disconnect() sends a close frame and resolves
+  receiver.client.disconnect().then(() => {
+    console.log('Socket Mode disconnected cleanly.');
+    process.exit(0);
+  }).catch((err: Error) => {
+    console.error('Socket Mode disconnect error:', err.message);
+    process.exit(1);
+  });
+  // Force exit after 5s if disconnect hangs
+  setTimeout(() => {
+    console.error('Graceful shutdown timed out after 5s, forcing exit.');
+    process.exit(1);
+  }, 5000).unref();
+}
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
 // ── Alerts channel configuration ─────────────────────────────────
 
 const ALERTS_CHANNEL_ID = process.env.QORI_ALERTS_CHANNEL_ID;
