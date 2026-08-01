@@ -50,7 +50,7 @@ export const reschedulingRequestModal = {
       type: "section",
       text: {
         type: "mrkdwn",
-        text: "*🔄 Rescheduling*",
+        text: "*Rescheduling*",
       },
     },
     {

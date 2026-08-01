@@ -262,7 +262,7 @@ const handleAnalyzeNotesSubmission = async ({ ack, body, view, client }: SlackVi
     await client.chat.postEphemeral({
       channel: body.user.id,
       user: body.user.id,
-      text: '🔄 *Analyzing session* — this takes a minute or two. You\'ll see a confirmation when it\'s done.',
+      text: '*Analyzing session* — this takes a minute or two. You\'ll see a confirmation when it\'s done.',
     });
 
     if (!studyId || studyId === "no_studies") {

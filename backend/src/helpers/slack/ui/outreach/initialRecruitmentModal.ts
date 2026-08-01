@@ -50,7 +50,7 @@ export const initialRecruitmentModal = {
       type: "section",
       text: {
         type: "mrkdwn",
-        text: "*📋 Signup details*",
+        text: "*Signup details*",
       },
     },
     {

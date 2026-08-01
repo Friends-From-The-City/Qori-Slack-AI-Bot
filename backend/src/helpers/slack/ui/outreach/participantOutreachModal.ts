@@ -38,7 +38,7 @@ export const participantOutreachModal = {
       type: "section",
       text: {
         type: "mrkdwn",
-        text: "*📬 Message type*",
+        text: "*Message type*",
       },
     },
     {
@@ -55,42 +55,42 @@ export const participantOutreachModal = {
           {
             text: {
               type: "plain_text",
-              text: "📧 Initial recruitment",
+              text: "Initial recruitment",
             },
             value: "initial_recruitment",
           },
           {
             text: {
               type: "plain_text",
-              text: "📅 Session confirmation",
+              text: "Session confirmation",
             },
             value: "session_confirmation",
           },
           {
             text: {
               type: "plain_text",
-              text: "⏰ Session reminder",
+              text: "Session reminder",
             },
             value: "session_reminder",
           },
           {
             text: {
               type: "plain_text",
-              text: "🔄 Rescheduling request",
+              text: "Rescheduling request",
             },
             value: "rescheduling_request",
           },
           {
             text: {
               type: "plain_text",
-              text: "🔔 Follow-up",
+              text: "Follow-up",
             },
             value: "follow_up",
           },
           {
             text: {
               type: "plain_text",
-              text: "🙏 Thank you",
+              text: "Thank you",
             },
             value: "thank_you",
           },

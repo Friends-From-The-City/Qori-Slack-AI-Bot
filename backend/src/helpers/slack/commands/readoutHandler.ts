@@ -544,7 +544,7 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }: SlackVi
 
       await client.chat.postMessage({
         channel: body.user.id,
-        text: `🔄 Generating ${selectedAudiences.length} targeted readout(s) for *${selectedStudyName}*... You'll receive a notification as each completes.`,
+        text: `Generating ${selectedAudiences.length} targeted readout(s) for *${selectedStudyName}*... You'll receive a notification as each completes.`,
       });
 
       // Background IIFE so the modal closes immediately
@@ -614,13 +614,13 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }: SlackVi
           const links = succeeded.map(r => `• <${r.url}|${r.audience}>`).join('\n');
           await client.chat.postMessage({
             channel: body.user.id,
-            text: `📊 *All targeted readouts complete* (${succeeded.length}/${results.length})`,
+            text: `*All targeted readouts complete* (${succeeded.length}/${results.length})`,
             blocks: [
               {
                 type: 'section',
                 text: {
                   type: 'mrkdwn',
-                  text: `📊 *All targeted readouts complete* (${succeeded.length}/${results.length})\n\n${links}${failed.length > 0 ? `\n\n❌ ${failed.length} failed: ${failed.map(r => r.audience).join(', ')}` : ''}`,
+                  text: `*All targeted readouts complete* (${succeeded.length}/${results.length})\n\n${links}${failed.length > 0 ? `\n\n❌ ${failed.length} failed: ${failed.map(r => r.audience).join(', ')}` : ''}`,
                 },
               },
             ],
@@ -632,7 +632,7 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }: SlackVi
       // Research readout (existing flow)
       await client.chat.postMessage({
         channel: body.user.id,
-        text: `🔄 Generating research readout for *${selectedStudyName}*... This may take a few minutes.`,
+        text: `Generating research readout for *${selectedStudyName}*... This may take a few minutes.`,
       });
 
       const yamlTemplateName = 'research_readout.yaml';
@@ -662,7 +662,7 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }: SlackVi
             type: 'section',
             text: {
               type: 'mrkdwn',
-              text: `📊 *Report ready:*\n<${renderedYaml.result.url}|View Full Report on GitHub>`,
+              text: `*Report ready:*\n<${renderedYaml.result.url}|View Full Report on GitHub>`,
             },
           },
           { type: 'divider' },

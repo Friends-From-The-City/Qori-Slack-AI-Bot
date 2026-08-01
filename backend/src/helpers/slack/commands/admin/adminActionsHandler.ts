@@ -1345,7 +1345,7 @@ export async function handleStakeholderSubmit({
       try {
         await client.chat.postMessage({
           channel: stakeholderInfo.userId,
-          text: `:clipboard: *${assignerName}* assigned you as stakeholder for *${metadata.projectName}*. You'll receive brief approval requests for studies in this project.`,
+          text: `*${assignerName}* assigned you as stakeholder for *${metadata.projectName}*. You'll receive brief approval requests for studies in this project.`,
         });
       } catch {
         // DM to stakeholder failed, not critical

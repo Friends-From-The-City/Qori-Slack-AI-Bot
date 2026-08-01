@@ -63,7 +63,7 @@ async function participantHandler({ ack, body, client, command }: SlackCommandMi
           elements: [
             {
               type: "mrkdwn",
-              text: `🏷️ *Will be assigned:* \`${nextCode}\``
+              text: `*Will be assigned:* \`${nextCode}\``
             }
           ]
         };
@@ -441,7 +441,7 @@ async function handleAddParticipantStudySelect({ ack, body, client }: SlackActio
         elements: [
           {
             type: "mrkdwn",
-            text: `🏷️ *Will be assigned:* \`${nextCode}\``
+            text: `*Will be assigned:* \`${nextCode}\``
           }
         ]
       };

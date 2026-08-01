@@ -25,7 +25,7 @@ export const requestStudyChangesModal = (fileOptionsArray: FileOption[]) => ({
       type: "section",
       text: {
         type: "mrkdwn",
-        text: "*📝 Request Changes*\nPlease provide specific feedback about what needs to be changed.",
+        text: "*Request Changes*\nPlease provide specific feedback about what needs to be changed.",
       },
     },
     {
@@ -119,7 +119,7 @@ export const requestStudyChangesModal = (fileOptionsArray: FileOption[]) => ({
       elements: [
         {
           type: "mrkdwn",
-          text: "💡 *Tip:* Be specific about what needs changing. The researcher will receive your feedback and can ask questions if needed.",
+          text: "*Tip:* Be specific about what needs changing. The researcher will receive your feedback and can ask questions if needed.",
         },
       ],
     },

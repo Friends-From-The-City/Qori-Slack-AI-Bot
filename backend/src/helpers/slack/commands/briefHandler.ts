@@ -242,7 +242,7 @@ async function handleBriefSubmission({ ack, body, view, client }: SlackViewMiddl
   try {
     await client.chat.postMessage({
       channel: body.user.id,
-      text: `:hourglass_flowing_sand: Creating research brief for *${studyName}*... This may take a moment.`,
+      text: `Creating research brief for *${studyName}*... This may take a moment.`,
     });
   } catch (err) {
     const progressErr = err instanceof Error ? err.message : String(err);

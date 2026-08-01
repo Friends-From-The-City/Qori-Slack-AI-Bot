@@ -89,7 +89,7 @@ export const emailModal = (params: EmailModalParams = {}) => {
             type: "button",
             text: {
               type: "plain_text",
-              text: "📄 Copy Email (Formatted)",
+              text: "Copy Email (Formatted)",
             },
             action_id: "copy_email_formatted",
             style: "primary",

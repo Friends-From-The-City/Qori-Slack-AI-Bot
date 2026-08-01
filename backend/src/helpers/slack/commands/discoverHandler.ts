@@ -418,7 +418,7 @@ async function handleDiscoverSubmission({ ack, view, body, client }: SlackViewMi
 
   await client.chat.postMessage({
     channel: userId,
-    text: `🔍 Running ${typeConfig.label} for "${topic}"... This may take a minute.`,
+    text: `Running ${typeConfig.label} for "${topic}"... This may take a minute.`,
   });
 
   try {

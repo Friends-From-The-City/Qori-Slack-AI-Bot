@@ -75,7 +75,7 @@ const discussionGuideModal = {
       elements: [
         {
           type: "mrkdwn",
-          text: ":speech_balloon: *{{study_name}}*\nBuilding a session guide from your approved brief.",
+          text: "*{{study_name}}*\nBuilding a session guide from your approved brief.",
         },
       ],
     },
