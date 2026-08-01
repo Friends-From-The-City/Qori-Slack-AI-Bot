@@ -70,7 +70,7 @@ docker-compose up    # Starts app (3000), postgres (5432), redis (6379)
 
 **Sam agent** — `sam/requirements.txt` was generated from imports (versions unpinned, need verification). Run directly: `python sam/sam-agent.py`
 
-**Environment:** Copy `backend/.env.example` to `backend/.env`. Required variables: Slack tokens (`SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET`, `SLACK_APP_TOKEN`), `GITHUB_TOKEN`/`GITHUB_OWNER`/`GITHUB_REPO`, `ANTHROPIC_API_KEY`, database credentials. See `.env.example` for the full list with descriptions. **Critical:** `SLACK_APP_TOKEN` must be the **dev app's** token for local development — never the prod app token. See Railway Deployment section for the token isolation rule.
+**Environment:** Copy `backend/.env.example` to `backend/.env`. Required variables: Slack tokens (`SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET`, `SLACK_APP_TOKEN`), `GITHUB_TOKEN`/`GITHUB_OWNER`/`GITHUB_REPO`, `ANTHROPIC_API_KEY`, database credentials. See `.env.example` for the full list with descriptions. **Critical:** All Slack credentials (`SLACK_APP_TOKEN`, `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET`, `QORI_ALERTS_CHANNEL_ID`) must be from the **dev app and dev workspace** for local development — never prod values. See Railway Deployment section for the token isolation rule.
 
 ## Railway Deployment
 
@@ -81,7 +81,9 @@ docker-compose up    # Starts app (3000), postgres (5432), redis (6379)
 | Production | `main` | `Qori` | `A08U0FLM4AG` | Research team workspace |
 | Development | `dev` | `Qori Dev` | *(see dev app page)* | Dev/test workspace |
 
-**Token isolation rule (incident 2026-07-28):** Each environment's `SLACK_APP_TOKEN` must belong to **that environment's Slack app only**. The prod app token (`A08U0FLM4AG`) lives in exactly one place: Railway prod variables. Cross-environment token sharing causes Socket Mode to open multiple websocket connections to the same app; Slack round-robins commands across all connections, and connections without running handlers never ack — producing total, persistent "app did not respond" failure. This caused a 3-day outage. Local `.env` and Railway dev must use the Qori-dev app's own app-level token.
+**Token isolation rule (incident 2026-07-28):** **All Slack credentials are workspace-scoped and must match the environment's own Slack app.** This covers `SLACK_APP_TOKEN`, `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET`, `QORI_ALERTS_CHANNEL_ID`, and any future workspace-scoped ID. Prod credentials live in exactly one place: Railway prod variables. Local `.env` and Railway dev use the Qori-dev app's own credentials and dev-workspace channel IDs.
+
+Cross-environment credential sharing caused a 3-day outage: Railway dev held the prod app token, opening zombie Socket Mode connections; Slack round-robined commands across all connections, and connections without running handlers never acked — total, persistent "app did not respond." The same leak class applies to bot tokens (API calls target the wrong workspace), channel IDs (`channel_not_found`), and user IDs (`user_not_found` when DMing error reports).
 
 **Migrations run automatically on deploy.** The Dockerfile CMD is `scripts/start.sh`, which:
 1. Waits for database connection
@@ -106,7 +108,7 @@ This ensures code and schema always deploy together — the root cause of the Ju
 
 3. **Postgres public URL for manual migrations.** Use the public URL (`railway.app` hostname) from the Postgres Connect tab, not the internal URL (`postgres.railway.internal`).
 
-4. **`SLACK_APP_TOKEN` must match the environment's Slack app.** Never copy the prod token into dev or local `.env`. See "Token isolation rule" above.
+4. **All Slack credentials must match the environment's own app and workspace.** `SLACK_APP_TOKEN`, `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET`, `QORI_ALERTS_CHANNEL_ID` — never copy any of these from prod into dev or local `.env`. See "Token isolation rule" above.
 
 **Deploy flow:**
 ```
