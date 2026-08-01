@@ -161,8 +161,8 @@ const ALERTS_CHANNEL_ID = process.env.QORI_ALERTS_CHANNEL_ID;
 // Socket Mode hello frame reports how many active websocket connections
 // exist for this app token. If >1, another process shares the token and
 // Slack round-robins commands — most will never be acked.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- receiver is private in Bolt's types but accessible at runtime
-const socketModeReceiver = (slackApp as any).receiver as SocketModeReceiver;
+// receiver is private in Bolt's types but accessible at runtime — cast through unknown (not as-any)
+const socketModeReceiver = (slackApp as unknown as { receiver: SocketModeReceiver }).receiver;
 socketModeReceiver.client.on('hello', (event: { num_connections: number; debug_info?: { host?: string }; connection_info?: { app_id?: string } }) => {
   if (event.num_connections > 1) {
     console.warn(
