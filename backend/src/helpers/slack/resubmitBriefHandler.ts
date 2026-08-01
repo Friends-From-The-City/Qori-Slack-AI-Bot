@@ -136,7 +136,7 @@ export async function handleBriefResubmit({
       type: 'header',
       text: {
         type: 'plain_text',
-        text: `📝 Brief Resubmitted — ${studyName}`,
+        text: `Brief Resubmitted — ${studyName}`,
         emoji: true,
       },
     },
@@ -195,7 +195,7 @@ export async function handleBriefResubmit({
 
       await client.chat.postMessage({
         channel: im.channel.id,
-        text: `📝 Brief resubmitted for *${studyName}* — please re-review`,
+        text: `Brief resubmitted for *${studyName}* — please re-review`,
         blocks: messageBlocks as KnownBlock[],
       });
 

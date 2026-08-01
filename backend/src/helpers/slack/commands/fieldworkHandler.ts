@@ -231,7 +231,7 @@ async function handleFieldworkAddParticipant({ ack, body, client }: SlackActionM
         block_id: "code_preview_block",
         elements: [{
           type: "mrkdwn",
-          text: `✨ Will be assigned: *${nextCode}*`
+          text: `Will be assigned: *${nextCode}*`
         }]
       };
     }

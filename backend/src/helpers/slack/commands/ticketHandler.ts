@@ -200,9 +200,9 @@ function buildStep1Modal(
           action_id: 'audience_select_action',
           placeholder: { type: 'plain_text', text: 'Choose audience...' },
           options: [
-            { text: { type: 'plain_text', text: '🎨 Designer' }, value: 'designer' },
-            { text: { type: 'plain_text', text: '⚙️ Engineering' }, value: 'engineering' },
-            { text: { type: 'plain_text', text: '♿ Accessibility' }, value: 'accessibility' },
+            { text: { type: 'plain_text', text: 'Designer' }, value: 'designer' },
+            { text: { type: 'plain_text', text: 'Engineering' }, value: 'engineering' },
+            { text: { type: 'plain_text', text: 'Accessibility' }, value: 'accessibility' },
           ],
         },
       },
@@ -443,7 +443,7 @@ const handleStep2Submit = async ({ ack, body, view, client }: SlackViewMiddlewar
 
   await client.chat.postMessage({
     channel: userId,
-    text: `🔄 Creating ${tickets.length} GitHub Issue(s) for *${config.label}* audience...`,
+    text: `Creating ${tickets.length} GitHub Issue(s) for *${config.label}* audience...`,
   });
 
   // Create issues sequentially

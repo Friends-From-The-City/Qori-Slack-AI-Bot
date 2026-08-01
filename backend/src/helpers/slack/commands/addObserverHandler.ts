@@ -20,10 +20,10 @@ import { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo } from '../../gith
 // ── Helpers ────────────────────────────────────────────────
 
 const ROLE_DISPLAY: Record<string, string> = {
-  note_taker: '📝 Note-taker',
-  silent_observer: '👁️ Silent Observer',
-  pm_observer: '📊 PM Observer',
-  stakeholder: '🏛️ Stakeholder',
+  note_taker: 'Note-taker',
+  silent_observer: 'Silent Observer',
+  pm_observer: 'PM Observer',
+  stakeholder: 'Stakeholder',
 };
 
 /**

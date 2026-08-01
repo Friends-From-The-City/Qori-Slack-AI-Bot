@@ -738,11 +738,11 @@ ${scrubResult.content}`;
     // DB-held quarantine: content shown inline, no GitHub link (not committed yet)
     await client.chat.postMessage({
       channel: body.user.id,
-      text: `🔍 PII Review Required: ${templateData.study_name} - ${templateData.participant_id}`,
+      text: `PII Review Required: ${templateData.study_name} - ${templateData.participant_id}`,
       blocks: [
         {
           type: 'header',
-          text: { type: 'plain_text', text: '🔍 PII Review Required', emoji: true }
+          text: { type: 'plain_text', text: 'PII Review Required', emoji: true }
         },
         {
           type: 'context',

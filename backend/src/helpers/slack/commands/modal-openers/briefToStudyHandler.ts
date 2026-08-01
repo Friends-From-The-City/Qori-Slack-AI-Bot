@@ -108,7 +108,7 @@ async function openPlanFromBrief({ ack, body, client }: SlackActionMiddlewareArg
         elements: [
           {
             type: "mrkdwn",
-            text: `:clipboard: *${studyName}*\nGenerating an execution plan from your approved brief.`,
+            text: `*${studyName}*\nGenerating an execution plan from your approved brief.`,
           },
         ],
       };
@@ -163,7 +163,7 @@ async function openPlanFromBrief({ ack, body, client }: SlackActionMiddlewareArg
           elements: [
             {
               type: "mrkdwn",
-              text: `:clipboard: *${studyName}*`,
+              text: `*${studyName}*`,
             },
           ],
         },

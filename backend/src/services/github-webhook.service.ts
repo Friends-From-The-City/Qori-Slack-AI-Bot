@@ -98,10 +98,10 @@ class GithubWebhookService {
 
           // Compose Slack message blocks
           const blocks = [
-            { type: 'section', text: { type: 'mrkdwn', text: `📝 *Change Request from* <@${requestedBy || 'unknown'}>` } },
+            { type: 'section', text: { type: 'mrkdwn', text: `*Change Request from* <@${requestedBy || 'unknown'}>` } },
             { type: 'section', text: { type: 'mrkdwn', text: previousReason } },
             { type: 'divider' },
-            { type: 'section', text: { type: 'mrkdwn', text: '🔄 *GitHub Activity Detected:*' } },
+            { type: 'section', text: { type: 'mrkdwn', text: '*GitHub Activity Detected:*' } },
             { type: 'section', text: { type: 'mrkdwn', text: `• ${commitMsg}` } },
             { type: 'divider' },
             {
