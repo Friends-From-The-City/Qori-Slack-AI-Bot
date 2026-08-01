@@ -79,11 +79,13 @@ docker-compose up    # Starts app (3000), postgres (5432), redis (6379)
 | Environment | Branch | Slack App | App ID | Workspace |
 |-------------|--------|-----------|--------|-----------|
 | Production | `main` | `Qori` | `A08U0FLM4AG` | Research team workspace |
-| Development | `dev` | `Qori Dev` | *(see dev app page)* | Dev/test workspace |
+| Development | `dev` | `Qori-dev` | `A0BM9PN95LM` | QD workspace (`qoridev.slack.com`) |
 
 **Token isolation rule (incident 2026-07-28):** **All Slack credentials are workspace-scoped and must match the environment's own Slack app.** This covers `SLACK_APP_TOKEN`, `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET`, `QORI_ALERTS_CHANNEL_ID`, and any future workspace-scoped ID. Prod credentials live in exactly one place: Railway prod variables. Local `.env` and Railway dev use the Qori-dev app's own credentials and dev-workspace channel IDs.
 
 Cross-environment credential sharing caused a 3-day outage: Railway dev held the prod app token, opening zombie Socket Mode connections; Slack round-robined commands across all connections, and connections without running handlers never acked — total, persistent "app did not respond." The same leak class applies to bot tokens (API calls target the wrong workspace), channel IDs (`channel_not_found`), and user IDs (`user_not_found` when DMing error reports).
+
+**Workspace isolation:** Qori (prod) installs ONLY in the FFTC workspace (`friendsfromthecity.slack.com`); Qori-dev installs ONLY in the QD workspace (`qoridev.slack.com`). An app appearing in the wrong workspace is an incident.
 
 **Migrations run automatically on deploy.** The Dockerfile CMD is `scripts/start.sh`, which:
 1. Waits for database connection
