@@ -704,56 +704,56 @@ Track specific violations found during audit, with fix status.
 |-------|--------|-----------|--------|
 | Research Brief | R7 | out_of_scope, start_date, decision_deadline hard-required but should be optional | Pending |
 | Analyze Session | R7 | "Study *" label uses asterisk (line 151) | Pending |
-| Add Participant | R1 | Emoji section headers (📝🗓️📊) | Fixed (PR #XXX) |
+| Add Participant | R1 | Emoji section headers (📝🗓️📊) | Fixed (PR #241) |
 | Add Participant | R3 | "Research study" → "Study" | Pending |
 | Add Participant | R7 | Trailing asterisks on required fields | Pending |
 | Add Participant | R8 | CAPS emphasis in help text | Pending |
 | Add Participant | R11 | Duplicative help text | Pending |
-| Update Participant | R1 | Emoji in labels | Fixed (PR #XXX) |
+| Update Participant | R1 | Emoji in labels | Fixed (PR #241) |
 | Update Participant | R7 | "Update Notes* (optional)" contradiction | Pending |
 | Update Participant | R10 | Two primary-style buttons | Pending |
-| Add Observer | R1 | Emoji in role options (📝👁️📊🏛️) | Fixed (PR #XXX) |
+| Add Observer | R1 | Emoji in role options (📝👁️📊🏛️) | Fixed (PR #241) |
 | Add Observer | R2 | Button "Done" not action-oriented | Pending |
 | Session Notes | R2 | Button "Process & Submit" not action-oriented | Pending |
 | Session Notes | R3 | Nested header structure | Pending |
 | Session Notes | R10 | Tab renders as green primary | Pending |
 | Session Notes | R11 | Duplicative PII scrubbing help | Pending |
-| Session Confirmation | R1 | Emoji in section header (📅) | Fixed (PR #XXX) |
+| Session Confirmation | R1 | Emoji in section header (📅) | Fixed (PR #241) |
 | Session Confirmation | R2 | Has "Generate" but form has asterisks on labels | Pending |
 | Session Confirmation | R7 | Asterisks in labels ("Session date *", "Session time *", "Meeting link *") | Pending |
-| Participant Outreach | R1 | Emoji in radio options | Fixed (PR #XXX) |
+| Participant Outreach | R1 | Emoji in radio options | Fixed (PR #241) |
 | Participant Outreach | R2 | Button "Next" not action-oriented | Pending |
 | Participant Outreach | R3 | "Select an existing study:" imperative | Pending |
 | Participant Outreach | R7 | Trailing asterisk | Pending |
-| Discovery Launcher | R1 | Emoji in option rows | Fixed (PR #XXX) |
+| Discovery Launcher | R1 | Emoji in option rows | Fixed (PR #241) |
 | Discovery Launcher | R8 | Italics in help text | Pending |
-| PII Review (transcript) | R1 | Decorative emoji in header (🔍) and button (📄); functional ✅⚠️❌ preserved | Fixed (PR #XXX) |
+| PII Review (transcript) | R1 | Decorative emoji in header (🔍) and button (📄); functional ✅⚠️❌ preserved | Fixed (PR #241) |
 | PII Review (manual notes) | R1 | Emoji in DM message (🔍✅⚠️) | Pending |
 | Join Observer | R1 | Emoji in role options (📝👁️📊🏛️) | Pending |
 | Admin Center Hub | R2 | "Open" button label (lines 102, 115) not action-oriented | Pending |
 | Admin — Delete Study | R2 | "Open" button label not action-oriented | Pending |
-| Plan Launcher | R1 | Emoji in section rows (:clipboard: :speech_balloon:) | Fixed (PR #XXX) |
-| Plan Launcher | R2 | Submit "Done" on launcher modal (no-op) | Fixed (PR #XXX) |
-| Plan Launcher | R9 | Close→Cancel for consistency | Fixed (PR #XXX) |
-| Research Plan Generator | R1 | :clipboard: in context block | Fixed (PR #XXX) |
-| Discussion Guide Modal | R1 | :speech_balloon: in context block | Fixed (PR #XXX) |
-| Readout Modal | R1 | Emoji in report type context and audience checkboxes (📄🎯🎨⚙️♿👔) | Fixed (PR #XXX) |
-| Upload Notes | R1 | Emoji in submit (📤), header (📂), button (📝), section (🤖), context (📁) | Fixed (PR #XXX) |
-| Session Notes | R1 | 💡 in tips context | Fixed (PR #XXX) |
-| Analyze Session | R1 | 📄 in auto-selected transcript context | Fixed (PR #XXX) |
-| Request Changes | R1 | 📝 in section header, 💡 in tip context | Fixed (PR #XXX) |
-| Mark Changes Complete | R1 | 🐛 in GitHub section, ☑️ in notification rows | Fixed (PR #XXX) |
-| Observer Guide DM | R1 | :book: in guidelines link | Fixed (PR #XXX) |
-| Study Result Blocks | R1 | 🗓️ in header, 🔔 in DM text | Fixed (PR #XXX) |
-| Research Shareout | R1 | Emoji in type options (🎯📊👥📄🏛️📐), headers (📋📑📤), tip (💡) | Fixed (PR #XXX) |
-| Copy Email | R1 | 📄 in section text | Fixed (PR #XXX) |
-| Email Preview | R1 | 📄 in button label | Fixed (PR #XXX) |
-| Session Reminder | R1 | 📅 in section header | Fixed (PR #XXX) |
-| Initial Recruitment | R1 | 📋 in section header | Fixed (PR #XXX) |
-| Rescheduling Request | R1 | 🔄 in section header | Fixed (PR #XXX) |
-| Discover: Desk Research | R1 | :page_facing_up: in context | Fixed (PR #XXX) |
-| Discover: Stakeholder | R1 | :studio_microphone: in context | Fixed (PR #XXX) |
-| Discover: Survey | R1 | :bar_chart: in context | Fixed (PR #XXX) |
+| Plan Launcher | R1 | Emoji in section rows (:clipboard: :speech_balloon:) | Fixed (PR #241) |
+| Plan Launcher | R2 | Submit "Done" on launcher modal (no-op) | Fixed (PR #241) |
+| Plan Launcher | R9 | Close→Cancel for consistency | Fixed (PR #241) |
+| Research Plan Generator | R1 | :clipboard: in context block | Fixed (PR #241) |
+| Discussion Guide Modal | R1 | :speech_balloon: in context block | Fixed (PR #241) |
+| Readout Modal | R1 | Emoji in report type context and audience checkboxes (📄🎯🎨⚙️♿👔) | Fixed (PR #241) |
+| Upload Notes | R1 | Emoji in submit (📤), header (📂), button (📝), section (🤖), context (📁) | Fixed (PR #241) |
+| Session Notes | R1 | 💡 in tips context | Fixed (PR #241) |
+| Analyze Session | R1 | 📄 in auto-selected transcript context | Fixed (PR #241) |
+| Request Changes | R1 | 📝 in section header, 💡 in tip context | Fixed (PR #241) |
+| Mark Changes Complete | R1 | 🐛 in GitHub section, ☑️ in notification rows | Fixed (PR #241) |
+| Observer Guide DM | R1 | :book: in guidelines link | Fixed (PR #241) |
+| Study Result Blocks | R1 | 🗓️ in header, 🔔 in DM text | Fixed (PR #241) |
+| Research Shareout | R1 | Emoji in type options (🎯📊👥📄🏛️📐), headers (📋📑📤), tip (💡) | Fixed (PR #241) |
+| Copy Email | R1 | 📄 in section text | Fixed (PR #241) |
+| Email Preview | R1 | 📄 in button label | Fixed (PR #241) |
+| Session Reminder | R1 | 📅 in section header | Fixed (PR #241) |
+| Initial Recruitment | R1 | 📋 in section header | Fixed (PR #241) |
+| Rescheduling Request | R1 | 🔄 in section header | Fixed (PR #241) |
+| Discover: Desk Research | R1 | :page_facing_up: in context | Fixed (PR #241) |
+| Discover: Stakeholder | R1 | :studio_microphone: in context | Fixed (PR #241) |
+| Discover: Survey | R1 | :bar_chart: in context | Fixed (PR #241) |
 
 ---
 
