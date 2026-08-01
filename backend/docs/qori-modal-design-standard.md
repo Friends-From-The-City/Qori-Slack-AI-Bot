@@ -211,27 +211,27 @@ Scores reflect CURRENT code state, not intended state. A cell flips to ✓ with 
 | Modal | R1 | R2 | R3 | R4 | R5 | R6 | R7 | R8 | R9 | R10 | R11 | R12 | R13 | R14 | R15 |
 |-------|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:---:|:---:|:---:|:---:|:---:|:---:|
 | Research Brief | ✓ | ✓ | ✓ | ✓ | ✓ | N/A | — | ? | ✓ | ✓ | ? | ✓ | ✓ | N/A | N/A |
-| Analyze Session | — | ✓ | ✓ | ✓ | ✓ | N/A | — | ? | ✓ | ✓ | ? | ✓ | ✓ | N/A | N/A |
+| Analyze Session | ✓ | ✓ | ✓ | ✓ | ✓ | N/A | — | ? | ✓ | ✓ | ? | ✓ | ✓ | N/A | N/A |
 | Research Synthesis | ✓ | ✓ | ✓ | ✓ | ✓ | N/A | ✓ | ? | ✓ | ✓ | ? | ✓ | ✓ | N/A | N/A |
 | Readout | ? | ? | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? | N/A | N/A |
 | Discussion Guide | ? | ? | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? | N/A | N/A |
 | Research Plan | ? | ? | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? | N/A | N/A |
-| Discovery Launcher | — | ? | ? | ? | ? | N/A | ? | — | ? | ? | — | ? | ? | — | N/A |
+| Discovery Launcher | ✓ | ? | ? | ? | ? | N/A | ? | — | ? | ? | — | ? | ? | — | N/A |
 | Discover: Desk Research | ? | ? | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? | N/A | N/A |
 | Discover: Stakeholder | ? | ? | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? | N/A | N/A |
 | Discover: Survey | ? | ? | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? | N/A | N/A |
 | Project Creation | ? | ? | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? | N/A | N/A |
-| Add Participant | — | ? | — | ? | ? | N/A | — | — | ? | ? | — | ? | ? | N/A | N/A |
-| Update Participant | — | ? | ? | ? | ? | N/A | — | ? | ? | — | ? | ? | ? | N/A | N/A |
-| Add Observer | — | — | ? | ? | ? | N/A | ✓ | ? | ? | ? | ? | ? | ? | N/A | N/A |
+| Add Participant | ✓ | ? | — | ? | ? | N/A | — | — | ? | ? | — | ? | ? | N/A | N/A |
+| Update Participant | ✓ | ? | ? | ? | ? | N/A | — | ? | ? | — | ? | ? | ? | N/A | N/A |
+| Add Observer | ✓ | — | ? | ? | ? | N/A | ✓ | ? | ? | ? | ? | ? | ? | N/A | N/A |
 | Session Notes | ✓ | — | — | ? | ? | N/A | ? | ? | ? | — | — | ? | ? | N/A | N/A |
-| Participant Outreach | — | — | — | ? | ? | N/A | — | — | ? | ? | ? | ? | ? | N/A | N/A |
-| Session Confirmation | — | — | ? | ? | ? | N/A | — | ? | ? | ? | ? | ? | ? | N/A | N/A |
+| Participant Outreach | ✓ | — | — | ? | ? | N/A | — | — | ? | ? | ? | ? | ? | N/A | N/A |
+| Session Confirmation | ✓ | — | ? | ? | ? | N/A | — | ? | ? | ? | ? | ? | ? | N/A | N/A |
 | Tickets | ✓ | ✓ | ✓ | ✓ | ✓ | N/A | ? | ? | ✓ | ✓ | ? | ✓ | ✓ | N/A | N/A |
-| PII Review (transcript) | — | ✓ | ✓ | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? | N/A | N/A |
+| PII Review (transcript) | ✓ | ✓ | ✓ | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? | N/A | N/A |
 | PII Review (manual notes) | — | ? | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? | N/A | N/A |
 | Fieldwork Dashboard | ? | ✓ | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? | N/A | N/A |
-| Join Observer | — | ✓ | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? | N/A | N/A |
+| Join Observer | ✓ | ✓ | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? | N/A | N/A |
 | Admin Center Hub | ? | — | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? | ✓ | — |
 | Admin — Delete Study | ? | — | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? | N/A | N/A |
 | Admin — Manage Stakeholder | ? | ✓ | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? | N/A | N/A |
@@ -704,34 +704,56 @@ Track specific violations found during audit, with fix status.
 |-------|--------|-----------|--------|
 | Research Brief | R7 | out_of_scope, start_date, decision_deadline hard-required but should be optional | Pending |
 | Analyze Session | R7 | "Study *" label uses asterisk (line 151) | Pending |
-| Add Participant | R1 | Emoji section headers (📝🗓️📊) | Pending |
+| Add Participant | R1 | Emoji section headers (📝🗓️📊) | Fixed (PR #241) |
 | Add Participant | R3 | "Research study" → "Study" | Pending |
 | Add Participant | R7 | Trailing asterisks on required fields | Pending |
 | Add Participant | R8 | CAPS emphasis in help text | Pending |
 | Add Participant | R11 | Duplicative help text | Pending |
-| Update Participant | R1 | Emoji in labels | Pending |
+| Update Participant | R1 | Emoji in labels | Fixed (PR #241) |
 | Update Participant | R7 | "Update Notes* (optional)" contradiction | Pending |
 | Update Participant | R10 | Two primary-style buttons | Pending |
-| Add Observer | R1 | Emoji in role options (📝👁️📊🏛️) | Pending |
+| Add Observer | R1 | Emoji in role options (📝👁️📊🏛️) | Fixed (PR #241) |
 | Add Observer | R2 | Button "Done" not action-oriented | Pending |
 | Session Notes | R2 | Button "Process & Submit" not action-oriented | Pending |
 | Session Notes | R3 | Nested header structure | Pending |
 | Session Notes | R10 | Tab renders as green primary | Pending |
 | Session Notes | R11 | Duplicative PII scrubbing help | Pending |
-| Session Confirmation | R1 | Emoji in section header (📅) | Pending |
+| Session Confirmation | R1 | Emoji in section header (📅) | Fixed (PR #241) |
 | Session Confirmation | R2 | Has "Generate" but form has asterisks on labels | Pending |
 | Session Confirmation | R7 | Asterisks in labels ("Session date *", "Session time *", "Meeting link *") | Pending |
-| Participant Outreach | R1 | Emoji in radio options | Pending |
+| Participant Outreach | R1 | Emoji in radio options | Fixed (PR #241) |
 | Participant Outreach | R2 | Button "Next" not action-oriented | Pending |
 | Participant Outreach | R3 | "Select an existing study:" imperative | Pending |
 | Participant Outreach | R7 | Trailing asterisk | Pending |
-| Discovery Launcher | R1 | Emoji in option rows | Pending |
+| Discovery Launcher | R1 | Emoji in option rows | Fixed (PR #241) |
 | Discovery Launcher | R8 | Italics in help text | Pending |
-| PII Review (transcript) | R1 | Decorative 🔍 removed from header; ✅⚠️📄❌ kept (functional) | Partial fix (emoji-sweep-handlers) |
-| PII Review (manual notes) | R1 | Decorative 🔍 removed; ✅⚠️ kept (functional) | Fixed (emoji-sweep-handlers) |
-| Join Observer | R1 | Emoji in role options (📝👁️📊🏛️) | Fixed (emoji-sweep-handlers) |
+| PII Review (transcript) | R1 | Decorative 🔍 header + 📄 button removed (PR #241); 🔍 DM removed (PR #240); functional ✅⚠️❌ preserved | Fixed (PR #241 + #240) |
+| PII Review (manual notes) | R1 | Decorative 🔍 removed from DM; functional ✅⚠️ preserved | Fixed (PR #240) |
+| Join Observer | R1 | Emoji in role options (📝👁️📊🏛️) removed from modal (PR #241) and handler (PR #240) | Fixed (PR #241 + #240) |
 | Admin Center Hub | R2 | "Open" button label (lines 102, 115) not action-oriented | Pending |
 | Admin — Delete Study | R2 | "Open" button label not action-oriented | Pending |
+| Plan Launcher | R1 | Emoji in section rows (:clipboard: :speech_balloon:) | Fixed (PR #241) |
+| Plan Launcher | R2 | Submit "Done" on launcher modal (no-op) | Fixed (PR #241) |
+| Plan Launcher | R9 | Close→Cancel for consistency | Fixed (PR #241) |
+| Research Plan Generator | R1 | :clipboard: in context block | Fixed (PR #241) |
+| Discussion Guide Modal | R1 | :speech_balloon: in context block | Fixed (PR #241) |
+| Readout Modal | R1 | Emoji in report type context and audience checkboxes (📄🎯🎨⚙️♿👔) | Fixed (PR #241) |
+| Upload Notes | R1 | Emoji in submit (📤), header (📂), button (📝), section (🤖), context (📁) | Fixed (PR #241) |
+| Session Notes | R1 | 💡 in tips context | Fixed (PR #241) |
+| Analyze Session | R1 | 📄 in auto-selected transcript context | Fixed (PR #241) |
+| Request Changes | R1 | 📝 in section header, 💡 in tip context | Fixed (PR #241) |
+| Mark Changes Complete | R1 | 🐛 in GitHub section, ☑️ in notification rows | Fixed (PR #241) |
+| Observer Guide DM | R1 | :book: in guidelines link | Fixed (PR #241) |
+| Study Result Blocks | R1 | 🗓️ in header, 🔔 in DM text | Fixed (PR #241) |
+| Research Shareout | R1 | Emoji in type options (🎯📊👥📄🏛️📐), headers (📋📑📤), tip (💡) | Fixed (PR #241) |
+| Copy Email | R1 | 📄 in section text | Fixed (PR #241) |
+| Email Preview | R1 | 📄 in button label | Fixed (PR #241) |
+| Session Reminder | R1 | 📅 in section header | Fixed (PR #241) |
+| Initial Recruitment | R1 | 📋 in section header | Fixed (PR #241) |
+| Rescheduling Request | R1 | 🔄 in section header | Fixed (PR #241) |
+| Discover: Desk Research | R1 | :page_facing_up: in context | Fixed (PR #241) |
+| Discover: Stakeholder | R1 | :studio_microphone: in context | Fixed (PR #241) |
+| Discover: Survey | R1 | :bar_chart: in context | Fixed (PR #241) |
 
 ---
 
@@ -739,6 +761,7 @@ Track specific violations found during audit, with fix status.
 
 | Date | Version | Changes |
 |------|---------|---------|
+| 2026-07-31 | 2.0 | R1 emoji sweep: removed all decorative emoji from ~28 modal builder files. Functional emoji (✅❌⚠️:warning:🔴🟡🟢:lock:🗑️) preserved. Plan launcher (studySetupModal): removed vestigial submit block (R2), Close→Cancel (R9). Added new violation log rows for modals found during sweep. |
 | 2026-07-10 | 1.9 | Session Notes input preservation fix shipped (`37f50e43`): tab switches no longer clear typed inputs. PII scrubbing fix shipped (`15c0a49f`): participant name now correctly extracted and scrubbed. Whitespace behavior documented (`7b1f31c1`): Slack API strips leading/trailing whitespace from plain_text_input (not fixable). Merged to main as `e454740a`. |
 | 2026-07-09 | 1.8 | 5f fix spec implemented in sessionNotesHandler.ts: (a) inline errors, (b) trim paste, (c) validate content after download. Pending manual test. |
 | 2026-07-09 | 1.7 | §6.0.2 ID matching verified — SELECT confirms `desk_research`, `stakeholder_synthesis` only, no `_processor` values. |

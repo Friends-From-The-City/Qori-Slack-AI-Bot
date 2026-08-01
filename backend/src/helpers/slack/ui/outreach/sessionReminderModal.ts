@@ -50,7 +50,7 @@ export const sessionReminderModal = {
       type: "section",
       text: {
         type: "mrkdwn",
-        text: "*📅 Session details*",
+        text: "*Session details*",
       },
     },
     {

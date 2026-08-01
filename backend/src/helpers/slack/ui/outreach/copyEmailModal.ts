@@ -24,7 +24,7 @@ export const copyEmailModal = (params: CopyEmailParams = {}) => {
         type: "section",
         text: {
           type: "mrkdwn",
-          text: "*📄 Email Message Body*\nClick the text below and press Ctrl+A (or Cmd+A) to select all, then Ctrl+C (or Cmd+C) to copy.",
+          text: "*Email Message Body*\nClick the text below and press Ctrl+A (or Cmd+A) to select all, then Ctrl+C (or Cmd+C) to copy.",
         },
       },
       {

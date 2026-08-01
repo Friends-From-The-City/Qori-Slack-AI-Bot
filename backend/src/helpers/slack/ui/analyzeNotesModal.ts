@@ -316,7 +316,7 @@ export const analyzeNotesModal = (
         elements: [
           {
             type: "mrkdwn",
-            text: `📄 *Analyzing:* \`${transcript.filename || 'Unknown'}\``,
+            text: `*Analyzing:* \`${transcript.filename || 'Unknown'}\``,
           },
         ],
       });

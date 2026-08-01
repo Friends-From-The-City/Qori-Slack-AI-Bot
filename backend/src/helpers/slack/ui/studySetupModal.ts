@@ -45,13 +45,9 @@ export function studySetupModalPlanStudy(studies: StudyOption[] | null, channelI
       type: "plain_text",
       text: "Plan your study",
     },
-    submit: {
-      type: "plain_text",
-      text: "Done",
-    },
     close: {
       type: "plain_text",
-      text: "Close",
+      text: "Cancel",
     },
     blocks: [
       {
@@ -90,7 +86,7 @@ export function studySetupModalPlanStudy(studies: StudyOption[] | null, channelI
         type: "section",
         text: {
           type: "mrkdwn",
-          text: ":clipboard: *Research plan*\nTurns your brief into a stakeholder-ready plan",
+          text: "*Research plan*\nTurns your brief into a stakeholder-ready plan",
         },
         accessory: {
           type: "button",
@@ -106,7 +102,7 @@ export function studySetupModalPlanStudy(studies: StudyOption[] | null, channelI
         type: "section",
         text: {
           type: "mrkdwn",
-          text: ":speech_balloon: *Discussion guide*\nSession script grounded in your objectives",
+          text: "*Discussion guide*\nSession script grounded in your objectives",
         },
         accessory: {
           type: "button",

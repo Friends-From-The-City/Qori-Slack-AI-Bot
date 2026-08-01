@@ -91,8 +91,8 @@ export const buildReadoutModal = (state: ReadoutModalState = {}) => {
           {
             type: 'mrkdwn',
             text: reportType === 'research_readout'
-              ? '📄 *Research Readout* — Comprehensive findings, recommendations, and decisions from all research data'
-              : '🎯 *Targeted Readouts* — Generate audience-specific reports from an existing research readout'
+              ? '*Research Readout* — Comprehensive findings, recommendations, and decisions from all research data'
+              : '*Targeted Readouts* — Generate audience-specific reports from an existing research readout'
           }
         ]
       }
@@ -144,22 +144,22 @@ export const buildReadoutModal = (state: ReadoutModalState = {}) => {
           action_id: 'audience_checkboxes',
           options: [
             {
-              text: { type: 'mrkdwn', text: '*🎨 Designer* — design challenges + ticket candidates' },
+              text: { type: 'mrkdwn', text: '*Designer* — design challenges + ticket candidates' },
               description: { type: 'plain_text', text: 'Creates GitHub Issues after review' },
               value: 'Design Team'
             },
             {
-              text: { type: 'mrkdwn', text: '*⚙️ Engineering* — technical challenges + ticket candidates' },
+              text: { type: 'mrkdwn', text: '*Engineering* — technical challenges + ticket candidates' },
               description: { type: 'plain_text', text: 'Creates GitHub Issues after review' },
               value: 'Engineering Team'
             },
             {
-              text: { type: 'mrkdwn', text: '*♿ Accessibility* — WCAG compliance + ticket candidates' },
+              text: { type: 'mrkdwn', text: '*Accessibility* — WCAG compliance + ticket candidates' },
               description: { type: 'plain_text', text: 'Creates GitHub Issues after review' },
               value: 'Accessibility Team'
             },
             {
-              text: { type: 'mrkdwn', text: '*👔 Leadership* — executive brief (BLUF style)' },
+              text: { type: 'mrkdwn', text: '*Leadership* — executive brief (BLUF style)' },
               description: { type: 'plain_text', text: 'Document only — no tickets' },
               value: 'Executive Leadership'
             }

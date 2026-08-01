@@ -40,42 +40,42 @@ export const researchShareoutModal = {
           {
             text: {
               type: "plain_text",
-              text: "🎯 Stakeholder Summary – 1-minute TL;DR for executives",
+              text: "Stakeholder Summary – 1-minute TL;DR for executives",
             },
             value: "stakeholder_summary",
           },
           {
             text: {
               type: "plain_text",
-              text: "📊 Executive Readout – High-level findings presentation",
+              text: "Executive Readout – High-level findings presentation",
             },
             value: "executive_readout",
           },
           {
             text: {
               type: "plain_text",
-              text: "👥 Team Shareout – Internal research presentation",
+              text: "Team Shareout – Internal research presentation",
             },
             value: "team_shareout",
           },
           {
             text: {
               type: "plain_text",
-              text: "📄 Research Report – Detailed findings document",
+              text: "Research Report – Detailed findings document",
             },
             value: "research_report",
           },
           {
             text: {
               type: "plain_text",
-              text: "🏛️ Policy Brief – Recommendations for government",
+              text: "Policy Brief – Recommendations for government",
             },
             value: "policy_brief",
           },
           {
             text: {
               type: "plain_text",
-              text: "📐 Design Requirements – Product specifications",
+              text: "Design Requirements – Product specifications",
             },
             value: "design_requirements",
           },
@@ -89,7 +89,7 @@ export const researchShareoutModal = {
       type: "header",
       text: {
         type: "plain_text",
-        text: "📋 Study Context",
+        text: "Study Context",
       },
     },
     {
@@ -146,7 +146,7 @@ export const researchShareoutModal = {
       type: "header",
       text: {
         type: "plain_text",
-        text: "📑 Research Findings",
+        text: "Research Findings",
       },
     },
     {
@@ -174,7 +174,7 @@ export const researchShareoutModal = {
       type: "header",
       text: {
         type: "plain_text",
-        text: "📤 Delivery",
+        text: "Delivery",
       },
     },
     {
@@ -215,7 +215,7 @@ export const researchShareoutModal = {
       elements: [
         {
           type: "mrkdwn",
-          text: "💡 *Key Difference:* Shareouts are for *already-analyzed* findings, not raw data. Use `/run-template` for synthesis, then return here to share.",
+          text: "*Key Difference:* Shareouts are for *already-analyzed* findings, not raw data. Use `/run-template` for synthesis, then return here to share.",
         },
       ],
     },
