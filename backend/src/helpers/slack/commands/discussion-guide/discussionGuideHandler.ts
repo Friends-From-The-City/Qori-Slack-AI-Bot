@@ -228,7 +228,7 @@ async function openDiscussionGuideModal({ ack, body, client }: SlackActionMiddle
           elements: [
             {
               type: "mrkdwn",
-              text: `:speech_balloon: *${preselectStudyName}*`,
+              text: `*${preselectStudyName}*`,
             },
           ],
         },
@@ -260,7 +260,7 @@ async function openDiscussionGuideModal({ ack, body, client }: SlackActionMiddle
         elements: [
           {
             type: "mrkdwn",
-            text: `:speech_balloon: *${preselectStudyName}*\nBuilding a session guide from your approved brief.`,
+            text: `*${preselectStudyName}*\nBuilding a session guide from your approved brief.`,
           },
         ],
       };
