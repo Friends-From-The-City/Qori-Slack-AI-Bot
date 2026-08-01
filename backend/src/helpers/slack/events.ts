@@ -13,7 +13,7 @@
  */
 
 import express from 'express';
-import { App, LogLevel } from '@slack/bolt';
+import { App, LogLevel, SocketModeReceiver } from '@slack/bolt';
 import * as Sentry from '@sentry/node';
 import { scrubPII } from '../../config/sentry';
 import type { View } from '@slack/types';
@@ -130,6 +130,33 @@ const slackApp = new App({
 // ── Alerts channel configuration ─────────────────────────────────
 
 const ALERTS_CHANNEL_ID = process.env.QORI_ALERTS_CHANNEL_ID;
+
+// ── num_connections tripwire (incident 2026-07-28) ─────────────
+// Socket Mode hello frame reports how many active websocket connections
+// exist for this app token. If >1, another process shares the token and
+// Slack round-robins commands — most will never be acked.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- receiver is private in Bolt's types but accessible at runtime
+const socketModeReceiver = (slackApp as any).receiver as SocketModeReceiver;
+socketModeReceiver.client.on('hello', (event: { num_connections: number; debug_info?: { host?: string }; connection_info?: { app_id?: string } }) => {
+  if (event.num_connections > 1) {
+    console.warn(
+      `[CRITICAL] Socket Mode hello: num_connections=${event.num_connections} — ` +
+      `expected 1. Another process is sharing this app token. ` +
+      `Commands will be lost. (host=${event.debug_info?.host || 'unknown'}, app=${event.connection_info?.app_id || 'unknown'})`
+    );
+    // Also post to alerts channel if configured
+    if (ALERTS_CHANNEL_ID) {
+      slackApp.client.chat.postMessage({
+        channel: ALERTS_CHANNEL_ID,
+        text: `:rotating_light: *Socket Mode: ${event.num_connections} connections detected* — expected 1. Another process is sharing the prod app token. Commands will be round-robined and most will fail. Check Railway dev environment and local .env files for the prod app token (A08U0FLM4AG).`,
+      }).catch((err: Error) => {
+        console.error('Failed to post num_connections alert:', err.message);
+      });
+    }
+  } else {
+    console.log(`Socket Mode hello: num_connections=${event.num_connections} (healthy)`);
+  }
+});
 
 /**
  * Post an error alert to the #qori-alerts channel.
