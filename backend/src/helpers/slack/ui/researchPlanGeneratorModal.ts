@@ -43,7 +43,7 @@ export const researchPlanGeneratorModal = {
       elements: [
         {
           type: "mrkdwn",
-          text: ":clipboard: *{{study_name}}*\nGenerating an execution plan from your approved brief.",
+          text: "*{{study_name}}*\nGenerating an execution plan from your approved brief.",
         },
       ],
     },

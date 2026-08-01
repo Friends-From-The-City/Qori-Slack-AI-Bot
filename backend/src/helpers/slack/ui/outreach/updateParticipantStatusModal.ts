@@ -106,7 +106,7 @@ export const updateParticipantStatusModal = {
       },
       label: {
         type: "plain_text",
-        text: "*👤 Participant*",
+        text: "*Participant*",
       },
       hint: {
         type: "plain_text",
@@ -118,7 +118,7 @@ export const updateParticipantStatusModal = {
       type: "section",
       text: {
         type: "mrkdwn",
-        text: "*🔄 Update*",
+        text: "*Update*",
       },
     },
     {
@@ -153,7 +153,7 @@ export const updateParticipantStatusModal = {
       },
       label: {
         type: "plain_text",
-        text: "*📝 Update Notes*",
+        text: "*Update Notes*",
       },
     },
     {

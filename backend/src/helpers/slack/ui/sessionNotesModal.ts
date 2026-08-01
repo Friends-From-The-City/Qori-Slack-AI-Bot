@@ -170,7 +170,7 @@ const manualBlocks = (preserved?: PreservedInputs) => {
       elements: [
         {
           type: "mrkdwn",
-          text: "💡 *Tips for better notes:*\n• Quote reactions: `\"This is confusing\"`\n• Note timestamps: `Minute 5: User struggled`\n• Describe tasks: `Task 1 - Find benefits (3 min)`\n• Flag issues: `VoiceOver didn't announce button`\n• Capture emotions: `User sighed, frustrated`"
+          text: "*Tips for better notes:*\n• Quote reactions: `\"This is confusing\"`\n• Note timestamps: `Minute 5: User struggled`\n• Describe tasks: `Task 1 - Find benefits (3 min)`\n• Flag issues: `VoiceOver didn't announce button`\n• Capture emotions: `User sighed, frustrated`"
         }
       ]
     },

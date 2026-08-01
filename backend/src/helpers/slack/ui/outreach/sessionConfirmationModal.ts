@@ -50,7 +50,7 @@ export const sessionConfirmationModal = {
       type: "section",
       text: {
         type: "mrkdwn",
-        text: "*📅 Session details*",
+        text: "*Session details*",
       },
     },
     {

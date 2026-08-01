@@ -82,7 +82,7 @@ export const generateStudyResultBlocks = (
       type: 'header',
       text: {
         type: 'plain_text',
-        text: `🗓️ ${studyName}${documentTypeLabel ? ` - ${documentTypeLabel}` : ''}`,
+        text: `${studyName}${documentTypeLabel ? ` - ${documentTypeLabel}` : ''}`,
         emoji: true,
       },
     },
@@ -128,7 +128,7 @@ const generateChannelBlocks = (studyName: string, study: StudyWithRoles | null, 
       type: 'header',
       text: {
         type: 'plain_text',
-        text: `🗓️ ${studyName} - ${documentType.charAt(0).toUpperCase() + documentType.slice(1)} Created`,
+        text: `${studyName} - ${documentType.charAt(0).toUpperCase() + documentType.slice(1)} Created`,
         emoji: true,
       },
     },
@@ -235,7 +235,7 @@ export const sendStudyResultMessage = async (
 
           await client.chat.postMessage({
             channel: im.channel.id,
-            text: `🔔 New ${documentType} for *${studyName}* - Please review and take action`,
+            text: `New ${documentType} for *${studyName}* - Please review and take action`,
             blocks: blocksWithContext as unknown as KnownBlock[],
           });
           console.log(`✅ Sent approval request to ${roleLabel} ${approver.userId}`);

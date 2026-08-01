@@ -31,7 +31,7 @@ export const uploadNotesModal = (participants: Participant[] = []) => {
     },
     "submit": {
       "type": "plain_text",
-      "text": "📤 Upload",
+      "text": "Upload",
       "emoji": true
     },
     "close": {
@@ -42,7 +42,7 @@ export const uploadNotesModal = (participants: Participant[] = []) => {
     "blocks": [
       {
         "type": "header",
-        "text": { "type": "plain_text", "text": "📂 Destination & Participant", "emoji": true }
+        "text": { "type": "plain_text", "text": "Destination & Participant", "emoji": true }
       },
 
       /* Folder */
@@ -85,7 +85,7 @@ export const uploadNotesModal = (participants: Participant[] = []) => {
           {
             "type": "button",
             "action_id": "select_session_notes",
-            "text": { "type": "plain_text", "text": "📝 Take Notes", "emoji": true },
+            "text": { "type": "plain_text", "text": "Take Notes", "emoji": true },
             "style": "primary",
             "value": "session_notes"
           }
@@ -115,7 +115,7 @@ export const uploadNotesModal = (participants: Participant[] = []) => {
       {
         "type": "section",
         "block_id": "processing_info_title",
-        "text": { "type": "mrkdwn", "text": "🤖 *Processing Details*" }
+        "text": { "type": "mrkdwn", "text": "*Processing Details*" }
       },
       {
         "type": "context",
@@ -131,7 +131,7 @@ export const uploadNotesModal = (participants: Participant[] = []) => {
         "block_id": "destination_preview",
         "text": {
           "type": "mrkdwn",
-          "text": "📁 `{project}/{study}/03-fieldwork/[folder]/[participant]-[type]-[date].[ext]`"
+          "text": "`{project}/{study}/03-fieldwork/[folder]/[participant]-[type]-[date].[ext]`"
         }
       },
 

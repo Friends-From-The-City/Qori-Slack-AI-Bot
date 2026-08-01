@@ -45,7 +45,7 @@ export const sendObserverGuideDM = async (
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: `<${OBSERVER_GUIDELINES_URL}|:book: View Observer Guidelines>`,
+        text: `<${OBSERVER_GUIDELINES_URL}|View Observer Guidelines>`,
       },
     },
     {
