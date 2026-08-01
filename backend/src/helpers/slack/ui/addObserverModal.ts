@@ -55,12 +55,12 @@ const buildAddObserverModal = (sessions: SessionOption[], channelName: string) =
         action_id: 'observer_role',
         placeholder: { type: 'plain_text', text: 'Select a role...' },
         options: [
-          { text: { type: 'plain_text', text: '📝 Note-taker' }, value: 'note_taker' },
-          { text: { type: 'plain_text', text: '👁️ Silent Observer' }, value: 'silent_observer' },
-          { text: { type: 'plain_text', text: '📊 PM Observer' }, value: 'pm_observer' },
-          { text: { type: 'plain_text', text: '🏛️ Stakeholder' }, value: 'stakeholder' },
+          { text: { type: 'plain_text', text: 'Note-taker' }, value: 'note_taker' },
+          { text: { type: 'plain_text', text: 'Silent Observer' }, value: 'silent_observer' },
+          { text: { type: 'plain_text', text: 'PM Observer' }, value: 'pm_observer' },
+          { text: { type: 'plain_text', text: 'Stakeholder' }, value: 'stakeholder' },
         ],
-        initial_option: { text: { type: 'plain_text', text: '👁️ Silent Observer' }, value: 'silent_observer' },
+        initial_option: { text: { type: 'plain_text', text: 'Silent Observer' }, value: 'silent_observer' },
       },
     },
     {

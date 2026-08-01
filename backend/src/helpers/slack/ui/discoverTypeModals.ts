@@ -27,7 +27,7 @@ export const discoverDeskResearchModal = {
       elements: [
         {
           type: "mrkdwn",
-          text: ":page_facing_up: Upload reports, competitive analysis, or background docs. Qori extracts barriers, metrics, and knowledge gaps.",
+          text: "Upload reports, competitive analysis, or background docs. Qori extracts barriers, metrics, and knowledge gaps.",
         },
       ],
     },
@@ -117,7 +117,7 @@ export const discoverStakeholderModal = {
       elements: [
         {
           type: "mrkdwn",
-          text: ":studio_microphone: Upload interview transcripts or stakeholder notes. Qori extracts constraints, priorities, and alignment gaps.",
+          text: "Upload interview transcripts or stakeholder notes. Qori extracts constraints, priorities, and alignment gaps.",
         },
       ],
     },
@@ -207,7 +207,7 @@ export const discoverSurveyModal = {
       elements: [
         {
           type: "mrkdwn",
-          text: ":bar_chart: Upload survey exports. Qori identifies themes, findings, and demographic patterns.",
+          text: "Upload survey exports. Qori identifies themes, findings, and demographic patterns.",
         },
       ],
     },

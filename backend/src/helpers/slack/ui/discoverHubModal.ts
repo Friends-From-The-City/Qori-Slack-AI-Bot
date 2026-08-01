@@ -38,7 +38,7 @@ export const discoverHubModal = {
       type: "section",
       text: {
         type: "mrkdwn",
-        text: ":page_facing_up: *Desk research*\nReports, competitive analysis, background docs",
+        text: "*Desk research*\nReports, competitive analysis, background docs",
       },
       accessory: {
         type: "button",
@@ -54,7 +54,7 @@ export const discoverHubModal = {
       type: "section",
       text: {
         type: "mrkdwn",
-        text: ":studio_microphone: *Stakeholder synthesis*\nInterview transcripts and stakeholder notes",
+        text: "*Stakeholder synthesis*\nInterview transcripts and stakeholder notes",
       },
       accessory: {
         type: "button",
@@ -70,7 +70,7 @@ export const discoverHubModal = {
       type: "section",
       text: {
         type: "mrkdwn",
-        text: ":bar_chart: *Survey synthesis*\nSurvey exports (CSV, Excel)",
+        text: "*Survey synthesis*\nSurvey exports (CSV, Excel)",
       },
       accessory: {
         type: "button",

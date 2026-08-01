@@ -55,7 +55,7 @@ const markChangesCompleteModal = (fileName: string, filePath: string, statusId: 
       type: "section",
       text: {
         type: "mrkdwn",
-        text: `🐛 *GitHub:* ${fileName}`,
+        text: `*GitHub:* ${fileName}`,
       },
     },
     {
@@ -69,14 +69,14 @@ const markChangesCompleteModal = (fileName: string, filePath: string, statusId: 
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: requestedBy ? `☑️ Notify ${requestedBy} changes are complete` : '☑️ Notify the user who requested changes',
+        text: requestedBy ? `Notify ${requestedBy} changes are complete` : 'Notify the user who requested changes',
       },
     },
     {
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: '☑️ Include link to view updated files',
+        text: 'Include link to view updated files',
       },
     },
     {

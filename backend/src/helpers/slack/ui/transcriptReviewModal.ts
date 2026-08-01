@@ -83,7 +83,7 @@ export const buildTranscriptReviewModal = (params: TranscriptReviewParams): View
       // Header
       {
         type: 'header',
-        text: { type: 'plain_text', text: '🔍 PII Review Required', emoji: true }
+        text: { type: 'plain_text', text: 'PII Review Required', emoji: true }
       },
       {
         type: 'context',
@@ -119,7 +119,7 @@ export const buildTranscriptReviewModal = (params: TranscriptReviewParams): View
         elements: [
           {
             type: 'button',
-            text: { type: 'plain_text', text: '📄 Review Full Transcript on GitHub', emoji: true },
+            text: { type: 'plain_text', text: 'Review Full Transcript on GitHub', emoji: true },
             url: fileUrl,
             action_id: 'review_full_transcript_link',
             style: 'primary'

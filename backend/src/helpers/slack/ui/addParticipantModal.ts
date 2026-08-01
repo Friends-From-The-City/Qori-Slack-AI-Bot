@@ -50,7 +50,7 @@ const addParticipantModal = {
     { type: "divider" },
 
     // Participant Information
-    { type: "section", text: { type: "mrkdwn", text: "📝 *Participant Information*" } },
+    { type: "section", text: { type: "mrkdwn", text: "*Participant Information*" } },
     // Participant alias (optional memory aid)
     {
       type: "input",
@@ -75,11 +75,11 @@ const addParticipantModal = {
         action_id: "recruitment_method",
         placeholder: { type: "plain_text", text: "Select recruitment source" },
         options: [
-          { text: { type: "plain_text", text: "🗂️ Internal panel" }, value: "internal_panel" },
-          { text: { type: "plain_text", text: "📧 Email outreach" }, value: "email_outreach" },
-          { text: { type: "plain_text", text: "🏢 Recruitment agency" }, value: "recruitment_agency" },
-          { text: { type: "plain_text", text: "🤝 Referral" }, value: "referral" },
-          { text: { type: "plain_text", text: "🌐 Social/Website" }, value: "online" },
+          { text: { type: "plain_text", text: "Internal panel" }, value: "internal_panel" },
+          { text: { type: "plain_text", text: "Email outreach" }, value: "email_outreach" },
+          { text: { type: "plain_text", text: "Recruitment agency" }, value: "recruitment_agency" },
+          { text: { type: "plain_text", text: "Referral" }, value: "referral" },
+          { text: { type: "plain_text", text: "Social/Website" }, value: "online" },
         ],
       },
     },
@@ -87,7 +87,7 @@ const addParticipantModal = {
     { type: "divider" },
 
     // Session Details
-    { type: "section", text: { type: "mrkdwn", text: "📅 *Session Details*" } },
+    { type: "section", text: { type: "mrkdwn", text: "*Session Details*" } },
     // Scheduled date
     {
       type: "input",
@@ -127,7 +127,7 @@ const addParticipantModal = {
     { type: "divider" },
 
     // Demographics
-    { type: "section", text: { type: "mrkdwn", text: "📊 *Demographics*" } },
+    { type: "section", text: { type: "mrkdwn", text: "*Demographics*" } },
     // Race/Ethnicity
     {
       type: "input",
@@ -213,7 +213,7 @@ const addParticipantModal = {
     { type: "divider" },
 
     // Notes & Accommodations
-    { type: "section", text: { type: "mrkdwn", text: "📝 *Additional Info" } },
+    { type: "section", text: { type: "mrkdwn", text: "*Additional Info*" } },
     {
       type: "input",
       block_id: "notes_accommodations_block",
