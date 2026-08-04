@@ -14,7 +14,7 @@ export const discoverHubModal = {
   callback_id: "discover_hub_modal",
   title: {
     type: "plain_text",
-    text: "Discovery research",
+    text: "Discovery Research",
   },
   close: {
     type: "plain_text",

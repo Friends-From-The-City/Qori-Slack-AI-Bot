@@ -3,7 +3,7 @@ export const followupModal = {
   callback_id: "outreach_follow_up_modal",
   title: {
     type: "plain_text",
-    text: "Follow-up",
+    text: "Follow-Up",
   },
   submit: {
     type: "plain_text",

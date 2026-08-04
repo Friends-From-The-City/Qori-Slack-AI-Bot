@@ -3,7 +3,7 @@ export const initialRecruitmentModal = {
   callback_id: "outreach_initial_recruitment_modal",
   title: {
     type: "plain_text",
-    text: "Initial recruitment",
+    text: "Initial Recruitment",
   },
   submit: {
     type: "plain_text",

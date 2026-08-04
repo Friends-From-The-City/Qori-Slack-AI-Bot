@@ -22,7 +22,7 @@ export function projectCreationModal(channelId: string) {
     private_metadata: JSON.stringify({ channelId } satisfies ProjectCreationModalMetadata),
     title: {
       type: "plain_text",
-      text: "Start a project",
+      text: "Start a Project",
     },
     submit: {
       type: "plain_text",
