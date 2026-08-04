@@ -15,26 +15,40 @@ For modal-specific design guidance, see `docs/modal-design-principles.md`.
 
 The migration paused template standardization. The plan template (v7.0) and brief template (v7.0) are the established references. Per the post-migration audit, 26 of 27 templates have no unit tests, and 12 use the older "minimal static + single LLM" pattern instead of the canonical interleaved Handlebars + bounded LLM slots (ADR 0005).
 
-### Completed (May 2026)
+### Completed (May–August 2026)
 
-- **research_plan** v7.0 (reference implementation)
-- **research_brief** v7.0 (ADR 0016)
-- **desk_research** v7.0
-- **stakeholder_synthesis** v7.0
-- **survey_synthesis** v7.0
-- **affinity_mapping** v7.0
-- **persona_generator** v7.0
-- **designer_readout** v7.0 (reference implementation for readout ticket quality)
-- **research_readout** v7.0 (upstream of all 4 audience readouts — emits prioritized_findings + prioritized_recommendations)
-- **engineering_readout** v7.0 (21-field ticket schema, already production-ready)
-- **accessibility_readout** v7.0 (18-field compliance/AT schema, P0_legal/P0_severe priority)
-- **leadership_readout** v7.0 (document-only, BLUF-style, exec_summary_points)
+- **research_plan** v7.2 (OUTPUT BOUNDARIES added August 2026, validity checklist, metadata ruling)
+- **research_brief** v7.1 (validity checklist, metadata ruling)
+- **desk_research** v7.1 (validity checklist, metadata ruling)
+- **stakeholder_synthesis** v7.1 (✓→empty cells, metadata ruling)
+- **survey_synthesis** v7.1 (validity checklist, metadata ruling)
+- **affinity_mapping** v7.1 (validity checklist, metadata ruling)
+- **persona_generator** v7.0 (metadata ruling)
+- **designer_readout** v7.0 (metadata ruling; delta doc marked Implemented)
+- **research_readout** v7.0 (metadata ruling)
+- **engineering_readout** v7.0 (metadata ruling)
+- **accessibility_readout** v7.0 (metadata ruling)
+- **leadership_readout** v7.0 (metadata ruling)
+- **discussion_guide** v7.1 (true v7.0 restructure August 2026 — was monolithic despite v7.0 label)
+- **journey_mapping** v7.0 (true restructure from v4.0, August 2026)
+- **session_summary** v7.2 (reference implementation, metadata ruling)
+- **design_opportunity_generator** v7.0 (metadata ruling)
+- **jobs_to_be_done** v7.0 (metadata ruling)
+- **usability_issues_extractor** v7.0 (metadata ruling)
 
-### Remaining
+### Post-launch conformance backlog
 
-- All readout templates complete.
-- **Discussion guide, session_summary, participant_tracker.** Discussion guide has cascade gaps (75-minute partially addressed). Participant tracker has status label mismatch (audit finding).
-- **Other downstream templates:** journey_mapping, jobs_to_be_done, usability_issues, design_opportunities, service_blueprint. Each consumes specific cascade variables and produces specific outputs.
+Restructure to v7.0 when next touched. Priority order: service_blueprint first.
+
+- **service_blueprint** v1.2 — monolithic, no OUTPUT BOUNDARIES. First priority among these.
+- **targeted_readouts** v4.1 — monolithic, 8 audience formats. Dead config strings fixed but structure unchanged.
+- **github_issues_generator** v4.0 — monolithic. Downstream terminal (emits GitHub issues, not cascade variables).
+- **participant_outreach** v4.2 — 2-task communication template. Pattern C per §4.12 (low design weight).
+
+Not applicable for v7.0 restructure (utility/non-AI):
+- **participant_tracker** v1.2 — pure Handlebars, zero AI tasks
+- **session_notes** v2.1 — handler-driven formatting
+- **transcript_upload** v2.4 — transcript processing utility
 
 ---
 
