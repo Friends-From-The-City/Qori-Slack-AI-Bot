@@ -43,7 +43,7 @@ export function studySetupModalPlanStudy(studies: StudyOption[] | null, channelI
     private_metadata: JSON.stringify({ channelId } satisfies StudySetupModalMetadata),
     title: {
       type: "plain_text",
-      text: "Plan your study",
+      text: "Plan Your Study",
     },
     close: {
       type: "plain_text",

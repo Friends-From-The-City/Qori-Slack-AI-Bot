@@ -3,7 +3,7 @@ export const sessionConfirmationModal = {
   callback_id: "outreach_session_confirmation_modal",
   title: {
     type: "plain_text",
-    text: "Session confirmation",
+    text: "Session Confirmation",
   },
   submit: {
     type: "plain_text",

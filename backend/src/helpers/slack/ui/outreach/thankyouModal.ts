@@ -3,7 +3,7 @@ export const thankyouModal = {
   callback_id: "outreach_thank_you_modal",
   title: {
     type: "plain_text",
-    text: "Thank you",
+    text: "Thank You",
   },
   submit: {
     type: "plain_text",

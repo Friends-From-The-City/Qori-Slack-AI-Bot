@@ -95,7 +95,8 @@ Prefill from discovery satisfies but does not alter required status.
 - **`stakeholder`** — REQUIRED under (b): workflow gate (approver assignment).
 - **`problem_statement`** — REQUIRED under (a): `target_barriers` is hard-required downstream (`research_plan.yaml:69-73`, `discussion_guide.yaml:69-73`) and AI-generated from `problem_statement` + discovery. In the empty-cascade case (no discovery selected), an empty `problem_statement` forces the AI task to generate barriers from nothing — fabricated provenance flowing into plan and discussion guide. `problem_statement` is the human grounding; required.
 - **`session_date`, `session_time`, `current_status`** (Add Participant) — OPTIONAL. Not cascade-required (participant records don't feed YAML templates), not routing/identity, not workflow gates. These are operational metadata for scheduling, not required inputs.
-- **`recruitment_method`** (Add Participant) — FLAGGED. Currently marked required in code but doesn't satisfy (a), (b), or (c). Ambiguity: Is recruitment source tracking required for research compliance/methodology audit purposes (policy question), or is it optional metadata? Needs policy decision before fix.
+- **`recruitment_method`** (Add Participant) — REQUIRED under (b): recruitment-source tracking supports federal research methodology auditability. Resolved 2026-08-04.
+- **`race_ethnicity`, `age_range`, `education_level`, `location_type`** (Add Participant) — REQUIRED. `participant_metadata` is cascade-required by `research_readout.yaml:76-80`, so the cascade always receives a value. Every demographics dropdown includes a "Prefer not to say" option — honest data that respects data-minimization in a federal context. Unfreezes §6.7 design freeze (2026-08-04).
 
 **Status:** Derivation complete for Brief, Analyze, Synthesis, Readout, Add Participant, Session Notes. Pending: Discover modals.
 
@@ -202,6 +203,34 @@ One loud thing per surface.
 
 ---
 
+### R16: Scope — All Researcher-Facing Surfaces
+
+This design standard governs **all** researcher-facing surfaces — modals, DMs, dashboards, ephemeral messages, and channel posts. Surfaces are not exempted by being "just a message."
+
+**Ruling applicability by surface type:**
+
+| Ruling | Modals | DMs / Channel posts / Ephemeral |
+|--------|:------:|:-------------------------------:|
+| R1 No decorative emoji | ✓ | ✓ |
+| R2 Action-oriented labels | ✓ | ✓ (button text) |
+| R3 No redundant headers | ✓ | N/A |
+| R4 Domain-accurate terminology | ✓ | ✓ |
+| R5 Researcher-friendly labels | ✓ | ✓ |
+| R6 App icon | N/A | N/A |
+| R7 Required/optional convention | ✓ | ✓ (input blocks in DMs) |
+| R8 Help text voice | ✓ | ✓ |
+| R9 Dividers | ✓ | N/A |
+| R10 Information hierarchy | ✓ | N/A |
+| R11 Help text earns its place | ✓ | ✓ |
+| R12 Grounding context blocks | ✓ | N/A |
+| R13 Proper pluralization | ✓ | ✓ |
+| R14 Hub launcher verb | ✓ | N/A |
+| R15 Danger styling | ✓ | ✓ (destructive buttons) |
+
+**Status:** Ratified 2026-08-04.
+
+---
+
 ## §5: Conformance Checklist
 
 Per-modal audit state. ✓ = conforms, — = violation found, ? = not audited, N/A = not applicable.
@@ -216,7 +245,7 @@ Scores reflect CURRENT code state, not intended state. A cell flips to ✓ with 
 | Readout | ? | ? | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? | N/A | N/A |
 | Discussion Guide | ? | ? | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? | N/A | N/A |
 | Research Plan | ? | ? | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? | N/A | N/A |
-| Discovery Launcher | ✓ | ? | ? | ? | ? | N/A | ? | — | ? | ? | — | ? | ? | — | N/A |
+| Discovery Launcher | ✓ | ? | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? | ✓ | N/A |
 | Discover: Desk Research | ? | ? | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? | N/A | N/A |
 | Discover: Stakeholder | ? | ? | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? | N/A | N/A |
 | Discover: Survey | ? | ? | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? | N/A | N/A |
@@ -235,6 +264,19 @@ Scores reflect CURRENT code state, not intended state. A cell flips to ✓ with 
 | Admin Center Hub | ? | — | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? | ✓ | — |
 | Admin — Delete Study | ? | — | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? | N/A | N/A |
 | Admin — Manage Stakeholder | ? | ✓ | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? | N/A | N/A |
+| **Inline surfaces (R16)** | | | | | | | | | | | | | | | |
+| Plan Launcher | ✓ | — | ? | ? | ? | N/A | ? | ? | ✓ | ? | ? | ? | ? | — | N/A |
+| Research Plan Generator | ✓ | ? | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? | N/A | N/A |
+| Request Changes | ✓ | ? | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? | N/A | N/A |
+| Mark Changes Complete | ✓ | ? | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? | N/A | N/A |
+| Research Shareout | ✓ | ? | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? | N/A | N/A |
+| Upload Notes | ✓ | ? | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? | N/A | N/A |
+| Observer Guide DM | ✓ | N/A | N/A | ? | ? | N/A | N/A | ? | N/A | N/A | ? | N/A | ? | N/A | N/A |
+| Study Result Blocks | ✓ | N/A | N/A | ? | ? | N/A | N/A | ? | N/A | N/A | ? | N/A | ? | N/A | N/A |
+| Observer CTA (channel) | ? | ? | N/A | ? | ? | N/A | N/A | ? | N/A | N/A | ? | N/A | ? | N/A | ? |
+| Generation Progress DMs | ? | N/A | N/A | ? | ? | N/A | N/A | ? | N/A | N/A | ? | N/A | ? | N/A | N/A |
+| Error/Contract DMs | ? | N/A | N/A | ? | ? | N/A | N/A | ? | N/A | N/A | ? | N/A | ? | N/A | N/A |
+| Observer Awareness DM | ? | N/A | N/A | ? | ? | N/A | N/A | ? | N/A | N/A | ? | N/A | ? | N/A | N/A |
 
 **Legend:**
 - ✓ Conforms
@@ -270,7 +312,17 @@ Scores reflect CURRENT code state, not intended state. A cell flips to ✓ with 
 | `addObserverModal.ts` | (DB operation, no template) | (fieldwork) |
 | `outreach/*.ts` | (messaging templates) | `/qori-outreach` |
 
-**Inline surfaces (built in handlers, not separate files):**
+**Modals built as separate files but missing from the table above:**
+
+| Modal File | Primary Template | Command |
+|------------|------------------|---------|
+| `studySetupModal.ts` | (launcher) | `/qori-plan` |
+| `requestStudyChangesModal.ts` | (DB operation) | (fieldwork) |
+| `markChangesCompleteModal.ts` | (DB operation) | (fieldwork) |
+| `researchShareoutModal.ts` | (sharing flow) | `/qori-readout` |
+| `selfJoinSessionPickerModal.ts` | (observer self-join) | (fieldwork) |
+
+**Inline modals (built in handlers, not separate files):**
 
 | Surface | Location | Flow |
 |---------|----------|------|
@@ -278,6 +330,18 @@ Scores reflect CURRENT code state, not intended state. A cell flips to ✓ with 
 | Admin — Delete Study | `adminActionsHandler.ts:686-750` | Inline modal in handler |
 | Admin — Manage Stakeholder | `adminActionsHandler.ts:1027-1175` | Inline modal in handler |
 | Admin — DSAR sub-modals | `adminActionsHandler.ts:33-110` | Inline modals in handler |
+
+**Non-modal researcher-facing surfaces (R16 scope):**
+
+| Surface | Location | Type | Description |
+|---------|----------|------|-------------|
+| Observer Guide DM | `observerGuideDM.ts` | DM | Observer guidelines and study context |
+| Study Result Blocks | `studyResultBlocks.ts` | Channel post | Study creation/fieldwork result notifications |
+| Observer CTA | `addObserverHandler.ts:200-228` | Channel post | "Join as observer" button in study channel |
+| Observer Awareness DM | `addObserverHandler.ts:400-404` | DM | Researcher notified when someone self-joins |
+| Generation Progress DMs | Various handlers | DM | "Generating your plan..." → result messages |
+| Error/Contract DMs | `slackHelpers.ts`, various | DM | TemplateContractError and API failure messages |
+| PII Review DM (transcript) | `sessionNotesHandler.ts` | DM | Approve/reject buttons for quarantined transcripts |
 
 ---
 
@@ -571,7 +635,7 @@ Derived from `researchBriefModal.ts` — fields with `optional: true`:
 | **Analyze** | study_select (b), session_select (b), transcript_select (c) | notes_select | — |
 | **Synthesis** | study_select (b), analysis_method (b) | — | — |
 | **Readout** | study_select (b), audience_select (b) | — | — |
-| **Add Participant** | study_select (b) | participant_name, session_date, session_time, current_status, notes_accommodations | recruitment_method, race_ethnicity, age_range, education_level, location_type |
+| **Add Participant** | study_select (b), recruitment_method (b), race_ethnicity, age_range, education_level, location_type | participant_name, session_date, session_time, current_status, notes_accommodations | — |
 | **Session Notes** | study_select (b), session_select (b), transcript (c, XOR) | observer_notes | — |
 
 ---
@@ -586,21 +650,19 @@ Derived from `researchBriefModal.ts` — fields with `optional: true`:
 |-------------|--------------|-----------|
 | `study_select` | **YES** | (b) routing/identity — determines which study the participant belongs to |
 | `participant_name` | **NO** | Private alias, explicitly `optional: true` (line 66) |
-| `recruitment_method` | **FLAGGED** | No cascade consumer, not routing/identity, not workflow gate. Policy question: is recruitment source audit-required? |
+| `recruitment_method` | **YES** | (b) recruitment-source tracking supports federal research methodology auditability |
 | `session_date` | **NO** | Operational metadata, not cascade-required. Participant can be added before scheduling. |
 | `session_time` | **NO** | Operational metadata, not cascade-required. |
 | `current_status` | **NO** | Operational metadata — has default (line 123: `initial_option: statusOptions[0]`). |
-| `race_ethnicity` | **FLAGGED** | Demographics — see note below |
-| `age_range` | **FLAGGED** | Demographics — see note below |
-| `education_level` | **FLAGGED** | Demographics — see note below |
-| `location_type` | **FLAGGED** | Demographics — see note below |
+| `race_ethnicity` | **YES** | `participant_metadata` cascade-required by `research_readout.yaml:76-80`; "Prefer not to say" option present |
+| `age_range` | **YES** | `participant_metadata` cascade-required by `research_readout.yaml:76-80`; "Prefer not to say" option present |
+| `education_level` | **YES** | `participant_metadata` cascade-required by `research_readout.yaml:76-80`; "Prefer not to say" option present |
+| `location_type` | **YES** | `participant_metadata` cascade-required by `research_readout.yaml:76-80`; "Prefer not to say" option present |
 | `notes_accommodations` | **NO** | Explicitly `optional: true` (line 229) |
 
-**Demographics fields policy note:** Four demographics fields (`race_ethnicity`, `age_range`, `education_level`, `location_type`) are currently marked required in code (no `optional: true`). These don't satisfy R7 criteria (a), (b), or (c). Whether they're required is a policy question for VA research compliance (data minimization vs representative sampling documentation). Design freeze on these fields pending policy decision.
+**Demographics ruling (2026-08-04):** Four demographics fields remain REQUIRED. `participant_metadata` is cascade-required by `research_readout.yaml:76-80` — the cascade always receives a value. Every demographics dropdown includes a "Prefer not to say" option, providing honest data while respecting data-minimization in a federal context. Resolves previous design freeze.
 
-**R7 Derived Required Fields:** `study_select` only.
-
-**R7 Flagged (needs policy decision):** `recruitment_method`, `race_ethnicity`, `age_range`, `education_level`, `location_type`.
+**R7 Derived Required Fields:** `study_select`, `recruitment_method`, `race_ethnicity`, `age_range`, `education_level`, `location_type`.
 
 **R7 Derived Optional Fields:** `participant_name`, `session_date`, `session_time`, `current_status`, `notes_accommodations`.
 
@@ -726,7 +788,7 @@ Track specific violations found during audit, with fix status.
 | Participant Outreach | R3 | "Select an existing study:" imperative | Pending |
 | Participant Outreach | R7 | Trailing asterisk | Pending |
 | Discovery Launcher | R1 | Emoji in option rows | Fixed (PR #241) |
-| Discovery Launcher | R8 | Italics in help text | Pending |
+| Discovery Launcher | R8 | Italics in help text | Fixed (B1 PR) |
 | PII Review (transcript) | R1 | Decorative 🔍 header + 📄 button removed (PR #241); 🔍 DM removed (PR #240); functional ✅⚠️❌ preserved | Fixed (PR #241 + #240) |
 | PII Review (manual notes) | R1 | Decorative 🔍 removed from DM; functional ✅⚠️ preserved | Fixed (PR #240) |
 | Join Observer | R1 | Emoji in role options (📝👁️📊🏛️) removed from modal (PR #241) and handler (PR #240) | Fixed (PR #241 + #240) |
@@ -761,6 +823,7 @@ Track specific violations found during audit, with fix status.
 
 | Date | Version | Changes |
 |------|---------|---------|
+| 2026-08-04 | 2.1 | Block A rulings: (A1) Demographics fields REQUIRED with "Prefer not to say" options — resolves §6.7 design freeze. (A2) recruitment_method REQUIRED under R7(b) for federal methodology auditability. (A3) R16: Scope — design standard governs all researcher-facing surfaces (modals, DMs, channel posts, ephemerals). §5 checklist expanded with inline surface rows. §5.1 inventory expanded with missing modals and non-modal surfaces. §6.6/§6.7 updated to reflect resolved flags. |
 | 2026-07-31 | 2.0 | R1 emoji sweep: removed all decorative emoji from ~28 modal builder files. Functional emoji (✅❌⚠️:warning:🔴🟡🟢:lock:🗑️) preserved. Plan launcher (studySetupModal): removed vestigial submit block (R2), Close→Cancel (R9). Added new violation log rows for modals found during sweep. |
 | 2026-07-10 | 1.9 | Session Notes input preservation fix shipped (`37f50e43`): tab switches no longer clear typed inputs. PII scrubbing fix shipped (`15c0a49f`): participant name now correctly extracted and scrubbed. Whitespace behavior documented (`7b1f31c1`): Slack API strips leading/trailing whitespace from plain_text_input (not fixable). Merged to main as `e454740a`. |
 | 2026-07-09 | 1.8 | 5f fix spec implemented in sessionNotesHandler.ts: (a) inline errors, (b) trim paste, (c) validate content after download. Pending manual test. |

@@ -46,7 +46,7 @@ export const buildSelfJoinSessionPickerModal = (sessions: SessionOption[], study
     return {
       type: 'modal',
       callback_id: 'self_join_session_picker_modal',
-      title: { type: 'plain_text', text: 'Join as observer' },
+      title: { type: 'plain_text', text: 'Join as Observer' },
       close: { type: 'plain_text', text: 'Close' },
       blocks,
     };
@@ -95,7 +95,7 @@ export const buildSelfJoinSessionPickerModal = (sessions: SessionOption[], study
   return {
     type: 'modal',
     callback_id: 'self_join_session_picker_modal',
-    title: { type: 'plain_text', text: 'Join as observer' },
+    title: { type: 'plain_text', text: 'Join as Observer' },
     submit: { type: 'plain_text', text: 'Join' },
     close: { type: 'plain_text', text: 'Cancel' },
     blocks,

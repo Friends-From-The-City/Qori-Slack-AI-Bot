@@ -3,7 +3,7 @@ export const sessionReminderModal = {
   callback_id: "outreach_session_reminder_modal",
   title: {
     type: "plain_text",
-    text: "Session reminder",
+    text: "Session Reminder",
   },
   submit: {
     type: "plain_text",

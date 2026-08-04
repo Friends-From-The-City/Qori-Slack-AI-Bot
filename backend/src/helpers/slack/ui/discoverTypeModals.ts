@@ -11,7 +11,7 @@ export const discoverDeskResearchModal = {
   callback_id: "discover_desk_research_modal",
   title: {
     type: "plain_text",
-    text: "Desk research",
+    text: "Desk Research",
   },
   submit: {
     type: "plain_text",
@@ -101,7 +101,7 @@ export const discoverStakeholderModal = {
   callback_id: "discover_stakeholder_modal",
   title: {
     type: "plain_text",
-    text: "Stakeholder synthesis",
+    text: "Stakeholder Synthesis",
   },
   submit: {
     type: "plain_text",
@@ -191,7 +191,7 @@ export const discoverSurveyModal = {
   callback_id: "discover_survey_modal",
   title: {
     type: "plain_text",
-    text: "Survey synthesis",
+    text: "Survey Synthesis",
   },
   submit: {
     type: "plain_text",

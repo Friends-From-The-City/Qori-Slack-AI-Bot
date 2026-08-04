@@ -100,7 +100,7 @@ const buildAddObserverModal = (sessions: SessionOption[], channelName: string) =
   return {
     type: 'modal',
     callback_id: 'add_observer_modal',
-    title: { type: 'plain_text', text: 'Add observer' },
+    title: { type: 'plain_text', text: 'Add Observer' },
     submit: { type: 'plain_text', text: 'Done' },
     close: { type: 'plain_text', text: 'Cancel' },
     blocks,

@@ -193,7 +193,7 @@ async function scaffoldDiscoveryFolders(projectSlug: string): Promise<void> {
 /** Format artifact list for the hub's visibility section. Max 5, trimmed to essentials. */
 function buildArtifactDisplayText(artifacts: DiscoveryArtifact[]): string {
   if (artifacts.length === 0) {
-    return '_No discovery research yet. Start with desk research to build your team\'s knowledge base._';
+    return 'No discovery research yet. Start with desk research to build your team\'s knowledge base.';
   }
 
   const shown = artifacts.slice(0, 5);
@@ -203,9 +203,9 @@ function buildArtifactDisplayText(artifacts: DiscoveryArtifact[]): string {
   });
 
   if (artifacts.length > 5) {
-    lines.push(`_...and ${artifacts.length - 5} more. These all feed into /qori-brief automatically._`);
+    lines.push(`...and ${artifacts.length - 5} more. These all feed into /qori-brief automatically.`);
   } else {
-    lines.push('_These feed into /qori-brief automatically._');
+    lines.push('These feed into /qori-brief automatically.');
   }
 
   return lines.join('\n');

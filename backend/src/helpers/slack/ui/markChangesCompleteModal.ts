@@ -16,7 +16,7 @@ const markChangesCompleteModal = (fileName: string, filePath: string, statusId: 
   private_metadata: JSON.stringify({ fileName, filePath, statusId } satisfies MarkChangesCompleteMetadata),
   title: {
     type: "plain_text",
-    text: "✅ Mark Changes Complete",
+    text: "Mark Changes Complete",
   },
   submit: {
     type: "plain_text",
