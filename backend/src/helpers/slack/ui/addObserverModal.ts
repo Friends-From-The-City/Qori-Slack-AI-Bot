@@ -91,7 +91,7 @@ const buildAddObserverModal = (sessions: SessionOption[], channelName: string) =
       elements: [
         {
           type: 'mrkdwn',
-          text: `Cap: ${MAX_OBSERVERS} total per session · 1 Note-taker · 1 Stakeholder · 2 PM Observers · 3 Silent Observers. Both paths trigger the observer guide DM.`,
+          text: `Up to ${MAX_OBSERVERS} observers per session, in any mix. Role limits within those ${MAX_OBSERVERS}: max 1 Note-taker, 1 Stakeholder, 2 PM Observers. Both paths trigger the observer guide DM.`,
         },
       ],
     },
@@ -101,7 +101,7 @@ const buildAddObserverModal = (sessions: SessionOption[], channelName: string) =
     type: 'modal',
     callback_id: 'add_observer_modal',
     title: { type: 'plain_text', text: 'Add Observer' },
-    submit: { type: 'plain_text', text: 'Done' },
+    submit: { type: 'plain_text', text: 'Add Observer' },
     close: { type: 'plain_text', text: 'Cancel' },
     blocks,
   } as unknown as View;
