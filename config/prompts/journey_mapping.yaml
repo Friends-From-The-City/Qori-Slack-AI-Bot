@@ -289,23 +289,6 @@ ai_generation_tasks:
 
       ---
 
-      {% if upstream_atomic_nugget_core %}
-      ## Cascade summary
-
-      This journey map synthesizes behavioral sequences from upstream research.
-
-      | Source data | Count |
-      |-------------|-------|
-      | Sessions analyzed | [n] |
-      | Nugget pool size | [n] |
-      | Validated themes available | [n or 0] |
-      | Personas available | [n or 0] |
-      | Target barriers under consideration | [n or 0] |
-
-      ---
-
-      {% endif %}
-
       ## 01 &nbsp;&nbsp; [Stage Title — Descriptive]
 
       [1-2 sentence description of what happens at this stage]

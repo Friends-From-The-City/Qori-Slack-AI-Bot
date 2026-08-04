@@ -259,7 +259,8 @@ output_template: |
 
   ---
 
-  ## Cascade summary
+  <details>
+  <summary><strong>Research provenance</strong></summary>
 
   This leadership brief emits variables for potential downstream consumption.
 
@@ -276,6 +277,8 @@ output_template: |
   | decision_inputs | research_readout | Decision frame |
   | business_context | research_brief | Business pressures |
   | methodology_selection | research_brief | Study methodology context |
+
+  </details>
 
 output_options:
   path: "05-readouts/"

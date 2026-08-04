@@ -377,7 +377,8 @@ output_template: |
 
   ---
 
-  ## Cascade summary
+  <details>
+  <summary><strong>Research provenance</strong></summary>
 
   This opportunity analysis emits variables for structural completeness. Replace strategy — one analysis per study, not per-participant pool.
 
@@ -397,6 +398,8 @@ output_template: |
   | validated_jobs | jobs_to_be_done | Progress-focused job framing |
   | target_barriers | research_brief | Barrier addressing |
   | research_questions | research_brief | Question addressing |
+
+  </details>
 
 output_options:
   path: "04-synthesis/"

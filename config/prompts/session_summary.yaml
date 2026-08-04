@@ -495,7 +495,8 @@ output_template: |
 
   ---
 
-  ## Cascade summary
+  <details>
+  <summary><strong>Research provenance</strong></summary>
 
   This session summary emits pool variables consumed by downstream synthesis templates.
 
@@ -514,6 +515,8 @@ output_template: |
   | target_barriers | research_brief | Barrier validation grounding |
   | research_questions | research_brief | Question framing |
   | methodology_selection | research_brief | Observation framing |
+
+  </details>
 
 output_options:
   path: "03-fieldwork/sessions/"

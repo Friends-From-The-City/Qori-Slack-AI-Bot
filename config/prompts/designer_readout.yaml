@@ -362,7 +362,8 @@ output_template: |
 
   ---
 
-  ## Cascade summary
+  <details>
+  <summary><strong>Research provenance</strong></summary>
 
   This designer readout emits variables for downstream templates.
 
@@ -380,6 +381,8 @@ output_template: |
   | journey_stages | journey_mapping | Flow context for interventions |
   | validated_themes | affinity_mapping | Thematic pattern references |
   | target_barriers | research_brief | Barrier context |
+
+  </details>
 
 output_options:
   path: "05-readouts/"
