@@ -235,7 +235,9 @@ async function handleBriefSubmission({ ack, body, view, client }: SlackViewMiddl
   };
 
   // Study name inherits from project slug (Phase 2D: no study_name_block)
+  // Study slug is 'research' to avoid doubled path ({slug}/{slug})
   const studyName = projectSlug;
+  const studySlug = 'research';
 
 
   // Post "working" message to researcher's DM (consistent with completion DM)
@@ -275,7 +277,7 @@ async function handleBriefSubmission({ ack, body, view, client }: SlackViewMiddl
       const scaffoldResult = await scaffoldStudy(
         project.slug,
         studyName,
-        studyName, // studyName serves as both name and slug
+        studySlug,
         project.name,
         userName,
       );
@@ -289,13 +291,13 @@ async function handleBriefSubmission({ ack, body, view, client }: SlackViewMiddl
       study = await addResearchStudyWithRoles({
         name: studyName,
         project_id: projectId,
-        slug: studyName,
+        slug: studySlug,
         description: `Created from research brief`,
         created_by: body.user.id,
         researcher_name: userName,
         researcher_email: userEmail,
         link: scaffoldResult.studyReadmeUrl,
-        path: `${project.slug}/${studyName}`,
+        path: `${project.slug}/${studySlug}`,
         channel_name: channelId,
         assignments: [],
       });

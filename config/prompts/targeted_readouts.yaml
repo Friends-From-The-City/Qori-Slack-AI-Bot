@@ -1009,7 +1009,7 @@ core_files:
     extract: ["objectives", "methods", "success_criteria", "timeline"]
 
   session_summaries:
-    folder: "03-fieldwork/session-summaries/"
+    folder: "03-fieldwork/sessions/"
     required: true
     extract: ["pain_points", "opportunities", "insights", "quotes", "participant_context"]
     file_pattern: "*session_summary*.md"
@@ -1021,11 +1021,11 @@ core_files:
 
 optional_files:
   affinity_mapping:
-    file: "04-analysis/affinity-mapping/*.md"
+    file: "04-synthesis/affinity-mapping/*.md"
     extract: ["themes", "evidence_counts", "recommendations"]
 
   journey_mapping:
-    file: "04-analysis/journey-mapping/*.md"
+    file: "04-synthesis/journey-mapping/*.md"
     extract: ["stages", "pain_points", "opportunities"]
 
 auto_variables:

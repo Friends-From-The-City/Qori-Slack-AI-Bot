@@ -376,7 +376,7 @@ const handleStep2Submit = async ({ ack, body, view, client }: SlackViewMiddlewar
 
   const values = view.state.values;
   const meta = JSON.parse(view.private_metadata || '{}');
-  const { studyId, studyName, audience } = meta as { studyId: number; studyName: string; audience: AudienceKey };
+  const { studyId, studyName, studyPath, audience } = meta as { studyId: number; studyName: string; studyPath: string; audience: AudienceKey };
   const userId = body.user.id;
 
   const selectedTicketIds: string[] = values.ticket_selection?.ticket_checkboxes?.selected_options?.map((o: any) => o.value) || [];
@@ -458,7 +458,7 @@ const handleStep2Submit = async ({ ack, body, view, client }: SlackViewMiddlewar
 
   for (const ticket of tickets) {
     try {
-      const issueBody = formatIssueBody(ticket, audience, studyName, findingsMap, nuggetDetails);
+      const issueBody = formatIssueBody(ticket, audience, studyName, findingsMap, nuggetDetails, studyPath);
       const labels = buildLabels(ticket, audience, studyName);
 
       const { data } = await octokit.rest.issues.create({
@@ -529,6 +529,7 @@ function formatIssueBody(
   studyName: string,
   findingsMap: Record<string, PrioritizedFinding> = {},
   nuggetDetails: Record<string, NuggetDetail> = {},
+  studyPath: string = studyName,
 ): string {
   const sections: string[] = [];
 
@@ -636,7 +637,7 @@ function formatIssueBody(
   if (ticket.addresses_findings?.length) {
     const owner = process.env.GITHUB_OWNER;
     const repo = process.env.GITHUB_REPO;
-    const readoutPath = `${studyName}/05-readouts/`;
+    const readoutPath = `${studyPath}/05-readouts/`;
     const readoutLink = `https://github.com/${owner}/${repo}/tree/main/${readoutPath}`;
 
     const findingLines = ticket.addresses_findings.map(fId => {
