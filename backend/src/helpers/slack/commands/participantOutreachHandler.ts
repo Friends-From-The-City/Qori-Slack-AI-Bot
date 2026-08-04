@@ -38,7 +38,7 @@ async function participantOutreachHandler({ ack, body, client, command }: SlackC
       studyDropdownBlock = {
         type: 'input',
         block_id: 'study_select_block',
-        label: { type: 'plain_text', text: 'Select an existing study:' },
+        label: { type: 'plain_text', text: 'Study' },
         element: {
           type: 'static_select',
           action_id: 'study_select',
@@ -51,7 +51,8 @@ async function participantOutreachHandler({ ack, body, client, command }: SlackC
     // Only show the dropdown at the top
     let blocks = JSON.parse(JSON.stringify(participantOutreachModal.blocks));
     if (studyDropdownBlock) {
-      blocks.unshift(studyDropdownBlock);
+      // Insert after the intro context block so purpose sentence stays at top
+      blocks.splice(1, 0, studyDropdownBlock);
     }
     await client.views.open({
       trigger_id: body.trigger_id,
