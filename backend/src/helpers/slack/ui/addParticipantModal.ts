@@ -25,7 +25,7 @@ const addParticipantModal = {
     {
       type: "input",
       block_id: "study_select_block",
-      label: { type: "plain_text", text: "Research study *" },
+      label: { type: "plain_text", text: "Study" },
       element: {
         type: "static_select",
         action_id: "add_participant_study_select",
@@ -55,21 +55,21 @@ const addParticipantModal = {
     {
       type: "input",
       block_id: "participant_name_block",
-      label: { type: "plain_text", text: "Private alias (optional)" },
+      label: { type: "plain_text", text: "Private alias" },
       element: {
         type: "plain_text_input",
         action_id: "participant_name",
         max_length: 100,
         placeholder: { type: "plain_text", text: "e.g., 'screen-reader user', 'Veteran A'" },
       },
-      hint: { type: "plain_text", text: "Optional private label to help YOU remember this participant. Do NOT enter real names — use the system code for identity." },
+      hint: { type: "plain_text", text: "Private label to help you remember this participant. Do not enter real names — use the system code for identity." },
       optional: true,
     },
     // Recruitment method
     {
       type: "input",
       block_id: "recruitment_method_block",
-      label: { type: "plain_text", text: "How was this participant recruited? *" },
+      label: { type: "plain_text", text: "Recruitment method" },
       element: {
         type: "static_select",
         action_id: "recruitment_method",
@@ -92,7 +92,7 @@ const addParticipantModal = {
     {
       type: "input",
       block_id: "session_date_block",
-      label: { type: "plain_text", text: "Scheduled date *" },
+      label: { type: "plain_text", text: "Scheduled date" },
       element: {
         type: "datepicker",
         action_id: "session_date",
@@ -103,7 +103,7 @@ const addParticipantModal = {
     {
       type: "input",
       block_id: "session_time_block",
-      label: { type: "plain_text", text: "Scheduled time *" },
+      label: { type: "plain_text", text: "Scheduled time" },
       element: {
         type: "timepicker",
         action_id: "session_time",
@@ -114,7 +114,7 @@ const addParticipantModal = {
     {
       type: "input",
       block_id: "current_status_block",
-      label: { type: "plain_text", text: "Current status *" },
+      label: { type: "plain_text", text: "Current status" },
       element: {
         type: "static_select",
         action_id: "current_status",
@@ -132,7 +132,7 @@ const addParticipantModal = {
     {
       type: "input",
       block_id: "race_ethnicity_block",
-      label: { type: "plain_text", text: "Race/Ethnicity *" },
+      label: { type: "plain_text", text: "Race/ethnicity" },
       element: {
         type: "static_select",
         action_id: "race_ethnicity",
@@ -153,7 +153,7 @@ const addParticipantModal = {
     {
       type: "input",
       block_id: "age_range_block",
-      label: { type: "plain_text", text: "Age Range *" },
+      label: { type: "plain_text", text: "Age range" },
       element: {
         type: "static_select",
         action_id: "age_range",
@@ -174,7 +174,7 @@ const addParticipantModal = {
     {
       type: "input",
       block_id: "education_level_block",
-      label: { type: "plain_text", text: "Education Level *" },
+      label: { type: "plain_text", text: "Education level" },
       element: {
         type: "static_select",
         action_id: "education_level",
@@ -196,7 +196,7 @@ const addParticipantModal = {
     {
       type: "input",
       block_id: "location_type_block",
-      label: { type: "plain_text", text: "Location Type *" },
+      label: { type: "plain_text", text: "Location type" },
       element: {
         type: "static_select",
         action_id: "location_type",
@@ -225,7 +225,6 @@ const addParticipantModal = {
         max_length: 500,
         placeholder: { type: "plain_text", text: "e.g., Prefers afternoon sessions, uses screen reader, limited data plan" },
       },
-      hint: { type: "plain_text", text: "Needs screen reader, prefers morning sessions, caregiver present" },
       optional: true,
     },
 
