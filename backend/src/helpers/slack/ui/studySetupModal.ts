@@ -92,7 +92,7 @@ export function studySetupModalPlanStudy(studies: StudyOption[] | null, channelI
           type: "button",
           text: {
             type: "plain_text",
-            text: "Create",
+            text: "Open",
           },
           action_id: "create_research_plan",
           value: "research_plan",
@@ -108,7 +108,7 @@ export function studySetupModalPlanStudy(studies: StudyOption[] | null, channelI
           type: "button",
           text: {
             type: "plain_text",
-            text: "Create",
+            text: "Open",
           },
           action_id: "create_discussion_guide",
           value: "discussion_guide",

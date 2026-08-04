@@ -406,12 +406,15 @@ describe('pattern: channel context threading', () => {
   // - qa/askStudyHandler: Disabled RAG feature (returns "not available yet")
   // - admin/adminCenterHandler: Uses project context via ProjectModel.findOne, passes
   //   project object to modal builder (pattern check doesn't recognize project.id)
+  // - study/studyLifecycleHandler: handleUserSelectOptions fetches channel members
+  //   for team-member typeahead — channel-only by design (no study/project scope)
   const CHANNEL_ONLY_ALLOWED = [
     'learn/learnHandler.ts',
     'repo/repoConfigHandler.ts',
     'repo/syncHandler.ts',
     'qa/askStudyHandler.ts',
     'admin/adminCenterHandler.ts',
+    'study/studyLifecycleHandler.ts',
   ];
 
   it('handler files that use channel_id also reference study or project context', () => {
