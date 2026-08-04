@@ -214,17 +214,16 @@ describe('research_plan template v7.0', () => {
     expect(output).not.toContain('Stakeholder reviewer');
   });
 
-  test('Cascade summary appears after risks, before Document Information footer', async () => {
+  test('Research provenance appears after risks, collapsed in details', async () => {
     const output = await renderPlan();
-    const cascadePos = output.indexOf('## Cascade summary');
+    const provenancePos = output.indexOf('Research provenance');
     const risksPos = output.indexOf('## Risks and mitigations');
-    const footerPos = output.indexOf('## Document Information');
 
-    expect(cascadePos).toBeGreaterThan(risksPos);
-    // Footer is appended by buildTraceabilityFooter, which may or may not
-    // be present in outputTemplate (it's appended to fullContent, not outputTemplate).
-    // So we just verify cascade summary is after risks.
-    expect(cascadePos).toBeGreaterThan(0);
+    expect(provenancePos).toBeGreaterThan(risksPos);
+    expect(provenancePos).toBeGreaterThan(0);
+    // Metadata ruling: cascade summary collapsed in <details>
+    expect(output).toContain('<details>');
+    expect(output).toContain('Research provenance');
   });
 
   test('Cascade summary contains correct counts', async () => {

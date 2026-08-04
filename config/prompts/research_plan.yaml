@@ -4,18 +4,20 @@
 id: research_plan
 name: run_research_plan
 label: "📋 Research Plan"
-version: "v7.1"
+version: "v7.2"
 
 description: |
   Transform your research concept into a stakeholder-ready execution plan.
   Lean output focused on methodology, participants, timeline, and deliverables.
+  v7.2: OUTPUT BOUNDARIES added to all prose tasks, validity checklist (empty cells),
+  cascade summary collapsed in <details> per metadata ruling (2026-08-04).
   v7.1: Fix participant duplication — glance value in summary, detail once in section.
   v7.0: Interleaved Handlebars/AI architecture — computed values render
   mechanically, LLM only writes bounded prose sections.
 
 author: Qori R&D
 created: 2025-06-26
-last_updated: 2026-05-13
+last_updated: 2026-08-04
 
 # ═══════════════════════════════════════════════════════════
 # CONFIGURATION
@@ -168,7 +170,8 @@ ai_generation_tasks:
       BUSINESS CONTEXT: {{upstream_business_context}}
       {% endif %}
 
-      Output ONLY the summary paragraph. No heading, no preamble.
+      OUTPUT BOUNDARIES: Generate ONLY the summary paragraph — no heading,
+      no preamble, no footer or structural elements.
       Focus: what the study will do, the method, participant target,
       and what decision the findings will inform.
 
@@ -186,7 +189,8 @@ ai_generation_tasks:
       OBJECTIVES: {{upstream_research_objectives}}
       {% endif %}
 
-      Output ONLY the paragraph. No heading, no preamble.
+      OUTPUT BOUNDARIES: Generate ONLY the paragraph — no heading,
+      no preamble, no footer or structural elements.
       Focus: why this research matters now, what's known, what the gap is.
       Do not introduce scope beyond what the brief approved.
 
@@ -202,7 +206,8 @@ ai_generation_tasks:
       RESEARCH QUESTIONS: {{upstream_research_questions}}
       {% endif %}
 
-      Output ONLY the sentences. No heading, no label.
+      OUTPUT BOUNDARIES: Generate ONLY the sentences — no heading,
+      no label, no footer or structural elements.
       Be specific to the methodology. Mention what sessions will explore and
       how the protocol will elicit evidence about the target barriers.
 
@@ -210,16 +215,19 @@ ai_generation_tasks:
     prompt: |
       Write 1-2 sentences about session format for {{methodology}} sessions.
 
-      Output ONLY the sentences. Cover: remote/in-person, accessibility
-      accommodations, alternative formats if applicable.
+      OUTPUT BOUNDARIES: Generate ONLY the sentences — no heading,
+      no footer or structural elements.
+      Cover: remote/in-person, accessibility accommodations, alternative
+      formats if applicable.
 
   - task_id: "data_collection_methods"
     prompt: |
       Write 1-2 sentences about data collection methods for {{methodology}}.
 
-      Output ONLY the sentences. Mention specific methods: think-aloud,
-      screen recording, observer notes, post-session interviews, etc.
-      Be specific to the methodology.
+      OUTPUT BOUNDARIES: Generate ONLY the sentences — no heading,
+      no footer or structural elements.
+      Mention specific methods: think-aloud, screen recording, observer
+      notes, post-session interviews, etc. Be specific to the methodology.
 
   - task_id: "participant_glance"
     prompt: |
@@ -232,6 +240,8 @@ ai_generation_tasks:
       Output ONLY a single line with count + segment names. Example format:
       "8-10 veterans across five segments: appointments, benefits, assistive-tech, lower tech proficiency, VA terminology"
 
+      OUTPUT BOUNDARIES: Generate ONLY a single line — no heading,
+      no footer or structural elements.
       NO rationale, NO detail — just count and segment names. This is for a summary table cell.
 
   - task_id: "participant_composition_prose"
@@ -249,7 +259,8 @@ ai_generation_tasks:
       1. ONE sentence stating sample size and rationale (e.g., "Recruit 8-10 participants across five defined segments to ensure coverage of documented discovery barriers")
       2. A bullet list (use markdown dash -) with each segment on its own line, including count per segment and brief rationale
 
-      Output ONLY the content. NO header (the template provides the section header).
+      OUTPUT BOUNDARIES: Generate ONLY the content — no heading,
+      no footer or structural elements. The template provides the section header.
       Keep it actionable. Include accessibility segments and demographic diversity requirements if specified in the criteria.
 
   - task_id: "deliverables_narrative"
@@ -268,7 +279,9 @@ ai_generation_tasks:
       - Concept Testing: Session summaries, Concept reaction synthesis, Research readout, Design recommendations
       - Mixed Methods: Session summaries, Affinity map, Journey map, Research readout
 
-      Output ONLY the bullet list. Format each as:
+      OUTPUT BOUNDARIES: Generate ONLY the bullet list — no heading,
+      no footer or structural elements.
+      Format each as:
       - **[Deliverable]** — [one-line description]
 
       Close with: "All artifacts will be stored in the study's research folder for ongoing reference."
@@ -437,7 +450,27 @@ output_template: |
 
   ---
 
-  ## Cascade summary
+  <details>
+  <summary><strong>Validity checklist</strong></summary>
+
+  | Check | Result |
+  |-------|--------|
+  | Objectives match brief | |
+  | Research questions have RQ-XXX IDs | |
+  | Target barriers have TB-XXX IDs | |
+  | Method matches approved methodology | |
+  | Participant count matches brief | |
+  | Timeline phases are realistic | |
+  | Deliverables are method-appropriate | |
+  | Risks are study-specific, not generic | |
+  | Brief operationalization covers all commitments | |
+
+  </details>
+
+  ---
+
+  <details>
+  <summary><strong>Research provenance</strong></summary>
 
   This plan operationalizes the approved research brief.
 
@@ -459,6 +492,8 @@ output_template: |
   - [RQ-XXX] = research question this element addresses
   - [TB-XXX] = target barrier this task tests
   - [Ob-XXX] = research objective this deliverable serves
+
+  </details>
 
 output_options:
   path: "02-plan/"
