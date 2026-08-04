@@ -3,7 +3,7 @@ export const reschedulingRequestModal = {
   callback_id: "outreach_rescheduling_modal",
   title: {
     type: "plain_text",
-    text: "Rescheduling request",
+    text: "Rescheduling Request",
   },
   submit: {
     type: "plain_text",

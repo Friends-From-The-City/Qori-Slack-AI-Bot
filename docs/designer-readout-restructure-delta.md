@@ -1,7 +1,7 @@
 # Designer Readout Restructure Delta: v1.1 to v7.0 Conformance
 
 **Date:** 2026-05-20
-**Status:** Proposed (awaiting approval before implementation)
+**Status:** Implemented (2026-05-20). Confirmed by conformance audit 2026-08-04 — all 10 proposed changes applied.
 **Reference:** `affinity_mapping.yaml` v7.0, `persona_generator.yaml` v7.0, ADR 0005/0016
 
 ---

@@ -4,16 +4,19 @@
 id: journey_mapping
 name: run_journey_mapping
 label: 🧭 Journey Mapping
-version: "v4.0"
+version: "v7.0"
 
 description: >
   Turn raw user research into a clear, step-by-step journey map. Maps key stages of the
   user's experience — capturing actions, thoughts, emotions, opportunities, and ownership —
   to inform design, policy, and service improvements.
+  v7.0: True v7.0 restructure — Handlebars frame renders masthead, methodology, appendixes,
+  validity checklist, cascade provenance. LLM bounded to journey_body (summary + stages +
+  actions + discussion). OUTPUT BOUNDARIES added. Metadata ruling applied.
 
 author: Qori R&D
 created: 2025-06-30
-last_updated: 2026-05-06
+last_updated: 2026-08-04
 
 # ═══════════════════════════════════════════════════════════
 # CONFIGURATION
@@ -262,14 +265,12 @@ ai_generation_tasks:
       {% endif %}
 
       ============================================================
-      OUTPUT FORMAT
+      OUTPUT FORMAT — Summary + Stages + Actions + Discussion
       ============================================================
 
-      # Journey Map: [DESCRIPTIVE TITLE — infer from the research data, e.g., "VA Mobile App Navigation" or "Benefits Claims Processing". If a descriptive title cannot be confidently inferred from the data, use the study slug.]
-
-      **Study:** {{selected_study}} &nbsp; | &nbsp; **Researcher:** {{researcher_contact}} &nbsp; | &nbsp; **Date:** {{current_date}}
-
-      ---
+      The template handles the masthead, methodology, upstream context,
+      validity checklist, related artifacts, and cascade provenance.
+      Generate ONLY the sections below.
 
       ## Summary
 
@@ -287,23 +288,6 @@ ai_generation_tasks:
       | 05 — [Stage name] | [count] | [X of Y] |{% if upstream_atomic_nugget_core %} [validates TB-XXX] |{% endif %}
 
       ---
-
-      {% if upstream_atomic_nugget_core %}
-      ## Cascade summary
-
-      This journey map synthesizes behavioral sequences from upstream research.
-
-      | Source data | Count |
-      |-------------|-------|
-      | Sessions analyzed | [n] |
-      | Nugget pool size | [n] |
-      | Validated themes available | [n or 0] |
-      | Personas available | [n or 0] |
-      | Target barriers under consideration | [n or 0] |
-
-      ---
-
-      {% endif %}
 
       ## 01 &nbsp;&nbsp; [Stage Title — Descriptive]
 
@@ -372,81 +356,6 @@ ai_generation_tasks:
 
       3. [Question about cross-team collaboration needed] — *[Team + Team]*
 
-      ---
-
-      ## Methodology
-
-      **Framework** — Experience journey mapping
-
-      **Approach** — Stage-by-stage analysis of user actions, emotions, pain points, and opportunities derived from qualitative session data. Each stage's findings are grounded in verbatim quotes and observed behaviors. Pattern B traceability — citations are inline at each stage rather than aggregated separately.
-
-      **Data sources** — [List participant IDs: PT-001, PT-002, PT-003]
-
-      **Limitations** — [Number] participants. [Note any sample composition bias]. Stage definitions are study-specific — different study contexts would surface different stage structures.
-
-      ### References
-
-      - Adaptive Path — Pioneers of journey mapping methodology
-      - Nielsen Norman Group — Stage-based emotion mapping framework
-      - Stickdorn, M. & Schneider, J. — *This Is Service Design Thinking* (2011)
-      - Kalbach, J. — *Mapping Experiences* (O'Reilly, 2nd ed., 2020)
-
-      ---
-
-      {% if upstream_atomic_nugget_core %}
-      ## Upstream context
-
-      This journey map was synthesized from:
-
-      | Source | Used for |
-      |--------|----------|
-      | session_summary outputs | Nuggets across participants |
-      {% if upstream_validated_themes %}| affinity_mapping | Theme grounding |{% endif %}
-      {% if upstream_personas %}| persona_generator | Persona-specific journey paths |{% endif %}
-      {% if upstream_target_barriers %}| research_brief | Target barriers, research questions |{% endif %}
-
-      Citation markers throughout:
-      - [validates TB-XXX] = target barrier manifesting at this stage
-      - [addresses RQ-XXX] = research question this stage helps answer
-      - nugget-PT00X-XXX = source nugget reference
-      - theme-XX = source theme reference
-      - persona-XX = persona whose journey includes this stage
-
-      ---
-
-      {% endif %}
-
-      ## Appendix
-
-      <details>
-      <summary><strong>Related artifacts</strong></summary>
-
-      RELATED ARTIFACTS:
-      Populate this table with artifacts from {{detected_files}} when available.
-      Use exact paths from the detected files list. Prepend ../ to each path.
-      If a file isn't in the list, omit the row. Do NOT invent files.
-
-      | Artifact | Location | Status |
-      |----------|----------|--------|
-      | [Per-participant session summary] | [path from detected_files](../path) | Complete |
-      | [Analysis artifacts if present] | [path](../path) | Complete |
-
-      </details>
-
-      <details>
-      <summary><strong>Validity checklist</strong></summary>
-
-      | Criterion | Verified |
-      |-----------|:--------:|
-      | All quotes verbatim from session data | ✓ |
-      | No real participant names used | ✓ |
-      | Stage labels consistent throughout document | ✓ |
-      | Citations represent all participants in study | ✓ |
-      | Opportunities are specific and implementable | ✓ |
-      | Owners are concrete teams (not vague roles) | ✓ |
-
-      </details>
-
       ============================================================
       QUALITY CHECKS (do not include in output)
       ============================================================
@@ -460,20 +369,121 @@ ai_generation_tasks:
       - Owners are VA teams (Product, Engineering, Design, Content, Accessibility, Policy)
       - Summary stage overview counts match actual pain points per stage
       {% if upstream_atomic_nugget_core %}
-      - [ ] Nugget IDs referenced in stage evidence match actual upstream IDs
-      - [ ] Each stage has supporting_nuggets populated
-      - [ ] Cascade markers ([validates TB-XXX], [addresses RQ-XXX]) present where applicable
-      - [ ] Cascade Summary table has accurate counts
-      - [ ] Upstream Context appendix present
+      - Nugget IDs referenced in stage evidence match actual upstream IDs
+      - Each stage has supporting_nuggets populated
+      - Cascade markers ([validates TB-XXX], [addresses RQ-XXX]) present where applicable
       {% endif %}
 
-      Do NOT output a footer or "Generated by Qori" line — that is added automatically.
+      OUTPUT BOUNDARIES: Do not generate the document title, masthead,
+      methodology section, upstream context appendix, related artifacts,
+      validity checklist, cascade provenance, or footer. The template
+      handles those sections. Start with ## Summary and end after
+      ## Discussion questions.
 
 # ═══════════════════════════════════════════════════════════
 # OUTPUT
 # ═══════════════════════════════════════════════════════════
 output_template: |
+  # Journey Map: {{selected_study}}
+
+  **Study:** {{selected_study}} &nbsp; | &nbsp; **Researcher:** {{researcher_contact}} &nbsp; | &nbsp; **Date:** {{current_date}}
+
+  ---
+
   {{ai_generated.journey_map_complete}}
+
+  ---
+
+  ## Methodology
+
+  **Framework** — Experience journey mapping
+
+  **Approach** — Stage-by-stage analysis of user actions, emotions, pain points, and opportunities derived from qualitative session data. Each stage's findings are grounded in verbatim quotes and observed behaviors. Pattern B traceability — citations are inline at each stage rather than aggregated separately.
+
+  **Limitations** — Stage definitions are study-specific — different study contexts would surface different stage structures.
+
+  ### References
+
+  - Adaptive Path — Pioneers of journey mapping methodology
+  - Nielsen Norman Group — Stage-based emotion mapping framework
+  - Stickdorn, M. & Schneider, J. — *This Is Service Design Thinking* (2011)
+  - Kalbach, J. — *Mapping Experiences* (O'Reilly, 2nd ed., 2020)
+
+  {% if upstream_atomic_nugget_core %}
+  ---
+
+  <details>
+  <summary><strong>Upstream context</strong></summary>
+
+  This journey map was synthesized from:
+
+  | Source | Used for |
+  |--------|----------|
+  | session_summary outputs | Nuggets across participants |
+  {% if upstream_validated_themes %}| affinity_mapping | Theme grounding |{% endif %}
+  {% if upstream_personas %}| persona_generator | Persona-specific journey paths |{% endif %}
+  {% if upstream_target_barriers %}| research_brief | Target barriers, research questions |{% endif %}
+
+  Citation markers throughout:
+  - [validates TB-XXX] = target barrier manifesting at this stage
+  - [addresses RQ-XXX] = research question this stage helps answer
+  - nugget-PT00X-XXX = source nugget reference
+  - theme-XX = source theme reference
+  - persona-XX = persona whose journey includes this stage
+
+  </details>
+  {% endif %}
+
+  {{#if detected_files}}
+  <details>
+  <summary><strong>Related artifacts</strong></summary>
+
+  | Artifact | Location |
+  |----------|----------|
+  {{#each file_list}}
+  | {{this}} | ../{{this}} |
+  {{/each}}
+
+  </details>
+  {{/if}}
+
+  <details>
+  <summary><strong>Validity checklist</strong></summary>
+
+  | Check | Result |
+  |-------|--------|
+  | All quotes verbatim from session data | |
+  | No real participant names used | |
+  | Stage labels consistent throughout document | |
+  | Citations represent all participants in study | |
+  | Opportunities are specific and implementable | |
+  | Owners are concrete teams (not vague roles) | |
+
+  </details>
+
+  ---
+
+  <details>
+  <summary><strong>Research provenance</strong></summary>
+
+  {% if upstream_atomic_nugget_core %}
+  | Source data | Detail |
+  |------------|--------|
+  | Nugget pool | atomic_nugget_core + atomic_nugget_detail from session_summary |
+  {% if upstream_validated_themes %}| Themes | validated_themes from affinity_mapping |{% endif %}
+  {% if upstream_personas %}| Personas | personas from persona_generator |{% endif %}
+  {% if upstream_target_barriers %}| Barriers | target_barriers from research_brief |{% endif %}
+  {% if upstream_research_questions %}| Questions | research_questions from research_brief |{% endif %}
+
+  | Emitted variable | Description |
+  |-------------------|-------------|
+  | journey_stages | Stage-by-stage breakdown with actions, emotions, pain points |
+  | journey_pain_points | Cross-stage pain points with severity and ownership |
+  {% else %}
+  No upstream cascade variables — journey map generated from file content only.
+  {% endif %}
+
+  </details>
 
 output_options:
   path: "04-synthesis/"
@@ -482,77 +492,20 @@ output_options:
 # ═══════════════════════════════════════════════════════════
 # METADATA (documentation only — not read by backend)
 # ═══════════════════════════════════════════════════════════
-processing_workflow:
-  1. validate_slack_modal_inputs
-  2. discover_files_from_study_selection
-  3. combine_selected_files_with_truncation
-  4. execute_file_discovery_summary
-  5. execute_journey_map_complete
-  6. format_output
-  7. save_to_analysis_folder
-
-auto_variables:
-  - stage_count: extract_stage_count(ai_generated.journey_map_complete) || 5
-  - current_date: new Date().toISOString().split('T')[0]
-
-notify:
-  - role: team
-    action: "Journey mapping completed"
-    channel: "{{study_channel}}"
-    message: "Journey mapping for {{selected_study}} complete. {{stage_count}} stages mapped."
-
-quality_assurance:
-  require_citations: true
-  require_participant_ids_only: true
-  require_va_context: true
-  prohibit_generic_opportunities: true
-  prohibit_invented_quotes: true
-  require_stage_consistency: true
-
 notes: |
+  v7.0 Changes (True v7.0 Restructure):
+  - Restructured output_template from monolithic pass-through to Handlebars frame.
+  - LLM bounded to journey_map_complete: Summary + stages + actions + discussion.
+  - Handlebars renders: masthead, methodology (static), upstream context toggle,
+    related artifacts, validity checklist (empty cells), research provenance.
+  - OUTPUT BOUNDARIES added. Validity checklist ✓→empty cells.
+  - Metadata ruling: cascade summary → collapsed <details> "Research provenance".
+  - file_discovery_summary task preserved (pre-analysis summary).
+
   v4.0 Changes (Cascade-aware retrofit):
-  - Consumes: atomic_nuggets split into atomic_nugget_core + atomic_nugget_detail (schema split)
-  - Consumes: added personas (persona_generator), target_barriers and research_questions (research_brief)
-  - Consumes: inject_as upgraded from context to reference/grounding per cascade spec
-  - Emits: added journey_stages and journey_pain_points with Sonnet extraction
-  - Added CASCADE-AWARE GENERATION instruction block with 7 cascade rules
-  - Added Cascade Summary section (source data counts table)
-  - Summary table gains Cascade column with [validates TB-XXX] markers
-  - Stage template gains nugget ID citations, Supporting nuggets line, Grounded in theme line
-  - Added Upstream Context appendix with citation marker legend
-  - Added cascade quality checks (nugget ID verification, cascade markers, counts)
-  - All existing prompt content, design language, and quality checks preserved
+  - Consumes: atomic_nuggets split into core + detail, added personas, barriers, questions.
+  - Emits: journey_stages and journey_pain_points with Sonnet extraction.
+  - CASCADE-AWARE GENERATION block with 8 cascade rules.
 
   v3.12 Changes (Design Language Translation):
-  - Translated locked design from docs/design-references/journey-map-reference.md
-  - Pattern B traceability: inline citations per stage, no per-stage Sources lines
-  - H1: clean text with descriptive title (inferred from data, fallback to study slug)
-  - Added masthead (Study/Researcher/Date)
-  - Added Summary section with narrative + > [!IMPORTANT] callout + stage overview table
-  - Stages: ## 01 &nbsp;&nbsp; editorial numbering (was 1️⃣ emoji), text labels (was inline
-    emoji 📱🔴✅💡👥), H4 sub-sections (What goes wrong / Success looks like /
-    Design opportunity)
-  - Removed ## Journey Stages wrapper heading (stages are H2 directly)
-  - Removed ## Overview section (merged into Summary)
-  - Recommended actions: numeric priority + text effort labels (was emoji)
-  - Discussion questions: numbered list with italic team attribution (was table)
-  - Methodology: bold-em-dash format, added Limitations and updated References
-  - Added Appendix with Related Artifacts (from {{detected_files}}) + Validity Checklist
-  - Validity checklist: added "No real participant names used" row
-  - Added OUTPUT PROCESS instruction: generate stages first, then build Summary from them
-  - Footer removed from prompt (backend buildTraceabilityFooter handles it)
-  - Filename: {{selected_study}}-journey-map-{{current_date_iso}}.md
-  - Preserved all 8 CRITICAL RULES (including NO REAL NAMES, CITATION DIVERSITY)
-  - Preserved two-task structure (file_discovery_summary + journey_map_complete)
-
-  v3.11: Standards Polish (canonical structure, dead config removal)
-  v3.10: Citation Diversity rule
-  v3.3: Anti-generic rules
-  v3.0: Major restructure
-  v2.0: Original multi-task architecture
-
-output_use: |
-  Journey mapping identifies sequential stages of the user experience and maps
-  actions, emotions, pain points, and opportunities at each stage. Pattern B
-  traceability — citations inline per stage. All findings grounded in research
-  data with participant IDs and timestamps.
+  - Pattern B traceability, editorial numbering, Pentagram-style design.

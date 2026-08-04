@@ -43,7 +43,7 @@ export function studySetupModalPlanStudy(studies: StudyOption[] | null, channelI
     private_metadata: JSON.stringify({ channelId } satisfies StudySetupModalMetadata),
     title: {
       type: "plain_text",
-      text: "Plan your study",
+      text: "Plan Your Study",
     },
     close: {
       type: "plain_text",
@@ -92,7 +92,7 @@ export function studySetupModalPlanStudy(studies: StudyOption[] | null, channelI
           type: "button",
           text: {
             type: "plain_text",
-            text: "Create",
+            text: "Open",
           },
           action_id: "create_research_plan",
           value: "research_plan",
@@ -108,7 +108,7 @@ export function studySetupModalPlanStudy(studies: StudyOption[] | null, channelI
           type: "button",
           text: {
             type: "plain_text",
-            text: "Create",
+            text: "Open",
           },
           action_id: "create_discussion_guide",
           value: "discussion_guide",

@@ -59,7 +59,7 @@ export const requestStudyChangesModal = (fileOptionsArray: FileOption[]) => ({
       },
       label: {
         type: "plain_text",
-        text: "Which files need updates? (optional)",
+        text: "Which files need updates?",
       },
     },
     {
@@ -111,7 +111,7 @@ export const requestStudyChangesModal = (fileOptionsArray: FileOption[]) => ({
       },
       label: {
         type: "plain_text",
-        text: "Deadline for changes (optional)",
+        text: "Deadline for changes",
       },
     },
     {

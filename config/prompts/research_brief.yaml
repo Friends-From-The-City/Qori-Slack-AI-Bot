@@ -4,18 +4,19 @@
 id: research_brief
 name: create_research_brief
 label: "Research Brief"
-version: "v7.0"
+version: "v7.1"
 
 description: |
   Cascade-aware stakeholder approval document for research scope.
   Brief = approval gate. Plan = execution doc.
+  v7.1: Validity checklist (empty cells), cascade summary collapsed per metadata ruling.
   v7.0: Interleaved Handlebars/AI architecture — computed values render
   mechanically, LLM only writes bounded prose sections. Handler assigns
   barrier/question IDs via pre-render JSON tasks (Option C).
 
 author: Qori R&D
 created: 2025-06-26
-last_updated: 2026-05-19
+last_updated: 2026-08-04
 
 # ═══════════════════════════════════════════════════════════
 # CONFIGURATION
@@ -517,9 +518,24 @@ output_template: |
 
   ---
 
+  <details>
+  <summary><strong>Validity checklist</strong></summary>
+
+  | Check | Result |
+  |-------|--------|
+  | Problem statement grounds target barriers | |
+  | Learning objectives map to research questions | |
+  | Methodology fits the research questions | |
+  | Participant approach addresses criteria | |
+  | Discovery sources cited where used | |
+  | Out of scope is explicit | |
+
+  </details>
+
   ---
 
-  ## Cascade summary
+  <details>
+  <summary><strong>Research provenance</strong></summary>
 
   This brief establishes the research scope for downstream templates.
 
@@ -542,6 +558,8 @@ output_template: |
 
   Full discovery artifacts: see `_discovery/` in study repository.
   {{/if}}
+
+  </details>
 
 output_options:
   path: "01-brief/"

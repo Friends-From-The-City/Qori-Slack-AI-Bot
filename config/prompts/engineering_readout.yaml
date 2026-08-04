@@ -366,7 +366,8 @@ output_template: |
 
   ---
 
-  ## Cascade summary
+  <details>
+  <summary><strong>Research provenance</strong></summary>
 
   This engineering readout emits variables for downstream templates.
 
@@ -384,6 +385,8 @@ output_template: |
   | personas | persona_generator | User impact context |
   | target_barriers | research_brief | Barrier context |
   | methodology_selection | research_brief | Study methodology context |
+
+  </details>
 
 output_options:
   path: "05-readouts/"

@@ -351,7 +351,8 @@ output_template: |
 
   ---
 
-  ## Cascade summary
+  <details>
+  <summary><strong>Research provenance</strong></summary>
 
   This persona generation emits variables for downstream templates.
 
@@ -370,6 +371,8 @@ output_template: |
   | participant_metadata | session_summary | Demographics for persona attributes |
   | target_barriers | research_brief | Barrier impact marking |
   | research_questions | research_brief | Question addressing |
+
+  </details>
 
 output_options:
   path: "04-synthesis/"
