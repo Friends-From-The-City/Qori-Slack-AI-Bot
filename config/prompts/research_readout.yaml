@@ -596,7 +596,8 @@ output_template: |
 
   ---
 
-  ## Cascade summary
+  <details>
+  <summary><strong>Research provenance</strong></summary>
 
   This research readout emits variables for downstream audience-specific readouts.
 
@@ -627,6 +628,8 @@ output_template: |
   | journey_stages | journey_mapping | User journey context |
   | stakeholder_constraints | stakeholder_synthesis | Constraint context |
   | alignment_gaps | stakeholder_synthesis | Priority gaps |
+
+  </details>
 
 output_options:
   path: "05-readouts/"

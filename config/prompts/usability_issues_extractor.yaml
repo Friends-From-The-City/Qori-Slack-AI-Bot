@@ -361,7 +361,8 @@ output_template: |
 
   ---
 
-  ## Cascade summary
+  <details>
+  <summary><strong>Research provenance</strong></summary>
 
   This usability analysis emits variables for downstream templates. Replace strategy — one analysis per study, not per-participant pool.
 
@@ -378,6 +379,8 @@ output_template: |
   | validated_themes | affinity_mapping | Issue-theme linking |
   | target_barriers | research_brief | Barrier validation |
   | research_questions | research_brief | Question addressing |
+
+  </details>
 
 output_options:
   path: "04-synthesis/"
