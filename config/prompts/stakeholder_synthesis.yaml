@@ -4,7 +4,7 @@
 id: stakeholder_synthesis
 name: synthesize_stakeholder_interviews
 label: "Stakeholder Synthesis"
-version: "v7.0"
+version: "v7.1"
 
 description: |
   Synthesize internal stakeholder interviews into findings-grade
@@ -15,7 +15,7 @@ description: |
 
 author: Qori R&D
 created: 2026-01-08
-last_updated: 2026-05-20
+last_updated: 2026-08-04
 
 # ═══════════════════════════════════════════════════════════
 # CONFIGURATION
@@ -359,15 +359,15 @@ output_template: |
   <details>
   <summary><strong>Validity checklist</strong></summary>
 
-  | Criterion | Verified |
-  |-----------|:---:|
-  | Quotes verbatim from interview transcripts | ✓ |
-  | Role-only attribution preserved (no real names) | ✓ |
-  | Confidence declared per section | ✓ |
-  | Constraints triangulated across stakeholder perspectives where possible | ✓ |
-  | Alignment gaps explicitly surfaced | ✓ |
-  | Open questions documented for follow-up | ✓ |
-  | Recommendations connect to specific constraints | ✓ |
+  | Check | Result |
+  |-------|--------|
+  | Quotes verbatim from interview transcripts | |
+  | Role-only attribution preserved (no real names) | |
+  | Confidence declared per section | |
+  | Constraints triangulated across stakeholder perspectives | |
+  | Alignment gaps explicitly surfaced | |
+  | Open questions documented for follow-up | |
+  | Recommendations connect to specific constraints | |
 
   </details>
 
@@ -386,9 +386,8 @@ output_template: |
 
   ---
 
-  ---
-
-  ## Cascade summary
+  <details>
+  <summary><strong>Research provenance</strong></summary>
 
   This stakeholder synthesis emits variables for downstream templates.
 
@@ -402,6 +401,8 @@ output_template: |
   | system_failure_modes | System dynamics with failure points |
 
   **Stakeholders analyzed:** {{document_count}}
+
+  </details>
 
 output_options:
   path: "{{project_slug}}/00-discovery/"

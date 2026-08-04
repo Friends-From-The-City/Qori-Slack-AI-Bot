@@ -4,7 +4,7 @@
 id: affinity_mapping
 name: run_affinity_mapping
 label: "Affinity Mapping"
-version: "v7.0"
+version: "v7.1"
 
 description: |
   Group qualitative data into research-grounded themes using inductive
@@ -15,7 +15,7 @@ description: |
 
 author: Qori R&D
 created: 2025-06-27
-last_updated: 2026-05-20
+last_updated: 2026-08-04
 
 # ═══════════════════════════════════════════════════════════
 # CONFIGURATION
@@ -317,9 +317,23 @@ output_template: |
 
   ---
 
+  <details>
+  <summary><strong>Validity checklist</strong></summary>
+
+  | Check | Result |
+  |-------|--------|
+  | Themes grounded in nugget evidence | |
+  | No single-nugget themes | |
+  | Cross-participant patterns identified | |
+  | Unexpected patterns documented | |
+  | Nugget IDs traceable to source sessions | |
+
+  </details>
+
   ---
 
-  ## Cascade summary
+  <details>
+  <summary><strong>Research provenance</strong></summary>
 
   This affinity analysis emits variables for downstream templates.
 
@@ -336,6 +350,8 @@ output_template: |
   | atomic_nugget_detail | session_summary | Verbatim quotes, behaviors, context |
   | target_barriers | research_brief | Barrier validation grounding |
   | research_questions | research_brief | Research question addressing |
+
+  </details>
 
 output_options:
   path: "04-synthesis/"
