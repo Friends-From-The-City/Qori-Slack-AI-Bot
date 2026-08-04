@@ -99,6 +99,7 @@ Start with `0001` and read forward. The history is itself useful — it shows ho
 - [0024 — Project-level authorization model](./0024-project-level-authorization-model.md) — Tiered access (membership=act, creator=delete); channel-based membership with fail-closed Slack fallback
 - [0025 — Admin center and federal records management](./0025-admin-center-records-management.md) — Owner-as-records-authority; disposition schedules; legal holds; retention-gated deletion; audit logging
 - [0026 — PII scrubbing at ingestion](./0026-pii-scrubbing-at-ingestion.md) — Transient-capture scrub; quarantine; review-gates-commit; no real names stored
+- [0027 — Single study per project accepted for launch (Phase 2D)](./0027-single-study-per-project-phase-2d.md) — Doubled {slug}/{slug} path is accepted artifact; multi-study deferred post-launch
 
 ### Lessons (informal ADRs from failure modes)
 

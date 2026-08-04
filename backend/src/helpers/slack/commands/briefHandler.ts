@@ -235,6 +235,10 @@ async function handleBriefSubmission({ ack, body, view, client }: SlackViewMiddl
   };
 
   // Study name inherits from project slug (Phase 2D: no study_name_block)
+  // NOTE: This produces a doubled path ({slug}/{slug}) in GitHub. This is a
+  // known Phase 2D limitation — the architecture is single-study-per-project
+  // and there is no study name input. Multi-study support requires a design
+  // decision (restore study_name_block, derive distinct slugs).
   const studyName = projectSlug;
 
 
@@ -275,7 +279,7 @@ async function handleBriefSubmission({ ack, body, view, client }: SlackViewMiddl
       const scaffoldResult = await scaffoldStudy(
         project.slug,
         studyName,
-        studyName, // studyName serves as both name and slug
+        studyName, // studyName serves as both name and slug (Phase 2D)
         project.name,
         userName,
       );
