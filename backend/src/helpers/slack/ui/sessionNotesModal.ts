@@ -86,7 +86,7 @@ export const buildSessionNotesView = (state: SessionNotesState = {}) => {
     callback_id: 'session_notes_submit',
     private_metadata: JSON.stringify(essentialData),
     title: { type: 'plain_text', text: 'Session Notes' },
-    submit: { type: 'plain_text', text: isManual ? 'Submit to GitHub' : 'Process & Submit' },
+    submit: { type: 'plain_text', text: isManual ? 'Submit to GitHub' : 'Submit Transcript' },
     close: { type: 'plain_text', text: 'Cancel' },
     blocks: [
       // Tabs
@@ -97,12 +97,10 @@ export const buildSessionNotesView = (state: SessionNotesState = {}) => {
           {
             type: 'button', action_id: 'tab_manual', value: 'manual',
             text: { type: 'plain_text', text: 'Manual Notes' },
-            style: isManual ? 'primary' : undefined
           },
           {
             type: 'button', action_id: 'tab_upload', value: 'upload',
             text: { type: 'plain_text', text: 'Upload Transcript' },
-            style: !isManual ? 'primary' : undefined
           }
         ]
       },
@@ -155,7 +153,7 @@ export const buildSessionNotesView = (state: SessionNotesState = {}) => {
         }
       },
 
-      ...(isManual ? manualBlocks(state.preserved) : uploadBlocks(method, state.preserved)),
+      ...(isManual ? manualBlocks(state.preserved) : uploadBlocks(method, state.preserved, state.session?.session_id)),
 
     ]
   } as unknown as View;
@@ -202,7 +200,7 @@ const manualBlocks = (preserved?: PreservedInputs) => {
   ];
 }
 
-const uploadBlocks = (method: string, preserved?: PreservedInputs) => {
+const uploadBlocks = (method: string, preserved?: PreservedInputs, participantCode?: string) => {
   const filesSelected = method === 'files';
   return [
     // PII Scrubbing Section
@@ -215,7 +213,7 @@ const uploadBlocks = (method: string, preserved?: PreservedInputs) => {
       elements: [
         {
           type: 'mrkdwn',
-          text: '⚠️ *Privacy protection:* Enter the participant\'s real name below. It will be replaced with their code (e.g., PT-001) in the transcript before saving. *This name is NOT stored* — it\'s used only for find/replace, then discarded.'
+          text: `⚠️ *Privacy protection:* Enter the participant's real name below. It will be replaced with their code (${participantCode || 'e.g., PT-001'}) in the transcript before saving. *This name is not stored* — it's used only for find/replace, then discarded.`
         }
       ]
     },
@@ -223,8 +221,8 @@ const uploadBlocks = (method: string, preserved?: PreservedInputs) => {
       type: 'input',
       block_id: 'pii_real_name',
       optional: true,
-      label: { type: 'plain_text', text: 'Participant\'s real name (for scrubbing)' },
-      hint: { type: 'plain_text', text: 'e.g., "David Chen" — will be replaced with PT-001. Leave blank if transcript is already anonymized.' },
+      label: { type: 'plain_text', text: 'Participant\'s real name' },
+      hint: { type: 'plain_text', text: `Will be replaced with ${participantCode || 'participant code'}. Leave blank if already anonymized.` },
       element: {
         type: 'plain_text_input',
         action_id: 'real_name_input',
@@ -233,13 +231,12 @@ const uploadBlocks = (method: string, preserved?: PreservedInputs) => {
       }
     },
     { type: 'divider' },
-    { type: 'section', text: { type: 'mrkdwn', text: '*Select Input Method*' } },
     // Files
     {
       type: 'input',
       block_id: 'transcript_files',
       optional: true,
-      label: { type: 'plain_text', text: 'Upload File' },
+      label: { type: 'plain_text', text: 'Upload file' },
       hint: { type: 'plain_text', text: 'You can attach multiple files. Common types: txt, md, pdf, docx, mp3, wav.' },
       element: {
         type: 'file_input',
@@ -315,7 +312,7 @@ const uploadBlocks = (method: string, preserved?: PreservedInputs) => {
       type: 'input',
       block_id: 'transcript_paste',
       optional: true,
-      label: { type: 'plain_text', text: 'Or paste Transcript' },
+      label: { type: 'plain_text', text: 'Or paste transcript' },
       element: {
         type: 'plain_text_input', action_id: 'text', multiline: true,
         placeholder: { type: 'plain_text', text: 'Paste transcript text here...' },

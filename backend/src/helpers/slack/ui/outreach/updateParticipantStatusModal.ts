@@ -16,7 +16,7 @@ export const updateParticipantStatusModal = {
   },
   submit: {
     type: "plain_text",
-    text: "Update Status",
+    text: "Update Participant",
   },
   close: {
     type: "plain_text",
@@ -57,11 +57,10 @@ export const updateParticipantStatusModal = {
           type: "button",
           text: {
             type: "plain_text",
-            text: "Load Participants for Selected Study",
+            text: "Load Participants",
             emoji: true,
           },
           action_id: "load_participants_button",
-          style: "primary",
           confirm: {
             title: {
               type: "plain_text",
@@ -106,7 +105,7 @@ export const updateParticipantStatusModal = {
       },
       label: {
         type: "plain_text",
-        text: "*Participant*",
+        text: "Participant",
       },
       hint: {
         type: "plain_text",
@@ -114,13 +113,6 @@ export const updateParticipantStatusModal = {
       },
     },
     { type: "divider" },
-    {
-      type: "section",
-      text: {
-        type: "mrkdwn",
-        text: "*Update*",
-      },
-    },
     {
       type: "input",
       block_id: "status_update_block",
@@ -135,7 +127,7 @@ export const updateParticipantStatusModal = {
       },
       label: {
         type: "plain_text",
-        text: "New Status",
+        text: "Status",
       },
     },
     {
@@ -153,7 +145,7 @@ export const updateParticipantStatusModal = {
       },
       label: {
         type: "plain_text",
-        text: "*Update Notes*",
+        text: "Notes",
       },
     },
     {
