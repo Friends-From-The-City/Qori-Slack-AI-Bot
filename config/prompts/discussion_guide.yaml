@@ -4,16 +4,20 @@
 id: discussion_guide
 name: run_discussion_guide
 label: "💬 Discussion Guide"
-version: "v7.0"
+version: "v7.1"
 
 description: |
   Generate a session guide for user research. Adapts structure based on
   methodology (usability testing, interviews, card sorting, etc.).
   Includes introduction scripts, methodology-specific tasks, and closing protocols.
+  v7.1: True v7.0 restructure — Handlebars frame renders masthead, summary table,
+  static sections (emergency, debrief), upstream context, validity checklist, cascade
+  provenance. LLM bounded to guide_body (sections 01-05 + coverage check).
+  OUTPUT BOUNDARIES added. Metadata ruling applied (cascade → collapsed details).
 
 author: Qori R&D
 created: 2025-06-26
-last_updated: 2026-05-06
+last_updated: 2026-08-04
 
 # ═══════════════════════════════════════════════════════════
 # CONFIGURATION
@@ -117,12 +121,33 @@ emits:
 # AI GENERATION
 # ═══════════════════════════════════════════════════════════
 ai_generation_tasks:
-  - task_id: "guide_complete"
+  - task_id: "descriptive_title"
     prompt: |
-      You are creating a discussion guide for a user research session.
+      Generate a concise study title from this research focus: {{research_focus}}
 
-      IMPORTANT: Generate the COMPLETE guide. Do not stop early. Every
-      section listed in the output format below is REQUIRED.
+      OUTPUT BOUNDARIES: Generate ONLY the title text — max 8 words. No heading
+      marker, no quotes, no preamble. Example: "Mobile Benefits Navigation Usability"
+
+  - task_id: "summary"
+    prompt: |
+      Write a 2-3 sentence summary for a discussion guide.
+
+      Research focus: {{research_focus}}
+      Method: {{research_method}}
+      Tasks: {{task_count}}
+      Session length: {{session_length}} minutes
+
+      OUTPUT BOUNDARIES: Generate ONLY the summary sentences — no heading,
+      no preamble, no footer or structural elements.
+      Focus: what this session covers, the methodology, number of tasks/topics,
+      and what the research aims to learn.
+
+  - task_id: "guide_body"
+    prompt: |
+      You are creating the session content for a discussion guide.
+
+      IMPORTANT: Generate ALL five sections (01-05) plus the coverage check.
+      Do not stop early.
 
       {% if upstream_research_objectives %}
       ============================================================
@@ -247,42 +272,12 @@ ai_generation_tasks:
       {% endif %}
 
       ============================================================
-      OUTPUT FORMAT
+      OUTPUT FORMAT — Sections 01 through 05 + Coverage check
       ============================================================
 
-      # Discussion Guide: [Generate a concise study title from {{research_focus}}, max 8 words]
-
-      **Study:** {{selected_study}} &nbsp; | &nbsp; **Researcher:** {{lead_researcher}} &nbsp; | &nbsp; **Date:** {{current_date}} &nbsp; | &nbsp; **Status:** Draft
-
-      ---
-
-      ## Summary
-
-      [2-3 sentences: what this session covers, methodology, number of tasks/topics, what the research aims to learn]
-
-      | | |
-      |---|---|
-      | **Method** | [Display name for {{research_method}}] |
-      | **Session length** | {{session_length}} minutes |
-      | **Format** | Remote, video + screen share |
-      | **Tasks** | {{task_count}} |
-
-      {% if upstream_research_objectives %}
-      ---
-
-      ## Cascade summary
-
-      | Brief commitment | Detail |
-      |------------------|--------|
-      | Research objectives | [count from upstream_research_objectives] |
-      | Research questions | [count from upstream_research_questions] |
-      | Target barriers | [count from upstream_target_barriers] |
-      | Methodology | {{upstream_methodology_selection}} |{% if upstream_participant_criteria %}
-      | Participant criteria | [one-line summary from upstream_participant_criteria] |{% endif %}
-
-      {% endif %}
-
-      ---
+      Begin with the session timing table, then generate sections 01-05
+      and the coverage check. The template handles the masthead, summary,
+      cascade summary, emergency procedures, debrief, and appendixes.
 
       ## Session timing
 
@@ -290,7 +285,7 @@ ai_generation_tasks:
       |-------|---------:|--------:|
       | Introduction and consent | [X] min | [X] min |
       | Warm-up | [X] min | [X] min |
-      {% if research_method == "usability_testing" or research_method == "card_sorting" or research_method == "tree_testinging" %}
+      {% if research_method == "usability_testing" or research_method == "card_sorting" or research_method == "tree_testing" %}
       | Tasks 01–0{{task_count}} | [X] min | [X] min |
       {% elif research_method == "user_interviews" %}
       | Topics 01–0{{task_count}} | [X] min | [X] min |
@@ -634,45 +629,6 @@ ai_generation_tasks:
       - [ ] Follow-up contact preferences confirmed
       - [ ] Recording stopped
 
-      ---
-
-      ## After-session debrief
-
-      *Ask yourself after each session — capture in session notes immediately.*
-
-      1. What patterns am I seeing related to {{research_focus}}?
-      2. What surprised me about this participant's experience?
-      3. What needs deeper investigation in remaining sessions?
-      4. What quotes or moments were most revealing?
-
-      *After all sessions complete:*
-
-      5. What are the top 3–5 themes across all participants?
-      6. How confident am I in these findings? What's still unclear?
-      7. What recommendations emerge from these patterns?
-
-      ---
-
-      ## Emergency procedures
-
-      #### Technical issues
-
-      - Backup meeting link ready before session starts
-      - Screen share troubleshooting: check browser permissions, try a different browser, fall back to phone
-      - Have phone number as backup contact method
-
-      #### Participant distress
-
-      - Pause session immediately and check comfort level
-      - Remind them they can stop at any time and there are no wrong answers
-      - For Veterans: VA Crisis Line — call 988, then press 1 (24/7 support)
-
-      #### Data and privacy concerns
-
-      - Reassure about data handling and anonymization
-      - Review consent form if questions arise
-      - Stop recording immediately if requested
-
       {% if upstream_research_questions %}
       ---
 
@@ -686,43 +642,6 @@ ai_generation_tasks:
       | Target barrier | Validated by |
       |----------------|--------------|
       [For each TB-XXX from the upstream target barriers, list which task/topic/concept/observation targets it. If a barrier has no task targeting it, mark it as "GAP — no task targets this barrier".]
-      {% endif %}
-      {% endif %}
-
-      {% if upstream_research_objectives %}
-      ---
-
-      ## Appendix: Upstream context
-
-      *This guide was generated from the following approved research brief variables.
-      These are provided for moderator reference — do not read aloud.*
-
-      **Research objectives:**
-      [For each objective from upstream_research_objectives, write one bullet:
-       - **OBJ-001** — [objective text]
-       - **OBJ-002** — [objective text]
-       etc. Extract text from JSON if needed. NO brackets, braces, or null fields.]
-
-      {% if upstream_research_questions %}
-      **Research questions:**
-      [For each question from upstream_research_questions, write one bullet:
-       - **RQ-001** — [question text]
-       - **RQ-002** — [question text]
-       etc. Extract text from JSON if needed. NO brackets, braces, or null fields.]
-      {% endif %}
-
-      {% if upstream_target_barriers %}
-      **Target barriers:**
-      [For each barrier from upstream_target_barriers, write one bullet:
-       - **TB-001** — [barrier text]
-       - **TB-002** — [barrier text]
-       etc. Extract text from JSON if needed. NO brackets, braces, or null fields.]
-      {% endif %}
-
-      {% if upstream_participant_criteria %}
-      **Participant criteria:**
-      [Write as plain text summary — NO JSON. State participant count,
-       demographics, and key criteria in natural language.]
       {% endif %}
       {% endif %}
 
@@ -741,15 +660,150 @@ ai_generation_tasks:
       - Every RQ-XXX appears in at least one task (coverage check table is complete)
       - [targets TB-XXX] markers present where tasks probe specific barriers
       - Coverage check section has no GAPs (if gaps exist, add tasks or reassign)
-      - Appendix contains NO raw JSON (no brackets, braces, null fields, quotes around keys)
 
-      Do NOT output a footer or "Generated by Qori" line — that is added automatically.
+      OUTPUT BOUNDARIES: Do not generate the document title, masthead, summary
+      section, cascade summary, emergency procedures, after-session debrief,
+      upstream context appendix, validity checklist, or footer. The template
+      handles those sections. Start with ## Session timing and end after the
+      coverage check (or after ## 05 Closing if no upstream context).
 
 # ═══════════════════════════════════════════════════════════
 # OUTPUT
 # ═══════════════════════════════════════════════════════════
 output_template: |
-  {{ai_generated.guide_complete}}
+  # Discussion Guide: {{ai_generated.descriptive_title}}
+
+  **Study:** {{selected_study}} &nbsp; | &nbsp; **Researcher:** {{lead_researcher}} &nbsp; | &nbsp; **Date:** {{current_date}} &nbsp; | &nbsp; **Status:** Draft
+
+  ---
+
+  ## Summary
+
+  {{ai_generated.summary}}
+
+  | | |
+  |---|---|
+  | **Method** | {{research_method}} |
+  | **Session length** | {{session_length}} minutes |
+  | **Format** | Remote, video + screen share |
+  | **Tasks** | {{task_count}} |
+
+  ---
+
+  {{ai_generated.guide_body}}
+
+  ---
+
+  ## After-session debrief
+
+  *Ask yourself after each session — capture in session notes immediately.*
+
+  1. What patterns am I seeing related to {{research_focus}}?
+  2. What surprised me about this participant's experience?
+  3. What needs deeper investigation in remaining sessions?
+  4. What quotes or moments were most revealing?
+
+  *After all sessions complete:*
+
+  5. What are the top 3–5 themes across all participants?
+  6. How confident am I in these findings? What's still unclear?
+  7. What recommendations emerge from these patterns?
+
+  ---
+
+  ## Emergency procedures
+
+  #### Technical issues
+
+  - Backup meeting link ready before session starts
+  - Screen share troubleshooting: check browser permissions, try a different browser, fall back to phone
+  - Have phone number as backup contact method
+
+  #### Participant distress
+
+  - Pause session immediately and check comfort level
+  - Remind them they can stop at any time and there are no wrong answers
+  - For Veterans: VA Crisis Line — call 988, then press 1 (24/7 support)
+
+  #### Data and privacy concerns
+
+  - Reassure about data handling and anonymization
+  - Review consent form if questions arise
+  - Stop recording immediately if requested
+
+  {% if upstream_research_objectives %}
+  ---
+
+  <details>
+  <summary><strong>Upstream context</strong></summary>
+
+  *This guide was generated from the following approved research brief variables.
+  These are provided for moderator reference — do not read aloud.*
+
+  **Research objectives:**
+  {{upstream_research_objectives}}
+
+  {% if upstream_research_questions %}
+  **Research questions:**
+  {{upstream_research_questions}}
+  {% endif %}
+
+  {% if upstream_target_barriers %}
+  **Target barriers:**
+  {{upstream_target_barriers}}
+  {% endif %}
+
+  {% if upstream_participant_criteria %}
+  **Participant criteria:**
+  {{upstream_participant_criteria}}
+  {% endif %}
+
+  </details>
+  {% endif %}
+
+  ---
+
+  <details>
+  <summary><strong>Validity checklist</strong></summary>
+
+  | Check | Result |
+  |-------|--------|
+  | Timing adds up to {{session_length}} minutes | |
+  | Exactly {{task_count}} activity blocks generated | |
+  | All script text in blockquotes | |
+  | Every activity header has [RQ-XXX] markers | |
+  | Coverage check has no gaps | |
+  | Activity labels match methodology | |
+
+  </details>
+
+  ---
+
+  <details>
+  <summary><strong>Research provenance</strong></summary>
+
+  {% if upstream_research_objectives %}
+  | Brief commitment | Detail |
+  |------------------|--------|
+  | Research objectives | {{upstream_research_objectives_count}} objectives |
+  | Research questions | {{upstream_research_questions_count}} questions |
+  | Target barriers | {{upstream_target_barriers_count}} barriers |
+  | Methodology | {{upstream_methodology_selection}} |
+
+  **Upstream context**
+
+  | Source | Used for |
+  |--------|----------|
+  | research_brief | Objectives, questions, method, barriers, participant criteria |
+
+  Citation markers throughout:
+  - [RQ-XXX] = research question this task addresses
+  - [TB-XXX] = target barrier this task tests
+  {% else %}
+  No upstream cascade variables — guide generated from researcher inputs only.
+  {% endif %}
+
+  </details>
 
 output_options:
   path: "02-plan/"
@@ -760,46 +814,36 @@ output_options:
 # ═══════════════════════════════════════════════════════════
 processing_workflow:
   1. validate_modal_inputs
-  2. execute_guide_complete_task
-  3. render_output_template
-  4. save_to_planning_folder
-
-notify:
-  - role: team
-    action: "Discussion guide generated"
-    channel: "{{study_channel}}"
-    message: "Discussion guide for {{selected_study}} is ready for review."
+  2. execute_descriptive_title_task
+  3. execute_summary_task
+  4. execute_guide_body_task
+  5. render_output_template
+  6. save_to_planning_folder
 
 notes: |
+  v7.1 Changes (True v7.0 Restructure):
+  - Restructured from monolithic guide_complete → descriptive_title + summary + guide_body.
+  - Handlebars output_template now renders: masthead, summary table, static sections
+    (after-session debrief, emergency procedures), upstream context toggle, validity
+    checklist (empty cells), and cascade provenance (collapsed <details>).
+  - LLM bounded to guide_body: sections 01–05 + coverage check tables.
+  - OUTPUT BOUNDARIES instruction added.
+  - Metadata ruling applied: cascade summary → collapsed <details> "Research provenance".
+  - Emergency procedures and debrief moved from LLM prompt to static Handlebars.
+  - Upstream context moved from LLM-generated appendix to Handlebars <details> toggle
+    with raw variable interpolation (no LLM reformatting needed).
+  - Fixed typo: "tree_testinging" → "tree_testing" in session timing Jinja2 branch.
+
   v7.0 Changes (Cascade-Aware Retrofit):
   - Consumes upgraded: research_objectives, research_questions, methodology_selection
     now required with inject_as: commitment. Added participant_criteria (optional, context).
-  - Emits upgraded: task_scenarios and probes now use $ref schemas
-    (schemas/task_scenario.yaml, schemas/probe.yaml) with extraction_model: sonnet.
-    Renamed probing_questions → probes for consistency.
-  - Cascade-aware generation instructions added to prompt: [RQ-XXX] markers on
-    every task/topic/concept/observation header, [targets TB-XXX] for barrier
-    validation tasks, stable IDs, coverage check requirement.
-  - Output template additions: Cascade summary table (count-based, after Summary),
-    Coverage check section (after Emergency procedures) with RQ and TB gap detection,
-    Upstream context appendix for moderator reference (formatted as readable lists).
+  - Emits upgraded: task_scenarios and probes now use $ref schemas.
   - All 7 method branches + fallback updated with cascade markers in headers.
-  - Quality checks expanded: RQ coverage, TB targeting, gap detection.
-  - Backward compatible: cascade sections are Jinja2-gated on upstream variable
-    presence — guide generates cleanly without upstream context.
-  - Fix: scope drift — prompt now requires title and tasks to reflect full upstream
-    scope, not narrow to a single sub-topic when brief covers multiple areas.
-  - Fix: raw JSON leak — appendix upstream variables formatted as readable bullet
-    lists (OBJ-XXX, RQ-XXX, TB-XXX) instead of raw JSON interpolation.
-  - Fix: "Upstream context" table renamed to canonical "Cascade summary" with
-    count-based format matching research_plan v6.0 pattern.
 
   v6.2 Changes (Design Language Translation):
   - Translated locked design from docs/design-references/discussion_guide_reference.md
   - Pattern C: document-level footer only (backend buildTraceabilityFooter)
   - Consolidated 4 AI tasks → 1 comprehensive task with Jinja2 branching
-  - Modal simplified: removed participants + testing_url, added task_count +
-    lead_moderator with Slack profile auto-fill. Methodology expanded to 7 options.
   - Editorial numbering for sequential sections (## 01 through ## 05)
   - Script text in blockquotes (> lines) for read-aloud distinction
   - Methodology-aware activity labeling (Task/Topic/Concept/Observation/Activity)
