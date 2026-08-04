@@ -11,7 +11,7 @@ export const participantOutreachModal = {
   },
   submit: {
     type: "plain_text",
-    text: "Next",
+    text: "Continue",
   },
   blocks: [
     {
@@ -35,18 +35,11 @@ export const participantOutreachModal = {
       type: "divider",
     },
     {
-      type: "section",
-      text: {
-        type: "mrkdwn",
-        text: "*Message type*",
-      },
-    },
-    {
       type: "input",
       block_id: "message_type_block",
       label: {
         type: "plain_text",
-        text: "Select message type *",
+        text: "Message type",
       },
       element: {
         type: "radio_buttons",
