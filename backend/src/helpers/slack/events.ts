@@ -24,7 +24,7 @@ import { qoriMainCommand, handleStudySelect } from './commands/qoriMainHandler';
 
 // Project creation (Phase 2C)
 import { projectStartCommand, handleProjectCreateSubmission } from './commands/projectStartHandler';
-import { handleViewClosed, handlePlanStudyNoop, handleStudySetupSkip, handleUserSelectOptions } from './commands/study/studyLifecycleHandler';
+import { handleViewClosed, handleUserSelectOptions } from './commands/study/studyLifecycleHandler';
 
 // Admin Center (ADR 0025)
 import { adminCenterCommand } from './commands/admin/adminCenterHandler';
@@ -483,8 +483,6 @@ slackApp.command('/run-template', runTemplateCommand);
 // ─── Study creation & lifecycle ─────────────────────────────────
 
 slackApp.options('user_select', handleUserSelectOptions);
-slackApp.view('plan_study_modal', handlePlanStudyNoop);
-slackApp.view('study-setup-modal-start-research', handleStudySetupSkip);
 // Bolt type gap: 'view_closed' isn't a recognized SlackEvent subtype, so
 // EventFromType<'view_closed'> resolves to BaseSlackEvent which lacks .view.
 // The handler uses an inline type with { event: { view: { callback_id } } }.
