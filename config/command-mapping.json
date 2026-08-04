@@ -1,213 +1,109 @@
 {
-  "version": "1.0.0",
-  "description": "Maps Qori slash commands to their modal and prompt configurations",
+  "version": "2.0.0",
+  "description": "Documents the mapping between Qori slash commands and their configurations. NOT loaded at runtime — routing lives in events.ts. This file is documentation only.",
 
   "commands": {
     "/qori": {
       "description": "Show all available Qori commands",
       "type": "menu",
-      "modal": null,
-      "prompt": null
+      "registration": "events.ts"
     },
 
-    "/qori-request": {
-      "description": "Stakeholder submits research request",
+    "/qori-start": {
+      "description": "Create a new project",
       "type": "workflow",
-      "modal": "analyze/research_request.json",
-      "prompt": "research_request.yaml"
+      "registration": "events.ts"
+    },
+
+    "/qori-brief": {
+      "description": "Create research brief (starts a new study)",
+      "type": "workflow",
+      "registration": "events.ts (inline)"
     },
 
     "/qori-plan": {
-      "description": "Create study plan, guides, upload research",
+      "description": "Create plan or discussion guide for an existing study",
       "type": "menu",
-      "modal": "plan/plan_menu.json",
-      "actions": {
-        "research_brief": {
-          "label": "Research Brief",
-          "modal": "plan/research_brief.json",
-          "prompt": "research_brief.yaml"
-        },
-        "research_plan": {
-          "label": "Research Plan",
-          "modal": "plan/research_plan.json",
-          "prompt": "research_plan.yaml"
-        },
-        "discussion_guide": {
-          "label": "Discussion Guide",
-          "modal": "plan/discussion_guide.json",
-          "prompt": "discussion_guide.yaml"
-        },
-        "stakeholder_interview_guide": {
-          "label": "Stakeholder Interview Guide",
-          "modal": "plan/stakeholder_interview_guide.json",
-          "prompt": "stakeholder_interview_guide.yaml"
-        },
-        "upload_desk_research": {
-          "label": "Upload Desk Research",
-          "modal": "plan/upload_desk_research.json",
-          "prompt": "desk_research.yaml"
-        },
-        "upload_stakeholder_notes": {
-          "label": "Upload Stakeholder Notes",
-          "modal": "plan/upload_stakeholder_notes.json",
-          "prompt": "stakeholder_synthesis.yaml"
-        },
-        "upload_survey_data": {
-          "label": "Upload Survey Data",
-          "modal": "plan/upload_survey_data.json",
-          "prompt": "survey_synthesis.yaml"
-        }
-      }
+      "registration": "events.ts (inline)"
     },
 
-    "/qori-participants": {
-      "description": "Add or update participants",
+    "/qori-discover": {
+      "description": "Pre-study research (desk research, stakeholder synthesis, surveys)",
       "type": "menu",
-      "actions": {
-        "add_participant": {
-          "label": "Add Participant",
-          "modal": "participants/add_participant.json",
-          "prompt": "participant_tracker.yaml"
-        },
-        "update_participant": {
-          "label": "Update Participant",
-          "modal": "participants/update_participant.json",
-          "prompt": "participant_status_update.yaml"
-        }
-      }
+      "registration": "events.ts"
     },
 
-    "/qori-outreach": {
-      "description": "Generate participant messages",
+    "/qori-fieldwork": {
+      "description": "Participants, outreach, observers, session notes",
       "type": "menu",
-      "modal": "outreach/outreach_menu.json",
-      "prompt": "participant_outreach.yaml",
-      "message_types": [
-        "initial_recruitment",
-        "session_confirmation",
-        "session_reminder",
-        "rescheduling",
-        "follow_up",
-        "thank_you"
-      ]
-    },
-
-    "/qori-observe": {
-      "description": "Request to observe a session",
-      "type": "workflow",
-      "modal": "participants/observer_request.json",
-      "prompt": "observer_request.yaml"
-    },
-
-    "/qori-notes": {
-      "description": "Observer documents session",
-      "type": "menu",
-      "actions": {
-        "take_notes": {
-          "label": "Take Notes (Live)",
-          "modal": "notes/take_notes.json",
-          "prompt": "session_notes.yaml"
-        },
-        "manual_notes": {
-          "label": "Manual Notes Entry",
-          "modal": "notes/manual_notes.json",
-          "prompt": "session_notes.yaml"
-        },
-        "upload_transcript": {
-          "label": "Upload Transcript",
-          "modal": "notes/upload_transcript.json",
-          "prompt": "transcript_upload.yaml"
-        }
-      }
+      "registration": "events.ts",
+      "note": "Consolidates former /qori-participants, /qori-outreach, /qori-observe, /qori-notes"
     },
 
     "/qori-analyze": {
       "description": "Analyze session data",
       "type": "workflow",
-      "modal": "analyze/analyze_notes.json",
-      "prompt": "session_summary.yaml",
-      "analysis_types": [
-        "session_summary",
-        "usability_issues",
-        "affinity_mapping"
-      ]
+      "registration": "events.ts"
     },
 
     "/qori-synthesis": {
-      "description": "Cross-session synthesis",
+      "description": "Cross-session synthesis (7 methods)",
       "type": "menu",
-      "modal": "analyze/synthesis.json",
-      "prompt": "synthesize_router.yaml",
-      "synthesis_types": {
-        "affinity_mapping": {
-          "label": "Affinity Mapping",
-          "prompt": "affinity_mapping.yaml"
-        },
-        "journey_mapping": {
-          "label": "Journey Mapping",
-          "prompt": "journey_mapping.yaml"
-        },
-        "persona_generator": {
-          "label": "Persona Generator",
-          "prompt": "persona_generator.yaml"
-        },
-        "jobs_to_be_done": {
-          "label": "Jobs to Be Done",
-          "prompt": "jobs_to_be_done.yaml"
-        },
-        "service_blueprint": {
-          "label": "Service Blueprint",
-          "prompt": "service_blueprint.yaml"
-        },
-        "design_opportunities": {
-          "label": "Design Opportunities",
-          "prompt": "design_opportunity_generator.yaml"
-        },
-        "usability_issues": {
-          "label": "Usability Issues",
-          "prompt": "usability_issues_extractor.yaml"
-        }
-      }
+      "registration": "events.ts"
     },
 
     "/qori-report": {
-      "description": "Generate stakeholder report + GitHub issues",
+      "description": "Generate stakeholder reports",
       "type": "menu",
-      "modal": "report/report_menu.json",
-      "actions": {
-        "research_readout": {
-          "label": "Research Readout",
-          "modal": null,
-          "prompt": "research_readout.yaml"
-        },
-        "targeted_readouts": {
-          "label": "Targeted Readouts",
-          "modal": "report/targeted_readouts.json",
-          "prompt": "targeted_readouts.yaml"
-        },
-        "github_issues": {
-          "label": "Generate GitHub Issues",
-          "modal": null,
-          "prompt": "github_issues_generator.yaml"
-        }
-      }
+      "registration": "events.ts"
     },
 
-    "/qori-sam": {
-      "description": "Talk to Sam, Qori's support assistant",
-      "type": "agent",
-      "agent": "sam",
-      "capabilities": [
-        "answer_questions",
-        "update_config",
-        "diagnose_issues",
-        "escalate_to_team"
-      ]
+    "/qori-tickets": {
+      "description": "Generate GitHub issues from readout findings",
+      "type": "workflow",
+      "registration": "events.ts"
+    },
+
+    "/qori-ask": {
+      "description": "Search across studies",
+      "type": "workflow",
+      "registration": "events.ts"
+    },
+
+    "/qori-learn": {
+      "description": "Interactive tutorial",
+      "type": "workflow",
+      "registration": "events.ts"
+    },
+
+    "/qori-admin": {
+      "description": "Admin center (stakeholders, data, study management)",
+      "type": "menu",
+      "registration": "events.ts"
+    },
+
+    "/qori-repo": {
+      "description": "Configure repo/folder binding for a channel",
+      "type": "workflow",
+      "registration": "events.ts"
+    },
+
+    "/qori-sync": {
+      "description": "Sync folder (UI shell — vector store disabled)",
+      "type": "workflow",
+      "registration": "events.ts",
+      "note": "Listener active but sync operation is no-op (RAG disabled)"
+    },
+
+    "/run-template": {
+      "description": "Research shareout (UI shell — no AI generation)",
+      "type": "workflow",
+      "registration": "events.ts",
+      "note": "Listener active but submission is no-op"
     }
   },
 
   "prompt_directory": "config/prompts",
-  "modal_directory": "config/modals",
 
   "defaults": {
     "llm_model": "claude-sonnet-4-6",

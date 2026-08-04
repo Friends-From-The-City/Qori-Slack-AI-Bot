@@ -50,28 +50,14 @@ async function qoriMainHandler({ ack, command, client }: SlackCommandMiddlewareA
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: '*`/qori-participants`* → Add or update participants'
+        text: '*`/qori-discover`* → Pre-study research (desk research, stakeholder synthesis, surveys)'
       }
     },
     {
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: '*`/qori-outreach`* → Generate participant outreach messages'
-      }
-    },
-    {
-      type: 'section',
-      text: {
-        type: 'mrkdwn',
-        text: '*`/qori-observe`* → Request to observe a session'
-      }
-    },
-    {
-      type: 'section',
-      text: {
-        type: 'mrkdwn',
-        text: '*`/qori-notes`* → Observer documents session notes'
+        text: '*`/qori-fieldwork`* → Participants, outreach, observers, session notes'
       }
     },
     {
@@ -93,6 +79,27 @@ async function qoriMainHandler({ ack, command, client }: SlackCommandMiddlewareA
       text: {
         type: 'mrkdwn',
         text: '*`/qori-report`* → Generate stakeholder report'
+      }
+    },
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: '*`/qori-tickets`* → Generate GitHub issues from readout findings'
+      }
+    },
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: '*`/qori-ask`* → Search across studies'
+      }
+    },
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: '*`/qori-admin`* → Admin center (stakeholders, data, study management)'
       }
     },
     {

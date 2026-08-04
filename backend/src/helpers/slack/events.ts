@@ -85,7 +85,7 @@ import { ticketHandler, handleStep1Submit, handleStep2Submit } from './commands/
 
 // Q&A
 import { askHandler, handleAskSubmit, handleShowMore } from './commands/askHandler';
-import { askStudyCommand, handleAskStudySubmission } from './commands/qa/askStudyHandler';
+// /ask-study removed — RAG disabled, hardcoded beta-test/ path deleted
 import { runTemplateCommand, handleTypeSelect, handleShareoutSubmission } from './commands/qa/runTemplateHandler';
 
 // Learn/onboarding
@@ -478,7 +478,6 @@ slackApp.command('/qori-learn', learnCommand);
 slackApp.command('/qori-repo', repoCommand);
 slackApp.command('/qori-sync', syncCommand);
 slackApp.command('/qori-admin', adminCenterCommand);
-slackApp.command('/ask-study', askStudyCommand);
 slackApp.command('/run-template', runTemplateCommand);
 
 // ─── Study creation & lifecycle ─────────────────────────────────
@@ -618,7 +617,7 @@ slackApp.view('tickets_step2_submit', handleStep2Submit);
 
 // ─── Q&A ────────────────────────────────────────────────────────
 
-slackApp.view('ask-study-modal', handleAskStudySubmission);
+// ask-study-modal removed — /ask-study unregistered
 slackApp.view('ask_qori_submit', handleAskSubmit);
 slackApp.action('ask_show_more', handleShowMore);
 slackApp.action('type_select', handleTypeSelect);
