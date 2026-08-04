@@ -4,7 +4,7 @@
 id: survey_synthesis
 name: survey_response_synthesizer
 label: "Survey Synthesis"
-version: "v7.0"
+version: "v7.1"
 
 description: |
   Analyze open-ended survey responses using thematic analysis.
@@ -14,7 +14,7 @@ description: |
 
 author: Qori R&D
 created: 2025-08-11
-last_updated: 2026-05-20
+last_updated: 2026-08-04
 
 # ═══════════════════════════════════════════════════════════
 # CONFIGURATION
@@ -341,9 +341,22 @@ output_template: |
 
   ---
 
+  <details>
+  <summary><strong>Validity checklist</strong></summary>
+
+  | Check | Result |
+  |-------|--------|
+  | All survey data files referenced | |
+  | Themes supported by response patterns | |
+  | Sentiment analysis grounded in data | |
+  | Knowledge gaps are actionable | |
+
+  </details>
+
   ---
 
-  ## Cascade summary
+  <details>
+  <summary><strong>Research provenance</strong></summary>
 
   This survey synthesis emits discovery variables for downstream templates.
 
@@ -357,6 +370,8 @@ output_template: |
   | knowledge_gaps | Questions the survey couldn't answer |
 
   **Files analyzed:** {{document_count}}
+
+  </details>
 
 output_options:
   path: "{{project_slug}}/00-discovery/"

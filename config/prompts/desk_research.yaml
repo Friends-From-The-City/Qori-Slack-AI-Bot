@@ -4,7 +4,7 @@
 id: desk_research
 name: run_desk_research
 label: "Desk Research"
-version: v7.0
+version: v7.1
 
 description: |
   Analyze uploaded research documents and generate a synthesis with key
@@ -15,7 +15,7 @@ description: |
 
 author: Qori R&D
 created: 2025-08-27
-last_updated: 2026-05-19
+last_updated: 2026-08-04
 
 # ═══════════════════════════════════════════════════════════
 # CONFIGURATION
@@ -355,9 +355,22 @@ output_template: |
 
   ---
 
+  <details>
+  <summary><strong>Validity checklist</strong></summary>
+
+  | Check | Result |
+  |-------|--------|
+  | All source documents cited | |
+  | Themes supported by multiple sources | |
+  | Knowledge gaps are actionable | |
+  | No claims beyond source material | |
+
+  </details>
+
   ---
 
-  ## Cascade summary
+  <details>
+  <summary><strong>Research provenance</strong></summary>
 
   This desk research emits discovery variables for downstream templates.
 
@@ -371,6 +384,8 @@ output_template: |
   | source_artifacts | Document metadata for provenance tracking |
 
   **Documents analyzed:** {{document_count}}
+
+  </details>
 
 output_options:
   filename: "{{topic_slug}}-desk-research-{{current_date_iso}}.md"
