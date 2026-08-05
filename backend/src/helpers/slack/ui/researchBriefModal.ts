@@ -154,10 +154,11 @@ export const researchBriefModal = {
         multiline: true,
       },
     },
-    // Out of scope
+    // Out of scope — optional per R7 (all consumers optional)
     {
       type: "input",
       block_id: "out_of_scope_block",
+      optional: true,
       label: {
         type: "plain_text",
         text: "What's out of scope?",
@@ -281,10 +282,11 @@ export const researchBriefModal = {
         text: "*Timeline & Budget*",
       },
     },
-    // Start date
+    // Start date — optional per R7 (all consumers optional)
     {
       type: "input",
       block_id: "start_date_block",
+      optional: true,
       label: {
         type: "plain_text",
         text: "When does research start?",
@@ -298,10 +300,11 @@ export const researchBriefModal = {
         },
       },
     },
-    // Decision deadline
+    // Decision deadline — optional per R7 (no cascade consumer)
     {
       type: "input",
       block_id: "decision_deadline_block",
+      optional: true,
       label: {
         type: "plain_text",
         text: "When do stakeholders need findings?",
