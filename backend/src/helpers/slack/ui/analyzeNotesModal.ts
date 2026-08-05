@@ -148,7 +148,7 @@ export const analyzeNotesModal = (
       dispatch_action: true,
       label: {
         type: "plain_text",
-        text: "Study *",
+        text: "Study",
         emoji: false,
       },
       element: studySelectElement,

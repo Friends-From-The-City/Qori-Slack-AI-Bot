@@ -239,15 +239,15 @@ Scores reflect CURRENT code state, not intended state. A cell flips to ✓ with 
 
 | Modal | R1 | R2 | R3 | R4 | R5 | R6 | R7 | R8 | R9 | R10 | R11 | R12 | R13 | R14 | R15 |
 |-------|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:---:|:---:|:---:|:---:|:---:|:---:|
-| Research Brief | ✓ | ✓ | ✓ | ✓ | ✓ | N/A | — | ? | ✓ | ✓ | ? | ✓ | ✓ | N/A | N/A |
-| Analyze Session | ✓ | ✓ | ✓ | ✓ | ✓ | N/A | — | ? | ✓ | ✓ | ? | ✓ | ✓ | N/A | N/A |
+| Research Brief | ✓ | ✓ | ✓ | ✓ | ✓ | N/A | ✓ | ? | ✓ | ✓ | ? | ✓ | ✓ | N/A | N/A |
+| Analyze Session | ✓ | ✓ | ✓ | ✓ | ✓ | N/A | ✓ | ? | ✓ | ✓ | ? | ✓ | ✓ | N/A | N/A |
 | Research Synthesis | ✓ | ✓ | ✓ | ✓ | ✓ | N/A | ✓ | ? | ✓ | ✓ | ? | ✓ | ✓ | N/A | N/A |
 | Readout | ? | ? | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? | N/A | N/A |
 | Discussion Guide | ? | ? | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? | N/A | N/A |
 | Research Plan | ? | ? | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? | N/A | N/A |
 | Discovery Launcher | ✓ | ? | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? | ✓ | N/A |
-| Discover: Desk Research | ? | ? | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? | N/A | N/A |
-| Discover: Stakeholder | ? | ? | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? | N/A | N/A |
+| Discover: Desk Research | ? | ? | ? | ? | ? | N/A | ✓ | ? | ? | ? | ? | ? | ? | N/A | N/A |
+| Discover: Stakeholder | ? | ? | ? | ? | ? | N/A | ✓ | ? | ? | ? | ? | ? | ? | N/A | N/A |
 | Discover: Survey | ? | ? | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? | N/A | N/A |
 | Project Creation | ? | ? | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? | N/A | N/A |
 | Add Participant | ✓ | ? | — | ? | ? | N/A | — | — | ? | ? | — | ? | ? | N/A | N/A |
@@ -746,8 +746,9 @@ if (filesList.length > 0) {
 
 | Modal | Status |
 |-------|--------|
-| Discover: Desk Research | Pending (Section 3a) |
-| Discover: Stakeholder Synthesis | Pending (Section 3a) |
+| Discover: Desk Research | Complete — topic (c) + file_upload (c) required; description optional. Already correctly wired. |
+| Discover: Stakeholder Synthesis | Complete — topic (c) + file_upload (c) required; description optional. Already correctly wired. |
+| Discover: Survey Synthesis | Complete — topic (c) + survey_name (c) + file_upload (c) required; question_focus optional. Already correctly wired. |
 | Discover: Survey Synthesis | Pending (Section 3a) |
 
 ---
