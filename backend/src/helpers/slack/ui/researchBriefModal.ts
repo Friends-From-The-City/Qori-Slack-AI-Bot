@@ -29,7 +29,7 @@ export const researchBriefModal = {
       elements: [
         {
           type: "mrkdwn",
-          text: "Define the research scope for stakeholder approval. Once approved, the research plan will elaborate the execution details.",
+          text: "Scope the research for stakeholder approval. Approved brief → research plan.",
         },
       ],
     },
