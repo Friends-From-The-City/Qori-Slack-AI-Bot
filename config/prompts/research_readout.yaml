@@ -177,6 +177,7 @@ emits:
   - key: study_methodology
     pool: false
     pool_strategy: replace
+    extraction_model: sonnet
     schema:
       $ref: schemas/study_methodology.yaml
     extract_from: "Methodology section"
