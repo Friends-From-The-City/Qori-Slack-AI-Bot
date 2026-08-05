@@ -436,11 +436,11 @@ export interface MethodologyRecommendation {
 export interface ParticipantMetadata {
   /** Participant ID */
   participant_id: string | null;
-  /** Military service, disability status, relevant experience */
+  /** Explicitly stated background relevant to the study (e.g., service era, prior product experience). Never inferred from speech or behavior. */
   background: string | null;
   /** Device, OS, connectivity, browser */
   tech_setup: string | null;
-  /** Assistive technology or accessibility needs */
+  /** Assistive technology observed in use, or accessibility needs the participant explicitly stated */
   accessibility: string | null;
   /** How participant was recruited (Perigean, intercept, snowball, etc.) */
   recruitment_source: string | null;
