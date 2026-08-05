@@ -186,6 +186,12 @@ Features that don't exist yet. Not blocking launch but worth tracking for priori
 
 A pre-recruitment screening flow. Researchers would define screening questions; potential participants would answer; only qualified participants would proceed to scheduling. Current workflow assumes participants are pre-qualified.
 
+### DB demographics as authoritative cascade source
+
+The researcher-entered, SPD-15-compliant demographic record in `study_participants.demographics_info` should plausibly BE `participant_metadata`'s demographic layer, rather than the cascade relying on LLM transcript extraction. Currently the Add Participant demographics (race/ethnicity, age range, education, location) flow only to the participant tracker and DSAR export — never into the cascade. The cascade's `participant_metadata` emit from session_summary extracts `background` and `accessibility` from the transcript, which risks inferred demographic characterization of veteran participants (the fabrication class this architecture exists to prevent). Design decision: merge the DB record into participant_metadata at the handler level, making the researcher's structured input the authoritative source and constraining the LLM extraction to session-observed facts only.
+
+**Filed:** 2026-08-05. Adjacent to ADR 0027 (multi-study) and `/qori-ask` cross-team spike.
+
 ### Bulk-add participants
 
 Adding participants one at a time is slow for studies with many participants. Bulk upload (CSV or paste-from-spreadsheet) would speed up large studies.
