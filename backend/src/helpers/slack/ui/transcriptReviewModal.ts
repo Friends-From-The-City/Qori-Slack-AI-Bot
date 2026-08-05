@@ -120,9 +120,33 @@ export const buildTranscriptReviewModal = (params: TranscriptReviewParams): View
       },
       { type: 'divider' },
 
-      // Attestation checkbox — required for approval
-      // NOTE: Rescrub loop (additional terms field + re-scrub automation) deferred
-      // to follow-up PR — partial implementation would create false assurance.
+      // Rescrub loop — additional terms to scrub before approving
+      {
+        type: 'input',
+        block_id: 'rescrub_terms_block',
+        optional: true,
+        label: { type: 'plain_text', text: 'Additional names or terms to scrub' },
+        hint: { type: 'plain_text', text: 'Comma-separated. Used for find/replace only — not stored.' },
+        element: {
+          type: 'plain_text_input',
+          action_id: 'rescrub_terms',
+          placeholder: { type: 'plain_text', text: 'e.g., Sarah, Denver VA, Dr. Martinez' },
+        }
+      },
+      {
+        type: 'actions',
+        block_id: 'rescrub_action_block',
+        elements: [
+          {
+            type: 'button',
+            text: { type: 'plain_text', text: 'Rescrub' },
+            action_id: 'pii_rescrub',
+          }
+        ]
+      },
+      { type: 'divider' },
+
+      // Attestation checkbox — required for approval. Resets on rescrub.
       {
         type: 'input',
         block_id: 'attestation_block',

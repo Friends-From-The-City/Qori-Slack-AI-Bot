@@ -9,7 +9,7 @@
 import type { AllMiddlewareArgs, SlackCommandMiddlewareArgs, SlackActionMiddlewareArgs, SlackViewMiddlewareArgs, BlockAction, ViewSubmitAction } from '@slack/bolt';
 
 import { buildSessionNotesView, type PreservedInputs } from "../ui/sessionNotesModal";
-import { buildTranscriptReviewModal, type TranscriptReviewModalMetadata } from "../ui/transcriptReviewModal";
+import { buildTranscriptReviewModal, type TranscriptReviewModalMetadata, type ScrubStats } from "../ui/transcriptReviewModal";
 import sessionObserverService from "../../../services/session_observer.service";
 import sessionParticipantService from "../../../services/study_participant.service";
 import { resolveStudyFromName } from "../../../services/research_study.service";
@@ -989,6 +989,123 @@ const handleTranscriptReviewApprove = async ({ ack, body, view, client }: SlackV
   }
 };
 
+// ─── Rescrub loop — re-scrub quarantine with additional terms ─────────────────────
+
+/**
+ * Handle rescrub button click in the transcript review modal.
+ *
+ * Reads quarantine content from GitHub, applies additional find/replace terms,
+ * regenerates quarantine, rebuilds the review modal with updated stats.
+ * Terms are transient — used in memory for find/replace, then discarded (§2.1).
+ * Attestation checkbox resets (reviewer attests to the regenerated version).
+ */
+const handleRescrub = async ({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs): Promise<void> => {
+  await ack();
+
+  try {
+    // Extract terms from the input field (actions blocks can read sibling input values)
+    const viewValues = (body as any).view?.state?.values;
+    const rescrubTermsRaw = viewValues?.rescrub_terms_block?.rescrub_terms?.value?.trim() || '';
+
+    if (!rescrubTermsRaw) {
+      // No terms entered — nothing to rescrub
+      return;
+    }
+
+    // Parse comma-separated terms
+    const terms = rescrubTermsRaw.split(',').map((t: string) => t.trim()).filter(Boolean);
+    if (terms.length === 0) return;
+
+    // Parse metadata from private_metadata
+    const metadata: TranscriptReviewModalMetadata = JSON.parse((body as any).view?.private_metadata || '{}');
+    const { quarantinePath, participantCode, studyName, fileUrl } = metadata;
+
+    if (!quarantinePath) {
+      console.error('[PII] Rescrub: missing quarantinePath in metadata');
+      return;
+    }
+
+    // Read current quarantine content from GitHub
+    const { Octokit } = await import('@octokit/rest');
+    const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
+    const owner = process.env.GITHUB_OWNER!;
+    const repo = process.env.GITHUB_REPO!;
+
+    let quarantineContent: string;
+    let quarantineSha: string;
+    try {
+      const fileResponse = await octokit.rest.repos.getContent({
+        owner, repo, path: quarantinePath, ref: 'main',
+      });
+      const fileData = fileResponse.data as { content: string; sha: string };
+      quarantineContent = Buffer.from(fileData.content, 'base64').toString('utf-8');
+      quarantineSha = fileData.sha;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error('[PII] Rescrub: failed to read quarantine file:', message);
+      return;
+    }
+
+    // Apply find/replace for each term → [REDACTED]
+    let scrubbedContent = quarantineContent;
+    let totalReplacements = 0;
+    for (const term of terms) {
+      const regex = new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+      const matches = scrubbedContent.match(regex);
+      if (matches) {
+        totalReplacements += matches.length;
+        scrubbedContent = scrubbedContent.replace(regex, '[REDACTED]');
+      }
+    }
+
+    // Regenerate quarantine file with updated content
+    await octokit.rest.repos.createOrUpdateFileContents({
+      owner, repo, path: quarantinePath,
+      message: `Rescrub: ${terms.length} additional term(s) applied`,
+      content: Buffer.from(scrubbedContent).toString('base64'),
+      sha: quarantineSha,
+    });
+
+    console.log(`[PII] Rescrub complete: ${totalReplacements} replacement(s) from ${terms.length} term(s)`);
+    // Terms discarded here — not logged, not stored (§2.1 discipline)
+
+    // Rebuild the review modal with updated stats
+    // Count PII markers in the regenerated content for updated status
+    const phoneCount = (scrubbedContent.match(/\[PHONE\]/g) || []).length;
+    const emailCount = (scrubbedContent.match(/\[EMAIL\]/g) || []).length;
+    const participantNameCount = (scrubbedContent.match(new RegExp(participantCode.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []).length;
+    const redactedCount = (scrubbedContent.match(/\[REDACTED\]/g) || []).length;
+
+    const updatedStats: ScrubStats = {
+      participantName: participantNameCount,
+      moderatorName: (scrubbedContent.match(/\[Moderator\]/g) || []).length,
+      speakerLabels: 0,
+      phoneNumbers: phoneCount,
+      emailAddresses: emailCount,
+    };
+
+    const updatedModal = buildTranscriptReviewModal({
+      stats: updatedStats,
+      participantCode,
+      studyName,
+      fileUrl,
+      nameProvided: participantNameCount > 0,
+    });
+    updatedModal.private_metadata = (body as any).view?.private_metadata;
+
+    // Update the modal — attestation resets (no initial_options on checkbox)
+    await client.views.update({
+      view_id: (body as any).view?.id,
+      hash: (body as any).view?.hash,
+      view: updatedModal,
+    });
+
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('[PII] Rescrub error:', message);
+  }
+};
+
 // ─── Manual notes approval via button click (DB-held quarantine) ─────────────────────
 
 /**
@@ -1153,6 +1270,7 @@ export {
   handleSessionSelectionChange,
   handleSessionNotesSubmission,
   handleTranscriptReviewApprove,
+  handleRescrub,
   handleManualNotesApprove,
   handleManualNotesReject,
 };
