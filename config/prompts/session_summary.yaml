@@ -247,6 +247,14 @@ ai_generation_tasks:
       - Include timestamps if present
       - NEVER fabricate or paraphrase quotes
 
+      PARTICIPANT CONTEXT RULES:
+      Participant context fields record ONLY what the participant explicitly
+      stated or what was directly observed as session mechanics (assistive
+      technology in use, device). NEVER infer demographic, medical, disability,
+      or identity attributes from speech patterns, task performance, or
+      behavioral evidence. When a field's information was not explicitly
+      stated: write "Not stated in session." When in doubt, omit.
+
       CONFIDENCE ASSESSMENT (required for each pain point):
       Assess evidence strength using three levels. Always include a parenthetical
       explanation of WHY you assigned that level:
@@ -274,11 +282,11 @@ ai_generation_tasks:
 
       ## Participant context
 
-      **Background** — [Military service, disability status, relevant experience from sources]
+      **Background** — [Explicitly stated background relevant to the study (e.g., service era, prior experience with the product)]
 
       **App usage** — [Frequency, primary tasks, duration of use]
 
-      **Assistive technology** — [Any AT or accessibility needs, or "None noted"]
+      **Assistive technology** — [Assistive technology observed in use, or accessibility needs the participant explicitly stated, or "None noted"]
 
       **Calling pattern** — [If relevant: how often they call VA support instead of using the app]
 
