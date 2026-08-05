@@ -649,7 +649,7 @@ notes: |
   - Monolithic research_readout_complete task replaced by analysis_body task.
   - Handlebars renders: masthead, references (toggle), related artifacts (toggle,
     raw detected_files list), upstream context (toggle, conditional on data),
-    validity checklist (toggle), cascade summary (always present).
+    validity checklist (toggle), declared inputs (static declaration table).
   - Related artifacts changed from LLM-categorized table to raw file list via
     Handlebars (mechanical, no LLM judgment on cosmetic categorization).
   - Internal quality checklist removed (redundant with anti-fabrication rules).

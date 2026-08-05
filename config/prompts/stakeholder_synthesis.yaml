@@ -445,11 +445,11 @@ notes: |
     cross-section coherence) and appendix_observations (raw preservation).
   - Handlebars renders: masthead, methodology (in toggle), validity
     checklist, references, appendix structure, related artifacts,
-    cascade summary (always present).
+    declared inputs (static declaration table).
   - Anti-fabrication guards preserved (6 rules from v5.0).
   - OUTPUT BOUNDARIES rule added to both tasks.
   - derived_variables block removed (handler computes topic_slug).
-  - Cascade summary always renders (was conditional on upstream data).
+  - Declared inputs section always renders (was conditional on upstream data).
   - Methodology section wrapped in details/summary toggle.
 
   v5.0-v5.0.1: Single-task architecture (superseded by v7.0).

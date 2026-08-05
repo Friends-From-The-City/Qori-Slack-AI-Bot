@@ -62,7 +62,7 @@ const addParticipantModal = {
         max_length: 100,
         placeholder: { type: "plain_text", text: "e.g., 'screen-reader user', 'Veteran A'" },
       },
-      hint: { type: "plain_text", text: "Private label to help you remember this participant. Do not enter real names — use the system code for identity." },
+      hint: { type: "plain_text", text: "Use the participant code, not a real name — this field is not checked." },
       optional: true,
     },
     // Recruitment method
