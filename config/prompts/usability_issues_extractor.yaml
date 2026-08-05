@@ -394,7 +394,7 @@ notes: |
   - Monolithic usability_complete task replaced by analysis_body task.
   - Handlebars renders: masthead, methodology (toggle with severity criteria
     and references), upstream context (toggle, conditional), validity checklist
-    (toggle), cascade summary (always present).
+    (toggle), declared inputs (static declaration table).
   - NEW: emits prioritized_issues (replace strategy, Sonnet extraction).
     This closes the broken cascade contract — research_readout declares
     it consumes prioritized_issues from usability_issues but the emit

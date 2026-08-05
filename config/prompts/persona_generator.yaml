@@ -389,7 +389,7 @@ notes: |
     (always present, documents both emits and consumes).
   - Recommendations kept (same rationale as affinity_mapping — see comment).
   - OUTPUT BOUNDARIES with ## heading instruction added.
-  - Cascade summary always renders (was conditional).
+  - Declared inputs section always renders (was conditional).
 
   v5.0: Cascade-aware retrofit (superseded by v7.0).
   v4.3: Design language translation.

@@ -401,7 +401,7 @@ notes: |
   - Monolithic survey_synthesis_complete task split into 2 tasks:
     analysis_body (overview + themes + sentiment) and knowledge_gaps_prose.
   - Handlebars renders: masthead, methodology (toggle), references (toggle),
-    cascade summary (always present).
+    declared inputs (static declaration table).
   - Recommendations removed → Knowledge Gaps (same treatment as desk_research).
   - survey_recommendations emit removed (orphaned — no downstream consumer).
   - sample_demographics emit kept (orphaned but potentially useful).

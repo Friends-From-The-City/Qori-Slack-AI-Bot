@@ -55,6 +55,6 @@ Empty arrays `[]` and empty objects `{}` count as present — that's valid data 
 
 ## References
 
-- `TemplateContractError` class in `backend/src/utils/yamlProcessor.js`
+- `TemplateContractError` class in `backend/src/helpers/yamlProcessor.ts`
 - Foundation 2 instruction document
 - Related: ADR 0005 (Handlebars architecture — this enforcement complements it), ADR 0006 (transform-on-consume — shapes can still drift even with the contract)

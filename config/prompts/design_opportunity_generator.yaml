@@ -415,7 +415,7 @@ notes: |
     description, scope calibration, and IDEO/Stanford/NNG/Kumar references),
     upstream context (toggle, conditional — richest upstream display of any
     template, shows 6 potential sources), validity checklist (toggle),
-    cascade summary (always present).
+    declared inputs (static declaration table).
   - NEW: emits design_hmw_opportunities (replace strategy, Sonnet extraction).
     No downstream consumer currently — emit exists for structural completeness
     and future consumption readiness. HMW statement is a single field (see
