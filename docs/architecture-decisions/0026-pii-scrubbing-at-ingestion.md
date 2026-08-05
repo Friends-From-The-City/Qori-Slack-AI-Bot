@@ -101,7 +101,9 @@ Transcripts currently use a **git quarantine path** (§2.5): the scrubbed-but-no
 
 This residual is **bounded**: the repository is private with limited collaborators, and the content is already auto-scrubbed (structured PII removed), so the exposure is incidental PII in scrubbed test transcripts, readable only by authorized collaborators via history.
 
-**Planned closure:** move transcript quarantine off git (mirroring the manual-notes database approach) and serve the full text for review via a non-git, access-controlled mechanism, so git receives transcripts only on approval. This work is to be built deliberately, with explicit security treatment of any endpoint that serves unreviewed content (session-bound rather than bearer access, no logging of access URLs, no-store caching, HTTPS-only). *(Tracked separately as "transcript option 2.")*
+**Planned closure (Option 2):** move transcript quarantine off git (mirroring the manual-notes database approach) and serve the full text for review via a non-git, access-controlled mechanism, so git receives transcripts only on approval. This work is to be built deliberately, with explicit security treatment of any endpoint that serves unreviewed content (session-bound rather than bearer access, no logging of access URLs, no-store caching, HTTPS-only).
+
+**Decision (2026-08-05):** Option 2 ships before the first study with external participants; internal studies proceed on the current bounded residual.
 
 ### 6.1 Path bug found and fixed during verification
 
