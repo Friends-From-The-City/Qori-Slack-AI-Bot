@@ -63,14 +63,14 @@ interface TranscriptReviewParams {
 export const buildTranscriptReviewModal = (params: TranscriptReviewParams): View => {
   const { stats, participantCode, studyName, fileUrl, nameProvided, rescrubSummary } = params;
 
-  // ── Honest status block ──────────────────────────
+  // ── Honest status block — three attributed lines ──────────────
+  // Line 1: Auto-scrub (machine only — no [REDACTED] count)
   const autoScrubLines: string[] = [];
   if (stats.phoneNumbers > 0) autoScrubLines.push(`${stats.phoneNumbers} phone number${stats.phoneNumbers !== 1 ? 's' : ''} → [PHONE]`);
   if (stats.emailAddresses > 0) autoScrubLines.push(`${stats.emailAddresses} email${stats.emailAddresses !== 1 ? 's' : ''} → [EMAIL]`);
   if (stats.participantName > 0) autoScrubLines.push(`participant name → ${participantCode}: ${stats.participantName} replacement${stats.participantName !== 1 ? 's' : ''}`);
   if (stats.moderatorName > 0) autoScrubLines.push(`moderator name → [Moderator]: ${stats.moderatorName}`);
   if (stats.speakerLabels > 0) autoScrubLines.push(`speaker labels: ${stats.speakerLabels}`);
-  if (stats.redactedTerms && stats.redactedTerms > 0) autoScrubLines.push(`${stats.redactedTerms} additional redaction${stats.redactedTerms !== 1 ? 's' : ''} → [REDACTED]`);
 
   const nameStatus = nameProvided
     ? `participant name → ${participantCode}`
@@ -80,9 +80,14 @@ export const buildTranscriptReviewModal = (params: TranscriptReviewParams): View
     ? `Auto-scrub applied: ${autoScrubLines.join(' · ')}`
     : `Auto-scrub applied: ${nameStatus}`;
 
-  // Append positional rescrub summary if present (aggregate numbers only)
+  // Line 3: Your rescrub (reviewer's redactions, not machine's)
+  // Omitted when redactedTerms is zero (no rescrub has occurred)
+  if (stats.redactedTerms && stats.redactedTerms > 0) {
+    statusText += `\nYour rescrub: ${stats.redactedTerms} redaction${stats.redactedTerms !== 1 ? 's' : ''} → [REDACTED]`;
+  }
   if (rescrubSummary) {
-    statusText += `\n${rescrubSummary}`;
+    // Append per-term positional counts for this pass
+    statusText += rescrubSummary.startsWith('\n') ? rescrubSummary : `\n${rescrubSummary}`;
   }
 
   return {
