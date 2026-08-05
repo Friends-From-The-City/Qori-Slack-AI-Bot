@@ -96,7 +96,7 @@ Prefill from discovery satisfies but does not alter required status.
 - **`problem_statement`** — REQUIRED under (a): `target_barriers` is hard-required downstream (`research_plan.yaml:69-73`, `discussion_guide.yaml:69-73`) and AI-generated from `problem_statement` + discovery. In the empty-cascade case (no discovery selected), an empty `problem_statement` forces the AI task to generate barriers from nothing — fabricated provenance flowing into plan and discussion guide. `problem_statement` is the human grounding; required.
 - **`session_date`, `session_time`, `current_status`** (Add Participant) — OPTIONAL. Not cascade-required (participant records don't feed YAML templates), not routing/identity, not workflow gates. These are operational metadata for scheduling, not required inputs.
 - **`recruitment_method`** (Add Participant) — REQUIRED under (b): recruitment-source tracking supports federal research methodology auditability. Resolved 2026-08-04.
-- **`race_ethnicity`, `age_range`, `education_level`, `location_type`** (Add Participant) — REQUIRED. `participant_metadata` is cascade-required by `research_readout.yaml:76-80`, so the cascade always receives a value. Every demographics dropdown includes a "Prefer not to say" option — honest data that respects data-minimization in a federal context. Unfreezes §6.7 design freeze (2026-08-04).
+- **`race_ethnicity`, `age_range`, `education_level`, `location_type`** (Add Participant) — REQUIRED. Demographics support research quality (representative sampling documentation), participant tracker breakdowns, and DSAR completeness (federal records management). NOTE: these fields do NOT enter the cascade — `participant_metadata` is LLM-extracted from transcripts, not from DB demographics (corrected 2026-08-05; see backlog item "DB demographics as authoritative cascade source"). Every demographics dropdown includes a "Prefer not to say" option — honest data that respects data-minimization in a federal context. `race_ethnicity` is multi-select per OMB SPD-15 (2024 revision). Unfreezes §6.7 design freeze (2026-08-04).
 
 **Status:** Derivation complete for Brief, Analyze, Synthesis, Readout, Add Participant, Session Notes. Pending: Discover modals.
 
@@ -239,15 +239,15 @@ Scores reflect CURRENT code state, not intended state. A cell flips to ✓ with 
 
 | Modal | R1 | R2 | R3 | R4 | R5 | R6 | R7 | R8 | R9 | R10 | R11 | R12 | R13 | R14 | R15 |
 |-------|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:---:|:---:|:---:|:---:|:---:|:---:|
-| Research Brief | ✓ | ✓ | ✓ | ✓ | ✓ | N/A | — | ? | ✓ | ✓ | ? | ✓ | ✓ | N/A | N/A |
-| Analyze Session | ✓ | ✓ | ✓ | ✓ | ✓ | N/A | — | ? | ✓ | ✓ | ? | ✓ | ✓ | N/A | N/A |
+| Research Brief | ✓ | ✓ | ✓ | ✓ | ✓ | N/A | ✓ | ? | ✓ | ✓ | ? | ✓ | ✓ | N/A | N/A |
+| Analyze Session | ✓ | ✓ | ✓ | ✓ | ✓ | N/A | ✓ | ? | ✓ | ✓ | ? | ✓ | ✓ | N/A | N/A |
 | Research Synthesis | ✓ | ✓ | ✓ | ✓ | ✓ | N/A | ✓ | ? | ✓ | ✓ | ? | ✓ | ✓ | N/A | N/A |
 | Readout | ? | ? | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? | N/A | N/A |
 | Discussion Guide | ? | ? | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? | N/A | N/A |
 | Research Plan | ? | ? | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? | N/A | N/A |
 | Discovery Launcher | ✓ | ? | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? | ✓ | N/A |
-| Discover: Desk Research | ? | ? | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? | N/A | N/A |
-| Discover: Stakeholder | ? | ? | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? | N/A | N/A |
+| Discover: Desk Research | ? | ? | ? | ? | ? | N/A | ✓ | ? | ? | ? | ? | ? | ? | N/A | N/A |
+| Discover: Stakeholder | ? | ? | ? | ? | ? | N/A | ✓ | ? | ? | ? | ? | ? | ? | N/A | N/A |
 | Discover: Survey | ? | ? | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? | N/A | N/A |
 | Project Creation | ? | ? | ? | ? | ? | N/A | ? | ? | ? | ? | ? | ? | ? | N/A | N/A |
 | Add Participant | ✓ | ? | — | ? | ? | N/A | — | — | ? | ? | — | ? | ? | N/A | N/A |
@@ -654,13 +654,13 @@ Derived from `researchBriefModal.ts` — fields with `optional: true`:
 | `session_date` | **NO** | Operational metadata, not cascade-required. Participant can be added before scheduling. |
 | `session_time` | **NO** | Operational metadata, not cascade-required. |
 | `current_status` | **NO** | Operational metadata — has default (line 123: `initial_option: statusOptions[0]`). |
-| `race_ethnicity` | **YES** | `participant_metadata` cascade-required by `research_readout.yaml:76-80`; "Prefer not to say" option present |
-| `age_range` | **YES** | `participant_metadata` cascade-required by `research_readout.yaml:76-80`; "Prefer not to say" option present |
-| `education_level` | **YES** | `participant_metadata` cascade-required by `research_readout.yaml:76-80`; "Prefer not to say" option present |
-| `location_type` | **YES** | `participant_metadata` cascade-required by `research_readout.yaml:76-80`; "Prefer not to say" option present |
+| `race_ethnicity` | **YES** | Research quality + tracker breakdowns + DSAR completeness; "Prefer not to say" option present |
+| `age_range` | **YES** | Research quality + tracker breakdowns + DSAR completeness; "Prefer not to say" option present |
+| `education_level` | **YES** | Research quality + tracker breakdowns + DSAR completeness; "Prefer not to say" option present |
+| `location_type` | **YES** | Research quality + tracker breakdowns + DSAR completeness; "Prefer not to say" option present |
 | `notes_accommodations` | **NO** | Explicitly `optional: true` (line 229) |
 
-**Demographics ruling (2026-08-04):** Four demographics fields remain REQUIRED. `participant_metadata` is cascade-required by `research_readout.yaml:76-80` — the cascade always receives a value. Every demographics dropdown includes a "Prefer not to say" option, providing honest data while respecting data-minimization in a federal context. Resolves previous design freeze.
+**Demographics ruling (2026-08-04, corrected 2026-08-05):** Four demographics fields remain REQUIRED. Demographics support research quality (representative sampling documentation), participant tracker breakdowns, and DSAR completeness. NOTE: these fields do NOT enter the cascade — `participant_metadata` is LLM-extracted from transcripts, not from DB demographics. Every demographics dropdown includes a "Prefer not to say" option, providing honest data while respecting data-minimization in a federal context. `race_ethnicity` is multi-select per OMB SPD-15 (2024 revision): 7 minimum categories, select all that apply, "Prefer not to say" as exclusive alternative. Resolves previous design freeze.
 
 **R7 Derived Required Fields:** `study_select`, `recruitment_method`, `race_ethnicity`, `age_range`, `education_level`, `location_type`.
 
@@ -746,8 +746,9 @@ if (filesList.length > 0) {
 
 | Modal | Status |
 |-------|--------|
-| Discover: Desk Research | Pending (Section 3a) |
-| Discover: Stakeholder Synthesis | Pending (Section 3a) |
+| Discover: Desk Research | Complete — topic (c) + file_upload (c) required; description optional. Already correctly wired. |
+| Discover: Stakeholder Synthesis | Complete — topic (c) + file_upload (c) required; description optional. Already correctly wired. |
+| Discover: Survey Synthesis | Complete — topic (c) + survey_name (c) + file_upload (c) required; question_focus optional. Already correctly wired. |
 | Discover: Survey Synthesis | Pending (Section 3a) |
 
 ---

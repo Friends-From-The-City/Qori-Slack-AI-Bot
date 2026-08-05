@@ -10,14 +10,14 @@ properties:
     description: "Participant ID"
   background:
     type: string
-    description: "Military service, disability status, relevant experience"
+    description: "Explicitly stated background relevant to the study (e.g., service era, prior product experience). Never inferred from speech or behavior."
   tech_setup:
     type: string
     description: "Device, OS, connectivity, browser"
   accessibility:
     type: string
     nullable: true
-    description: "Assistive technology or accessibility needs"
+    description: "Assistive technology observed in use, or accessibility needs the participant explicitly stated"
   recruitment_source:
     type: string
     nullable: true
