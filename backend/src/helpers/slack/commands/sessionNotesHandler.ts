@@ -876,18 +876,9 @@ const handleTranscriptReviewApprove = async ({ ack, body, view, client }: SlackV
       } as any);
     }
 
-    // ── Rescrub check (PII redesign item b) ──
-    const rescrubTerms = (view.state.values as any)
-      ?.rescrub_terms_block?.rescrub_terms?.value?.trim();
-    if (rescrubTerms) {
-      // TODO: Re-run scrub with additional terms, regenerate quarantine,
-      // reopen modal. For now, close and note that rescrub was requested.
-      // Full rescrub loop requires reading quarantine, re-scrubbing, re-writing,
-      // and rebuilding the modal — deferred to follow-up PR.
-      console.log(`[PII] Rescrub requested with terms: ${rescrubTerms.split(',').length} term(s)`);
-    }
-
     // Close all modals — this is a terminal action
+    // NOTE: Rescrub loop (item b) deferred to follow-up PR — requires
+    // re-scrub → regenerate quarantine → reopen modal, fully automated.
     await ack({ response_action: 'clear' });
 
     // ── MOVE from quarantine to final location ──
