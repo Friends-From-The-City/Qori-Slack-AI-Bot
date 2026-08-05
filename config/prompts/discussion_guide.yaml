@@ -122,6 +122,7 @@ emits:
 # ═══════════════════════════════════════════════════════════
 ai_generation_tasks:
   - task_id: "descriptive_title"
+    model: "claude-haiku-4-5-20251001"
     prompt: |
       Generate a concise study title from this research focus: {{research_focus}}
 

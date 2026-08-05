@@ -25,6 +25,9 @@ interface AiGenerationTask {
   task_id: string;
   prompt: string;
   output_format?: string;
+  /** Per-task model override. When set, this task uses the specified model
+   * instead of the default. Used for trivial transforms on Haiku. */
+  model?: string;
   [key: string]: unknown;
 }
 
@@ -121,7 +124,16 @@ export async function executeAiGenerationTasks(
         );
       }
 
-      const response = await llm.invoke(finalPrompt);
+      // Per-task model override (P4 ruling: trivial transforms on Haiku)
+      const taskLlm = task.model && task.model !== modelName
+        ? new ChatAnthropic({
+            anthropicApiKey: process.env.ANTHROPIC_API_KEY,
+            modelName: task.model,
+            temperature,
+            maxTokens,
+          })
+        : llm;
+      const response = await taskLlm.invoke(finalPrompt);
       return { taskId: task.task_id, response: response.content as string };
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
