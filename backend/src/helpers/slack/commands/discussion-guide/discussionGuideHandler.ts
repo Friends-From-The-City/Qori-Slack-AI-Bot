@@ -67,28 +67,27 @@ interface ResearchQuestion {
   priority?: string;
 }
 
-/** Format research_objectives (array of {id, objective}) as bullet list for pre-fill. */
+/** Format research_objectives (array of {id, objective}) as bullet list for pre-fill.
+ * IDs (OBJ-001) stay in the cascade; pre-fill renders clean text per R5. */
 function formatObjectivesForPrefill(objectives: unknown): string {
   if (!Array.isArray(objectives)) return '';
   return objectives
     .map((obj: ResearchObjective) => {
-      const id = obj.id || '';
       const objective = obj.objective || '';
-      return id && objective ? `• ${id}: ${objective}` : objective ? `• ${objective}` : '';
+      return objective ? `• ${objective}` : '';
     })
     .filter(Boolean)
     .join('\n');
 }
 
-/** Format research_questions (array of {id, question, priority}) for pre-fill. */
+/** Format research_questions (array of {id, question, priority}) for pre-fill.
+ * IDs (RQ-001) and priority labels stay in the cascade; pre-fill renders clean text per R5. */
 function formatQuestionsForPrefill(questions: unknown): string {
   if (!Array.isArray(questions)) return '';
   return questions
     .map((q: ResearchQuestion) => {
-      const id = q.id || '';
       const question = q.question || '';
-      const priority = q.priority ? ` (${q.priority})` : '';
-      return id && question ? `${id}${priority}: ${question}` : question || '';
+      return question || '';
     })
     .filter(Boolean)
     .join('\n');
