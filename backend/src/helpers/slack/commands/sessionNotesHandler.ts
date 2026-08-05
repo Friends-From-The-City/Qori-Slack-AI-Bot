@@ -903,10 +903,11 @@ const handleTranscriptReviewApprove = async ({ ack, body, view, client }: SlackV
     const quarantineSha = quarantineFile.data.sha;
 
     // 2. Flip PII marker from PENDING-REVIEW to REVIEWED-CLEARED
-    // Use regex for more robust matching (handles whitespace/encoding variations)
+    // First occurrence only — global /g over file body is silent evidence mutation
+    // if a participant ever says the phrase (ADR 0026 §5 over-redaction principle)
     const reviewedContent = rawContent
-      .replace(/<!--\s*PII-STATUS:\s*PENDING-REVIEW\s*-->/gi, '<!-- PII-STATUS: REVIEWED-CLEARED -->')
-      .replace(/\*\*PII Status:\*\*\s*Auto-scrubbed,?\s*pending human review/gi, `**PII Status:** Reviewed and cleared by <@${body.user.id}>`);
+      .replace(/<!--\s*PII-STATUS:\s*PENDING-REVIEW\s*-->/i, '<!-- PII-STATUS: REVIEWED-CLEARED -->')
+      .replace(/\*\*PII Status:\*\*\s*Auto-scrubbed,?\s*pending human review/i, `**PII Status:** Reviewed and cleared by <@${body.user.id}>`);
 
     // 3. Write to final location with updated marker
     const finalResult = await createOrUpdateFileOnGitHub(finalPath, reviewedContent);
@@ -992,6 +993,19 @@ const handleTranscriptReviewApprove = async ({ ack, body, view, client }: SlackV
 // ─── Rescrub loop — re-scrub quarantine with additional terms ─────────────────────
 
 /**
+ * Build a regex from a reviewer-typed term. Single audit point for all
+ * reviewer-supplied text → regex conversions.
+ *
+ * Escapes metacharacters, then anchors with lookarounds (not \b) so terms
+ * match at word edges without failing on non-word-char boundaries like
+ * "Dr. Patel" (where \b between "." and " " is not a word boundary).
+ */
+function buildTermRegex(term: string): RegExp {
+  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(?<!\\w)${escaped}(?!\\w)`, 'gi');
+}
+
+/**
  * Handle rescrub button click in the transcript review modal.
  *
  * Reads quarantine content from GitHub, applies additional find/replace terms,
@@ -1046,15 +1060,22 @@ const handleRescrub = async ({ ack, body, client }: SlackActionMiddlewareArgs<Bl
       return;
     }
 
-    // Apply find/replace for each term → [REDACTED]
+    // Apply find/replace for each term → [REDACTED] (word-boundary anchored)
     let scrubbedContent = quarantineContent;
     let totalReplacements = 0;
+    let zeroMatchCount = 0;
+    // Track per-term match counts positionally (transient — never rendered by text)
+    const perTermCounts: number[] = [];
     for (const term of terms) {
-      const regex = new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+      const regex = buildTermRegex(term);
       const matches = scrubbedContent.match(regex);
-      if (matches) {
-        totalReplacements += matches.length;
+      const count = matches ? matches.length : 0;
+      perTermCounts.push(count);
+      if (count > 0) {
+        totalReplacements += count;
         scrubbedContent = scrubbedContent.replace(regex, '[REDACTED]');
+      } else {
+        zeroMatchCount++;
       }
     }
 
@@ -1066,11 +1087,11 @@ const handleRescrub = async ({ ack, body, client }: SlackActionMiddlewareArgs<Bl
       sha: quarantineSha,
     });
 
-    console.log(`[PII] Rescrub complete: ${totalReplacements} replacement(s) from ${terms.length} term(s)`);
+    console.log(`[PII] Rescrub complete: ${totalReplacements} replacement(s) from ${terms.length} term(s), ${zeroMatchCount} zero-match`);
     // Terms discarded here — not logged, not stored (§2.1 discipline)
+    // perTermCounts discarded — positional counts only, no term text
 
-    // Rebuild the review modal with updated stats
-    // Count PII markers in the regenerated content for updated status
+    // Count PII markers in the CURRENT file for cumulative status
     const phoneCount = (scrubbedContent.match(/\[PHONE\]/g) || []).length;
     const emailCount = (scrubbedContent.match(/\[EMAIL\]/g) || []).length;
     const participantNameCount = (scrubbedContent.match(new RegExp(participantCode.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []).length;
@@ -1082,7 +1103,19 @@ const handleRescrub = async ({ ack, body, client }: SlackActionMiddlewareArgs<Bl
       speakerLabels: 0,
       phoneNumbers: phoneCount,
       emailAddresses: emailCount,
+      redactedTerms: redactedCount,
     };
+
+    // Build positional match summary (aggregate numbers only, no term text)
+    const matchParts: string[] = [];
+    for (let i = 0; i < perTermCounts.length; i++) {
+      if (perTermCounts[i] === 0) {
+        matchParts.push(`term ${i + 1} matched 0 times`);
+      } else {
+        matchParts.push(`term ${i + 1} matched ${perTermCounts[i]} time${perTermCounts[i] !== 1 ? 's' : ''}`);
+      }
+    }
+    const rescrubSummary = `${terms.length} term${terms.length !== 1 ? 's' : ''} submitted · ${matchParts.join(' · ')} · ${redactedCount} redaction${redactedCount !== 1 ? 's' : ''} in this file`;
 
     const updatedModal = buildTranscriptReviewModal({
       stats: updatedStats,
@@ -1090,6 +1123,7 @@ const handleRescrub = async ({ ack, body, client }: SlackActionMiddlewareArgs<Bl
       studyName,
       fileUrl,
       nameProvided: participantNameCount > 0,
+      rescrubSummary,
     });
     updatedModal.private_metadata = (body as any).view?.private_metadata;
 

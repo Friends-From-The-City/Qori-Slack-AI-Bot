@@ -105,6 +105,8 @@ This residual is **bounded**: the repository is private with limited collaborato
 
 **Decision (2026-08-05):** Option 2 ships before the first study with external participants; internal studies proceed on the current bounded residual.
 
+**Blocking dependency (2026-08-05):** The rescrub loop currently writes each iteration as a new quarantine commit, so over-redaction from the rescrub is recoverable via repo history. When Option 2 moves quarantine off git, that recovery path disappears and over-redaction becomes irreversible. **Option 2 must ship WITH a preview-before-commit step in the rescrub loop** — reviewer sees per-term match counts and confirms before the write. This is a blocking dependency, not a backlog item.
+
 ### 6.1 Path bug found and fixed during verification
 
 While verifying this ADR's claims against code (§8), the transcript-write path was found to be **hardcoded to `03-sessions/`** in the upload handler, bypassing the canonical folder constant `STUDY_FOLDERS.FIELDWORK_TRANSCRIPTS` (`03-fieldwork/transcripts/`). The readout scanner reads `03-fieldwork/transcripts/`, so **approved transcripts were written to a location the readout never scanned** — a traceability break: the evidence existed but was invisible to the stage that assembles findings.

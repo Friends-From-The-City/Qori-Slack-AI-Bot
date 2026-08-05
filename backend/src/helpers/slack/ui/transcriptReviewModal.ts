@@ -34,6 +34,8 @@ export interface ScrubStats {
   speakerLabels: number;
   phoneNumbers: number;
   emailAddresses: number;
+  /** Count of [REDACTED] tokens from rescrub terms in the current file */
+  redactedTerms?: number;
 }
 
 interface TranscriptReviewParams {
@@ -47,6 +49,8 @@ interface TranscriptReviewParams {
   fileUrl: string;
   /** Whether a participant name was provided at upload */
   nameProvided: boolean;
+  /** Positional match summary from rescrub (aggregate numbers only, no term text) */
+  rescrubSummary?: string;
 }
 
 /**
@@ -57,23 +61,29 @@ interface TranscriptReviewParams {
  * Per ADR 0026 §2.3: reviewer's job is the headline.
  */
 export const buildTranscriptReviewModal = (params: TranscriptReviewParams): View => {
-  const { stats, participantCode, studyName, fileUrl, nameProvided } = params;
+  const { stats, participantCode, studyName, fileUrl, nameProvided, rescrubSummary } = params;
 
-  // ── Honest status block (item a) ──────────────────────────
+  // ── Honest status block ──────────────────────────
   const autoScrubLines: string[] = [];
   if (stats.phoneNumbers > 0) autoScrubLines.push(`${stats.phoneNumbers} phone number${stats.phoneNumbers !== 1 ? 's' : ''} → [PHONE]`);
   if (stats.emailAddresses > 0) autoScrubLines.push(`${stats.emailAddresses} email${stats.emailAddresses !== 1 ? 's' : ''} → [EMAIL]`);
   if (stats.participantName > 0) autoScrubLines.push(`participant name → ${participantCode}: ${stats.participantName} replacement${stats.participantName !== 1 ? 's' : ''}`);
   if (stats.moderatorName > 0) autoScrubLines.push(`moderator name → [Moderator]: ${stats.moderatorName}`);
   if (stats.speakerLabels > 0) autoScrubLines.push(`speaker labels: ${stats.speakerLabels}`);
+  if (stats.redactedTerms && stats.redactedTerms > 0) autoScrubLines.push(`${stats.redactedTerms} additional redaction${stats.redactedTerms !== 1 ? 's' : ''} → [REDACTED]`);
 
   const nameStatus = nameProvided
     ? `participant name → ${participantCode}`
     : 'no name provided at upload — names NOT scrubbed';
 
-  const statusText = autoScrubLines.length > 0
+  let statusText = autoScrubLines.length > 0
     ? `Auto-scrub applied: ${autoScrubLines.join(' · ')}`
     : `Auto-scrub applied: ${nameStatus}`;
+
+  // Append positional rescrub summary if present (aggregate numbers only)
+  if (rescrubSummary) {
+    statusText += `\n${rescrubSummary}`;
+  }
 
   return {
     type: 'modal',
