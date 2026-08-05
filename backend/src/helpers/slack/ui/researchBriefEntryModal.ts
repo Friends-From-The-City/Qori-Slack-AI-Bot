@@ -195,18 +195,17 @@ export async function buildBriefEntryModal(options: BuildBriefEntryModalOptions)
     modalBlocks.splice(studyNameIdx, 1);
   }
 
-  // Add project context block at the top (after first context/divider)
+  // Add project slug line at the top (after intro context)
   const projectContextBlock = {
     type: "context",
     block_id: "project_context_block",
     elements: [
       {
         type: "mrkdwn",
-        text: `Creating research brief for project *${projectName}*`,
+        text: `*${projectName}*`,
       },
     ],
   };
-  // Insert after first block (usually a header context)
   modalBlocks.splice(1, 0, projectContextBlock);
 
   // Replace editable stakeholder_select with read-only inherited stakeholder display
@@ -242,7 +241,7 @@ export async function buildBriefEntryModal(options: BuildBriefEntryModalOptions)
       elements: [
         {
           type: "mrkdwn",
-          text: `*Approver:* ${approverDisplay} (${approverRoleLabel} — approves this brief)`,
+          text: `Approver: ${approverDisplay} (${approverRoleLabel})`,
         },
       ],
     };
@@ -297,7 +296,7 @@ export async function buildBriefEntryModal(options: BuildBriefEntryModalOptions)
         elements: [
           {
             type: "mrkdwn",
-            text: "⚠️ No discovery research available for this team yet. Run `/qori-discover` first to add organizational context, or proceed without — brief will be generated from your inputs alone.",
+            text: "No discovery yet — run `/qori-discover` first, or proceed with your inputs alone.",
           },
         ],
       };
