@@ -230,6 +230,7 @@ ai_generation_tasks:
       notes, post-session interviews, etc. Be specific to the methodology.
 
   - task_id: "participant_glance"
+    model: "claude-haiku-4-5-20251001"
     prompt: |
       Write a ONE-LINE glance summary of participant composition for an at-a-glance table.
 

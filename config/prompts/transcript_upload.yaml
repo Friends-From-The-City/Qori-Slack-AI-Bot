@@ -665,6 +665,7 @@ ai_generation_tasks:
       - Insights extracted: [Yes/No] (insights_count)
 
   - task_id: "transcript_coding_filename"
+    model: "claude-haiku-4-5-20251001"
     prompt: |
       Extract participant ID and output filename.
 
