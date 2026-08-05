@@ -82,5 +82,6 @@ Every claim the system makes about its own behavior — in UI text, generated do
 | 9 | MISLEADING | Medium | Advisory "don't enter real names" has no enforcement |
 | 10 | UNVERIFIABLE | Low | Slack platform behavior |
 | 25 | MISLEADING | Low | Static declaration, not dynamic reflection |
-| 27 | FALSE | Low | Stale ADR file reference — cosmetic |
-| 32 | MISLEADING | Medium | "Enforced" on 9 rulings has no CI backing |
+| 27 | FALSE → FIXED (#266) | Low | Stale ADR file reference — cosmetic |
+| 32 | MISLEADING → FIXED (#266) | Medium | "Enforced" → "Verified by manual sweep (PR #241)" |
+| 35 | PARTIAL | Medium | Generated documents conform to the writing style standard — standard ratified, enforcement pass pending |

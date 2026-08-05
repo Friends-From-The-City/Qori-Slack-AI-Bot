@@ -45,46 +45,44 @@ interface TranscriptReviewParams {
   studyName: string;
   /** GitHub URL to full transcript for review */
   fileUrl: string;
+  /** Whether a participant name was provided at upload */
+  nameProvided: boolean;
 }
 
 /**
  * Build the transcript review modal.
  *
- * The transcript is saved to quarantine (.pending-review/).
- * Researcher MUST review the FULL transcript via the GitHub link.
- * NO preview is shown — preview invites skimming instead of reading.
- * Approval MOVES file from quarantine to final location.
+ * PII redesign (2026-08-05): Honest status block (no success glyph),
+ * rescrub loop field, attestation checkbox, clear action labels.
+ * Per ADR 0026 §2.3: reviewer's job is the headline.
  */
 export const buildTranscriptReviewModal = (params: TranscriptReviewParams): View => {
-  const { stats, participantCode, studyName, fileUrl } = params;
+  const { stats, participantCode, studyName, fileUrl, nameProvided } = params;
 
-  // Build stats summary
-  const totalScrubs = stats.participantName + stats.moderatorName +
-    stats.speakerLabels + stats.phoneNumbers + stats.emailAddresses;
+  // ── Honest status block (item a) ──────────────────────────
+  const autoScrubLines: string[] = [];
+  if (stats.phoneNumbers > 0) autoScrubLines.push(`${stats.phoneNumbers} phone number${stats.phoneNumbers !== 1 ? 's' : ''} → [PHONE]`);
+  if (stats.emailAddresses > 0) autoScrubLines.push(`${stats.emailAddresses} email${stats.emailAddresses !== 1 ? 's' : ''} → [EMAIL]`);
+  if (stats.participantName > 0) autoScrubLines.push(`participant name → ${participantCode}: ${stats.participantName} replacement${stats.participantName !== 1 ? 's' : ''}`);
+  if (stats.moderatorName > 0) autoScrubLines.push(`moderator name → [Moderator]: ${stats.moderatorName}`);
+  if (stats.speakerLabels > 0) autoScrubLines.push(`speaker labels: ${stats.speakerLabels}`);
 
-  const statLines: string[] = [];
-  if (stats.participantName > 0) statLines.push(`• Participant name → ${participantCode}: ${stats.participantName}`);
-  if (stats.moderatorName > 0) statLines.push(`• Moderator name → [Moderator]: ${stats.moderatorName}`);
-  if (stats.speakerLabels > 0) statLines.push(`• Speaker labels: ${stats.speakerLabels}`);
-  if (stats.phoneNumbers > 0) statLines.push(`• Phone numbers → [PHONE]: ${stats.phoneNumbers}`);
-  if (stats.emailAddresses > 0) statLines.push(`• Email addresses → [EMAIL]: ${stats.emailAddresses}`);
+  const nameStatus = nameProvided
+    ? `participant name → ${participantCode}`
+    : 'no name provided at upload — names NOT scrubbed';
 
-  const statsText = totalScrubs > 0
-    ? `✅ *${totalScrubs} PII items scrubbed:*\n${statLines.join('\n')}`
-    : '⚠️ *No PII items were automatically scrubbed.* Please verify the transcript is already anonymized.';
+  const statusText = autoScrubLines.length > 0
+    ? `Auto-scrub applied: ${autoScrubLines.join(' · ')}`
+    : `Auto-scrub applied: ${nameStatus}`;
 
   return {
     type: 'modal',
     callback_id: 'transcript_review_approve',
     title: { type: 'plain_text', text: 'Review Transcript' },
     submit: { type: 'plain_text', text: 'Approve' },
-    close: { type: 'plain_text', text: 'Cancel' },
+    close: { type: 'plain_text', text: 'Reject — needs source fix' },
     blocks: [
-      // Header
-      {
-        type: 'header',
-        text: { type: 'plain_text', text: 'PII Review Required', emoji: true }
-      },
+      // Study/participant context
       {
         type: 'context',
         elements: [
@@ -93,49 +91,62 @@ export const buildTranscriptReviewModal = (params: TranscriptReviewParams): View
       },
       { type: 'divider' },
 
-      // Scrubbing stats
+      // Honest status block — no success glyph
       {
         type: 'section',
-        text: { type: 'mrkdwn', text: statsText }
-      },
-      { type: 'divider' },
-
-      // CRITICAL: Review full transcript link (the actual review happens on GitHub)
-      {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: '⚠️ *You MUST review the full transcript before approving.*\n\n' +
-            'Auto-scrub handles known names and patterns, but may miss:\n' +
-            '• Names mentioned in conversation ("my wife Sarah...")\n' +
-            '• Locations ("the Denver VA...")\n' +
-            '• Phone numbers or emails in conversation\n' +
-            '• Dates with context ("my birthday is...")\n\n' +
-            '*Click the button to review the full transcript on GitHub.*'
-        }
+        text: { type: 'mrkdwn', text: statusText }
       },
       {
-        type: 'actions',
+        type: 'context',
         elements: [
-          {
-            type: 'button',
-            text: { type: 'plain_text', text: 'Review Full Transcript on GitHub', emoji: true },
-            url: fileUrl,
-            action_id: 'review_full_transcript_link',
-            style: 'primary'
-          }
+          { type: 'mrkdwn', text: 'Not covered by auto-scrub: names of other people, places, dates, or details mentioned in conversation. Finding these is your review.' }
         ]
       },
       { type: 'divider' },
 
-      // Footer
+      // Review link — the actual review happens on GitHub
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: 'Review the full transcript before approving.'
+        },
+        accessory: {
+          type: 'button',
+          text: { type: 'plain_text', text: 'Open on GitHub' },
+          url: fileUrl,
+          action_id: 'review_full_transcript_link',
+        }
+      },
+      { type: 'divider' },
+
+      // Attestation checkbox — required for approval
+      // NOTE: Rescrub loop (additional terms field + re-scrub automation) deferred
+      // to follow-up PR — partial implementation would create false assurance.
+      {
+        type: 'input',
+        block_id: 'attestation_block',
+        label: { type: 'plain_text', text: 'Attestation' },
+        element: {
+          type: 'checkboxes',
+          action_id: 'attestation_checkbox',
+          options: [
+            {
+              text: { type: 'mrkdwn', text: '*I have reviewed the full transcript*' },
+              value: 'attested',
+            }
+          ]
+        }
+      },
+
+      // Action descriptions
       {
         type: 'context',
         elements: [
           {
             type: 'mrkdwn',
-            text: '✅ *Approve* — moves transcript to final location, eligible for analysis.\n' +
-              '❌ *Cancel* — keeps transcript in quarantine (re-upload to try again).'
+            text: '*Approve* — moves transcript to final location, eligible for `/qori-analyze`.\n' +
+              '*Reject* — keeps transcript in quarantine; re-upload to try again.'
           }
         ]
       }

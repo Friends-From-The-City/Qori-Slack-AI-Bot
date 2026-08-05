@@ -617,6 +617,7 @@ ${scrubResult.content}`;
         participantCode: templateData.participant_id,
         studyName: templateData.study_name,
         fileUrl: githubResult.url,
+        nameProvided: Boolean(participantRealName),
       });
 
       // Store minimal metadata in private_metadata (just IDs, not content)
@@ -723,11 +724,15 @@ ${scrubResult.content}`;
       studyName: templateData.study_name,
     };
 
-    // Build scrub stats text
-    const totalScrubs = scrubResult.stats.phoneNumbers + scrubResult.stats.emailAddresses;
-    const statsText = totalScrubs > 0
-      ? `*${totalScrubs} PII items scrubbed* (phone/email)`
-      : '*No PII items auto-scrubbed.* Manual notes typically contain incidental PII that requires human review.';
+    // Build honest status text (PII redesign item a — no success glyph)
+    const phoneCount = scrubResult.stats.phoneNumbers;
+    const emailCount = scrubResult.stats.emailAddresses;
+    const scrubParts: string[] = [];
+    if (phoneCount > 0) scrubParts.push(`${phoneCount} phone number${phoneCount !== 1 ? 's' : ''} → [PHONE]`);
+    if (emailCount > 0) scrubParts.push(`${emailCount} email${emailCount !== 1 ? 's' : ''} → [EMAIL]`);
+    const statsText = scrubParts.length > 0
+      ? `Auto-scrub applied: ${scrubParts.join(' · ')}`
+      : 'Auto-scrub applied: no phone/email patterns found';
 
     // ── Truncate content for Slack display (Block Kit limit: 3000 chars) ──
     const displayContent = scrubbedContent.length > 2800
@@ -742,7 +747,7 @@ ${scrubResult.content}`;
       blocks: [
         {
           type: 'header',
-          text: { type: 'plain_text', text: 'PII Review Required', emoji: true }
+          text: { type: 'plain_text', text: 'PII Review Required' }
         },
         {
           type: 'context',
@@ -757,14 +762,10 @@ ${scrubResult.content}`;
         },
         { type: 'divider' },
         {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: '⚠️ *Review the notes below for incidental PII before approving:*\n' +
-              '• Names mentioned in observations ("her husband Mike...")\n' +
-              '• Locations ("near the Denver VA...")\n' +
-              '• Dates with context ("mentioned her birthday...")'
-          }
+          type: 'context',
+          elements: [
+            { type: 'mrkdwn', text: 'Not covered by auto-scrub: names of other people, places, dates, or details mentioned in conversation. Finding these is your review.' }
+          ]
         },
         { type: 'divider' },
         {
@@ -780,14 +781,14 @@ ${scrubResult.content}`;
           elements: [
             {
               type: 'button',
-              text: { type: 'plain_text', text: '✅ Approve & Commit to Git', emoji: true },
+              text: { type: 'plain_text', text: 'Approve & Commit to Git' },
               style: 'primary',
               action_id: 'manual_notes_approve',
               value: JSON.stringify(approvalMetadata),
             },
             {
               type: 'button',
-              text: { type: 'plain_text', text: '🗑️ Reject', emoji: true },
+              text: { type: 'plain_text', text: 'Reject — needs source fix' },
               style: 'danger',
               action_id: 'manual_notes_reject',
               value: JSON.stringify({ noteId: pendingNote.id }),
@@ -799,8 +800,8 @@ ${scrubResult.content}`;
           elements: [
             {
               type: 'mrkdwn',
-              text: '✅ *Approve* — commits to GitHub, eligible for analysis.\n' +
-                '🗑️ *Reject* — deletes from DB, nothing committed to git.'
+              text: '*Approve* — commits to GitHub, eligible for `/qori-analyze`.\n' +
+                '*Reject* — deletes from DB, nothing committed to git.'
             }
           ]
         }
@@ -860,12 +861,24 @@ const handleTranscriptReviewApprove = async ({ ack, body, view, client }: SlackV
       await ack();
       await client.chat.postMessage({
         channel: body.user.id,
-        text: '❌ Error: Missing transcript paths. Please try uploading again.',
+        text: 'Error: Missing transcript paths. Please try uploading again.',
       });
       return;
     }
 
-    // Close all modals first — this is a terminal action
+    // ── Attestation validation (PII redesign item c) ──
+    const attestationChecked = (view.state.values as any)
+      ?.attestation_block?.attestation_checkbox?.selected_options?.length > 0;
+    if (!attestationChecked) {
+      return ack({
+        response_action: 'errors',
+        errors: { attestation_block: 'You must confirm you have reviewed the full transcript.' },
+      } as any);
+    }
+
+    // Close all modals — this is a terminal action
+    // NOTE: Rescrub loop (item b) deferred to follow-up PR — requires
+    // re-scrub → regenerate quarantine → reopen modal, fully automated.
     await ack({ response_action: 'clear' });
 
     // ── MOVE from quarantine to final location ──
@@ -930,7 +943,9 @@ const handleTranscriptReviewApprove = async ({ ack, body, view, client }: SlackV
 
     // @ts-expect-error — pre-existing type mismatch from require() → import migration
     const createdNote = await studyNotesService.createStudyNote(studyNoteData);
-    console.log(`✅ Study note created with pii_reviewed=true: ID=${createdNote.id}`);
+    // Attestation audit log: actor, timestamp, target, attestation recorded
+    console.log(`[AUDIT] PII review attestation: actor=${body.user.id} target=${participantCode}/${filename} time=${new Date().toISOString()} attested=true`);
+    console.log(`Study note created with pii_reviewed=true: ID=${createdNote.id}`);
 
     // Notify user
     await client.chat.postMessage({
