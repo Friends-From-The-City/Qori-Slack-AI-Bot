@@ -259,7 +259,7 @@ export function buildAddParticipantViewState(input: AddParticipantViewStateInput
         notes_input: textInput(input.notes),
       },
       race_ethnicity_block: {
-        race_ethnicity_select: staticSelect(input.raceEthnicity || 'prefer_not_to_say'),
+        race_ethnicity: multiStaticSelect(input.raceEthnicity ? [input.raceEthnicity] : ['prefer_not_to_say']),
       },
       age_range_block: {
         age_range_select: staticSelect(input.ageRange || '35-44'),

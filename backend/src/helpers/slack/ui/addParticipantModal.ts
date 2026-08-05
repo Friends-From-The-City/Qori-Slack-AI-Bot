@@ -88,7 +88,7 @@ const addParticipantModal = {
 
     // Session Details
     { type: "section", text: { type: "mrkdwn", text: "*Session Details*" } },
-    // Scheduled date
+    // Scheduled date — optional per R7 (operational metadata, not cascade-required)
     {
       type: "input",
       block_id: "session_date_block",
@@ -98,8 +98,9 @@ const addParticipantModal = {
         action_id: "session_date",
         placeholder: { type: "plain_text", text: "Select date" },
       },
+      optional: true,
     },
-    // Scheduled time
+    // Scheduled time — optional per R7
     {
       type: "input",
       block_id: "session_time_block",
@@ -109,8 +110,9 @@ const addParticipantModal = {
         action_id: "session_time",
         placeholder: { type: "plain_text", text: "Select time" },
       },
+      optional: true,
     },
-    // Current status
+    // Current status — optional per R7 (has default)
     {
       type: "input",
       block_id: "current_status_block",
@@ -122,29 +124,30 @@ const addParticipantModal = {
         options: statusOptions,
         initial_option: statusOptions[0],
       },
+      optional: true,
     },
 
     { type: "divider" },
 
     // Demographics
     { type: "section", text: { type: "mrkdwn", text: "*Demographics*" } },
-    // Race/Ethnicity
+    // Race/Ethnicity — OMB SPD-15 (2024 revision): combined question, select all that apply
     {
       type: "input",
       block_id: "race_ethnicity_block",
       label: { type: "plain_text", text: "Race/ethnicity" },
       element: {
-        type: "static_select",
+        type: "multi_static_select",
         action_id: "race_ethnicity",
-        placeholder: { type: "plain_text", text: "Select..." },
+        placeholder: { type: "plain_text", text: "Select all that apply..." },
         options: [
           { text: { type: "plain_text", text: "American Indian or Alaska Native" }, value: "american_indian" },
           { text: { type: "plain_text", text: "Asian" }, value: "asian" },
           { text: { type: "plain_text", text: "Black or African American" }, value: "black" },
           { text: { type: "plain_text", text: "Hispanic or Latino" }, value: "hispanic_latino" },
+          { text: { type: "plain_text", text: "Middle Eastern or North African" }, value: "middle_eastern_north_african" },
           { text: { type: "plain_text", text: "Native Hawaiian or Pacific Islander" }, value: "native_hawaiian" },
           { text: { type: "plain_text", text: "White" }, value: "white" },
-          { text: { type: "plain_text", text: "Two or More Races" }, value: "two_or_more" },
           { text: { type: "plain_text", text: "Prefer not to say" }, value: "prefer_not_to_say" },
         ],
       },

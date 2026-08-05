@@ -128,11 +128,10 @@ const RACE_ETHNICITY_MAPPINGS: Record<string, string> = {
   'black': 'Black or African American',
   'hispanic_latino': 'Hispanic or Latino',
   'hispanic': 'Hispanic or Latino',
+  'middle_eastern_north_african': 'Middle Eastern or North African',
   'native_hawaiian_pacific_islander': 'Native Hawaiian or Other Pacific Islander',
-  'native_hawaiian': 'Native Hawaiian or Other Pacific Islander',
+  'native_hawaiian': 'Native Hawaiian or Pacific Islander',
   'white': 'White',
-  'two_or_more_races': 'Two or More Races',
-  'two_or_more': 'Two or More Races',
   'prefer_not_to_say': 'Prefer not to say',
 };
 
@@ -350,9 +349,14 @@ function generateDemographicBreakdowns(participants: ParticipantRecord[]): Demog
     }
 
     if (typeof demographics === 'object' && demographics) {
-      if (demographics.race_ethnicity && demographics.race_ethnicity !== '') {
-        const raceKey = demographics.race_ethnicity;
-        raceBreakdown[raceKey] = (raceBreakdown[raceKey] || 0) + 1;
+      // SPD-15 (2024): race_ethnicity is an array (select all that apply)
+      const raceValues = Array.isArray(demographics.race_ethnicity)
+        ? demographics.race_ethnicity
+        : demographics.race_ethnicity ? [demographics.race_ethnicity] : [];
+      for (const raceKey of raceValues) {
+        if (raceKey !== '') {
+          raceBreakdown[raceKey] = (raceBreakdown[raceKey] || 0) + 1;
+        }
       }
 
       if (demographics.age_range && demographics.age_range !== '') {
