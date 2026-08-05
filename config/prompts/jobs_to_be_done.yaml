@@ -365,7 +365,7 @@ notes: |
   - Handlebars renders: masthead, methodology (toggle with JTBD framework
     description, dimension model, and Christensen/Moesta/Ulwick/Klement
     references), upstream context (toggle, conditional), validity checklist
-    (toggle), cascade summary (always present).
+    (toggle), declared inputs (static declaration table).
   - NEW: emits validated_jobs (replace strategy, Sonnet extraction).
     When/Want/So triad split into three separate required fields for
     cascade clarity — see schema comment in validated_job.yaml.

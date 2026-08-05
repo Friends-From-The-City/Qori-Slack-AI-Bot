@@ -538,7 +538,7 @@ notes: |
   - Monolithic analyze_and_extract task replaced by analysis_body task.
   - Handlebars renders: masthead, references (static), upstream context
     (toggle, conditional), sources appendix (toggle), validity checklist
-    (toggle), cascade summary (always present).
+    (toggle), declared inputs (static declaration table).
   - Barrier validation conditional stays in AI prompt (Option b from delta —
     avoids wasted generation when no upstream barriers exist).
   - Methodology prose stays in AI task (varies per session — format, tasks,

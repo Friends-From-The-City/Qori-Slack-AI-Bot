@@ -364,12 +364,12 @@ notes: |
   v7.0: Interleaved Handlebars/AI architecture (ADR 0005/0016 pattern).
   - Monolithic affinity_complete task replaced by analysis_body task.
   - Handlebars renders: masthead, methodology (toggle), references (toggle),
-    upstream context (toggle), cascade summary (always present).
+    upstream context (toggle), declared inputs (static declaration table).
   - Recommendations kept (deviation from discovery template treatment —
     see comment on analysis_body task for rationale).
   - OUTPUT BOUNDARIES with ## heading instruction added.
   - Dead variable focus_area removed from prompt.
-  - Cascade summary always renders (was conditional).
+  - Declared inputs section always renders (was conditional).
 
   v4.0: Cascade-aware retrofit (superseded by v7.0).
   v3.0-v3.2: Design language, standards polish.

@@ -165,7 +165,10 @@ ${data.upstream_stakeholder_questions_for_users ? `STAKEHOLDER QUESTIONS FOR USE
 
 Rules:
 1. If stakeholder questions exist, use them as research questions (they come pre-prioritized).
-2. Otherwise, reframe learning objectives as answerable research questions.
+2. Otherwise, transform learning objectives into research questions. Research questions
+   must be answerable through sessions — transform each objective into what a researcher
+   would actually investigate, not a restatement. If a question would be near-identical
+   to its objective, sharpen it toward observable behavior or decision criteria.
 3. Mark priority: Primary (must-answer), Secondary (valuable), or Exploratory (nice-to-have).
 4. 3-7 questions. Primary questions first.
 5. Do NOT invent statistics, metrics, or numbers. Use ONLY data from the inputs provided.

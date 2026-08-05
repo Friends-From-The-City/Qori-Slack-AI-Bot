@@ -89,23 +89,7 @@ export const buildSessionNotesView = (state: SessionNotesState = {}) => {
     submit: { type: 'plain_text', text: isManual ? 'Submit to GitHub' : 'Submit Transcript' },
     close: { type: 'plain_text', text: 'Cancel' },
     blocks: [
-      // Tabs
-      {
-        type: 'actions',
-        block_id: 'tabs',
-        elements: [
-          {
-            type: 'button', action_id: 'tab_manual', value: 'manual',
-            text: { type: 'plain_text', text: 'Manual Notes' },
-          },
-          {
-            type: 'button', action_id: 'tab_upload', value: 'upload',
-            text: { type: 'plain_text', text: 'Upload Transcript' },
-          }
-        ]
-      },
-
-      // Session select (shared)
+      // Session select first (R17: routing selectors before mode tabs)
       {
         type: 'input',
         block_id: 'session_select',
@@ -151,6 +135,22 @@ export const buildSessionNotesView = (state: SessionNotesState = {}) => {
             })()
             : undefined
         }
+      },
+
+      // Tabs (after session select per R17)
+      {
+        type: 'actions',
+        block_id: 'tabs',
+        elements: [
+          {
+            type: 'button', action_id: 'tab_manual', value: 'manual',
+            text: { type: 'plain_text', text: 'Manual Notes' },
+          },
+          {
+            type: 'button', action_id: 'tab_upload', value: 'upload',
+            text: { type: 'plain_text', text: 'Upload Transcript' },
+          }
+        ]
       },
 
       ...(isManual ? manualBlocks(state.preserved) : uploadBlocks(method, state.preserved, state.session?.session_id)),

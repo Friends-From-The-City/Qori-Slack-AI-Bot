@@ -12,7 +12,7 @@ This document captures the design rulings for Slack Block Kit modals across the 
 
 Remove all decorative emoji from modals. Emoji are permitted only when they carry semantic meaning (e.g., `:warning:` for error states). Decorative emoji (`:file_folder:`, `:bust_in_silhouette:`, `:sparkles:`, artifact icons like `📄`, `🎙️`) should be removed.
 
-**Status:** Enforced. Applied to Research Synthesis, Analyze Session, Tickets, and Research Brief modals.
+**Status:** Verified by manual sweep (PR #241). Applied to Research Synthesis, Analyze Session, Tickets, and Research Brief modals.
 
 ---
 
@@ -32,7 +32,7 @@ Submit button text should describe the action, not just "Submit". Examples:
 | Continue to next step | "Continue" |
 | Launches a sub-modal | "Open" (see R14) |
 
-**Status:** Enforced.
+**Status:** Verified by manual sweep (PR #241).
 
 ---
 
@@ -40,7 +40,7 @@ Submit button text should describe the action, not just "Submit". Examples:
 
 Remove redundant section headers when the input label is self-explanatory. For example, a "Research Study" section header followed by a "Study *" select is redundant — the label suffices. No imperatives ("Select a..."), no colons after labels.
 
-**Status:** Enforced.
+**Status:** Verified by manual sweep (PR #241).
 
 ---
 
@@ -48,7 +48,7 @@ Remove redundant section headers when the input label is self-explanatory. For e
 
 Use terminology that matches the domain. "Synthesis" (not "Analysis") for cross-session synthesis methods. "Analyze" for single-session analysis.
 
-**Status:** Enforced.
+**Status:** Verified by manual sweep (PR #241).
 
 ---
 
@@ -59,7 +59,7 @@ Translate system labels to researcher language. Examples:
 - "target_barriers" → "target barriers"
 - Strip `_metadata` suffixes and convert `snake_case` to spaces.
 
-**Status:** Enforced.
+**Status:** Verified by manual sweep (PR #241).
 
 ---
 
@@ -121,7 +121,7 @@ Use dividers sparingly, only between logical groups. Do not use dividers:
 - After every field
 - To create visual "boxes" around single fields
 
-**Status:** Enforced.
+**Status:** Verified by manual sweep (PR #241).
 
 ---
 
@@ -133,7 +133,7 @@ Use dividers sparingly, only between logical groups. Do not use dividers:
 - **Warnings**: Use `context` blocks with `:warning:` prefix
 - **One primary button per modal**: Submit is primary; secondary actions (Load, Refresh) are non-primary style
 
-**Status:** Enforced.
+**Status:** Verified by manual sweep (PR #241).
 
 ---
 
@@ -166,7 +166,7 @@ or
 
 Keep grounding information compact — one line, `•` separators, no decorative emoji.
 
-**Status:** Enforced.
+**Status:** Verified by manual sweep (PR #241).
 
 ---
 
@@ -177,7 +177,7 @@ Use correct singular/plural forms:
 - `${count} session${count !== 1 ? 's' : ''}`
 - `${count} barrier${count !== 1 ? 's' : ''}`
 
-**Status:** Enforced.
+**Status:** Verified by manual sweep (PR #241).
 
 ---
 
@@ -228,6 +228,16 @@ This design standard governs **all** researcher-facing surfaces — modals, DMs,
 | R15 Danger styling | ✓ | ✓ (destructive buttons) |
 
 **Status:** Ratified 2026-08-04.
+
+---
+
+### R17: Routing Selectors First
+
+Routing selectors (Study, Session) are always the **first interactive element** in a modal. Mode tabs, input fields, and content blocks follow. The researcher establishes context before choosing what to do with it.
+
+This applies to any modal that combines a routing selector with mode tabs or conditional content. Session Notes is the canonical example: Select Session appears above the Manual Notes / Upload Transcript tabs.
+
+**Status:** Ratified 2026-08-05.
 
 ---
 
