@@ -19,6 +19,10 @@ Pre-filled objectives and research questions render internal IDs ("OBJ-001", "RQ
 
 Routing selectors (Study/Session) are always the FIRST interactive element in a modal; mode tabs and inputs follow. One modal moves: Session Notes (Select Session above the Manual Notes / Upload Transcript tabs). Add to design standard with a ruling number.
 
+## P4. Model-selection audit (pre-launch worthy)
+
+For every AI task across all templates, report: task → current model → task character (synthesis/extraction on the provenance chain vs. structured drafting vs. trivial transform) → recommended model tier, with rationale. Constraint: anything with anti-fabrication grounding rules or provenance-chain output stays on the strongest tier — cost optimization never trades against the fabrication guards. Include rough per-task token volumes so recommendations carry cost impact. Recommendations only; Lapedra rules per row.
+
 ---
 
 *This list stays open. More items will be added as the walkthrough continues.*

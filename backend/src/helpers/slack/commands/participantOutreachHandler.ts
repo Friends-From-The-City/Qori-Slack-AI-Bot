@@ -971,13 +971,25 @@ async function handleSessionReminderSubmit({ ack, body, view, client }: SlackVie
 }
 
 async function handleAddParticipantSubmit({ ack, body, view, client }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs): Promise<void> {
-  await ack();
-
   try {
     const state = view.state.values as any;
     const meta = JSON.parse(body.view.private_metadata || '{}');
     const { channelId, userId } = meta;
 
+    // ── Validation (before ack) ──────────────────────────────
+    // SPD-15 (2024): race/ethnicity is multi-select (select all that apply)
+    const raceSelections: string[] = state.race_ethnicity_block?.race_ethnicity?.selected_options?.map((o: any) => o.value) || [];
+    // PNTS cannot be combined with categories — researcher resolves
+    if (raceSelections.includes('prefer_not_to_say') && raceSelections.length > 1) {
+      return ack({
+        response_action: 'errors',
+        errors: { race_ethnicity_block: "Select categories or 'Prefer not to say', not both." },
+      } as any);
+    }
+
+    await ack();
+
+    // ── Extraction ───────────────────────────────────────────
     // Extract study from dropdown selection (action_id: add_participant_study_select)
     const selectedStudyOption = state.study_select_block?.add_participant_study_select?.selected_option || null;
     const study_id = selectedStudyOption?.value || "";
@@ -988,8 +1000,7 @@ async function handleAddParticipantSubmit({ ack, body, view, client }: SlackView
     const scheduled_time = state.session_time_block?.session_time?.selected_time || "";
     const status_select = state.current_status_block?.current_status?.selected_option?.value || "";
     const notes_field = state.notes_accommodations_block?.notes_accommodations?.value || "";
-    // Extract demographic information from the new dropdown fields
-    const race_ethnicity = state.race_ethnicity_block?.race_ethnicity?.selected_option?.value || "";
+    const race_ethnicity = raceSelections;
     const age_range = state.age_range_block?.age_range?.selected_option?.value || "";
     const education_level = state.education_level_block?.education_level?.selected_option?.value || "";
     const location_type = state.location_type_block?.location_type?.selected_option?.value || "";
