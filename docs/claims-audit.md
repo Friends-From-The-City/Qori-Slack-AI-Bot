@@ -75,7 +75,7 @@ Every claim the system makes about its own behavior — in UI text, generated do
 
 | # | Status | Priority | Recommended action |
 |---|--------|----------|--------------------|
-| 2 | OPEN | Medium | PII redesign — scrub checkmark implies completeness |
+| 2 | OPEN → REOPENED | **High** | #268 shipped honest-status block but spec item (d) shipped "Reject — needs source fix" as a close-button label with no handler, no note capture, no notification. Inert-control class. DM-swap PR fixes: reject handler with note → uploader DM, quarantine deletion, audit row. Old misleading footer (:155-158) and close-button label removed. |
 | 3/33 | FALSE | **High** | §6.5/A1 rationale correction (in C2 PR #259) |
 | 4 | FIXED | — | PR #258 merged |
 | 6/8 | FALSE (dead) | Low | Delete `uploadNotesModal.ts` — dead code with false claims |
@@ -85,3 +85,4 @@ Every claim the system makes about its own behavior — in UI text, generated do
 | 27 | FALSE → FIXED (#266) | Low | Stale ADR file reference — cosmetic |
 | 32 | MISLEADING → FIXED (#266) | Medium | "Enforced" → "Verified by manual sweep (PR #241)" |
 | 35 | PARTIAL | Medium | Generated documents conform to the writing style standard — standard ratified, enforcement pass pending |
+| 36 | FALSE → FIXING | **High** | #268 spec item (c) states approval "writes to the disposition audit log with attestation recorded." Implementation was console.log at sessionNotesHandler.ts:955 — no persisted record. DM-swap PR wires to logDispositionAction (audit.service.ts:72), same store as admin actions. Closes with DM-swap PR number. |
