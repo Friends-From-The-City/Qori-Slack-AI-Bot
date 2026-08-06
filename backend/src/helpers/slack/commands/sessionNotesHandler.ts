@@ -9,7 +9,21 @@
 import type { AllMiddlewareArgs, SlackCommandMiddlewareArgs, SlackActionMiddlewareArgs, SlackViewMiddlewareArgs, BlockAction, ViewSubmitAction } from '@slack/bolt';
 
 import { buildSessionNotesView, type PreservedInputs } from "../ui/sessionNotesModal";
-import { buildTranscriptReviewModal, type TranscriptReviewModalMetadata, type ScrubStats } from "../ui/transcriptReviewModal";
+import {
+  type TranscriptReviewMetadata,
+  type TranscriptReviewModalMetadata,
+  type ScrubStats,
+  buildReviewUrl,
+  buildStatusText,
+  buildTranscriptReviewDmBlocks,
+  buildApprovedDmBlocks,
+  buildRejectedDmBlocks,
+  buildCommitFailureDmBlocks,
+  buildRescrubModal,
+  buildApproveModal,
+  buildRejectModal,
+} from "../ui/transcriptReviewModal";
+import { logDispositionAction } from "../../../services/audit.service";
 import sessionObserverService from "../../../services/session_observer.service";
 import sessionParticipantService from "../../../services/study_participant.service";
 import { resolveStudyFromName } from "../../../services/research_study.service";
@@ -571,40 +585,40 @@ const handleSessionNotesSubmission = async ({ ack, body, view, client }: SlackVi
 
 ${scrubResult.content}`;
 
-      // ── Save scrubbed transcript to QUARANTINE location ──
-      // IMPORTANT: Transcript goes to .pending-review/ first, NOT final location.
-      // Human must review full transcript before it reaches the final location.
-      // Auto-scrub is PARTIAL by design (name variants, incidental PII slip through).
-      // Review GATES the commit to final location - it's not rubber-stamping.
+      // ── DM-FIRST ORDERING ──────────────────────────────────────────
+      // The DM is the cheap, reversible operation. The git commit is the
+      // expensive, permanent one. Post the DM first. If the DM cannot be
+      // delivered, ABORT — nothing enters git, no orphan to recover.
+      // If the DM succeeds but the commit fails, update the DM to a
+      // failure state (buttons removed, clear instruction).
+
       const resolved = await resolveStudyFromName(templateData.study_name);
       if (!resolved) throw new Error(`Study "${templateData.study_name}" not found`);
 
       // DETERMINISTIC filename: re-uploads of same session REPLACE the pending file
       const transcriptFileName = `transcript_${templateData.session_id}.md`;
-      // Quarantine path - NOT analyzable, NOT the final transcript location
       const quarantinePath = `${resolved.study?.path}/.pending-review/${transcriptFileName}`;
-      // Final path - where it goes AFTER human approval (matches readout scanner path)
       const finalPath = `${resolved.study?.path}/${STUDY_FOLDERS.FIELDWORK_TRANSCRIPTS}/${transcriptFileName}`;
 
-      // Save to quarantine (NOT the final location)
-      const githubResult = await createOrUpdateFileOnGitHub(
-        quarantinePath,
-        scrubbedTranscriptContent,
-      );
-      console.log(`[PII] Transcript saved to quarantine: ${quarantinePath}`);
+      // Derive review URL BEFORE commit (deterministic from path)
+      const fileUrl = buildReviewUrl(quarantinePath);
 
-      // NO database record yet - record is created only on approval
-      // This ensures /qori-analyze cannot find this transcript until reviewed
+      // Close the upload modal
+      if (!ackCalled) {
+        await ack();
+        ackCalled = true;
+      }
 
-      // ── Build review modal with metadata for approval flow ──
-      // NO database record exists yet - created only on approval
-      const reviewMetadata: TranscriptReviewModalMetadata = {
+      // ── STEP 1: Post the review DM (reversible) ──
+      // Full status block, review link, all three buttons.
+      // If this fails, we abort — nothing enters git.
+      const partialMetadata: Omit<TranscriptReviewMetadata, 'dmChannelId' | 'messageTs'> = {
         quarantinePath,
         finalPath,
         filename: transcriptFileName,
         participantCode: templateData.participant_id,
         studyName: templateData.study_name,
-        fileUrl: githubResult.url,
+        fileUrl,
         studyId: selectedSession.study?.id || null,
         participantId: selectedSession.participant?.id || null,
         sessionDate: templateData.session_date,
@@ -612,27 +626,84 @@ ${scrubResult.content}`;
         userId: body.user.id,
       };
 
-      const reviewModal = buildTranscriptReviewModal({
+      // Post DM — this gives us dmChannelId + messageTs
+      let dmResult: { channel: string; ts: string };
+      try {
+        // Use a placeholder buttonMetadata (no messageTs yet — filled after post)
+        const placeholderMeta = JSON.stringify({ ...partialMetadata, dmChannelId: '', messageTs: '' });
+        const dmBlocks = buildTranscriptReviewDmBlocks({
+          stats: scrubResult.stats,
+          participantCode: templateData.participant_id,
+          studyName: templateData.study_name,
+          fileUrl,
+          nameProvided: Boolean(participantRealName),
+          buttonMetadata: placeholderMeta,
+        });
+
+        const postResult = await client.chat.postMessage({
+          channel: body.user.id,
+          text: `PII Review: ${templateData.study_name} - ${templateData.participant_id}`,
+          blocks: dmBlocks,
+        });
+
+        if (!postResult.ok || !postResult.ts || !postResult.channel) {
+          throw new Error('DM post returned no ts/channel');
+        }
+        dmResult = { channel: postResult.channel, ts: postResult.ts };
+      } catch (dmErr) {
+        // DM failed — ABORT. Nothing enters git. No orphan.
+        const dmMessage = dmErr instanceof Error ? dmErr.message : String(dmErr);
+        console.error('[PII] Review DM failed — aborting before commit:', dmMessage);
+        await postEphemeralOrDM(client, body.user.id, metadata.channelId || body.user.id,
+          'Could not deliver the review message. No transcript was saved. Please try again.');
+        return;
+      }
+
+      // Now we have dmChannelId + messageTs — update buttons with real metadata
+      const fullMetadata: TranscriptReviewMetadata = {
+        ...partialMetadata as any,
+        dmChannelId: dmResult.channel,
+        messageTs: dmResult.ts,
+      };
+      const buttonMetadata = JSON.stringify(fullMetadata);
+
+      // Update DM with real button metadata
+      const finalDmBlocks = buildTranscriptReviewDmBlocks({
         stats: scrubResult.stats,
         participantCode: templateData.participant_id,
         studyName: templateData.study_name,
-        fileUrl: githubResult.url,
+        fileUrl,
         nameProvided: Boolean(participantRealName),
+        buttonMetadata,
+      });
+      await client.chat.update({
+        channel: dmResult.channel,
+        ts: dmResult.ts,
+        text: `PII Review: ${templateData.study_name} - ${templateData.participant_id}`,
+        blocks: finalDmBlocks,
       });
 
-      // Store minimal metadata in private_metadata (just IDs, not content)
-      reviewModal.private_metadata = JSON.stringify(reviewMetadata);
-
-      // ── Push review modal via ack response_action ──
-      // IMPORTANT: Must use ack({ response_action: 'push' }) instead of client.views.push
-      // because trigger_id expires after 3 seconds and file processing takes time.
-      await ack({
-        response_action: 'push',
-        view: reviewModal,
-      });
-      ackCalled = true;
+      // ── STEP 2: Commit quarantine file (permanent) ──
+      // DM is already posted. If this fails, update DM to failure state.
+      try {
+        await createOrUpdateFileOnGitHub(quarantinePath, scrubbedTranscriptContent);
+        console.log(`[PII] Transcript saved to quarantine: ${quarantinePath}`);
+      } catch (commitErr) {
+        // Commit failed — update DM to failure state (buttons removed)
+        const commitMessage = commitErr instanceof Error ? commitErr.message : String(commitErr);
+        console.error('[PII] Quarantine commit failed:', commitMessage);
+        const failureBlocks = buildCommitFailureDmBlocks(templateData.study_name, templateData.participant_id);
+        await client.chat.update({
+          channel: dmResult.channel,
+          ts: dmResult.ts,
+          text: 'Transcript could not be saved to quarantine.',
+          blocks: failureBlocks,
+        });
+        return;
+      }
 
       // ── participantRealName is now out of scope — NEVER stored anywhere ──
+      // NO database record yet — record is created only on approval
       return;
     }
 
@@ -833,12 +904,54 @@ ${scrubResult.content}`;
 
 // ─── Transcript Review Approval Handler ─────────────────────────
 
+// ─── Transcript DM button handlers ──────────────────────────────────────────
+// Each button opens a sub-modal via views.open (fresh trigger_id from the click).
+// Sub-modal submit does the work + updates the DM to terminal state.
+
+/** Open the rescrub modal from DM button click. */
+const handleTranscriptRescrubButton = async ({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs): Promise<void> => {
+  await ack();
+  try {
+    const metadata = (body.actions[0] as any).value;
+    const modal = buildRescrubModal(metadata);
+    await client.views.open({ trigger_id: body.trigger_id, view: modal });
+  } catch (err) {
+    console.error('[PII] Failed to open rescrub modal:', err instanceof Error ? err.message : String(err));
+  }
+};
+
+/** Open the approve modal from DM button click. */
+const handleTranscriptApproveButton = async ({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs): Promise<void> => {
+  await ack();
+  try {
+    const metadata = (body.actions[0] as any).value;
+    const modal = buildApproveModal(metadata);
+    await client.views.open({ trigger_id: body.trigger_id, view: modal });
+  } catch (err) {
+    console.error('[PII] Failed to open approve modal:', err instanceof Error ? err.message : String(err));
+  }
+};
+
+/** Open the reject modal from DM button click. */
+const handleTranscriptRejectButton = async ({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs): Promise<void> => {
+  await ack();
+  try {
+    const metadata = (body.actions[0] as any).value;
+    const modal = buildRejectModal(metadata);
+    await client.views.open({ trigger_id: body.trigger_id, view: modal });
+  } catch (err) {
+    console.error('[PII] Failed to open reject modal:', err instanceof Error ? err.message : String(err));
+  }
+};
+
+// ─── Transcript sub-modal submit handlers ───────────────────────────────────
+
 /**
- * Handle transcript review approval.
+ * Handle transcript approval (from approve sub-modal submit).
  *
- * Called when user clicks "Approve" on the transcript review modal.
- * MOVES the transcript from quarantine (.pending-review/) to final location (03-fieldwork/transcripts/).
- * This is the gate - transcript only reaches final location AFTER human review.
+ * Validates attestation → reads quarantine → flips marker → writes to final
+ * location → deletes quarantine → creates DB record → writes audit row →
+ * updates DM to approved terminal state.
  */
 const handleTranscriptReviewApprove = async ({ ack, body, view, client }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs): Promise<void> => {
   try {
@@ -944,40 +1057,31 @@ const handleTranscriptReviewApprove = async ({ ack, body, view, client }: SlackV
 
     // @ts-expect-error — pre-existing type mismatch from require() → import migration
     const createdNote = await studyNotesService.createStudyNote(studyNoteData);
-    // Attestation audit log: actor, timestamp, target, attestation recorded
-    console.log(`[AUDIT] PII review attestation: actor=${body.user.id} target=${participantCode}/${filename} time=${new Date().toISOString()} attested=true`);
-    console.log(`Study note created with pii_reviewed=true: ID=${createdNote.id}`);
 
-    // Notify user
-    await client.chat.postMessage({
-      channel: body.user.id,
-      text: `✅ Transcript approved and saved`,
-      blocks: [
-        {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: `✅ *Transcript approved and saved*\n\n*Study:* ${studyName}\n*Participant:* ${participantCode}`,
-          },
-        },
-        {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: `<${finalResult.url}|View on GitHub>`,
-          },
-        },
-        {
-          type: 'context',
-          elements: [
-            {
-              type: 'mrkdwn',
-              text: '✅ This transcript is now eligible for `/qori-analyze`.',
-            },
-          ],
-        },
-      ],
+    // Disposition audit row (replaces console.log — per M3 ruling)
+    await logDispositionAction({
+      action: 'approve_transcript',
+      record_type: 'transcript',
+      target_identifier: `${participantCode}/${filename}`,
+      study_id: studyId ?? undefined,
+      study_name: studyName,
+      participant_code: participantCode,
+      actor_user_id: body.user.id,
+      authorization_basis: 'PII review attestation — reviewer confirmed full transcript review',
+      outcome: 'success',
+      outcome_detail: `quarantine=${quarantinePath} final=${finalPath} attested=true`,
     });
+
+    // Update the review DM to approved terminal state (buttons removed)
+    if (metadata.dmChannelId && metadata.messageTs) {
+      const approvedBlocks = buildApprovedDmBlocks(studyName, participantCode, finalResult.url, body.user.id);
+      await client.chat.update({
+        channel: metadata.dmChannelId,
+        ts: metadata.messageTs,
+        text: `Transcript approved: ${studyName} - ${participantCode}`,
+        blocks: approvedBlocks,
+      });
+    }
 
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -1006,38 +1110,35 @@ function buildTermRegex(term: string): RegExp {
 }
 
 /**
- * Handle rescrub button click in the transcript review modal.
+ * Handle rescrub sub-modal submit.
  *
- * Reads quarantine content from GitHub, applies additional find/replace terms,
- * regenerates quarantine, rebuilds the review modal with updated stats.
- * Terms are transient — used in memory for find/replace, then discarded (§2.1).
- * Attestation checkbox resets (reviewer attests to the regenerated version).
+ * Reads quarantine from GitHub, applies word-boundary-anchored find/replace,
+ * regenerates quarantine, writes audit row, updates the review DM with new stats.
+ * Terms are transient — used in memory, then discarded (§2.1).
  */
-const handleRescrub = async ({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs): Promise<void> => {
-  await ack();
-
+const handleTranscriptRescrubSubmit = async ({ ack, body, view, client }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs): Promise<void> => {
   try {
-    // Extract terms from the input field (actions blocks can read sibling input values)
-    const viewValues = (body as any).view?.state?.values;
-    const rescrubTermsRaw = viewValues?.rescrub_terms_block?.rescrub_terms?.value?.trim() || '';
-
+    const rescrubTermsRaw = (view.state.values as any)?.rescrub_terms_block?.rescrub_terms?.value?.trim() || '';
     if (!rescrubTermsRaw) {
-      // No terms entered — nothing to rescrub
+      await ack({ response_action: 'clear' } as any);
       return;
     }
 
-    // Parse comma-separated terms
     const terms = rescrubTermsRaw.split(',').map((t: string) => t.trim()).filter(Boolean);
-    if (terms.length === 0) return;
+    if (terms.length === 0) {
+      await ack({ response_action: 'clear' } as any);
+      return;
+    }
 
-    // Parse metadata from private_metadata
-    const metadata: TranscriptReviewModalMetadata = JSON.parse((body as any).view?.private_metadata || '{}');
-    const { quarantinePath, participantCode, studyName, fileUrl } = metadata;
+    const metadata: TranscriptReviewMetadata = JSON.parse(view.private_metadata || '{}');
+    const { quarantinePath, participantCode, studyName, fileUrl, dmChannelId, messageTs } = metadata;
 
     if (!quarantinePath) {
-      console.error('[PII] Rescrub: missing quarantinePath in metadata');
+      await ack({ response_action: 'clear' } as any);
       return;
     }
+
+    await ack({ response_action: 'clear' } as any);
 
     // Read current quarantine content from GitHub
     const { Octokit } = await import('@octokit/rest');
@@ -1045,26 +1146,16 @@ const handleRescrub = async ({ ack, body, client }: SlackActionMiddlewareArgs<Bl
     const owner = process.env.GITHUB_OWNER!;
     const repo = process.env.GITHUB_REPO!;
 
-    let quarantineContent: string;
-    let quarantineSha: string;
-    try {
-      const fileResponse = await octokit.rest.repos.getContent({
-        owner, repo, path: quarantinePath, ref: 'main',
-      });
-      const fileData = fileResponse.data as { content: string; sha: string };
-      quarantineContent = Buffer.from(fileData.content, 'base64').toString('utf-8');
-      quarantineSha = fileData.sha;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      console.error('[PII] Rescrub: failed to read quarantine file:', message);
-      return;
-    }
+    const fileResponse = await octokit.rest.repos.getContent({
+      owner, repo, path: quarantinePath, ref: 'main',
+    });
+    const fileData = fileResponse.data as { content: string; sha: string };
+    const quarantineContent = Buffer.from(fileData.content, 'base64').toString('utf-8');
+    const quarantineSha = fileData.sha;
 
-    // Apply find/replace for each term → [REDACTED] (word-boundary anchored)
+    // Apply find/replace (word-boundary anchored via buildTermRegex)
     let scrubbedContent = quarantineContent;
     let totalReplacements = 0;
-    let zeroMatchCount = 0;
-    // Track per-term match counts positionally (transient — never rendered by text)
     const perTermCounts: number[] = [];
     for (const term of terms) {
       const regex = buildTermRegex(term);
@@ -1074,12 +1165,11 @@ const handleRescrub = async ({ ack, body, client }: SlackActionMiddlewareArgs<Bl
       if (count > 0) {
         totalReplacements += count;
         scrubbedContent = scrubbedContent.replace(regex, '[REDACTED]');
-      } else {
-        zeroMatchCount++;
       }
     }
+    // Terms go out of scope after this block — §2.1 discipline
 
-    // Regenerate quarantine file with updated content
+    // Regenerate quarantine file
     await octokit.rest.repos.createOrUpdateFileContents({
       owner, repo, path: quarantinePath,
       message: `Rescrub: ${terms.length} additional term(s) applied`,
@@ -1087,9 +1177,18 @@ const handleRescrub = async ({ ack, body, client }: SlackActionMiddlewareArgs<Bl
       sha: quarantineSha,
     });
 
-    console.log(`[PII] Rescrub complete: ${totalReplacements} replacement(s) from ${terms.length} term(s), ${zeroMatchCount} zero-match`);
-    // Terms discarded here — not logged, not stored (§2.1 discipline)
-    // perTermCounts discarded — positional counts only, no term text
+    // Disposition audit row — counts only, no term text (§2.1)
+    await logDispositionAction({
+      action: 'rescrub_transcript',
+      record_type: 'transcript',
+      target_identifier: `${participantCode}/${metadata.filename}`,
+      study_name: studyName,
+      participant_code: participantCode,
+      actor_user_id: body.user.id,
+      authorization_basis: 'PII rescrub — reviewer-applied find/replace on quarantined transcript',
+      outcome: 'success',
+      outcome_detail: `terms_submitted=${terms.length} total_replacements=${totalReplacements}`,
+    });
 
     // Count PII markers in the CURRENT file for cumulative status
     const phoneCount = (scrubbedContent.match(/\[PHONE\]/g) || []).length;
@@ -1109,34 +1208,139 @@ const handleRescrub = async ({ ack, body, client }: SlackActionMiddlewareArgs<Bl
     // Build positional match summary (aggregate numbers only, no term text)
     const matchParts: string[] = [];
     for (let i = 0; i < perTermCounts.length; i++) {
-      if (perTermCounts[i] === 0) {
-        matchParts.push(`term ${i + 1} matched 0 times`);
-      } else {
-        matchParts.push(`term ${i + 1} matched ${perTermCounts[i]} time${perTermCounts[i] !== 1 ? 's' : ''}`);
-      }
+      matchParts.push(`term ${i + 1} matched ${perTermCounts[i]} time${perTermCounts[i] !== 1 ? 's' : ''}`);
     }
     const rescrubSummary = `${terms.length} term${terms.length !== 1 ? 's' : ''} submitted · ${matchParts.join(' · ')} · ${redactedCount} redaction${redactedCount !== 1 ? 's' : ''} in this file`;
 
-    const updatedModal = buildTranscriptReviewModal({
-      stats: updatedStats,
-      participantCode,
-      studyName,
-      fileUrl,
-      nameProvided: participantNameCount > 0,
-      rescrubSummary,
-    });
-    updatedModal.private_metadata = (body as any).view?.private_metadata;
-
-    // Update the modal — attestation resets (no initial_options on checkbox)
-    await client.views.update({
-      view_id: (body as any).view?.id,
-      hash: (body as any).view?.hash,
-      view: updatedModal,
-    });
+    // Update the review DM with new status (buttons preserved for next action)
+    if (dmChannelId && messageTs) {
+      const buttonMetadata = JSON.stringify(metadata);
+      const updatedBlocks = buildTranscriptReviewDmBlocks({
+        stats: updatedStats,
+        participantCode,
+        studyName,
+        fileUrl,
+        nameProvided: participantNameCount > 0,
+        buttonMetadata,
+        rescrubSummary,
+      });
+      await client.chat.update({
+        channel: dmChannelId,
+        ts: messageTs,
+        text: `PII Review: ${studyName} - ${participantCode}`,
+        blocks: updatedBlocks,
+      });
+    }
 
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error('[PII] Rescrub error:', message);
+  }
+};
+
+/**
+ * Handle transcript rejection (from reject sub-modal submit).
+ *
+ * Deletes quarantine file from working tree, writes audit row,
+ * notifies uploader with reviewer's note, updates DM to rejected terminal state.
+ * Git history retains the quarantine version per ADR 0026 §6.
+ */
+const handleTranscriptRejectSubmit = async ({ ack, body, view, client }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs): Promise<void> => {
+  try {
+    const rejectNote = (view.state.values as any)?.reject_note_block?.reject_note?.value?.trim() || '';
+    if (!rejectNote) {
+      return ack({
+        response_action: 'errors',
+        errors: { reject_note_block: 'Please describe what needs to be fixed.' },
+      } as any);
+    }
+
+    const metadata: TranscriptReviewMetadata = JSON.parse(view.private_metadata || '{}');
+    const { quarantinePath, participantCode, studyName, userId, dmChannelId, messageTs, filename } = metadata;
+
+    await ack({ response_action: 'clear' } as any);
+
+    // Delete quarantine file from working tree
+    // Git history retains it permanently — ADR 0026 §6, accepted residual
+    const { Octokit } = await import('@octokit/rest');
+    const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
+    const owner = process.env.GITHUB_OWNER!;
+    const repo = process.env.GITHUB_REPO!;
+
+    try {
+      const fileResponse = await octokit.rest.repos.getContent({
+        owner, repo, path: quarantinePath,
+      });
+      const sha = (fileResponse.data as { sha: string }).sha;
+      await octokit.rest.repos.deleteFile({
+        owner, repo, path: quarantinePath,
+        message: `Reject quarantine file after PII review rejection`,
+        sha,
+      });
+    } catch (delErr) {
+      // File may not exist (already deleted or commit failed) — continue
+      console.warn('[PII] Quarantine file deletion failed (may not exist):', delErr instanceof Error ? delErr.message : String(delErr));
+    }
+
+    // Disposition audit row — note_length only, NOT note content (M2)
+    await logDispositionAction({
+      action: 'reject_transcript',
+      record_type: 'transcript',
+      target_identifier: `${participantCode}/${filename}`,
+      study_name: studyName,
+      participant_code: participantCode,
+      actor_user_id: body.user.id,
+      authorization_basis: 'PII review rejection — reviewer found issues requiring source fix',
+      outcome: 'success',
+      outcome_detail: `quarantine=${quarantinePath} deletion_confirmed=true note_length=${rejectNote.length}`,
+    });
+
+    // Notify the uploader with the reviewer's note (mirror manual notes :1258-1267)
+    // Note text goes ONLY here — not to audit row, not to console, not to metadata
+    if (userId) {
+      await client.chat.postMessage({
+        channel: userId,
+        text: `Your transcript for ${participantCode} (${studyName}) was not approved.`,
+        blocks: [
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: `Your transcript for *${participantCode}* (*${studyName}*) was not approved.`,
+            },
+          },
+          { type: 'divider' },
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: `*Reviewer's note:*\n${rejectNote}`,
+            },
+          },
+          {
+            type: 'context',
+            elements: [
+              { type: 'mrkdwn', text: 'Fix the source and re-upload via `/qori-notes`.' },
+            ],
+          },
+        ],
+      });
+    }
+
+    // Update the review DM to rejected terminal state (buttons removed)
+    if (dmChannelId && messageTs) {
+      const rejectedBlocks = buildRejectedDmBlocks(studyName, participantCode, body.user.id);
+      await client.chat.update({
+        channel: dmChannelId,
+        ts: messageTs,
+        text: `Transcript rejected: ${studyName} - ${participantCode}`,
+        blocks: rejectedBlocks,
+      });
+    }
+
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('[PII] Transcript rejection error:', message);
   }
 };
 
@@ -1303,8 +1507,12 @@ export {
   handleTabUpload,
   handleSessionSelectionChange,
   handleSessionNotesSubmission,
+  handleTranscriptRescrubButton,
+  handleTranscriptApproveButton,
+  handleTranscriptRejectButton,
+  handleTranscriptRescrubSubmit,
   handleTranscriptReviewApprove,
-  handleRescrub,
+  handleTranscriptRejectSubmit,
   handleManualNotesApprove,
   handleManualNotesReject,
 };
