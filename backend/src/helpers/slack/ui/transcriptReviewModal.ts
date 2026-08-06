@@ -34,6 +34,8 @@ export interface ScrubStats {
   speakerLabels: number;
   phoneNumbers: number;
   emailAddresses: number;
+  /** Count of [REDACTED] tokens from rescrub terms in the current file */
+  redactedTerms?: number;
 }
 
 interface TranscriptReviewParams {
@@ -47,6 +49,8 @@ interface TranscriptReviewParams {
   fileUrl: string;
   /** Whether a participant name was provided at upload */
   nameProvided: boolean;
+  /** Positional match summary from rescrub (aggregate numbers only, no term text) */
+  rescrubSummary?: string;
 }
 
 /**
@@ -57,9 +61,10 @@ interface TranscriptReviewParams {
  * Per ADR 0026 §2.3: reviewer's job is the headline.
  */
 export const buildTranscriptReviewModal = (params: TranscriptReviewParams): View => {
-  const { stats, participantCode, studyName, fileUrl, nameProvided } = params;
+  const { stats, participantCode, studyName, fileUrl, nameProvided, rescrubSummary } = params;
 
-  // ── Honest status block (item a) ──────────────────────────
+  // ── Honest status block — three attributed lines ──────────────
+  // Line 1: Auto-scrub (machine only — no [REDACTED] count)
   const autoScrubLines: string[] = [];
   if (stats.phoneNumbers > 0) autoScrubLines.push(`${stats.phoneNumbers} phone number${stats.phoneNumbers !== 1 ? 's' : ''} → [PHONE]`);
   if (stats.emailAddresses > 0) autoScrubLines.push(`${stats.emailAddresses} email${stats.emailAddresses !== 1 ? 's' : ''} → [EMAIL]`);
@@ -71,9 +76,19 @@ export const buildTranscriptReviewModal = (params: TranscriptReviewParams): View
     ? `participant name → ${participantCode}`
     : 'no name provided at upload — names NOT scrubbed';
 
-  const statusText = autoScrubLines.length > 0
+  let statusText = autoScrubLines.length > 0
     ? `Auto-scrub applied: ${autoScrubLines.join(' · ')}`
     : `Auto-scrub applied: ${nameStatus}`;
+
+  // Line 3: Your rescrub (reviewer's redactions, not machine's)
+  // Omitted when redactedTerms is zero (no rescrub has occurred)
+  if (stats.redactedTerms && stats.redactedTerms > 0) {
+    statusText += `\nYour rescrub: ${stats.redactedTerms} redaction${stats.redactedTerms !== 1 ? 's' : ''} → [REDACTED]`;
+  }
+  if (rescrubSummary) {
+    // Append per-term positional counts for this pass
+    statusText += rescrubSummary.startsWith('\n') ? rescrubSummary : `\n${rescrubSummary}`;
+  }
 
   return {
     type: 'modal',
@@ -120,9 +135,33 @@ export const buildTranscriptReviewModal = (params: TranscriptReviewParams): View
       },
       { type: 'divider' },
 
-      // Attestation checkbox — required for approval
-      // NOTE: Rescrub loop (additional terms field + re-scrub automation) deferred
-      // to follow-up PR — partial implementation would create false assurance.
+      // Rescrub loop — additional terms to scrub before approving
+      {
+        type: 'input',
+        block_id: 'rescrub_terms_block',
+        optional: true,
+        label: { type: 'plain_text', text: 'Additional names or terms to scrub' },
+        hint: { type: 'plain_text', text: 'Comma-separated. Used for find/replace only — not stored.' },
+        element: {
+          type: 'plain_text_input',
+          action_id: 'rescrub_terms',
+          placeholder: { type: 'plain_text', text: 'e.g., Sarah, Denver VA, Dr. Martinez' },
+        }
+      },
+      {
+        type: 'actions',
+        block_id: 'rescrub_action_block',
+        elements: [
+          {
+            type: 'button',
+            text: { type: 'plain_text', text: 'Rescrub' },
+            action_id: 'pii_rescrub',
+          }
+        ]
+      },
+      { type: 'divider' },
+
+      // Attestation checkbox — required for approval. Resets on rescrub.
       {
         type: 'input',
         block_id: 'attestation_block',

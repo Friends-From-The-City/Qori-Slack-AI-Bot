@@ -73,7 +73,7 @@ import { handleParticipantOutreachSubmit, handleInitialRecruitmentSubmit, handle
 import { handleAddObserverSubmission, handleSelfJoinObserver, handleSelfJoinSubmission } from './commands/addObserverHandler';
 
 // Session notes
-import { handleTabManual, handleTabUpload, handleSessionSelectionChange, handleSessionNotesSubmission, handleTranscriptReviewApprove, handleManualNotesApprove, handleManualNotesReject } from './commands/sessionNotesHandler';
+import { handleTabManual, handleTabUpload, handleSessionSelectionChange, handleSessionNotesSubmission, handleTranscriptReviewApprove, handleRescrub, handleManualNotesApprove, handleManualNotesReject } from './commands/sessionNotesHandler';
 
 // Analysis
 import { analyzeNotesHandler, handleAnalyzeNotesSubmission, handleStudySelectionChange as handleAnalyzeNotesStudyChange, handleSessionSelectionChange as handleAnalyzeNotesSessionChange } from './commands/analyzeNotesHandler';
@@ -591,6 +591,7 @@ slackApp.action('tab_upload', handleTabUpload);
 slackApp.action('session_select_change', handleSessionSelectionChange);
 slackApp.view('session_notes_submit', handleSessionNotesSubmission);
 slackApp.view('transcript_review_approve', handleTranscriptReviewApprove);
+slackApp.action('pii_rescrub', handleRescrub);
 slackApp.action('manual_notes_approve', handleManualNotesApprove);
 slackApp.action('manual_notes_reject', handleManualNotesReject);
 

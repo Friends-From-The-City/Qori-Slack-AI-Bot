@@ -9,7 +9,7 @@
 import type { AllMiddlewareArgs, SlackCommandMiddlewareArgs, SlackActionMiddlewareArgs, SlackViewMiddlewareArgs, BlockAction, ViewSubmitAction } from '@slack/bolt';
 
 import { buildSessionNotesView, type PreservedInputs } from "../ui/sessionNotesModal";
-import { buildTranscriptReviewModal, type TranscriptReviewModalMetadata } from "../ui/transcriptReviewModal";
+import { buildTranscriptReviewModal, type TranscriptReviewModalMetadata, type ScrubStats } from "../ui/transcriptReviewModal";
 import sessionObserverService from "../../../services/session_observer.service";
 import sessionParticipantService from "../../../services/study_participant.service";
 import { resolveStudyFromName } from "../../../services/research_study.service";
@@ -903,10 +903,11 @@ const handleTranscriptReviewApprove = async ({ ack, body, view, client }: SlackV
     const quarantineSha = quarantineFile.data.sha;
 
     // 2. Flip PII marker from PENDING-REVIEW to REVIEWED-CLEARED
-    // Use regex for more robust matching (handles whitespace/encoding variations)
+    // First occurrence only — global /g over file body is silent evidence mutation
+    // if a participant ever says the phrase (ADR 0026 §5 over-redaction principle)
     const reviewedContent = rawContent
-      .replace(/<!--\s*PII-STATUS:\s*PENDING-REVIEW\s*-->/gi, '<!-- PII-STATUS: REVIEWED-CLEARED -->')
-      .replace(/\*\*PII Status:\*\*\s*Auto-scrubbed,?\s*pending human review/gi, `**PII Status:** Reviewed and cleared by <@${body.user.id}>`);
+      .replace(/<!--\s*PII-STATUS:\s*PENDING-REVIEW\s*-->/i, '<!-- PII-STATUS: REVIEWED-CLEARED -->')
+      .replace(/\*\*PII Status:\*\*\s*Auto-scrubbed,?\s*pending human review/i, `**PII Status:** Reviewed and cleared by <@${body.user.id}>`);
 
     // 3. Write to final location with updated marker
     const finalResult = await createOrUpdateFileOnGitHub(finalPath, reviewedContent);
@@ -986,6 +987,156 @@ const handleTranscriptReviewApprove = async ({ ack, body, view, client }: SlackV
       channel: body.user.id,
       text: `❌ Error saving transcript: ${message}`,
     });
+  }
+};
+
+// ─── Rescrub loop — re-scrub quarantine with additional terms ─────────────────────
+
+/**
+ * Build a regex from a reviewer-typed term. Single audit point for all
+ * reviewer-supplied text → regex conversions.
+ *
+ * Escapes metacharacters, then anchors with lookarounds (not \b) so terms
+ * match at word edges without failing on non-word-char boundaries like
+ * "Dr. Patel" (where \b between "." and " " is not a word boundary).
+ */
+function buildTermRegex(term: string): RegExp {
+  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(?<!\\w)${escaped}(?!\\w)`, 'gi');
+}
+
+/**
+ * Handle rescrub button click in the transcript review modal.
+ *
+ * Reads quarantine content from GitHub, applies additional find/replace terms,
+ * regenerates quarantine, rebuilds the review modal with updated stats.
+ * Terms are transient — used in memory for find/replace, then discarded (§2.1).
+ * Attestation checkbox resets (reviewer attests to the regenerated version).
+ */
+const handleRescrub = async ({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs): Promise<void> => {
+  await ack();
+
+  try {
+    // Extract terms from the input field (actions blocks can read sibling input values)
+    const viewValues = (body as any).view?.state?.values;
+    const rescrubTermsRaw = viewValues?.rescrub_terms_block?.rescrub_terms?.value?.trim() || '';
+
+    if (!rescrubTermsRaw) {
+      // No terms entered — nothing to rescrub
+      return;
+    }
+
+    // Parse comma-separated terms
+    const terms = rescrubTermsRaw.split(',').map((t: string) => t.trim()).filter(Boolean);
+    if (terms.length === 0) return;
+
+    // Parse metadata from private_metadata
+    const metadata: TranscriptReviewModalMetadata = JSON.parse((body as any).view?.private_metadata || '{}');
+    const { quarantinePath, participantCode, studyName, fileUrl } = metadata;
+
+    if (!quarantinePath) {
+      console.error('[PII] Rescrub: missing quarantinePath in metadata');
+      return;
+    }
+
+    // Read current quarantine content from GitHub
+    const { Octokit } = await import('@octokit/rest');
+    const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
+    const owner = process.env.GITHUB_OWNER!;
+    const repo = process.env.GITHUB_REPO!;
+
+    let quarantineContent: string;
+    let quarantineSha: string;
+    try {
+      const fileResponse = await octokit.rest.repos.getContent({
+        owner, repo, path: quarantinePath, ref: 'main',
+      });
+      const fileData = fileResponse.data as { content: string; sha: string };
+      quarantineContent = Buffer.from(fileData.content, 'base64').toString('utf-8');
+      quarantineSha = fileData.sha;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error('[PII] Rescrub: failed to read quarantine file:', message);
+      return;
+    }
+
+    // Apply find/replace for each term → [REDACTED] (word-boundary anchored)
+    let scrubbedContent = quarantineContent;
+    let totalReplacements = 0;
+    let zeroMatchCount = 0;
+    // Track per-term match counts positionally (transient — never rendered by text)
+    const perTermCounts: number[] = [];
+    for (const term of terms) {
+      const regex = buildTermRegex(term);
+      const matches = scrubbedContent.match(regex);
+      const count = matches ? matches.length : 0;
+      perTermCounts.push(count);
+      if (count > 0) {
+        totalReplacements += count;
+        scrubbedContent = scrubbedContent.replace(regex, '[REDACTED]');
+      } else {
+        zeroMatchCount++;
+      }
+    }
+
+    // Regenerate quarantine file with updated content
+    await octokit.rest.repos.createOrUpdateFileContents({
+      owner, repo, path: quarantinePath,
+      message: `Rescrub: ${terms.length} additional term(s) applied`,
+      content: Buffer.from(scrubbedContent).toString('base64'),
+      sha: quarantineSha,
+    });
+
+    console.log(`[PII] Rescrub complete: ${totalReplacements} replacement(s) from ${terms.length} term(s), ${zeroMatchCount} zero-match`);
+    // Terms discarded here — not logged, not stored (§2.1 discipline)
+    // perTermCounts discarded — positional counts only, no term text
+
+    // Count PII markers in the CURRENT file for cumulative status
+    const phoneCount = (scrubbedContent.match(/\[PHONE\]/g) || []).length;
+    const emailCount = (scrubbedContent.match(/\[EMAIL\]/g) || []).length;
+    const participantNameCount = (scrubbedContent.match(new RegExp(participantCode.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []).length;
+    const redactedCount = (scrubbedContent.match(/\[REDACTED\]/g) || []).length;
+
+    const updatedStats: ScrubStats = {
+      participantName: participantNameCount,
+      moderatorName: (scrubbedContent.match(/\[Moderator\]/g) || []).length,
+      speakerLabels: 0,
+      phoneNumbers: phoneCount,
+      emailAddresses: emailCount,
+      redactedTerms: redactedCount,
+    };
+
+    // Build positional match summary (aggregate numbers only, no term text)
+    const matchParts: string[] = [];
+    for (let i = 0; i < perTermCounts.length; i++) {
+      if (perTermCounts[i] === 0) {
+        matchParts.push(`term ${i + 1} matched 0 times`);
+      } else {
+        matchParts.push(`term ${i + 1} matched ${perTermCounts[i]} time${perTermCounts[i] !== 1 ? 's' : ''}`);
+      }
+    }
+    const rescrubSummary = `${terms.length} term${terms.length !== 1 ? 's' : ''} submitted · ${matchParts.join(' · ')} · ${redactedCount} redaction${redactedCount !== 1 ? 's' : ''} in this file`;
+
+    const updatedModal = buildTranscriptReviewModal({
+      stats: updatedStats,
+      participantCode,
+      studyName,
+      fileUrl,
+      nameProvided: participantNameCount > 0,
+      rescrubSummary,
+    });
+    updatedModal.private_metadata = (body as any).view?.private_metadata;
+
+    // Update the modal — attestation resets (no initial_options on checkbox)
+    await client.views.update({
+      view_id: (body as any).view?.id,
+      hash: (body as any).view?.hash,
+      view: updatedModal,
+    });
+
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('[PII] Rescrub error:', message);
   }
 };
 
@@ -1153,6 +1304,7 @@ export {
   handleSessionSelectionChange,
   handleSessionNotesSubmission,
   handleTranscriptReviewApprove,
+  handleRescrub,
   handleManualNotesApprove,
   handleManualNotesReject,
 };
