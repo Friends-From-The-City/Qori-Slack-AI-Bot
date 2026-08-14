@@ -54,8 +54,8 @@ input_variables:
     description: "Project-level research problem. Stakeholder insights are framed against this."
   - name: source_intent
     type: string
-    required: false
-    description: "What the researcher needs this source to tell them."
+    required: true
+    description: "What the researcher needs this source to tell them — how it relates to the project problem."
 
 # ═══════════════════════════════════════════════════════════
 # CASCADE CONTRACT
@@ -334,11 +334,7 @@ output_template: |
   {{#if project_problem_statement}}
   **Research problem:** {{project_problem_statement}}
 
-  {{#if source_intent}}
   **This document contributes:** {{source_intent}}
-  {{else}}
-  **This document contributes:** Internal stakeholder perspectives on {{study_name}}
-  {{/if}}
   {{else}}
   > [!WARNING]
   > No project problem statement set. Stakeholder insights cannot be fully contextualized.

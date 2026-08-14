@@ -53,7 +53,7 @@ input_variables:
 
   - source_intent:
       type: "textarea"
-      required: false
+      required: true
       placeholder: "e.g., What barriers do Veterans face with claim status tracking?"
       description: "What the researcher needs this source to tell them — how it relates to the project problem."
 
@@ -189,6 +189,10 @@ ai_generation_tasks:
       3. Do NOT create themes based on what you think should be covered
       4. QUOTE directly from documents when providing evidence
       5. If you can only identify 1-2 themes, that's fine - do not pad
+      6. RECOMMENDATIONS ARE NOT EVIDENCE. A source's recommendation (e.g.,
+         "Add plain-language descriptions") may be reported as what the source
+         recommends, but it cannot be quoted as evidence FOR a theme. Evidence
+         must be observational or empirical, not prescriptive.
 
       For each theme:
 
@@ -239,10 +243,8 @@ ai_generation_tasks:
       **Research Problem (from project):**
       {{project_problem_statement}}
 
-      {% if source_intent %}
       **Source Intent (what researcher needs from this source):**
       {{source_intent}}
-      {% endif %}
 
       **Research Topic:** {{effective_topic}}
 
@@ -303,21 +305,14 @@ ai_generation_tasks:
       3. Do NOT invent titles, authors, organizations, or dates
       4. If author/date not stated, write "Not specified"
 
-      Format as:
-
-      | # | Document | Author/Org | Date | Contribution |
-      |:-:|:---------|:-----------|:-----|:-------------|
-      | 1 | **[Title]** | [Author] | [Date] | [Key contribution] |
-
-      For each source, add a details block:
+      Format as a single details block per source (no redundant table):
 
       <details>
-      <summary><strong>N. [Document Title]</strong></summary>
+      <summary><strong>N. [Document Title]</strong> — [Author/Org], [Date]</summary>
 
-      - **Full Citation:** [Author/Org]. ([Date]). *[Title]*. [Publisher if known].
       - **Document Type:** [Report / Study / Survey / etc.]
-      - **Key Contribution:** [2-3 sentences]
-      - **Limitations:** [Any noted limitations]
+      - **Key Contribution:** [2-3 sentences on what this source establishes]
+      - **Limitations:** [Any noted limitations or gaps]
 
       </details>
 
@@ -340,11 +335,7 @@ output_template: |
   {{#if project_problem_statement}}
   **Research problem:** {{project_problem_statement}}
 
-  {{#if source_intent}}
   **This document contributes:** {{source_intent}}
-  {{else}}
-  **This document contributes:** Background research on {{effective_topic}}
-  {{/if}}
   {{else}}
   > [!WARNING]
   > No project problem statement set. Knowledge gaps cannot be derived without a stated research problem.
@@ -355,23 +346,6 @@ output_template: |
 
   > [!NOTE]
   > This analysis is based solely on the documents provided. All findings, themes, and knowledge gaps are derived from the uploaded content.
-
-  ---
-
-  ## Documents Analyzed
-
-  | # | Filename | Type |
-  |:-:|:---------|:-----|
-  {{#each document_names}}
-  | {{@index}} | {{this}} | {{lookup ../document_types @index}} |
-  {{/each}}
-
-  <details>
-  <summary><strong>Document details</strong> — source, relevance, and summaries</summary>
-
-  {{ai_generated.document_analysis}}
-
-  </details>
 
   ---
 
@@ -393,12 +367,6 @@ output_template: |
 
   ---
 
-  ## References
-
-  {{ai_generated.sources}}
-
-  ---
-
   <details>
   <summary><strong>Methodology</strong></summary>
 
@@ -408,6 +376,27 @@ output_template: |
   against the stated research problem, not generated speculatively.
 
   </details>
+
+  ---
+
+  ## Sources and Documents
+
+  **Documents analyzed:** {{document_count}}
+
+  {{#each document_names}}
+  - **{{this}}** ({{lookup ../document_types @index}})
+  {{/each}}
+
+  <details>
+  <summary><strong>Document details</strong> — source, relevance, and summaries</summary>
+
+  {{ai_generated.document_analysis}}
+
+  </details>
+
+  ### Source Attribution
+
+  {{ai_generated.sources}}
 
   ---
 
@@ -424,8 +413,6 @@ output_template: |
   | methodology_recommendations | Suggested research methods from the literature |
   | knowledge_gaps | Areas the research could not answer |
   | source_artifacts | Document metadata for provenance tracking |
-
-  **Documents analyzed:** {{document_count}}
 
   </details>
 
@@ -471,29 +458,35 @@ emits:
       items:
         $ref: schemas/discovered_barrier.yaml
     extract_from: |
-      Key Themes and Executive Summary — barriers, challenges, pain points.
+      DERIVATION RULE — discovered_barriers
+
+      definition: An obstacle that prevented or measurably degraded task
+        completion, evidenced by a specific observation in the source.
+
+      evidence_requirement: Must cite a specific observation showing the
+        barrier blocked or degraded a task. Include: what was attempted,
+        what happened, what the consequence was.
+
+      does_not_qualify:
+        - Dissatisfaction without a blocked or degraded task
+        - Recommendations (even if they imply a problem)
+        - Inference from absence of evidence
+        - Complaints without task context
+
       Assign sequential IDs (barrier-001).
       Include: title, summary, magnitude with numbers, evidence as array of
       supporting quotes/metrics, affected_population, source_document name,
       confidence level.
 
-      CRITICAL — barrier_categories (REQUIRED, array of 1+ values):
-      Classify each barrier by research-method category. Use ALL that apply
-      (barriers are multi-dimensional — e.g., screen-reader navigation is
-      BOTH ia AND accessibility):
-        - ia: navigation, findability, mental models, labeling, information architecture
-        - accessibility: assistive tech, WCAG, screen readers, motor/vision impairments
-        - performance: speed, latency, load times, system responsiveness
-        - content: readability, comprehension, terminology, tone, info quality
-        - task-flow: task completion, workflow steps, error recovery, form design
-        - cognitive: mental load, decision complexity, memory demands, learning curve
-        - other: ONLY if no category genuinely applies — do not force-fit a barrier
-          into a category it doesn't belong to. Prefer a real category when one fits;
-          use 'other' when none do.
-
-      Example: A barrier about "Veterans can't find benefit status" = [ia, task-flow].
-      A barrier about "Screen reader announces wrong labels" = [ia, accessibility].
-      A barrier about "Page loads too slowly on mobile" = [performance].
+      barrier_categories (REQUIRED, array of 1+ values):
+      Classify each barrier by research-method category. Use ALL that apply:
+        - ia: navigation, findability, mental models, labeling
+        - accessibility: assistive tech, WCAG, screen readers, motor/vision
+        - performance: speed, latency, load times, responsiveness
+        - content: readability, comprehension, terminology, tone
+        - task-flow: task completion, workflow steps, error recovery, forms
+        - cognitive: mental load, decision complexity, memory demands
+        - other: ONLY if no category genuinely applies
 
   - key: discovered_metrics
     pool: true

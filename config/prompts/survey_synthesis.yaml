@@ -52,8 +52,8 @@ input_variables:
     description: "Project-level research problem. Knowledge gaps are derived against this."
   - name: source_intent
     type: textarea
-    required: false
-    description: "What the researcher needs this source to tell them."
+    required: true
+    description: "What the researcher needs this source to tell them — how it relates to the project problem."
 
 # ═══════════════════════════════════════════════════════════
 # CASCADE CONTRACT
@@ -87,26 +87,34 @@ emits:
       items:
         $ref: schemas/discovered_barrier.yaml
     extract_from: |
-      Negative-sentiment themes as barriers. Assign sequential IDs (barrier-001).
-      Use theme pattern as summary, frequency as magnitude, respondent quotes as
-      evidence array, survey name as source_document.
+      DERIVATION RULE — discovered_barriers
 
-      CRITICAL — barrier_categories (REQUIRED, array of 1+ values):
-      Classify each barrier by research-method category. Use ALL that apply
-      (barriers are multi-dimensional):
-        - ia: navigation, findability, mental models, labeling, information architecture
-        - accessibility: assistive tech, WCAG, screen readers, motor/vision impairments
-        - performance: speed, latency, load times, system responsiveness
-        - content: readability, comprehension, terminology, tone, info quality
-        - task-flow: task completion, workflow steps, error recovery, form design
-        - cognitive: mental load, decision complexity, memory demands, learning curve
-        - other: ONLY if no category genuinely applies — do not force-fit a barrier
-          into a category it doesn't belong to. Prefer a real category when one fits;
-          use 'other' when none do.
+      definition: An obstacle that prevented or measurably degraded task
+        completion, evidenced by a specific respondent observation.
 
-      Example: "Can't find benefit status" = [ia, task-flow].
-      "App crashes frequently" = [performance].
-      "Instructions confusing" = [content, cognitive].
+      evidence_requirement: Must cite a specific response showing the
+        barrier blocked or degraded a task. Include: what was attempted,
+        what happened, what the consequence was. Use respondent quotes.
+
+      does_not_qualify:
+        - Dissatisfaction without a blocked or degraded task
+        - Negative sentiment alone (frustration is not a barrier)
+        - Recommendations or wishes
+        - Inference from absence of evidence
+
+      Assign sequential IDs (barrier-001).
+      Use theme pattern as summary, frequency as magnitude, respondent quotes
+      as evidence array, survey name as source_document.
+
+      barrier_categories (REQUIRED, array of 1+ values):
+      Classify each barrier by research-method category. Use ALL that apply:
+        - ia: navigation, findability, mental models, labeling
+        - accessibility: assistive tech, WCAG, screen readers, motor/vision
+        - performance: speed, latency, load times, responsiveness
+        - content: readability, comprehension, terminology, tone
+        - task-flow: task completion, workflow steps, error recovery, forms
+        - cognitive: mental load, decision complexity, memory demands
+        - other: ONLY if no category genuinely applies
 
   - key: discovered_metrics
     pool: true
@@ -170,31 +178,59 @@ ai_generation_tasks:
       RULES
       ============================================================
 
-      RULE 1: THEME-BY-THEME, NOT RESPONSE-BY-RESPONSE
-      Aggregate patterns across ALL responses. No one reads response-by-response.
+      RULE 1: THEME DEFINITION
+      A theme requires BOTH:
+        (a) A pattern in ≥2 INDEPENDENT data items. Two answers from the
+            SAME respondent count as ONE item.
+        (b) An interpretation of what the pattern MEANS, not a category label.
 
-      RULE 2: EVERY THEME NEEDS FREQUENCY + QUOTES
+      Single notable responses → "Individual Observations" section (retained,
+      not promoted to theme).
+
+      RULE 2: RESPONSE CODING
+      A response counts toward a theme ONLY if its OWN content supports it.
+      R003 ("form crashed and lost my progress") is a crash, not an upload
+      failure — do not inflate unrelated themes.
+
+      When a response is coded to MULTIPLE themes, DISCLOSE this where
+      frequencies are reported:
+      > *Note: [X] responses were coded to multiple themes.*
+
+      RULE 3: FREQUENCY + QUOTES
       For each theme: count, percentage, 2-3 representative quotes with R-IDs.
+      Prevalence is reported; it does not alone set priority.
 
-      RULE 3: RESPONDENT CITATIONS
+      RULE 4: RESPONDENT CITATIONS
       Assign IDs sequentially: R001, R002, R003...
-      Every quote: "[Quote]" — R00X
+      Every quote: "[Direct quote]" — R00X
 
-      RULE 4: SENTIMENT WITH MEANING
+      RULE 5: SENTIMENT CLASSIFICATION (explicit criteria)
+        - Negative: Response expresses frustration, complaint, criticism,
+          or reports a problem. Contains words like "frustrated," "annoying,"
+          "couldn't," "failed," "hate," or describes a blocked/degraded task.
+        - Positive: Response expresses satisfaction, praise, or reports
+          success. Contains words like "love," "great," "easy," "helpful,"
+          or describes a completed task with approval.
+        - Mixed: Response contains BOTH positive and negative elements
+          about the SAME topic (not separate topics). E.g., "I like the
+          new design but the navigation is confusing."
+        - Neutral: Factual, descriptive, or procedural response with no
+          evaluative language. Answers "what" without "how I felt about it."
+
       Always explain WHAT is driving the sentiment, not just the percentage.
 
-      RULE 5: NO HALLUCINATION
+      RULE 6: NO HALLUCINATION
       Only report themes from the data. Counts must be accurate. Quotes verbatim.
       If unsure about a count, say "approximately."
 
-      RULE 6: QUESTION FOCUS
+      RULE 7: QUESTION FOCUS
       {% if question_focus %}
       PRIORITIZE these questions: {{question_focus}}
       {% else %}
       Analyze ALL open-ended/text responses. Skip closed-ended questions.
       {% endif %}
 
-      RULE 7: EMPTY CONTENT
+      RULE 8: EMPTY CONTENT
       If the survey data between BEGIN/END markers is empty or contains no
       text responses, respond ONLY with:
       "> **No survey responses provided.** Please upload survey data and try again."
@@ -246,7 +282,7 @@ ai_generation_tasks:
 
       **PER-THEME SECTIONS:** For each theme:
 
-      **Theme N: [Name]**
+      ## Theme N: [Name]
 
       **Frequency:** [X] of [Total] responses ([Y]%)
 
@@ -258,11 +294,27 @@ ai_generation_tasks:
       > "[Direct quote]" — R00X
       > "[Direct quote]" — R00X
 
-      **Pattern:** [1-2 sentences explaining what this theme means]
+      **Pattern:** [1-2 sentences explaining what this theme MEANS — an
+      interpretation, not just a category label]
 
       ---
 
       [Repeat for each theme]
+
+      ---
+
+      **INDIVIDUAL OBSERVATIONS:**
+
+      Single notable responses that do not meet the ≥2 independent items
+      threshold for a theme. Retained for completeness, not promoted.
+
+      | R-ID | Observation | Why Notable |
+      |------|-------------|-------------|
+      | R00X | "[Quote]" | [Brief reason] |
+
+      If no individual observations exist, omit this section entirely.
+
+      ---
 
       **SENTIMENT OVERVIEW:**
 
@@ -301,10 +353,8 @@ ai_generation_tasks:
       **Research Problem (from project):**
       {{project_problem_statement}}
 
-      {% if source_intent %}
       **Source Intent (what researcher needs from this source):**
       {{source_intent}}
-      {% endif %}
 
       **Survey:** {{survey_name}}
 
@@ -360,11 +410,7 @@ output_template: |
   {{#if project_problem_statement}}
   **Research problem:** {{project_problem_statement}}
 
-  {{#if source_intent}}
   **This document contributes:** {{source_intent}}
-  {{else}}
-  **This document contributes:** Survey response patterns for {{survey_name}}
-  {{/if}}
   {{else}}
   > [!WARNING]
   > No project problem statement set. Knowledge gaps cannot be derived without a stated research problem.

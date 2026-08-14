@@ -57,14 +57,13 @@ export const discoverDeskResearchModal = {
     {
       type: "input",
       block_id: "description_block",
-      optional: true,
       label: {
         type: "plain_text",
         text: "What do you need this source to tell you?",
       },
       hint: {
         type: "plain_text",
-        text: "How this source relates to the project problem.",
+        text: "How this source relates to the project problem. Gaps are derived against this.",
       },
       element: {
         type: "plain_text_input",
@@ -151,14 +150,13 @@ export const discoverStakeholderModal = {
     {
       type: "input",
       block_id: "description_block",
-      optional: true,
       label: {
         type: "plain_text",
         text: "What do you need this source to tell you?",
       },
       hint: {
         type: "plain_text",
-        text: "How this source relates to the project problem.",
+        text: "How this source relates to the project problem. Gaps are derived against this.",
       },
       element: {
         type: "plain_text_input",
@@ -245,14 +243,13 @@ export const discoverSurveyModal = {
     {
       type: "input",
       block_id: "description_block",
-      optional: true,
       label: {
         type: "plain_text",
         text: "What do you need this source to tell you?",
       },
       hint: {
         type: "plain_text",
-        text: "How this source relates to the project problem.",
+        text: "How this source relates to the project problem. Gaps are derived against this.",
       },
       element: {
         type: "plain_text_input",
