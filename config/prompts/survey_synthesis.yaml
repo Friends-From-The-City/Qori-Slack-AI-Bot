@@ -46,6 +46,14 @@ input_variables:
     type: textarea
     required: true
     description: "Extracted content from uploaded files (provided by backend)"
+  - name: project_problem_statement
+    type: text
+    required: false
+    description: "Project-level research problem. Knowledge gaps are derived against this."
+  - name: source_intent
+    type: textarea
+    required: false
+    description: "What the researcher needs this source to tell them."
 
 # ═══════════════════════════════════════════════════════════
 # CASCADE CONTRACT
@@ -273,11 +281,30 @@ ai_generation_tasks:
       USE ## headings for each section (e.g., ## Overview, ## Theme 1: [Name]).
       Output the analytical content with proper markdown heading hierarchy.
 
-  # Knowledge gaps — what the survey couldn't answer
+  # Knowledge gaps — derived against the project problem statement
   - task_id: "knowledge_gaps_prose"
+    skip_when: "not project_problem_statement"
+    skip_output: |
+      > **Knowledge gaps require a project problem statement.**
+      >
+      > Run `/qori-start` to set a problem statement for this project, then re-run discovery.
     prompt: |
-      Identify 3-5 knowledge gaps from this survey data — questions the
-      survey couldn't answer or themes needing qualitative follow-up.
+      Identify knowledge gaps from the survey data.
+
+      ============================================================
+      DERIVATION RULE
+      ============================================================
+
+      A knowledge gap is: A question that the stated research problem requires
+      answering, which THIS SOURCE cannot answer.
+
+      **Research Problem (from project):**
+      {{project_problem_statement}}
+
+      {% if source_intent %}
+      **Source Intent (what researcher needs from this source):**
+      {{source_intent}}
+      {% endif %}
 
       **Survey:** {{survey_name}}
 
@@ -286,23 +313,39 @@ ai_generation_tasks:
       {{combined_file_content}}
       ---END DATA---
 
-      RULES:
-      - Each gap must trace to a specific limitation in the survey data
-      - Do NOT suggest product actions — those belong in the research brief
-      - Focus on: what the survey couldn't answer, what follow-up research
-        would investigate
+      ============================================================
+      RULES
+      ============================================================
 
-      Output as a table:
+      1. EVERY gap must be a question that the research problem REQUIRES answering
+      2. For each gap, state what the survey DOES establish on that question, then where it stops
+      3. Do NOT include:
+         - Questions the survey answers (partially or fully)
+         - Questions unrelated to the stated problem
+         - Generic research-practice observations
+         - Product actions, feature changes, or design implementations
+      4. If the survey is comprehensive relative to the problem:
+         > The survey provides strong coverage of the research problem. One area for further investigation: [specific gap].
 
-      | Gap Identified | Why It Matters | Suggested Research Approach |
-      |:---------------|:---------------|:---------------------------|
-      | [Unanswered question] | [Why this gap matters] | [Research method] |
+      ============================================================
+      OUTPUT FORMAT
+      ============================================================
 
-      If the survey data is comprehensive:
-      > The survey provides strong coverage. One area for further investigation: [specific gap].
+      For each gap (3-5 maximum):
+
+      **Gap N: [Question the problem requires answering]**
+
+      | What this source establishes | Where it stops |
+      |:-----------------------------|:---------------|
+      | [Specific evidence from survey] | [Specific limitation] |
+
+      **Suggested research approach:** [Method to investigate — e.g., interviews, usability testing]
+
+      ---
 
       OUTPUT BOUNDARIES: Do not generate section headings or structural
-      elements. The template handles all document structure.
+      elements beyond the per-gap separators above. The template handles
+      all document structure.
 
 # ═══════════════════════════════════════════════════════════
 # OUTPUT — interleaved Handlebars + AI prose
@@ -311,6 +354,22 @@ output_template: |
   # Survey Synthesis: {{survey_name}}
 
   **Study:** {{selected_study}} &nbsp; | &nbsp; **Survey:** {{survey_name}} &nbsp; | &nbsp; **Documents:** {{document_count}} &nbsp; | &nbsp; **Date:** {{current_date}}
+
+  ---
+
+  {{#if project_problem_statement}}
+  **Research problem:** {{project_problem_statement}}
+
+  {{#if source_intent}}
+  **This document contributes:** {{source_intent}}
+  {{else}}
+  **This document contributes:** Survey response patterns for {{survey_name}}
+  {{/if}}
+  {{else}}
+  > [!WARNING]
+  > No project problem statement set. Knowledge gaps cannot be derived without a stated research problem.
+  > Run `/qori-start` to set one.
+  {{/if}}
 
   ---
 
@@ -327,31 +386,10 @@ output_template: |
   <details>
   <summary><strong>Methodology</strong></summary>
 
-  **Framework:** Thematic Analysis
-
-  **Approach:** Open-ended responses were coded for recurring themes, counted for frequency, and analyzed for sentiment patterns. Representative quotes were extracted to illustrate each theme.
-
-  **Data Source:** {{survey_name}}
-
-  ### References
-
-  - **Virginia Braun & Victoria Clarke** — Thematic analysis methodology
-  - **Nielsen Norman Group** — Survey data analysis best practices
-  - **Qualtrics** — Open-ended response coding guidelines
-
-  </details>
-
-  ---
-
-  <details>
-  <summary><strong>Validity checklist</strong></summary>
-
-  | Check | Result |
-  |-------|--------|
-  | All survey data files referenced | |
-  | Themes supported by response patterns | |
-  | Sentiment analysis grounded in data | |
-  | Knowledge gaps are actionable | |
+  This survey synthesis uses thematic analysis (Braun & Clarke). Open-ended
+  responses were coded for recurring themes, counted for frequency, and
+  analyzed for sentiment patterns. Knowledge gaps are derived against the
+  stated research problem, not generated speculatively.
 
   </details>
 

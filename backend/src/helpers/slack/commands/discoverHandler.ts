@@ -22,7 +22,7 @@ import { format } from 'date-fns';
 import { processYamlTemplate } from '../../yamlProcessor';
 import { processSlackFiles } from '../../pdfProcessor';
 import { parseDocuments, validateDocuments } from '../../documentParser';
-import { getProjectByChannelId } from '../../../services/project.service';
+import { getProjectByChannelId, getProjectById } from '../../../services/project.service';
 import type { VariableContext } from '../../studyVariables';
 import { postEphemeralOrDM } from '../slackHelpers';
 
@@ -77,6 +77,8 @@ interface DiscoveryTemplateInput {
   effective_topic: string;
   topic_slug: string;
   project_slug: string;
+  project_problem_statement: string | null;
+  source_intent: string | null;
   description: string;
   document_content: string;
   combined_file_content: string;
@@ -416,6 +418,10 @@ async function handleDiscoverSubmission({ ack, view, body, client }: SlackViewMi
 
   console.log(`🔍 Discovery: project=${projectSlug}, type=${discoveryType}, topic="${topic}", slug="${topicSlug}", files=${uploadedFiles.length}`);
 
+  // Load project to get problem_statement for grounded gap derivation
+  const project = await getProjectById(projectId);
+  const projectProblemStatement = project?.problem_statement || null;
+
   await client.chat.postMessage({
     channel: userId,
     text: `Running ${typeConfig.label} for "${topic}"... This may take a minute.`,
@@ -459,6 +465,8 @@ async function handleDiscoverSubmission({ ack, view, body, client }: SlackViewMi
       effective_topic: topic,
       topic_slug: topicSlug,
       project_slug: projectSlug,
+      project_problem_statement: projectProblemStatement,
+      source_intent: description,
       description: description || topic,
       document_content: formattedDocumentContent,
       combined_file_content: formattedDocumentContent,

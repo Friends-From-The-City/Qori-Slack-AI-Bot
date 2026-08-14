@@ -14,6 +14,7 @@ interface CreateProjectInput {
   name: string;
   slug: string;
   description?: string | null;
+  problem_statement?: string | null;
   status?: ProjectStatus;
   created_by: string;
   channel_id?: string | null;
@@ -24,6 +25,7 @@ interface UpdateProjectInput {
   name?: string;
   slug?: string;
   description?: string | null;
+  problem_statement?: string | null;
   status?: ProjectStatus;
   channel_id?: string | null;
   team_slug?: string | null;

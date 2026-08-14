@@ -48,6 +48,14 @@ input_variables:
     type: string
     required: true
     description: "Combined content of all selected stakeholder files"
+  - name: project_problem_statement
+    type: string
+    required: false
+    description: "Project-level research problem. Stakeholder insights are framed against this."
+  - name: source_intent
+    type: string
+    required: false
+    description: "What the researcher needs this source to tell them."
 
 # ═══════════════════════════════════════════════════════════
 # CASCADE CONTRACT
@@ -153,10 +161,7 @@ emits:
           verbatim_quote:
             type: string
             nullable: true
-          mermaid_diagram:
-            type: string
-            nullable: true
-    extract_from: "System dynamics section (## 03) — flow name, Where it breaks, consequence. Assign sequential IDs (failure-001). Include source SH-XXX, verbatim quote, Mermaid diagram code if present."
+    extract_from: "Stakeholder alignment section (## 03) — identify system/process failure points from stakeholder constraints and conflicts. Assign sequential IDs (failure-001). Include source SH-XXX, verbatim quote."
 
 # ═══════════════════════════════════════════════════════════
 # AI GENERATION — focused, bounded tasks
@@ -199,9 +204,9 @@ ai_generation_tasks:
       - Moderate: Single source OR partial triangulation
       - Limited: Unverified single perspective
 
-      RULE 4: MAXIMUM 2 SEQUENCE DIAGRAMS in section 03. Choose flows where
-      diagrams reveal failure modes text alone cannot convey. Every diagram
-      MUST end with closing ```, followed by "Where it breaks" line.
+      RULE 4: ALIGNMENT TABLE in section 03. Render stakeholder alignment as a
+      table with columns: Stakeholder | Priorities | Constraints | Conflicts With.
+      Use ✓/⚠/✗ marks to show alignment/misalignment.
 
       RULE 5: NO METADATA FABRICATION — For interview durations, dates, metrics,
       use ONLY data explicitly stated. Write "Not specified" when unknown.
@@ -262,7 +267,13 @@ ai_generation_tasks:
 
       **SECTION 02 — STRATEGIC PRIORITIES AND ALIGNMENT:** Priority table (Priority | Stated by | Aligns with user need? | Notes) using ✓/⚠/✗ marks + WARNING callout for alignment gap + Confidence
 
-      **SECTION 03 — SYSTEM DYNAMICS:** 1-2 sentence frame + max 2 Mermaid sequence diagrams with "Where it breaks" + Confidence
+      **SECTION 03 — STAKEHOLDER ALIGNMENT:** 1-2 sentence frame + alignment table:
+
+      | Stakeholder | Priorities | Constraints | Conflicts With |
+      |-------------|------------|-------------|----------------|
+      | SH-XXX | [Top priorities] | [Key constraints] | [SH-XXX on what issue] |
+
+      Use ✓/⚠/✗ marks where helpful. Identify key alignment gaps. + Confidence
 
       **SECTION 04 — STAKEHOLDERS BELIEVE / REALITY / OPPORTUNITY:** Table (Believe | Reality | Opportunity) + Confidence
 
@@ -320,6 +331,22 @@ output_template: |
 
   ---
 
+  {{#if project_problem_statement}}
+  **Research problem:** {{project_problem_statement}}
+
+  {{#if source_intent}}
+  **This document contributes:** {{source_intent}}
+  {{else}}
+  **This document contributes:** Internal stakeholder perspectives on {{study_name}}
+  {{/if}}
+  {{else}}
+  > [!WARNING]
+  > No project problem statement set. Stakeholder insights cannot be fully contextualized.
+  > Run `/qori-start` to set one.
+  {{/if}}
+
+  ---
+
   ## Stakeholders interviewed
 
   {{ai_generated.analysis_body}}
@@ -358,21 +385,6 @@ output_template: |
 
   </details>
 
-  <details>
-  <summary><strong>Validity checklist</strong></summary>
-
-  | Check | Result |
-  |-------|--------|
-  | Quotes verbatim from interview transcripts | |
-  | Role-only attribution preserved (no real names) | |
-  | Confidence declared per section | |
-  | Constraints triangulated across stakeholder perspectives | |
-  | Alignment gaps explicitly surfaced | |
-  | Open questions documented for follow-up | |
-  | Recommendations connect to specific constraints | |
-
-  </details>
-
   {{#if detected_files}}
   <details>
   <summary><strong>Related artifacts</strong></summary>
@@ -400,7 +412,7 @@ output_template: |
   | alignment_gaps | Stated priority vs. actual behavior mismatches |
   | stakeholder_questions_for_users | Prioritized research questions from stakeholder insights |
   | backstage_observations | Raw system/process observations for service blueprint |
-  | system_failure_modes | System dynamics with failure points |
+  | system_failure_modes | System dynamics with failure points (from alignment conflicts) |
 
   **Stakeholders analyzed:** {{document_count}}
 
@@ -433,12 +445,9 @@ validation_rules:
   - rule: "confidence_per_section"
     description: "Every numbered section has a Confidence line"
     check: "sections 01-07 each contain 'Confidence' indicator"
-  - rule: "diagram_limit"
-    description: "Maximum 2 sequence diagrams"
-    check: "count of 'sequenceDiagram' <= 2"
   - rule: "all_sections_present"
     description: "All required sections present"
-    check: "output contains Constraints, Priorities, System dynamics, Believe/Reality, Questions, Open questions, Recommendations"
+    check: "output contains Constraints, Priorities, Stakeholder Alignment, Believe/Reality, Questions, Open questions, Recommendations"
 
 notes: |
   v7.0: Interleaved Handlebars/AI architecture (ADR 0005/0016 pattern).

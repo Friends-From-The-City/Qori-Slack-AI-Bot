@@ -31,6 +31,7 @@ class Project extends Model<
   declare name: string;
   declare slug: string;
   declare description: string | null;
+  declare problem_statement: string | null;
   declare status: CreationOptional<ProjectStatus>;
   declare created_by: string;
   declare channel_id: string | null;
@@ -78,6 +79,10 @@ export default (sequelize: Sequelize) => {
         unique: true,
       },
       description: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+      },
+      problem_statement: {
         type: DataTypes.TEXT,
         allowNull: true,
       },
