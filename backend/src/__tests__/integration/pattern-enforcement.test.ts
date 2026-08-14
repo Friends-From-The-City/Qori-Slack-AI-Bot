@@ -158,7 +158,12 @@ describe('pattern: as-any budget enforcement', () => {
 
     // Baseline after Stream 1: ~193 (measured). Allow 10% margin for natural growth.
     // If this fails, new `any` was introduced — categorize and justify or fix.
-    expect(total).toBeLessThanOrEqual(215);
+    // Budget raised 215 → 223 by PR #272 (transcript review DM
+    // swap). +8 casts, all in the acknowledged bounded categories:
+    // Bolt action payload typing (body.actions[0]), ack()
+    // response_action, view.state.values, Block Kit builder return
+    // types. No cascade or business-logic casts added.
+    expect(total).toBeLessThanOrEqual(223);
   });
 
   it('events.ts has no more than 1 as-any cast (excluding comments)', () => {
