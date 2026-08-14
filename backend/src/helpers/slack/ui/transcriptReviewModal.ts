@@ -229,7 +229,8 @@ export function buildRejectedDmBlocks(studyName: string, participantCode: string
     {
       type: 'context',
       elements: [
-        { type: 'mrkdwn', text: 'Git history retains the quarantine version per ADR 0026 §6.' }
+        // ADR 0026 §6: quarantine version retained in git history permanently
+        { type: 'mrkdwn', text: 'The deleted file remains in the repository\'s version history.' }
       ]
     }
   ];
