@@ -2,8 +2,43 @@ import nunjucks from 'nunjucks';
 import { ChatAnthropic } from '@langchain/anthropic';
 import { assertKnownNamesRedacted } from './piiRedaction';
 
-// make sure nunjucks knows it's okay to render standalone strings
+// Default environment for prompt rendering — tolerates undefined variables
+// because templates use {% if upstream_foo %} guards against optional data.
+// Used at line 137 for nunjucks.renderString().
 nunjucks.configure({ autoescape: false });
+
+// Jinja keywords that should not be treated as variable references in skip_when
+const JINJA_KEYWORDS = new Set(['not', 'and', 'or', 'true', 'false', 'none', 'null', 'is', 'in']);
+
+/**
+ * Extract variable names from a skip_when expression and verify they exist in inputValues.
+ * Throws if any referenced variable is undefined (not just empty), preventing typos from
+ * silently skipping tasks.
+ *
+ * CONSTRAINT: skip_when supports plain variable references and boolean keywords only.
+ * Examples that work: "not upstream_foo", "not upstream_foo and not upstream_bar"
+ * Examples that will false-positive throw: string literals ("foo"), filter names (x | default),
+ * property access (foo.bar). These are extracted as variable names and fail the existence check.
+ * Fails safe — unsupported syntax throws rather than silently misbehaving.
+ */
+function assertSkipWhenVariablesDefined(
+  expression: string,
+  inputValues: Record<string, unknown>,
+  taskId: string
+): void {
+  // Extract words that look like variable names (snake_case identifiers)
+  const matches = expression.match(/\b[a-z_][a-z0-9_]*\b/gi) || [];
+  const referencedVars = matches.filter(v => !JINJA_KEYWORDS.has(v.toLowerCase()));
+
+  for (const varName of referencedVars) {
+    if (!(varName in inputValues)) {
+      throw new Error(
+        `skip_when in task "${taskId}" references undefined variable "${varName}". ` +
+        `Check for typos. Available variables: ${Object.keys(inputValues).filter(k => k.startsWith('upstream_')).join(', ')}`
+      );
+    }
+  }
+}
 
 // ---------------------------------------------------------------------------
 // PII redaction context (H9)
@@ -28,6 +63,12 @@ interface AiGenerationTask {
   /** Per-task model override. When set, this task uses the specified model
    * instead of the default. Used for trivial transforms on Haiku. */
   model?: string;
+  /** Jinja expression evaluated against inputValues. If truthy, task is skipped
+   * and skip_output is returned instead of calling the LLM. Prevents fabrication
+   * when upstream data is absent. */
+  skip_when?: string;
+  /** Literal string returned when skip_when evaluates to true. No LLM call. */
+  skip_output?: string;
   [key: string]: unknown;
 }
 
@@ -110,6 +151,18 @@ export async function executeAiGenerationTasks(
 
   const taskPromises = aiGenerationTasks.map(async (task) => {
     try {
+      // Skip-task guard: if skip_when evaluates truthy, return skip_output without LLM call.
+      // Prevents fabrication when upstream data is absent.
+      // assertSkipWhenVariablesDefined throws on typos (undefined vars) before evaluation.
+      if (task.skip_when) {
+        assertSkipWhenVariablesDefined(task.skip_when, safeInputValues, task.task_id);
+        const skipCondition = nunjucks.renderString(`{{ ${task.skip_when} }}`, safeInputValues);
+        if (skipCondition.trim().toLowerCase() === 'true') {
+          console.log(`⏭️  Skipping task ${task.task_id}: skip_when condition met`);
+          return { taskId: task.task_id, response: task.skip_output || '' };
+        }
+      }
+
       const nunjucksTemplate = convertHandlebarsToNunjucks(task.prompt);
       const jinjaOut = nunjucks.renderString(nunjucksTemplate, safeInputValues);
       const finalPrompt = unescapeNunjucksSyntax(jinjaOut);

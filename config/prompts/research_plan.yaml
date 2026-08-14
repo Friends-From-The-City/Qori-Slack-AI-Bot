@@ -176,15 +176,15 @@ ai_generation_tasks:
       and what decision the findings will inform.
 
   - task_id: "background"
+    skip_when: "not upstream_business_context"
+    skip_output: "Background context was not provided in the approved brief."
     prompt: |
       Write a 3-4 sentence background paragraph for a research plan.
 
       Study: {{project_title}}
       Method: {{methodology}}
 
-      {% if upstream_business_context %}
       BUSINESS CONTEXT: {{upstream_business_context}}
-      {% endif %}
       {% if upstream_research_objectives %}
       OBJECTIVES: {{upstream_research_objectives}}
       {% endif %}
@@ -231,21 +231,23 @@ ai_generation_tasks:
 
   - task_id: "participant_glance"
     model: "claude-haiku-4-5-20251001"
+    skip_when: "not upstream_participant_approach"
+    skip_output: "Not defined in brief"
     prompt: |
       Write a ONE-LINE glance summary of participant composition for an at-a-glance table.
 
-      {% if upstream_participant_approach %}
       FULL APPROACH: {{upstream_participant_approach}}
-      {% endif %}
 
-      Output ONLY a single line with count + segment names. Example format:
-      "8-10 veterans across five segments: appointments, benefits, assistive-tech, lower tech proficiency, VA terminology"
+      Output ONLY a single line with count + segment names. Format:
+      "[count] [population] across [n] segments: [segment names]"
 
       OUTPUT BOUNDARIES: Generate ONLY a single line — no heading,
       no footer or structural elements.
       NO rationale, NO detail — just count and segment names. This is for a summary table cell.
 
   - task_id: "participant_composition_prose"
+    skip_when: "not upstream_participant_criteria and not upstream_participant_approach"
+    skip_output: "Participant requirements were not defined in the approved brief. Complete the brief's participant approach before relying on this section."
     prompt: |
       Write participant requirements content (sample size + composition).
 
@@ -257,7 +259,7 @@ ai_generation_tasks:
       {% endif %}
 
       Structure:
-      1. ONE sentence stating sample size and rationale (e.g., "Recruit 8-10 participants across five defined segments to ensure coverage of documented discovery barriers")
+      1. ONE sentence stating sample size and rationale (format: "Recruit [count] participants across [n] segments to ensure coverage of [criteria source]")
       2. A bullet list (use markdown dash -) with each segment on its own line, including count per segment and brief rationale
 
       OUTPUT BOUNDARIES: Generate ONLY the content — no heading,

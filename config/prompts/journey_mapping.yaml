@@ -293,7 +293,7 @@ ai_generation_tasks:
 
       [1-2 sentence description of what happens at this stage]
 
-      **Touchpoints** — [What user interacts with — e.g., "Home screen → Bottom navigation tabs → Section discovery"]
+      **Touchpoints** — [What user interacts with — format: "[entry point] → [navigation step] → [outcome]"]
 
       **User emotion** — [Single word: Confused, Frustrated, Confident, Uncertain, etc.]
 
@@ -308,11 +308,11 @@ ai_generation_tasks:
 
       #### Success looks like
 
-      [SPECIFIC measurable outcome — e.g., "Users discover all available app sections within 30 seconds of opening the app, regardless of accessibility settings." NOT vague like "clear navigation."]
+      [SPECIFIC measurable outcome — format: "[measurable user outcome within a stated timeframe]" NOT vague like "clear navigation."]
 
       #### Design opportunity
 
-      [SPECIFIC implementable fix — e.g., "Modify VoiceOver focus behavior to start on the tab bar, and implement responsive navigation labels that remain visible at 180% text scaling." NOT vague like "improve accessibility."]
+      [SPECIFIC implementable fix — format: "[specific technical remediation]" NOT vague like "improve accessibility."]
 
       **Suggested owner** — [Team name]
 
