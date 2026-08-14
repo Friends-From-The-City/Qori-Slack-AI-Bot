@@ -563,7 +563,7 @@ const handleSessionNotesSubmission = async ({ ack, body, view, client }: SlackVi
       };
 
       const scrubResult = scrubTranscript(rawContent, scrubCtx);
-      console.log(`[PII] Scrubbing complete: ${scrubResult.stats.participantName + scrubResult.stats.moderatorName + scrubResult.stats.speakerLabels + scrubResult.stats.phoneNumbers + scrubResult.stats.emailAddresses} items scrubbed`);
+      console.log(`[PII] Scrub pass: ${scrubResult.stats.participantName + scrubResult.stats.moderatorName + scrubResult.stats.speakerLabels + scrubResult.stats.phoneNumbers + scrubResult.stats.emailAddresses} items replaced`);
       // NOTE: Do NOT log the actual content or names
 
       // ── Build scrubbed transcript content with PII marker ──
@@ -650,6 +650,7 @@ ${scrubResult.content}`;
           throw new Error('DM post returned no ts/channel');
         }
         dmResult = { channel: postResult.channel, ts: postResult.ts };
+        console.log(`[PII-SEQ] 1/4 DM posted: channel=${dmResult.channel} ts=${dmResult.ts}`);
       } catch (dmErr) {
         // DM failed — ABORT. Nothing enters git. No orphan.
         const dmMessage = dmErr instanceof Error ? dmErr.message : String(dmErr);
@@ -682,9 +683,11 @@ ${scrubResult.content}`;
         text: `PII Review: ${templateData.study_name} - ${templateData.participant_id}`,
         blocks: finalDmBlocks,
       });
+      console.log(`[PII-SEQ] 2/4 DM button metadata attached`);
 
       // ── STEP 2: Commit quarantine file (permanent) ──
       // DM is already posted. If this fails, update DM to failure state.
+      console.log(`[PII-SEQ] 3/4 quarantine commit attempted`);
       try {
         await createOrUpdateFileOnGitHub(quarantinePath, scrubbedTranscriptContent);
         console.log(`[PII] Transcript saved to quarantine: ${quarantinePath}`);
@@ -699,6 +702,7 @@ ${scrubResult.content}`;
           text: 'Transcript could not be saved to quarantine.',
           blocks: failureBlocks,
         });
+        console.log(`[PII-SEQ] 4/4 DM updated to failure state`);
         return;
       }
 
