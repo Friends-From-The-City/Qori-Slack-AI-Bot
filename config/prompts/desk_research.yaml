@@ -245,6 +245,7 @@ ai_generation_tasks:
 
   # Sources
   - task_id: "sources"
+    model: "claude-haiku-4-5-20251001"
     prompt: |
       Create a professional reference list for the desk research.
 
@@ -423,6 +424,7 @@ emits:
   - key: discovered_barriers
     pool: true
     pool_strategy: append
+    extraction_model: sonnet
     schema:
       type: array
       items:

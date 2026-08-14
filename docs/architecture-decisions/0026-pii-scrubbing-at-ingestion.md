@@ -101,7 +101,13 @@ Transcripts currently use a **git quarantine path** (§2.5): the scrubbed-but-no
 
 This residual is **bounded**: the repository is private with limited collaborators, and the content is already auto-scrubbed (structured PII removed), so the exposure is incidental PII in scrubbed test transcripts, readable only by authorized collaborators via history.
 
-**Planned closure:** move transcript quarantine off git (mirroring the manual-notes database approach) and serve the full text for review via a non-git, access-controlled mechanism, so git receives transcripts only on approval. This work is to be built deliberately, with explicit security treatment of any endpoint that serves unreviewed content (session-bound rather than bearer access, no logging of access URLs, no-store caching, HTTPS-only). *(Tracked separately as "transcript option 2.")*
+**Planned closure (Option 2):** move transcript quarantine off git (mirroring the manual-notes database approach) and serve the full text for review via a non-git, access-controlled mechanism, so git receives transcripts only on approval. This work is to be built deliberately, with explicit security treatment of any endpoint that serves unreviewed content (session-bound rather than bearer access, no logging of access URLs, no-store caching, HTTPS-only).
+
+**Decision (2026-08-05):** Option 2 ships before the first study with external participants; internal studies proceed on the current bounded residual.
+
+**Blocking dependency (2026-08-05):** The rescrub loop currently writes each iteration as a new quarantine commit, so over-redaction from the rescrub is recoverable via repo history. When Option 2 moves quarantine off git, that recovery path disappears and over-redaction becomes irreversible. **Option 2 must ship WITH a preview-before-commit step in the rescrub loop** — reviewer sees per-term match counts and confirms before the write. This is a blocking dependency, not a backlog item.
+
+**Rejection disposition (2026-08-06):** On rejection, the quarantine file is deleted from the working tree. Git history retains the quarantine version permanently — this is the accepted §6 residual, not a clean removal. The deletion removes the file from the current tree so it does not accumulate; the git history retention is bounded by the same collaborator access list as all other quarantine commits. Disposition audit row records the rejection (actor, timestamp, target, note_length).
 
 ### 6.1 Path bug found and fixed during verification
 

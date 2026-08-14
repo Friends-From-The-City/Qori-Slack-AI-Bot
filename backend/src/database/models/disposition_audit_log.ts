@@ -21,7 +21,10 @@ export type AuditAction =
   | 'export_participant'
   | 'change_stakeholder'
   | 'deletion_denied'
-  | 'deletion_error';
+  | 'deletion_error'
+  | 'approve_transcript'
+  | 'reject_transcript'
+  | 'rescrub_transcript';
 
 export type AuditOutcome = 'success' | 'denied' | 'error';
 

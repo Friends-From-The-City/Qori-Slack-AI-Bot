@@ -54,6 +54,7 @@ emits:
   - key: survey_themes
     pool: true
     pool_strategy: append
+    extraction_model: sonnet
     schema:
       type: array
       items:
@@ -72,6 +73,7 @@ emits:
   - key: discovered_barriers
     pool: true
     pool_strategy: append
+    extraction_model: sonnet
     schema:
       type: array
       items:

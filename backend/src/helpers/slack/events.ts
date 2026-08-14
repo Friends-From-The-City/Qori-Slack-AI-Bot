@@ -73,7 +73,7 @@ import { handleParticipantOutreachSubmit, handleInitialRecruitmentSubmit, handle
 import { handleAddObserverSubmission, handleSelfJoinObserver, handleSelfJoinSubmission } from './commands/addObserverHandler';
 
 // Session notes
-import { handleTabManual, handleTabUpload, handleSessionSelectionChange, handleSessionNotesSubmission, handleTranscriptReviewApprove, handleManualNotesApprove, handleManualNotesReject } from './commands/sessionNotesHandler';
+import { handleTabManual, handleTabUpload, handleSessionSelectionChange, handleSessionNotesSubmission, handleTranscriptRescrubButton, handleTranscriptApproveButton, handleTranscriptRejectButton, handleTranscriptRescrubSubmit, handleTranscriptReviewApprove, handleTranscriptRejectSubmit, handleManualNotesApprove, handleManualNotesReject } from './commands/sessionNotesHandler';
 
 // Analysis
 import { analyzeNotesHandler, handleAnalyzeNotesSubmission, handleStudySelectionChange as handleAnalyzeNotesStudyChange, handleSessionSelectionChange as handleAnalyzeNotesSessionChange } from './commands/analyzeNotesHandler';
@@ -590,7 +590,13 @@ slackApp.action('tab_manual', handleTabManual);
 slackApp.action('tab_upload', handleTabUpload);
 slackApp.action('session_select_change', handleSessionSelectionChange);
 slackApp.view('session_notes_submit', handleSessionNotesSubmission);
-slackApp.view('transcript_review_approve', handleTranscriptReviewApprove);
+// Transcript review — DM-based surface with three sub-modals
+slackApp.action('transcript_rescrub', handleTranscriptRescrubButton);
+slackApp.action('transcript_approve', handleTranscriptApproveButton);
+slackApp.action('transcript_reject', handleTranscriptRejectButton);
+slackApp.view('transcript_rescrub_submit', handleTranscriptRescrubSubmit);
+slackApp.view('transcript_approve_submit', handleTranscriptReviewApprove);
+slackApp.view('transcript_reject_submit', handleTranscriptRejectSubmit);
 slackApp.action('manual_notes_approve', handleManualNotesApprove);
 slackApp.action('manual_notes_reject', handleManualNotesReject);
 

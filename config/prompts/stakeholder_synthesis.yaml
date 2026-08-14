@@ -78,6 +78,7 @@ emits:
   - key: stakeholder_priorities
     pool: false
     pool_strategy: replace
+    extraction_model: sonnet
     schema:
       type: array
       items:
@@ -87,6 +88,7 @@ emits:
   - key: alignment_gaps
     pool: false
     pool_strategy: replace
+    extraction_model: sonnet
     schema:
       type: array
       items:

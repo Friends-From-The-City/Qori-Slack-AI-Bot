@@ -181,6 +181,7 @@ ai_generation_tasks:
   # rendering. Study slugs like "va-mobile-nav-q3" need creative humanization.
   # This is NOT license to use LLM tasks for other computed values without scrutiny.
   - task_id: "descriptive_title"
+    model: "claude-haiku-4-5-20251001"
     prompt: |
       Convert this study slug into a short, descriptive title:
       Study slug: {{selected_study}}
@@ -406,6 +407,7 @@ ai_generation_tasks:
       Schema: [{"risk": "string", "source": "string", "mitigation": "string"}]
 
   - task_id: "approval_items"
+    model: "claude-haiku-4-5-20251001"
     prompt: |
       Generate 4 approval checkboxes for research brief about {{selected_study}}:
       - [ ] Stakeholder approves scope and method
