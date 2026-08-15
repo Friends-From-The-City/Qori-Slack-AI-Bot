@@ -70,6 +70,35 @@ Survey constructs use `derivation_type: 'deterministic'` and `status: 'accepted'
 
 No evidence constructs are projected into study_variables. `sample_demographics` is NOT auto-projected because `total_responses` alone is not demographic information — projection requires researcher-confirmed genuinely demographic fields matching the cascade schema semantics. The LLM may still extract cascade variables from rendered prose (existing behavior).
 
+## Ordinal Presentation Follows Measurement Order
+
+Ordinal distributions and cross-tab axes render categories in researcher-confirmed measurement order, NOT sorted by frequency or alphabetically. Nominal categories use count-descending with alphabetical tiebreak.
+
+## Declared Respondent Identifiers Are Provenance-Bearing
+
+When a researcher-confirmed ID field exists and values are safe to display, the declared respondent identifier (e.g., T001) is preserved as the display label in evidence quotes. Qori does not silently replace source IDs with aliases (e.g., R001). If an ID field has empty values for some rows, those rows get generated labels.
+
+## Preliminary Qualitative Interpretation Cannot Imply Prevalence
+
+Soft prevalence language ("several respondents," "a recurring concern," "some entries," "frequently," "commonly") is prohibited in Slice 1 prompt output. Preferred: "Open-text entries describe..." / "One observed issue involves..." / "An illustrative account describes..."
+
+Qualitative prevalence becomes available only after Slice 2: versioned codebook → candidate coding → researcher adjudication → accepted respondent-code membership → deterministic aggregation.
+
+## Emit Contract Aligned with v9 Authority Model
+
+Legacy survey emits audited against v9 authority model:
+
+| Variable | Decision | Rationale |
+|----------|----------|-----------|
+| survey_themes | REMOVED | Preliminary observations ≠ accepted themes |
+| discovered_metrics | REMOVED | Deterministic metrics stored as evidence constructs |
+| sample_demographics | REMOVED | No confirmed demographic fields in Slice 1 |
+| survey_findings | KEPT | Model-derived candidate findings (no new numbers) |
+| discovered_barriers | KEPT | Interpretive operation with tightened extraction |
+| knowledge_gaps | KEPT | Identifying evidence gaps is approved interpretive work |
+
+All existing downstream consumers (stakeholder_synthesis, research_brief) use optional/conditional consumption with Handlebars `{{#if}}` guards. Absence is tolerated.
+
 ## Qualitative Coding Deferred to Slice 2
 
 No codebook generation, model coding, theme/category frequency from open-text, coding audit trail, or coded cross-tabs. Open-text content is passed to the LLM for qualitative interpretation only.
