@@ -46,6 +46,7 @@ import {
   stagePendingCsv,
   getPendingCsv,
   deletePendingCsv,
+  formatComputedFacts,
 } from '../../survey';
 import {
   buildSchemaReviewModal,
@@ -351,28 +352,23 @@ export async function handleSurveySchemaConfirmation(
   args: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs,
 ): Promise<void> {
   const { ack, view, body, client } = args;
-  await ack();
 
   const meta: SchemaReviewMeta = JSON.parse(view.private_metadata || '{}');
   const userId = body.user.id;
 
-  // Load source for Redis key
-  const source = await EvidenceSourceModel.findByPk(meta.evidenceSourceId);
-  if (!source) {
-    await client.chat.postMessage({
-      channel: userId,
-      text: '❌ Survey source not found. Please re-upload via `/qori-discover`.',
-    });
-    return;
-  }
+  // ── VALIDATE BEFORE ACK ──────────────────────────────────────
+  // Ordinal order validation must block submission via Slack's
+  // response_action: 'errors' mechanism. Once ack() is called with
+  // no args, the modal closes and errors cannot be shown inline.
 
-  // Load field schemas
+  // Load field schemas (fast DB query, well within 3s ack window)
   const allFieldSchemas = await SurveyFieldSchemaModel.findAll({
     where: { evidence_source_id: meta.evidenceSourceId },
     order: [['id', 'ASC']],
   });
 
   if (allFieldSchemas.length === 0) {
+    await ack();
     await client.chat.postMessage({
       channel: userId,
       text: '❌ Survey schema expired. Please re-upload via `/qori-discover`.',
@@ -380,9 +376,22 @@ export async function handleSurveySchemaConfirmation(
     return;
   }
 
-  // Read CSV from Redis to get field values for ordinal order validation
+  // Build field values map from stored schema metadata for ordinal validation.
+  // Use the unique values stored as sampleValues or infer from schema rows.
+  // For full validation, we need the actual CSV values — load from Redis.
+  const source = await EvidenceSourceModel.findByPk(meta.evidenceSourceId);
+  if (!source) {
+    await ack();
+    await client.chat.postMessage({
+      channel: userId,
+      text: '❌ Survey source not found. Please re-upload via `/qori-discover`.',
+    });
+    return;
+  }
+
   const csvContent = await getPendingCsv(meta.projectId, source.public_id, userId);
   if (!csvContent) {
+    await ack();
     await client.chat.postMessage({
       channel: userId,
       text: '❌ Survey data has expired (2-hour staging window). Please re-upload via `/qori-discover`.',
@@ -394,6 +403,7 @@ export async function handleSurveySchemaConfirmation(
   try {
     survey = parseCsvBuffer(csvContent, 'staged-csv');
   } catch (err) {
+    await ack();
     const message = err instanceof Error ? err.message : String(err);
     await client.chat.postMessage({
       channel: userId,
@@ -428,7 +438,7 @@ export async function handleSurveySchemaConfirmation(
     allFieldValues.set(s.field_name, [...new Set(vals)]);
   }
 
-  // Parse confirmed roles from this page
+  // Validate ordinal orders BEFORE ack — blocks submission on failure
   let pageResults;
   try {
     pageResults = parseSchemaReviewValues(
@@ -438,14 +448,21 @@ export async function handleSurveySchemaConfirmation(
     );
   } catch (err) {
     if (err instanceof OrdinalOrderValidationError) {
-      await client.chat.postMessage({
-        channel: userId,
-        text: `❌ ${err.message}`,
+      // Block submission with inline Slack error on the ordinal order field
+      await ack({
+        response_action: 'errors',
+        errors: {
+          [`field_order_${err.fieldName}`]: err.message,
+        },
       });
       return;
     }
+    await ack();
     throw err;
   }
+
+  // Validation passed — accept submission
+  await ack();
 
   // Persist this page's confirmed fields
   await sequelize.transaction(async (t) => {
@@ -644,7 +661,7 @@ async function executeSurveyAnalysis(
       document_names: [survey.sourceFilename],
       document_types: ['CSV'],
       _discovery_type: 'survey-synthesis',
-      computed_facts: computedFacts,
+      computed_facts: formatComputedFacts(computedFacts),
       open_text_content: openTextContent,
       combined_file_content: openTextContent,
     };
