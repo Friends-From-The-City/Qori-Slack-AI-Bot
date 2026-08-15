@@ -63,6 +63,29 @@ export class TemplateContractError extends Error {
 }
 
 // ---------------------------------------------------------------------------
+// Evidence projection error
+// ---------------------------------------------------------------------------
+
+/**
+ * Thrown when an accepted evidence construct fails projection validation.
+ * Per ADR 0029: projection must fail closed — an accepted construct that
+ * cannot satisfy its projection contract throws rather than producing
+ * malformed cascade variables.
+ *
+ * Analogous to TemplateContractError for the evidence → cascade boundary.
+ */
+export class EvidenceProjectionError extends Error {
+  constructor(
+    message: string,
+    public readonly constructType?: string,
+    public readonly missingFields?: string[],
+  ) {
+    super(message);
+    this.name = 'EvidenceProjectionError';
+  }
+}
+
+// ---------------------------------------------------------------------------
 // PII redaction error
 // ---------------------------------------------------------------------------
 

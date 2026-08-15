@@ -100,6 +100,10 @@ Start with `0001` and read forward. The history is itself useful — it shows ho
 - [0025 — Admin center and federal records management](./0025-admin-center-records-management.md) — Owner-as-records-authority; disposition schedules; legal holds; retention-gated deletion; audit logging
 - [0026 — PII scrubbing at ingestion](./0026-pii-scrubbing-at-ingestion.md) — Transient-capture scrub; quarantine; review-gates-commit; no real names stored
 - [0027 — Single study per project accepted for launch (Phase 2D)](./0027-single-study-per-project-phase-2d.md) — Doubled {slug}/{slug} path is accepted artifact; multi-study deferred post-launch
+- [0028 — Deterministic research transformations occur outside generative models](./0028-deterministic-research-transformations.md) — LLMs interpret computed facts; they don't compute them
+- [0029 — Canonical evidence state is distinct from cascade projection](./0029-canonical-evidence-state-and-cascade-projection.md) — Authoritative evidence persists independently of study_variables consumer shapes
+- [0030 — Stable database IDs and typed relational lineage are authoritative evidence identity](./0030-evidence-lineage-identity.md) — DB IDs are identity; document anchors are presentation
+- [0031 — Progressive modal contracts](./0031-progressive-modal-contracts.md) — CONSUMES/ASKS/COMMITS/CONTROL/UPLOADS/DERIVES vocabulary applied progressively
 
 ### Lessons (informal ADRs from failure modes)
 
