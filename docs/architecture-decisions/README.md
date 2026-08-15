@@ -104,6 +104,7 @@ Start with `0001` and read forward. The history is itself useful — it shows ho
 - [0029 — Canonical evidence state is distinct from cascade projection](./0029-canonical-evidence-state-and-cascade-projection.md) — Authoritative evidence persists independently of study_variables consumer shapes
 - [0030 — Stable database IDs and typed relational lineage are authoritative evidence identity](./0030-evidence-lineage-identity.md) — DB IDs are identity; document anchors are presentation
 - [0031 — Progressive modal contracts](./0031-progressive-modal-contracts.md) — CONSUMES/ASKS/COMMITS/CONTROL/UPLOADS/DERIVES vocabulary applied progressively
+- [0032 — Versioned researcher-adjudicated qualitative coding](./0032-versioned-qualitative-coding.md) — Governed qualitative evidence; privacy-gated model access; immutable versioned codebooks
 
 ### Lessons (informal ADRs from failure modes)
 
