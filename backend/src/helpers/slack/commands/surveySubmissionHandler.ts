@@ -640,6 +640,30 @@ async function executeSurveyAnalysis(
       }
     });
 
+    // Build provenance metadata from actual execution state
+    const evidenceSource = await EvidenceSourceModel.findByPk(evidenceSourceId);
+    const schemaRows = await SurveyFieldSchemaModel.findAll({
+      where: { evidence_source_id: evidenceSourceId, review_status: 'confirmed' },
+      order: [['id', 'ASC']],
+    });
+    const firstReviewed = schemaRows.find((s: SurveyFieldSchema) => s.reviewed_by);
+    const ordinalFields = confirmedFields.filter(f => f.confirmedRole === 'ordinal' && f.orderMetadata);
+    const provenance = {
+      source_public_id: evidenceSource?.public_id ?? 'unknown',
+      source_filename: survey.sourceFilename,
+      reviewed_by: (firstReviewed as SurveyFieldSchema | undefined)?.reviewed_by ?? 'unknown',
+      reviewed_at: (firstReviewed as SurveyFieldSchema | undefined)?.reviewed_at
+        ? new Date((firstReviewed as SurveyFieldSchema).reviewed_at!).toISOString()
+        : 'unknown',
+      field_role_summary: confirmedFields.map(f =>
+        `${f.fieldName} (${f.confirmedRole}${f.isDemographic ? ', demographic' : ''})`
+      ).join(', '),
+      ordinal_orders: ordinalFields.map(f =>
+        `${f.fieldName}: ${f.orderMetadata!.join(' → ')}`
+      ).join(' | ') || 'No ordinal fields confirmed',
+      model_used: process.env.ANTHROPIC_MODEL_NAME || 'claude-sonnet-4-6',
+    };
+
     // Template rendering
     const project = await getProjectById(ctx.projectId);
     const projectProblemStatement = project?.problem_statement || null;
@@ -661,9 +685,10 @@ async function executeSurveyAnalysis(
       document_names: [survey.sourceFilename],
       document_types: ['CSV'],
       _discovery_type: 'survey-synthesis',
-      computed_facts: formatComputedFacts(computedFacts),
+      computed_facts: formatComputedFacts(computedFacts, confirmedFields),
       open_text_content: openTextContent,
       combined_file_content: openTextContent,
+      provenance,
     };
 
     const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, 'survey_synthesis.yaml');

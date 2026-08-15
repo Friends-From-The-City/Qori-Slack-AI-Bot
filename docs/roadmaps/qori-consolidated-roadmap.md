@@ -12,6 +12,7 @@ Last updated: 2026-08-15
 | Survey artifact v9 (evidence-first presentation) | CORRECTION PR / AWAITING DEV VERIFICATION | |
 | Active Project Context Visibility (UX) | ROADMAP — not implemented | |
 | Schema Review UX improvements (plain-language labels, help cues) | ROADMAP — not implemented | |
+| Legacy cascade → evidence-layer acceptance migration | ROADMAP — progressive per vertical slice | |
 | XLS/XLSX survey ingestion | DISABLED until proper ingestion exists | |
 | `/qori-ask` — evidence-backed research queries | NOT BUILT; evidence foundation intended to support it later | |
 | Staleness detection | NOT BUILT; deferred until evidence graph is populated | |

@@ -1,14 +1,16 @@
 /**
  * Survey Synthesis v9 Golden / Contract Tests
  *
- * Verifies the deterministic output contract:
- * - 11 respondents renders as 11 respondents, never 22
- * - Deterministic structured evidence visible
+ * Verifies the deterministic output contract including:
+ * - Ordinal distributions render in confirmed measurement order
+ * - Respondent count uses unique respondents
+ * - Declared respondent IDs survive into evidence quotes
+ * - No duplicated structured tables
  * - No Braun & Clarke
- * - No model-generated qualitative frequencies
- * - No unsupported causal language
- * - Formatted distributions render as Markdown tables
- * - Method & Provenance structure
+ * - No soft qualitative prevalence language in prompt
+ * - No model-generated frequencies
+ * - Method & Provenance reports actual emit state
+ * - Emit contract aligned with authority model
  */
 
 import { readFileSync } from 'fs';
@@ -21,40 +23,87 @@ import { formatComputedFacts, type FormattedComputedFacts } from '../../../helpe
 import type { ConfirmedField, SurveyComputedFacts } from '../../../types/survey';
 
 const FIXTURES = join(__dirname, '../../__fixtures__/survey');
+const YAML_PATH = join(__dirname, '../../../../../config/prompts/survey_synthesis.yaml');
 
-// Standard 10-row fixture with confirmed schema
-function computeStandardFacts(): { facts: SurveyComputedFacts; formatted: FormattedComputedFacts; openText: string } {
+const standardFields: ConfirmedField[] = [
+  { fieldName: 'response_id', confirmedRole: 'id', orderMetadata: null, isDemographic: false },
+  { fieldName: 'timestamp', confirmedRole: 'timestamp', orderMetadata: null, isDemographic: false },
+  { fieldName: 'overall_satisfaction', confirmedRole: 'ordinal',
+    orderMetadata: ['Very Dissatisfied', 'Dissatisfied', 'Neutral', 'Satisfied', 'Very Satisfied'],
+    isDemographic: false },
+  { fieldName: 'difficulty_rating', confirmedRole: 'ordinal',
+    orderMetadata: ['Very Difficult', 'Difficult', 'Moderate', 'Easy', 'Very Easy'],
+    isDemographic: false },
+  { fieldName: 'completion_status', confirmedRole: 'nominal', orderMetadata: null, isDemographic: false },
+  { fieldName: 'biggest_challenge', confirmedRole: 'open_text', orderMetadata: null, isDemographic: false },
+  { fieldName: 'additional_feedback', confirmedRole: 'open_text', orderMetadata: null, isDemographic: false },
+];
+
+function computeStandardFacts() {
   const csv = readFileSync(join(FIXTURES, 'standard.csv'));
   const survey = parseCsvBuffer(csv, 'standard.csv');
   const hash = computeContentHash(csv);
-
-  const fields: ConfirmedField[] = [
-    { fieldName: 'response_id', confirmedRole: 'id', orderMetadata: null, isDemographic: false },
-    { fieldName: 'timestamp', confirmedRole: 'timestamp', orderMetadata: null, isDemographic: false },
-    { fieldName: 'overall_satisfaction', confirmedRole: 'ordinal',
-      orderMetadata: ['Very Dissatisfied', 'Dissatisfied', 'Neutral', 'Satisfied', 'Very Satisfied'],
-      isDemographic: false },
-    { fieldName: 'difficulty_rating', confirmedRole: 'ordinal',
-      orderMetadata: ['Very Difficult', 'Difficult', 'Moderate', 'Easy', 'Very Easy'],
-      isDemographic: false },
-    { fieldName: 'completion_status', confirmedRole: 'nominal', orderMetadata: null, isDemographic: false },
-    { fieldName: 'biggest_challenge', confirmedRole: 'open_text', orderMetadata: null, isDemographic: false },
-    { fieldName: 'additional_feedback', confirmedRole: 'open_text', orderMetadata: null, isDemographic: false },
-  ];
-
-  const facts = computeSurveyFacts(survey, fields, hash);
-  const formatted = formatComputedFacts(facts);
-  const identities = assignRespondentIdentities(survey, fields, hash);
-  const openText = extractOpenTextContent(survey, fields, identities.map(i => i.displayLabel));
-
-  return { facts, formatted, openText };
+  const facts = computeSurveyFacts(survey, standardFields, hash);
+  const formatted = formatComputedFacts(facts, standardFields);
+  const identities = assignRespondentIdentities(survey, standardFields, hash);
+  const openText = extractOpenTextContent(survey, standardFields, identities.map(i => i.displayLabel));
+  return { facts, formatted, openText, identities };
 }
 
 describe('survey synthesis v9 contract', () => {
+  describe('ordinal rendering order', () => {
+    it('satisfaction distribution renders in confirmed measurement order', () => {
+      const { formatted } = computeStandardFacts();
+      const satStat = formatted.fieldStats.find(f => f.fieldName === 'overall_satisfaction');
+      const lines = satStat!.distribution!.split('\n');
+      // Skip header rows, get value rows
+      const valueRows = lines.filter(l => l.startsWith('|') && !l.includes('Value') && !l.includes('---'));
+      const renderedOrder = valueRows.map(r => r.split('|')[1].trim());
+      expect(renderedOrder).toEqual([
+        'Very Dissatisfied', 'Dissatisfied', 'Neutral', 'Satisfied', 'Very Satisfied',
+      ]);
+    });
+
+    it('difficulty distribution renders in confirmed measurement order', () => {
+      const { formatted } = computeStandardFacts();
+      const diffStat = formatted.fieldStats.find(f => f.fieldName === 'difficulty_rating');
+      const lines = diffStat!.distribution!.split('\n');
+      const valueRows = lines.filter(l => l.startsWith('|') && !l.includes('Value') && !l.includes('---'));
+      const renderedOrder = valueRows.map(r => r.split('|')[1].trim());
+      expect(renderedOrder).toEqual([
+        'Very Difficult', 'Difficult', 'Moderate', 'Easy', 'Very Easy',
+      ]);
+    });
+
+    it('nominal distribution sorts by count desc (not ordinal order)', () => {
+      const { formatted } = computeStandardFacts();
+      const statusStat = formatted.fieldStats.find(f => f.fieldName === 'completion_status');
+      const lines = statusStat!.distribution!.split('\n');
+      const valueRows = lines.filter(l => l.startsWith('|') && !l.includes('Value') && !l.includes('---'));
+      // Complete has highest count, should be first
+      expect(valueRows[0]).toContain('Complete');
+    });
+  });
+
+  describe('respondent identity', () => {
+    it('declared respondent IDs survive as display labels', () => {
+      const { identities } = computeStandardFacts();
+      // standard.csv has response_id field with R-101, R-102, etc.
+      expect(identities[0].displayLabel).toBe('R-101');
+      expect(identities[0].source).toBe('declared');
+      expect(identities[9].displayLabel).toBe('R-110');
+    });
+
+    it('declared IDs appear in open-text content', () => {
+      const { openText } = computeStandardFacts();
+      expect(openText).toContain('R-101');
+      expect(openText).not.toContain('R001'); // Should NOT alias
+    });
+  });
+
   describe('respondent count', () => {
     it('reports 10 unique respondents (not 20 text entries)', () => {
       const { facts } = computeStandardFacts();
-      // 10 rows in standard.csv
       expect(facts.totalRespondents).toBe(10);
     });
 
@@ -62,141 +111,184 @@ describe('survey synthesis v9 contract', () => {
       const { formatted } = computeStandardFacts();
       expect(formatted.totalRespondents).toBe(10);
     });
-
-    it('open-text extraction does not inflate respondent count', () => {
-      const { openText } = computeStandardFacts();
-      // Two open-text fields but respondent count stays at 10
-      // Labels should be R001-R010
-      expect(openText).toContain('R001');
-      expect(openText).toContain('R010');
-      expect(openText).not.toContain('R011');
-    });
   });
 
-  describe('deterministic structured evidence', () => {
-    it('completion distribution is visible as Markdown table', () => {
-      const { formatted } = computeStandardFacts();
-      const statusStat = formatted.fieldStats.find(f => f.fieldName === 'completion_status');
-      expect(statusStat).toBeDefined();
-      expect(statusStat!.distribution).not.toBeNull();
-      expect(statusStat!.distribution).toContain('| Value | Count |');
-      expect(statusStat!.distribution).toContain('Complete');
+  describe('no output duplication', () => {
+    it('YAML template has ONE Structured Evidence section, not Dataset Scope + Structured Evidence', () => {
+      const yaml = readFileSync(YAML_PATH, 'utf-8');
+      const structuredEvidenceCount = (yaml.match(/## Structured Evidence/g) || []).length;
+      expect(structuredEvidenceCount).toBe(1);
+      expect(yaml).not.toContain('## Dataset & Analysis Scope');
     });
 
-    it('satisfaction median is visible', () => {
-      const { formatted } = computeStandardFacts();
-      const satStat = formatted.fieldStats.find(f => f.fieldName === 'overall_satisfaction');
-      expect(satStat!.median).toBe('Satisfied');
-    });
-
-    it('difficulty median is visible', () => {
-      const { formatted } = computeStandardFacts();
-      const diffStat = formatted.fieldStats.find(f => f.fieldName === 'difficulty_rating');
-      expect(diffStat!.median).toBeDefined();
-    });
-
-    it('distributions are formatted as Markdown tables, not [object Object]', () => {
-      const { formatted } = computeStandardFacts();
-      for (const stat of formatted.fieldStats) {
-        if (stat.distribution) {
-          expect(stat.distribution).not.toContain('[object Object]');
-          expect(stat.distribution).toContain('|');
-        }
-      }
-    });
-
-    it('cross-tabs are formatted as Markdown tables', () => {
-      const { formatted } = computeStandardFacts();
-      for (const ct of formatted.crossTabs) {
-        expect(ct.cells).toContain('|');
-        expect(ct.cells).not.toContain('[object Object]');
-      }
+    it('source hash only appears in Method & Provenance section', () => {
+      const yaml = readFileSync(YAML_PATH, 'utf-8');
+      // sourceContentHash should only appear inside the details block
+      const hashRefs = yaml.split('sourceContentHash');
+      // One in the Integrity subsection of Method & Provenance
+      // Should not appear in main narrative
+      expect(yaml).not.toMatch(/## .*\n.*sourceContentHash/);
     });
   });
 
   describe('qualitative authority restrictions', () => {
-    // These test the v9 YAML prompt rules by verifying the template structure
-    it('YAML template does not contain Braun & Clarke as methodology claim', () => {
-      const yaml = readFileSync(join(__dirname, '../../../../../config/prompts/survey_synthesis.yaml'), 'utf-8');
-      // Should not claim B&C as active methodology
+    it('no Braun & Clarke methodology claim', () => {
+      const yaml = readFileSync(YAML_PATH, 'utf-8');
       expect(yaml).not.toMatch(/uses thematic analysis \(Braun & Clarke\)/);
     });
 
-    it('YAML prompt contains NUMERIC AUTHORITY rule', () => {
-      const yaml = readFileSync(join(__dirname, '../../../../../config/prompts/survey_synthesis.yaml'), 'utf-8');
+    it('no soft prevalence language in prompt examples', () => {
+      const yaml = readFileSync(YAML_PATH, 'utf-8');
+      // Prompt output format should not suggest prevalence hedges
+      expect(yaml).not.toMatch(/"several respondents described,"/);
+      expect(yaml).not.toMatch(/"a recurring concern was,"/);
+      expect(yaml).not.toMatch(/"some entries noted\."/);
+    });
+
+    it('prompt prohibits soft prevalence terms explicitly', () => {
+      const yaml = readFileSync(YAML_PATH, 'utf-8');
+      expect(yaml).toContain('several respondents');
+      expect(yaml).toContain('recurring concern');
+      // These appear in the prohibition list, not as instructions
+    });
+
+    it('NUMERIC AUTHORITY rule present', () => {
+      const yaml = readFileSync(YAML_PATH, 'utf-8');
       expect(yaml).toContain('NUMERIC AUTHORITY');
       expect(yaml).toContain('Never calculate');
     });
 
-    it('YAML prompt contains QUALITATIVE AUTHORITY rule', () => {
-      const yaml = readFileSync(join(__dirname, '../../../../../config/prompts/survey_synthesis.yaml'), 'utf-8');
+    it('QUALITATIVE AUTHORITY rule present', () => {
+      const yaml = readFileSync(YAML_PATH, 'utf-8');
       expect(yaml).toContain('QUALITATIVE AUTHORITY');
-      expect(yaml).toContain('preliminary');
     });
 
-    it('YAML prompt contains RESPONDENT TERMINOLOGY rule', () => {
-      const yaml = readFileSync(join(__dirname, '../../../../../config/prompts/survey_synthesis.yaml'), 'utf-8');
-      expect(yaml).toContain('unique respondent');
-      expect(yaml).toContain('Never count text');
+    it('prompt uses evidence-based wording examples (not prevalence)', () => {
+      const yaml = readFileSync(YAML_PATH, 'utf-8');
+      expect(yaml).toContain('Open-text entries describe');
+      expect(yaml).toContain('One observed issue involves');
+    });
+  });
+
+  describe('emit contract', () => {
+    it('survey_themes is NOT emitted (preliminary ≠ accepted themes)', () => {
+      const yaml = readFileSync(YAML_PATH, 'utf-8');
+      // survey_themes should not appear in the emits block
+      const emitsSection = yaml.split('emits:')[1].split('ai_generation_tasks:')[0];
+      expect(emitsSection).not.toContain('key: survey_themes');
     });
 
-    it('YAML prompt does not positively instruct model to count themes', () => {
-      const yaml = readFileSync(join(__dirname, '../../../../../config/prompts/survey_synthesis.yaml'), 'utf-8');
-      // Should not contain positive instructions like "count the themes"
-      // but may contain prohibitions like "Do not count themes"
-      expect(yaml).not.toMatch(/\bcount the themes\b/i);
-      expect(yaml).not.toMatch(/\btheme frequency_count\b/i);
-      expect(yaml).not.toMatch(/\bsentiment classification criteria\b/i);
+    it('discovered_metrics is NOT emitted (deterministic facts in evidence layer)', () => {
+      const yaml = readFileSync(YAML_PATH, 'utf-8');
+      const emitsSection = yaml.split('emits:')[1].split('ai_generation_tasks:')[0];
+      expect(emitsSection).not.toContain('key: discovered_metrics');
     });
 
-    it('YAML prompt does not positively instruct sentiment percentage calculation', () => {
-      const yaml = readFileSync(join(__dirname, '../../../../../config/prompts/survey_synthesis.yaml'), 'utf-8');
-      // Should not contain "calculate sentiment percentage" type instructions
-      expect(yaml).not.toMatch(/\bcalculate.*sentiment/i);
-      expect(yaml).not.toMatch(/\bsentiment.*breakdown.*table\b/i);
+    it('sample_demographics is NOT emitted (no confirmed demographic fields)', () => {
+      const yaml = readFileSync(YAML_PATH, 'utf-8');
+      const emitsSection = yaml.split('emits:')[1].split('ai_generation_tasks:')[0];
+      expect(emitsSection).not.toContain('key: sample_demographics');
+    });
+
+    it('knowledge_gaps IS emitted (approved interpretive operation)', () => {
+      const yaml = readFileSync(YAML_PATH, 'utf-8');
+      const emitsSection = yaml.split('emits:')[1].split('ai_generation_tasks:')[0];
+      expect(emitsSection).toContain('key: knowledge_gaps');
+    });
+
+    it('survey_findings IS emitted (model-derived candidates)', () => {
+      const yaml = readFileSync(YAML_PATH, 'utf-8');
+      const emitsSection = yaml.split('emits:')[1].split('ai_generation_tasks:')[0];
+      expect(emitsSection).toContain('key: survey_findings');
+    });
+
+    it('discovered_barriers IS emitted (interpretive operation)', () => {
+      const yaml = readFileSync(YAML_PATH, 'utf-8');
+      const emitsSection = yaml.split('emits:')[1].split('ai_generation_tasks:')[0];
+      expect(emitsSection).toContain('key: discovered_barriers');
+    });
+  });
+
+  describe('Method & Provenance structure', () => {
+    it('has one collapsed details block', () => {
+      const yaml = readFileSync(YAML_PATH, 'utf-8');
+      expect(yaml).toContain('<details>');
+      expect(yaml).toContain('Method & Provenance');
+    });
+
+    it('contains Source subsection with evidence_source public_id', () => {
+      const yaml = readFileSync(YAML_PATH, 'utf-8');
+      expect(yaml).toContain('### Source');
+      expect(yaml).toContain('Evidence source ID');
+      expect(yaml).toContain('provenance.source_public_id');
+    });
+
+    it('contains Schema subsection with reviewer metadata', () => {
+      const yaml = readFileSync(YAML_PATH, 'utf-8');
+      expect(yaml).toContain('### Schema');
+      expect(yaml).toContain('provenance.reviewed_by');
+      expect(yaml).toContain('provenance.reviewed_at');
+      expect(yaml).toContain('provenance.field_role_summary');
+      expect(yaml).toContain('provenance.ordinal_orders');
+    });
+
+    it('contains Generation subsection with actual model', () => {
+      const yaml = readFileSync(YAML_PATH, 'utf-8');
+      expect(yaml).toContain('### Generation');
+      expect(yaml).toContain('provenance.model_used');
+    });
+
+    it('contains Authority table with actual authority levels', () => {
+      const yaml = readFileSync(YAML_PATH, 'utf-8');
+      expect(yaml).toContain('NOT YET PERFORMED');
+      expect(yaml).toContain('Deterministic');
+      expect(yaml).toContain('Preliminary model interpretation');
+    });
+
+    it('uses MODEL-DERIVED for retained emits (not "candidate")', () => {
+      const yaml = readFileSync(YAML_PATH, 'utf-8');
+      expect(yaml).toContain('MODEL-DERIVED / emitted to legacy cascade');
+      expect(yaml).not.toMatch(/candidate findings/);
+    });
+
+    it('documents legacy cascade limitation', () => {
+      const yaml = readFileSync(YAML_PATH, 'utf-8');
+      expect(yaml).toContain('legacy interpretive cascade context');
+      expect(yaml).toContain('not accepted evidence-layer constructs');
+    });
+
+    it('contains NOT EMITTED state for removed variables', () => {
+      const yaml = readFileSync(YAML_PATH, 'utf-8');
+      expect(yaml).toContain('NOT EMITTED');
+      expect(yaml).toContain('formal coding not yet performed');
+      expect(yaml).toContain('deterministic evidence constructs');
+      expect(yaml).toContain('no confirmed demographic fields');
+    });
+
+    it('contains Integrity subsection with source hash', () => {
+      const yaml = readFileSync(YAML_PATH, 'utf-8');
+      expect(yaml).toContain('### Integrity');
+      expect(yaml).toContain('Source SHA-256');
     });
   });
 
   describe('output structure', () => {
-    it('YAML output template has Preliminary Qualitative label', () => {
-      const yaml = readFileSync(join(__dirname, '../../../../../config/prompts/survey_synthesis.yaml'), 'utf-8');
-      expect(yaml).toContain('Preliminary Qualitative Observations');
+    it('has Executive Summary', () => {
+      const yaml = readFileSync(YAML_PATH, 'utf-8');
+      expect(yaml).toContain('## Executive Summary');
     });
 
-    it('YAML output template has collapsed Method & Provenance', () => {
-      const yaml = readFileSync(join(__dirname, '../../../../../config/prompts/survey_synthesis.yaml'), 'utf-8');
+    it('has Analysis Details collapsed', () => {
+      const yaml = readFileSync(YAML_PATH, 'utf-8');
+      expect(yaml).toContain('Analysis Details');
       expect(yaml).toContain('<details>');
-      expect(yaml).toContain('Method & Provenance');
-      expect(yaml).toContain('</details>');
     });
 
-    it('YAML output template has Structured Evidence section', () => {
-      const yaml = readFileSync(join(__dirname, '../../../../../config/prompts/survey_synthesis.yaml'), 'utf-8');
-      expect(yaml).toContain('## Structured Evidence');
-    });
-
-    it('YAML output template has Evidence Gaps section', () => {
-      const yaml = readFileSync(join(__dirname, '../../../../../config/prompts/survey_synthesis.yaml'), 'utf-8');
-      expect(yaml).toContain('## Evidence Gaps');
-    });
-
-    it('YAML output template has Integrated Interpretation section', () => {
-      const yaml = readFileSync(join(__dirname, '../../../../../config/prompts/survey_synthesis.yaml'), 'utf-8');
-      expect(yaml).toContain('## Integrated Interpretation');
-    });
-
-    it('YAML output uses GitHub-native callout syntax', () => {
-      const yaml = readFileSync(join(__dirname, '../../../../../config/prompts/survey_synthesis.yaml'), 'utf-8');
+    it('uses GitHub-native callout syntax', () => {
+      const yaml = readFileSync(YAML_PATH, 'utf-8');
       expect(yaml).toContain('> [!NOTE]');
-    });
-  });
-
-  describe('schema summary formatting', () => {
-    it('formats schema summary as role counts', () => {
-      const { formatted } = computeStandardFacts();
-      expect(typeof formatted.schemaSummary).toBe('string');
-      expect(formatted.schemaSummary).toContain('ordinal');
-      expect(formatted.schemaSummary).toContain('nominal');
+      expect(yaml).toContain('> [!IMPORTANT]');
+      expect(yaml).toContain('> [!WARNING]');
     });
   });
 

@@ -72,7 +72,9 @@ function assignFromDeclaredId(
     const declaredId = row.values[idFieldName]?.trim() || '';
     return {
       canonicalKey: declaredId || generateKey(sourceContentHashPlaceholder, row.rowIndex),
-      displayLabel: `R${String(i + 1).padStart(3, '0')}`,
+      // When a declared ID exists and is safe to display, preserve it as the
+      // display label. Do not silently replace source IDs with aliases.
+      displayLabel: declaredId || `R${String(i + 1).padStart(3, '0')}`,
       source: declaredId ? 'declared' as const : 'generated' as const,
       rowIndex: row.rowIndex,
     };
