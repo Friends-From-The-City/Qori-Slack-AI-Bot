@@ -9,6 +9,9 @@ Last updated: 2026-08-15
 | Evidence foundation (tables, services, ADRs 0028-0031) | BUILT + VERIFIED IN DEV | PR #278 |
 | Survey deterministic ingestion (CSV parse, schema review, stats, evidence) | IMPLEMENTED IN PR #279 / AWAITING DEV VERIFICATION | PR #279 |
 | Survey qualitative coding + adjudication (codebooks, theme frequency, coding audit) | NOT BUILT / NEXT SURVEY SLICE | |
+| Survey artifact v9 (evidence-first presentation) | CORRECTION PR / AWAITING DEV VERIFICATION | |
+| Active Project Context Visibility (UX) | ROADMAP — not implemented | |
+| Schema Review UX improvements (plain-language labels, help cues) | ROADMAP — not implemented | |
 | XLS/XLSX survey ingestion | DISABLED until proper ingestion exists | |
 | `/qori-ask` — evidence-backed research queries | NOT BUILT; evidence foundation intended to support it later | |
 | Staleness detection | NOT BUILT; deferred until evidence graph is populated | |
