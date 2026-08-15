@@ -25,6 +25,12 @@ input_type: slack_modal_form
 input_processing: form_based
 discovery_scope: true
 
+# Survey v9.2 renders generation/model/provenance inside its own
+# Method & Provenance details block. The shared footer is suppressed
+# to avoid duplication and document-hierarchy disruption.
+document:
+  append_document_information: false
+
 # ═══════════════════════════════════════════════════════════
 # INPUTS
 # ═══════════════════════════════════════════════════════════
@@ -142,9 +148,15 @@ ai_generation_tasks:
 
       You must NOT:
         - Assign prevalence ("most respondents," "X of N," "60%")
-        - Use soft prevalence language ("several respondents,"
-          "a recurring concern," "some entries," "frequently,"
-          "commonly," "a small number," "predominant")
+        - Use ANY soft prevalence language, including but not limited to:
+          "some respondents," "some participants," "some entries,"
+          "several respondents," "several participants,"
+          "many respondents," "many participants,"
+          "a recurring concern," "recurring pattern,"
+          "with some respondents noting,"
+          "commonly," "frequently," "often,"
+          "a small number," "a majority," "most respondents,"
+          "predominant," "widespread"
         - Claim themes (no "Theme 1," no "three themes emerged")
         - Perform sentiment classification or distribution
         - Produce frequency tables, sentiment tables, or coded counts
@@ -321,7 +333,7 @@ output_template: |
 
   {{#if computed_facts}}
   > [!IMPORTANT]
-  > **{{computed_facts.totalRespondents}} unique respondents** analyzed.{{#each computed_facts.fieldStats}}{{#if this.median}} {{this.displayName}} median: **{{this.median}}**.{{/if}}{{/each}}
+  > **{{computed_facts.totalRespondents}} unique respondents** analyzed.{{#each computed_facts.fieldStats}}{{#if this.median}} {{this.displayName}} median: **{{this.median}}**.{{/if}}{{/each}}{{#each computed_facts.fieldStats}}{{#if this.distribution}}{{/if}}{{/each}}
 
   > [!WARNING]
   > This survey is descriptive. Formal qualitative coding has not been performed. Empty cells are reported as missing without further distinction.
@@ -346,34 +358,6 @@ output_template: |
   {{#if question_focus}}
   **Focus questions:** {{question_focus}}
   {{/if}}
-
-  ---
-
-  ## Preliminary Qualitative Observations
-
-  {{ai_generated.qualitative_observations}}
-
-  ---
-
-  ## Integrated Interpretation
-
-  {{#if computed_facts}}
-  The structured evidence (collapsed below) establishes the distributional baseline from {{computed_facts.totalRespondents}} unique respondents. The qualitative observations above offer preliminary interpretation of open-text entries. Readers should:
-
-  - **Look for convergence** — where structured distributions and qualitative observations point the same direction
-  - **Look for complementarity** — where open-text entries explain patterns visible in the distributions
-  - **Look for dissonance** — where qualitative observations seem to contradict distributional patterns (these warrant investigation, not resolution)
-
-  No new arithmetic is introduced in this section. No causal claims are made.
-  {{else}}
-  Without computed facts, integration is limited to the qualitative observations above.
-  {{/if}}
-
-  ---
-
-  ## Evidence Gaps
-
-  {{ai_generated.evidence_gaps}}
 
   ---
 
@@ -410,6 +394,39 @@ output_template: |
 
   </details>
 
+  {{/if}}
+
+  ---
+
+  ## Preliminary Qualitative Observations
+
+  {{ai_generated.qualitative_observations}}
+
+  ---
+
+  ## Integrated Interpretation
+
+  {{#if computed_facts}}
+  The structured evidence above establishes the distributional baseline from {{computed_facts.totalRespondents}} unique respondents. The qualitative observations offer preliminary interpretation of open-text entries. Readers should:
+
+  - **Look for convergence** — where structured distributions and qualitative observations point the same direction
+  - **Look for complementarity** — where open-text entries explain patterns visible in the distributions
+  - **Look for dissonance** — where qualitative observations seem to contradict distributional patterns (these warrant investigation, not resolution)
+
+  No new arithmetic is introduced in this section. No causal claims are made.
+  {{else}}
+  Without computed facts, integration is limited to the qualitative observations above.
+  {{/if}}
+
+  ---
+
+  ## Evidence Gaps
+
+  {{ai_generated.evidence_gaps}}
+
+  ---
+
+  {{#if computed_facts}}
   <details>
   <summary><strong>Analysis Details</strong></summary>
 
