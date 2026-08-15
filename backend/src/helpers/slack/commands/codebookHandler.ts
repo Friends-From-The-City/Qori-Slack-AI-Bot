@@ -3,6 +3,9 @@
  *
  * Plain-language UX: "Review Qori's proposed response categories"
  * Internally: versioned codebook with structured qualitative codes.
+ *
+ * Researcher actions: Accept, Edit, Remove, Add Category.
+ * Uses existing LangChain/ChatAnthropic pattern for generation.
  */
 
 import type {
@@ -27,7 +30,6 @@ import {
   CodebookImmutableError,
 } from '../../../services/survey-codebook.service';
 import { generateDraftCodes, CodebookGenerationError } from '../../survey/codebookGenerator';
-import { getAnalysisEligibleContent } from '../../../services/content-governance.service';
 import { getProjectById } from '../../../services/project.service';
 import type { SurveyQualitativeEntry } from '../../../database/models/survey_qualitative_entry';
 
@@ -56,24 +58,19 @@ export async function handleGenerateCodebook(
   });
 
   try {
-    // Get eligible entries
     const entries = await getEligibleEntries(rawMeta.evidenceSourceId);
-
-    // Get project context
     const project = await getProjectById(rawMeta.projectId);
 
-    // Generate draft codes via model
     const proposedCodes = await generateDraftCodes(
       entries,
       project?.problem_statement ?? null,
       rawMeta.questionFocus ?? null,
     );
 
-    // Persist codebook + codes
     const { codebook, codes } = await createDraftCodebook(
       rawMeta.evidenceSourceId,
       rawMeta.projectId,
-      null, // study_id — discovery is project-scoped
+      null,
       userId,
       proposedCodes,
       {
@@ -83,7 +80,6 @@ export async function handleGenerateCodebook(
       },
     );
 
-    // Open codebook review modal
     const meta: CodebookMeta = {
       evidenceSourceId: rawMeta.evidenceSourceId,
       projectId: rawMeta.projectId,
@@ -91,7 +87,7 @@ export async function handleGenerateCodebook(
       surveyName: rawMeta.surveyName ?? 'Survey',
     };
 
-    const modal = buildCodebookReviewModal(codes as SurveyCode[], entries, meta);
+    const modal = buildCodebookReviewModal(codes as SurveyCode[], meta);
 
     await client.views.open({
       trigger_id: body.trigger_id,
@@ -100,28 +96,20 @@ export async function handleGenerateCodebook(
 
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    if (err instanceof CodebookNotReadyError) {
-      await client.chat.postMessage({
-        channel: userId,
-        text: `❌ ${message}`,
-      });
-    } else if (err instanceof CodebookGenerationError) {
-      await client.chat.postMessage({
-        channel: userId,
-        text: `❌ Codebook generation error: ${message}`,
-      });
+    if (err instanceof CodebookNotReadyError || err instanceof CodebookGenerationError) {
+      await client.chat.postMessage({ channel: userId, text: `❌ ${message}` });
     } else {
       console.error('Error generating codebook:', err);
-      await client.chat.postMessage({
-        channel: userId,
-        text: `❌ Error generating response categories: ${message}`,
-      });
+      await client.chat.postMessage({ channel: userId, text: `❌ Error generating response categories: ${message}` });
     }
   }
 }
 
 /**
  * Handle codebook review modal submission.
+ *
+ * Processes: Accept/Edit/Remove per code + optional Add Category.
+ * Then accepts the codebook version.
  */
 export async function handleCodebookReviewSubmission(
   args: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs,
@@ -133,68 +121,87 @@ export async function handleCodebookReviewSubmission(
   const userId = body.user.id;
 
   if (!meta.codebookId) {
-    await client.chat.postMessage({
-      channel: userId,
-      text: '❌ Codebook not found. Please try again.',
-    });
+    await client.chat.postMessage({ channel: userId, text: '❌ Codebook not found.' });
     return;
   }
 
   const result = await getCodebookWithCodes(meta.codebookId);
   if (!result) {
-    await client.chat.postMessage({
-      channel: userId,
-      text: '❌ Codebook not found.',
-    });
+    await client.chat.postMessage({ channel: userId, text: '❌ Codebook not found.' });
     return;
   }
 
   const values = view.state.values as unknown as Record<string, Record<string, Record<string, unknown>>>;
 
-  // Process each code's review decision
-  for (const code of result.codes) {
-    const codeId = (code as unknown as { id: number }).id;
-    const decisionBlock = values[`code_decision_${codeId}`];
-    const decision = (decisionBlock?.code_action?.selected_option as { value: string } | null)?.value;
-
-    if (decision === 'accept') {
-      await updateCode(codeId, { status: 'accepted' });
-    } else if (decision === 'remove') {
-      await updateCode(codeId, { status: 'removed' });
-    }
-    // 'proposed' stays as-is if no action taken
-  }
-
-  // Accept the codebook
   try {
+    // Process each code's review decision
+    for (const code of result.codes) {
+      const codeId = (code as unknown as { id: number }).id;
+      const decisionBlock = values[`code_decision_${codeId}`];
+      const decision = (decisionBlock?.code_action?.selected_option as { value: string } | null)?.value;
+
+      if (decision === 'accept') {
+        await updateCode(codeId, { status: 'accepted' });
+      } else if (decision === 'remove') {
+        await updateCode(codeId, { status: 'removed' });
+      } else if (decision === 'edit') {
+        // Read edited fields
+        const editLabel = values[`code_edit_label_${codeId}`]?.edit_label_input?.value as string | undefined;
+        const editDef = values[`code_edit_def_${codeId}`]?.edit_def_input?.value as string | undefined;
+        const editInclude = values[`code_edit_include_${codeId}`]?.edit_include_input?.value as string | undefined;
+        const editExclude = values[`code_edit_exclude_${codeId}`]?.edit_exclude_input?.value as string | undefined;
+
+        const updates: Partial<Pick<SurveyCode, 'status' | 'label' | 'definition' | 'include_when' | 'exclude_when'>> = { status: 'accepted' };
+        if (editLabel?.trim()) updates.label = editLabel.trim();
+        if (editDef?.trim()) updates.definition = editDef.trim();
+        if (editInclude?.trim()) updates.include_when = editInclude.trim();
+        if (editExclude !== undefined) updates.exclude_when = editExclude?.trim() || null;
+
+        await updateCode(codeId, updates);
+      }
+    }
+
+    // Process "Add Category" if provided
+    const addLabelBlock = values.add_category_label;
+    const addLabel = addLabelBlock?.add_label_input?.value as string | undefined;
+    if (addLabel?.trim()) {
+      const addDef = (values.add_category_def?.add_def_input?.value as string | undefined)?.trim() ?? '';
+      const addInclude = (values.add_category_include?.add_include_input?.value as string | undefined)?.trim() ?? '';
+
+      if (addDef && addInclude) {
+        const codeKey = addLabel.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+        await addResearcherCode(meta.codebookId, {
+          code_key: codeKey,
+          label: addLabel.trim(),
+          definition: addDef,
+          include_when: addInclude,
+        });
+      }
+    }
+
+    // Accept the codebook
     await acceptCodebook(meta.codebookId, userId);
 
     await client.chat.postMessage({
       channel: userId,
-      text: `✅ *Response categories accepted.* The codebook is now the accepted analytical framework for this survey.\n\nFuture coding assignments (Slice 2B) will use these categories to classify individual responses.`,
+      text: '✅ *Response categories accepted.* This is now the accepted analytical framework for this survey.',
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    await client.chat.postMessage({
-      channel: userId,
-      text: `❌ Could not accept categories: ${message}`,
-    });
+    await client.chat.postMessage({ channel: userId, text: `❌ Could not accept categories: ${message}` });
   }
 }
 
 function buildCodebookReviewModal(
   codes: SurveyCode[],
-  entries: SurveyQualitativeEntry[],
   meta: CodebookMeta,
 ): Record<string, unknown> {
-  const entryMap = new Map(entries.map(e => [e.public_id, e]));
-
   const blocks: Record<string, unknown>[] = [
     {
       type: 'context',
       elements: [{
         type: 'mrkdwn',
-        text: `Qori grouped the open-text responses into *${codes.length} proposed categories*.\nReview these before Qori uses them for counting or synthesis.\n\nFor each category, choose *Accept* or *Remove*.`,
+        text: `Qori grouped the open-text responses into *${codes.length} proposed categories*.\nReview these before Qori uses them for counting or synthesis.\n\nFor each category: *Accept*, *Edit* (modify details), or *Remove*.`,
       }],
     },
     { type: 'divider' },
@@ -203,7 +210,6 @@ function buildCodebookReviewModal(
   for (const code of codes) {
     const codeId = (code as unknown as { id: number }).id;
 
-    // Code details
     let codeText = `*${code.label}*\n\n*What this means:* ${code.definition}\n\n*Include when:* ${code.include_when}`;
     if (code.exclude_when) {
       codeText += `\n\n*Do not include when:* ${code.exclude_when}`;
@@ -214,7 +220,7 @@ function buildCodebookReviewModal(
       text: { type: 'mrkdwn', text: codeText },
     });
 
-    // Decision
+    // Decision dropdown: Accept / Edit / Remove
     blocks.push({
       type: 'input',
       block_id: `code_decision_${codeId}`,
@@ -222,19 +228,90 @@ function buildCodebookReviewModal(
       element: {
         type: 'static_select',
         action_id: 'code_action',
-        initial_option: {
-          text: { type: 'plain_text', text: 'Accept' },
-          value: 'accept',
-        },
+        initial_option: { text: { type: 'plain_text', text: 'Accept' }, value: 'accept' },
         options: [
           { text: { type: 'plain_text', text: 'Accept' }, value: 'accept' },
+          { text: { type: 'plain_text', text: 'Edit' }, value: 'edit' },
           { text: { type: 'plain_text', text: 'Remove' }, value: 'remove' },
         ],
       },
     });
 
+    // Edit fields (optional — used only when "Edit" is selected)
+    blocks.push({
+      type: 'input',
+      block_id: `code_edit_label_${codeId}`,
+      optional: true,
+      label: { type: 'plain_text', text: 'Edit label (only if editing)' },
+      element: {
+        type: 'plain_text_input',
+        action_id: 'edit_label_input',
+        initial_value: code.label,
+      },
+    });
+
+    blocks.push({
+      type: 'input',
+      block_id: `code_edit_def_${codeId}`,
+      optional: true,
+      label: { type: 'plain_text', text: 'Edit definition (only if editing)' },
+      element: {
+        type: 'plain_text_input',
+        action_id: 'edit_def_input',
+        multiline: true,
+        initial_value: code.definition,
+      },
+    });
+
+    blocks.push({
+      type: 'input',
+      block_id: `code_edit_include_${codeId}`,
+      optional: true,
+      label: { type: 'plain_text', text: 'Edit include when (only if editing)' },
+      element: {
+        type: 'plain_text_input',
+        action_id: 'edit_include_input',
+        multiline: true,
+        initial_value: code.include_when,
+      },
+    });
+
+    blocks.push({
+      type: 'input',
+      block_id: `code_edit_exclude_${codeId}`,
+      optional: true,
+      label: { type: 'plain_text', text: 'Edit "do not include when" (only if editing)' },
+      element: {
+        type: 'plain_text_input',
+        action_id: 'edit_exclude_input',
+        multiline: true,
+        initial_value: code.exclude_when ?? '',
+      },
+    });
+
     blocks.push({ type: 'divider' });
   }
+
+  // Add Category section
+  blocks.push({
+    type: 'context',
+    elements: [{ type: 'mrkdwn', text: '*Add a category* (optional) — create your own response category.' }],
+  });
+  blocks.push({
+    type: 'input', block_id: 'add_category_label', optional: true,
+    label: { type: 'plain_text', text: 'New category label' },
+    element: { type: 'plain_text_input', action_id: 'add_label_input', placeholder: { type: 'plain_text', text: 'e.g., Technical Interruption' } },
+  });
+  blocks.push({
+    type: 'input', block_id: 'add_category_def', optional: true,
+    label: { type: 'plain_text', text: 'Definition' },
+    element: { type: 'plain_text_input', action_id: 'add_def_input', multiline: true, placeholder: { type: 'plain_text', text: 'What this category means' } },
+  });
+  blocks.push({
+    type: 'input', block_id: 'add_category_include', optional: true,
+    label: { type: 'plain_text', text: 'Include when' },
+    element: { type: 'plain_text_input', action_id: 'add_include_input', multiline: true, placeholder: { type: 'plain_text', text: 'When a response should receive this category' } },
+  });
 
   return {
     type: 'modal',

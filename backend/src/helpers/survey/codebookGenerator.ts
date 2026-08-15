@@ -1,20 +1,19 @@
 /**
  * Codebook Generator — model-based draft generation for qualitative coding.
  *
- * Generates structured JSON output proposing 3-12 response categories
- * from approved qualitative evidence. Uses mixed inductive/deductive
- * approach: research problem + focus questions inform what Qori attends
- * to, but categories may emerge directly from respondent evidence.
+ * Generates structured JSON output proposing response categories from
+ * approved qualitative evidence. Uses mixed inductive/deductive approach.
+ *
+ * Uses the existing LangChain/ChatAnthropic pattern consistent with
+ * langchain.ts and variableExtractor.ts. Provider/model identity is
+ * recorded in generation metadata.
  *
  * Rules:
+ * - Target 3-12 codes, hard max 12, no hard minimum (1-2 valid when evidence supports it)
  * - No prevalence/frequency claims
  * - No "theme/themes" terminology
- * - No invented respondent IDs
  * - Every proposed code references ≥1 valid entry public_id
- * - Model cannot mark codebook accepted
- * - Model cannot calculate counts
- *
- * All input entries must have analysis-eligible privacy status.
+ * - Invalid model output (prohibited language) → reject + bounded retry, not silent strip
  */
 
 import { ChatAnthropic } from '@langchain/anthropic';
@@ -22,6 +21,7 @@ import { getAnalysisEligibleContent } from '../../services/content-governance.se
 import type { SurveyQualitativeEntry } from '../../database/models/survey_qualitative_entry';
 
 const MAX_CODES = 12;
+const MAX_RETRIES = 1;
 
 export interface GeneratedCode {
   code_key: string;
@@ -56,7 +56,7 @@ export async function generateDraftCodes(
     throw new CodebookGenerationError('No analysis-eligible entries available for codebook generation.');
   }
 
-  // Build entry context using governance accessor
+  // Build entry context using governance accessor only
   const entryContext = entries
     .map(e => {
       const text = getAnalysisEligibleContent(e);
@@ -70,24 +70,50 @@ export async function generateDraftCodes(
 
   const prompt = buildCodebookPrompt(entryContext, researchProblem, focusQuestions, validPublicIds.size);
 
+  // Use existing LangChain/ChatAnthropic pattern (consistent with langchain.ts)
+  const modelName = process.env.ANTHROPIC_MODEL_NAME || 'claude-sonnet-4-6';
   const model = new ChatAnthropic({
-    modelName: process.env.ANTHROPIC_MODEL_NAME || 'claude-sonnet-4-6',
+    modelName,
     anthropicApiKey: process.env.ANTHROPIC_API_KEY,
     maxTokens: 4096,
     temperature: 0,
   });
 
-  const response = await model.invoke(prompt);
-  const responseText = typeof response.content === 'string'
-    ? response.content
-    : response.content.map(c => (c as { text: string }).text).join('');
+  let lastError: Error | null = null;
 
-  // Parse JSON from response
-  const codes = parseCodebookResponse(responseText);
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    const effectivePrompt = attempt === 0 ? prompt : prompt + RETRY_CORRECTION;
 
-  // Validate
-  return validateCodes(codes, validPublicIds);
+    const response = await model.invoke(effectivePrompt);
+    const responseText = typeof response.content === 'string'
+      ? response.content
+      : response.content.map(c => (c as { text: string }).text).join('');
+
+    try {
+      const codes = parseCodebookResponse(responseText);
+      const validated = validateCodes(codes, validPublicIds);
+      return validated;
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      if (attempt < MAX_RETRIES) {
+        console.warn(`[codebook] Attempt ${attempt + 1} failed: ${lastError.message}. Retrying with corrective instruction.`);
+        continue;
+      }
+    }
+  }
+
+  throw new CodebookGenerationError(
+    `Codebook generation failed after ${MAX_RETRIES + 1} attempts: ${lastError?.message}`,
+  );
 }
+
+const RETRY_CORRECTION = `
+
+CORRECTION: Your previous response was rejected because it contained prohibited language or structural issues. Please:
+1. Do NOT use the words "theme" or "themes" — use "category," "observation type," or "grouping"
+2. Do NOT include frequency counts, prevalence claims, or percentages
+3. Ensure every code references at least one valid entry [public_id] from the data above
+4. Output valid JSON only`;
 
 function buildCodebookPrompt(
   entryContext: string,
@@ -95,23 +121,23 @@ function buildCodebookPrompt(
   focusQuestions: string | null,
   entryCount: number,
 ): string {
+  const targetMax = Math.min(MAX_CODES, Math.max(1, Math.ceil(entryCount / 2)));
   return `You are proposing response categories for structured qualitative content analysis of survey open-text responses.
 
 ============================================================
 RULES
 ============================================================
 
-1. Propose ${Math.min(MAX_CODES, Math.max(1, Math.ceil(entryCount / 3)))}–${MAX_CODES} categories. Fewer is acceptable if the evidence supports fewer. Do NOT invent categories to fill a quota.
+1. Propose up to ${targetMax} categories (maximum ${MAX_CODES}). Fewer is acceptable — even 1 or 2 — if the evidence genuinely supports fewer. Do NOT invent categories to fill a quota.
 
-2. Each category must represent ONE analytically coherent observation type. Avoid overlapping categories where possible.
+2. Each category must represent ONE analytically coherent observation type. Avoid overlapping categories.
 
 3. Use plain-language labels. Do NOT use:
    - "theme" or "themes"
    - prevalence claims ("most respondents," "frequently")
-   - frequency counts
-   - percentages
+   - frequency counts or percentages
 
-4. Every category must reference at least one supporting entry by its [public_id].
+4. Every category must reference at least one supporting entry by its [public_id] from the data below.
 
 5. Do NOT:
    - invent respondent IDs
@@ -157,7 +183,6 @@ Respond with ONLY a JSON object. No markdown, no explanation.
 }
 
 function parseCodebookResponse(responseText: string): GeneratedCode[] {
-  // Extract JSON from response (may have markdown fences)
   let jsonStr = responseText.trim();
   if (jsonStr.startsWith('```')) {
     jsonStr = jsonStr.replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '');
@@ -177,10 +202,14 @@ function parseCodebookResponse(responseText: string): GeneratedCode[] {
   return parsed.codes;
 }
 
+/** Prohibited language patterns that invalidate analytic codes. */
+const PROHIBITED_PATTERNS = /\btheme\b|\bthemes\b|\bmost respondents\b|\bfrequently\b|\bcommonly\b|\bprevalence\b|\brecurring\b/i;
+
 function validateCodes(
   codes: GeneratedCode[],
   validPublicIds: Set<string>,
 ): GeneratedCode[] {
+  // Hard maximum
   if (codes.length > MAX_CODES) {
     throw new CodebookGenerationError(`Codebook exceeds maximum ${MAX_CODES} codes (got ${codes.length}).`);
   }
@@ -188,24 +217,26 @@ function validateCodes(
   const validatedCodes: GeneratedCode[] = [];
 
   for (const code of codes) {
+    // Required fields
     if (!code.code_key || !code.label || !code.definition || !code.include_when) {
       throw new CodebookGenerationError(`Code "${code.label ?? 'unknown'}" missing required fields.`);
     }
 
-    // Validate example references
-    const validExamples = code.example_entry_public_ids.filter(id => validPublicIds.has(id));
-    if (validExamples.length === 0) {
-      // Unsupported code — skip rather than fail entirely
-      console.warn(`[codebook] Skipping code "${code.label}" — no valid supporting entry references.`);
-      continue;
+    // Check for prohibited language — reject, do not silently strip
+    if (PROHIBITED_PATTERNS.test(code.label) || PROHIBITED_PATTERNS.test(code.definition)) {
+      throw new CodebookGenerationError(
+        `Code "${code.label}" contains prohibited qualitative authority language. ` +
+        `Do not use "theme," "prevalence," "frequently," "commonly," or "recurring."`,
+      );
     }
 
-    // Check for theme/prevalence language in definition
-    const prohibitedPatterns = /\btheme\b|\bthemes\b|\bmost respondents\b|\bfrequently\b|\bcommonly\b/i;
-    if (prohibitedPatterns.test(code.definition) || prohibitedPatterns.test(code.label)) {
-      // Strip prohibited language rather than reject the entire code
-      code.definition = code.definition.replace(prohibitedPatterns, '[observation]');
-      code.label = code.label.replace(prohibitedPatterns, 'Observation');
+    // Validate example references — unsupported codes rejected
+    const validExamples = code.example_entry_public_ids.filter(id => validPublicIds.has(id));
+    if (validExamples.length === 0) {
+      throw new CodebookGenerationError(
+        `Code "${code.label}" has no valid supporting entry references. ` +
+        `Every Qori-proposed code must reference at least one supplied entry.`,
+      );
     }
 
     validatedCodes.push({
@@ -215,7 +246,7 @@ function validateCodes(
   }
 
   if (validatedCodes.length === 0) {
-    throw new CodebookGenerationError('No valid codes produced. All proposed codes lacked supporting entry references.');
+    throw new CodebookGenerationError('No valid codes produced.');
   }
 
   return validatedCodes;
