@@ -4,7 +4,7 @@
 id: survey_synthesis
 name: survey_response_synthesizer
 label: "Survey Synthesis"
-version: "v9.1"
+version: "v9.2"
 
 description: |
   Analyze survey data with deterministic structured evidence and bounded
@@ -69,13 +69,13 @@ input_variables:
 # CASCADE CONTRACT — aligned with v9 authority model
 # ═══════════════════════════════════════════════════════════
 #
-# AUDIT (v9.1):
-# survey_themes:      SKIPPED — preliminary observations are not accepted themes
-# survey_findings:    KEPT — model-derived interpretation (no new numbers)
-# discovered_barriers: KEPT — interpretive operation (tightened extraction)
-# discovered_metrics: SKIPPED — deterministic metrics live in evidence layer
-# sample_demographics: SKIPPED — no confirmed demographic fields in Slice 1
-# knowledge_gaps:     KEPT — identifying evidence gaps is approved interpretive work
+# AUDIT (v9.2):
+# survey_themes:       NOT EMITTED — returns in Slice 2 after formal coding
+# survey_findings:     KEPT — model-derived interpretation (no new numbers)
+# discovered_barriers: NOT EMITTED — returns in Slice 2 after accepted coding
+# discovered_metrics:  NOT EMITTED — deterministic metrics in evidence layer
+# sample_demographics: NOT EMITTED — no confirmed demographic fields
+# knowledge_gaps:      KEPT — identifying evidence gaps is approved interpretive work
 
 emits:
   - key: survey_findings
@@ -86,47 +86,6 @@ emits:
       items:
         $ref: schemas/survey_finding.yaml
     extract_from: "Integrated Interpretation or Structured Evidence sections. Assign sequential IDs (finding-001). metric_name and sample_size must come from Structured Evidence values only — do not invent or re-count. Include source_question where applicable."
-
-  - key: discovered_barriers
-    pool: true
-    pool_strategy: append
-    extraction_model: sonnet
-    schema:
-      type: array
-      items:
-        $ref: schemas/discovered_barrier.yaml
-    extract_from: |
-      DERIVATION RULE — discovered_barriers
-
-      definition: An obstacle that prevented or measurably degraded task
-        completion, evidenced by a specific respondent observation.
-
-      evidence_requirement: Must cite a specific response showing the
-        barrier blocked or degraded a task. Include: what was attempted,
-        what happened, what the consequence was. Use respondent quotes.
-
-      does_not_qualify:
-        - Dissatisfaction without a blocked or degraded task
-        - Negative sentiment alone (frustration is not a barrier)
-        - Recommendations or wishes
-        - Inference from absence of evidence
-        - Qualitative prevalence claims (no "X respondents experienced")
-
-      Assign sequential IDs (barrier-001).
-      Use observation description as summary. Do NOT use theme frequency
-      as magnitude — magnitude must come from Structured Evidence counts
-      or be omitted. Use respondent quotes as evidence array, survey name
-      as source_document.
-
-      barrier_categories (REQUIRED, array of 1+ values):
-      Classify each barrier by research-method category. Use ALL that apply:
-        - ia: navigation, findability, mental models, labeling
-        - accessibility: assistive tech, WCAG, screen readers, motor/vision
-        - performance: speed, latency, load times, responsiveness
-        - content: readability, comprehension, terminology, tone
-        - task-flow: task completion, workflow steps, error recovery, forms
-        - cognitive: mental load, decision complexity, memory demands
-        - other: ONLY if no category genuinely applies
 
   - key: knowledge_gaps
     pool: true
@@ -285,9 +244,27 @@ ai_generation_tasks:
       **Survey:** {{survey_name}}
 
       {% if computed_facts %}
-      **Structured evidence available:**
+      ============================================================
+      AVAILABLE STRUCTURED EVIDENCE
+      ============================================================
+
+      The following ARE available from this survey:
       - {{computed_facts.totalRespondents}} unique respondents
       - Fields: {{computed_facts.schemaSummary}}
+      - Field distributions (value counts for all categorical fields)
+      - Ordinal medians (where researcher confirmed category order)
+      - Completion status distribution
+      - Cross-tabulations (completion × difficulty, completion × satisfaction)
+      - Missingness counts
+
+      The following are NOT available:
+      - Accepted qualitative-code prevalence (coding not performed)
+      - Population prevalence or representativeness
+      - Causal attribution (survey is descriptive only)
+      - Inferential significance (not computed)
+
+      Do NOT claim a structured result is missing if it appears in the
+      list above.
       {% endif %}
 
       **Open-text responses:**
@@ -312,6 +289,7 @@ ai_generation_tasks:
         - Questions unrelated to the stated problem
         - Generic research-practice observations
         - Product actions, feature changes, or design implementations
+        - Structured distributions that ARE available (see above)
 
       ============================================================
       OUTPUT FORMAT
@@ -343,10 +321,10 @@ output_template: |
 
   {{#if computed_facts}}
   > [!IMPORTANT]
-  > **{{computed_facts.totalRespondents}} unique respondents** analyzed across {{computed_facts.schemaSummary}} fields.{{#each computed_facts.fieldStats}}{{#if this.median}} {{this.fieldName}} median: **{{this.median}}**.{{/if}}{{/each}}
+  > **{{computed_facts.totalRespondents}} unique respondents** analyzed.{{#each computed_facts.fieldStats}}{{#if this.median}} {{this.displayName}} median: **{{this.median}}**.{{/if}}{{/each}}
 
   > [!WARNING]
-  > Empty CSV cells are reported as missing; bare CSV does not reveal why a value is absent. Qualitative observations below are preliminary — formal coding has not been performed.
+  > This survey is descriptive. Formal qualitative coding has not been performed. Empty cells are reported as missing without further distinction.
   {{else}}
   > [!WARNING]
   > No computed facts available. This synthesis relies on qualitative interpretation only.
@@ -371,61 +349,6 @@ output_template: |
 
   ---
 
-  {{#if computed_facts}}
-  ## Structured Evidence
-
-  *All values below are computed deterministically from source data. No LLM interpretation.*
-
-  {{#each computed_facts.fieldStats}}
-  {{#if this.distribution}}
-
-  ### {{this.fieldName}}
-
-  **Role:** {{this.role}} &nbsp; | &nbsp; **Present:** {{this.nPresent}} of {{../computed_facts.totalRespondents}} &nbsp; | &nbsp; **Missing:** {{this.nMissing}}{{#if this.median}} &nbsp; | &nbsp; **Median:** {{this.median}}{{/if}}
-
-  {{this.distribution}}
-
-  {{/if}}
-  {{/each}}
-
-  {{#if computed_facts.crossTabs}}
-
-  ### Cross-Tabulations
-
-  {{#each computed_facts.crossTabs}}
-
-  **{{this.rowField}} × {{this.colField}}** (n={{this.totalN}})
-
-  {{this.cells}}
-
-  {{/each}}
-  {{/if}}
-
-  <details>
-  <summary><strong>Analysis Details</strong></summary>
-
-  **Source fields:** {{computed_facts.schemaSummary}}
-
-  | Field | Role | Present | Missing |
-  |-------|------|--------:|--------:|
-  {{#each computed_facts.fieldStats}}
-  | {{this.fieldName}} | {{this.role}} | {{this.nPresent}} | {{this.nMissing}} |
-  {{/each}}
-
-  > [!NOTE]
-  > {{computed_facts.nonresponseLimitation}}
-
-  </details>
-
-  {{else}}
-
-  > [!WARNING]
-  > Structured evidence requires CSV input processed by the survey computation pipeline.
-
-  {{/if}}
-
-  ---
-
   ## Preliminary Qualitative Observations
 
   {{ai_generated.qualitative_observations}}
@@ -435,7 +358,7 @@ output_template: |
   ## Integrated Interpretation
 
   {{#if computed_facts}}
-  The structured evidence above establishes the distributional baseline from {{computed_facts.totalRespondents}} unique respondents. The qualitative observations offer preliminary interpretation of open-text entries. Readers should:
+  The structured evidence (collapsed below) establishes the distributional baseline from {{computed_facts.totalRespondents}} unique respondents. The qualitative observations above offer preliminary interpretation of open-text entries. Readers should:
 
   - **Look for convergence** — where structured distributions and qualitative observations point the same direction
   - **Look for complementarity** — where open-text entries explain patterns visible in the distributions
@@ -454,88 +377,105 @@ output_template: |
 
   ---
 
+  {{#if computed_facts}}
+  <details>
+  <summary><strong>View Structured Evidence</strong> — distributions, medians, and cross-tabulations</summary>
+
+  *All values below are computed deterministically from source data.*
+
+  {{#each computed_facts.fieldStats}}
+  {{#if this.distribution}}
+
+  ### {{this.displayName}}
+
+  **Role:** {{this.role}} &nbsp; | &nbsp; **Present:** {{this.nPresent}} of {{../computed_facts.totalRespondents}} &nbsp; | &nbsp; **Missing:** {{this.nMissing}}{{#if this.median}} &nbsp; | &nbsp; **Median:** {{this.median}}{{/if}}
+
+  {{this.distribution}}
+
+  {{/if}}
+  {{/each}}
+
+  {{#if computed_facts.crossTabs}}
+
+  ### Cross-Tabulations
+
+  {{#each computed_facts.crossTabs}}
+
+  **{{this.rowDisplayName}} × {{this.colDisplayName}}** (n={{this.totalN}})
+
+  {{this.cells}}
+
+  {{/each}}
+  {{/if}}
+
+  </details>
+
+  <details>
+  <summary><strong>Analysis Details</strong></summary>
+
+  **Unique respondents:** {{computed_facts.totalRespondents}}
+
+  **Fields:** {{computed_facts.schemaSummary}}
+
+  | Field | Role | Present | Missing |
+  |-------|------|--------:|--------:|
+  {{#each computed_facts.fieldStats}}
+  | {{this.displayName}} (`{{this.fieldName}}`) | {{this.role}} | {{this.nPresent}} | {{this.nMissing}} |
+  {{/each}}
+
+  > [!NOTE]
+  > {{computed_facts.nonresponseLimitation}}
+
+  </details>
+  {{/if}}
+
   <details>
   <summary><strong>Method & Provenance</strong></summary>
 
-  ### Source
+  > **Source**
+  >
+  > Original file: {{#if provenance}}{{provenance.source_filename}}{{else}}{{document_names}}{{/if}}
+  > Evidence Source ID: {{#if provenance}}`{{provenance.source_public_id}}`{{else}}Not available{{/if}}
+  > Respondents: {{#if computed_facts}}{{computed_facts.totalRespondents}}{{else}}Unknown{{/if}}
 
-  | Property | Value |
-  |----------|-------|
-  | **Original file** | {{#if provenance}}{{provenance.source_filename}}{{else}}{{document_names}}{{/if}} |
-  | **Evidence source ID** | {{#if provenance}}`{{provenance.source_public_id}}`{{else}}Not available{{/if}} |
-  | **Source type** | {{document_types}} |
-  | **Unique respondents** | {{#if computed_facts}}{{computed_facts.totalRespondents}}{{else}}Unknown{{/if}} |
-
-  ### Schema
-
+  > **Schema**
+  >
   {{#if provenance}}
-  **Review status:** Researcher-confirmed
-
-  **Reviewed by:** {{provenance.reviewed_by}}
-
-  **Reviewed at:** {{provenance.reviewed_at}}
-
-  **Confirmed field roles:** {{provenance.field_role_summary}}
-
-  **Confirmed ordinal orders:**
-
-  {{provenance.ordinal_orders}}
+  > Researcher confirmed the field roles and ordinal ordering.
+  > Reviewed by: {{provenance.reviewed_by}}
+  > Reviewed at: {{provenance.reviewed_at}}
+  >
+  > {{provenance.ordinal_orders}}
   {{else}}
-  **Status:** No schema — computed facts not available
+  > No schema — computed facts not available.
   {{/if}}
 
-  ### Computation
-
+  > **Computation**
+  >
   {{#if computed_facts}}
-  **Method:** Deterministic survey structured ingestion v1.0
-
-  **Operations:** Field distributions, medians (confirmed ordinal order), cross-tabulations
-
-  **Missingness:** {{computed_facts.nonresponseLimitation}}
+  > Distributions, medians, respondent counts, and cross-tabulations were computed deterministically in application code.
+  >
+  > {{computed_facts.nonresponseLimitation}}
   {{else}}
-  **Method:** Not applicable — no CSV pipeline output
+  > Not applicable — no CSV pipeline output.
   {{/if}}
 
-  ### Generation
+  > **Generation**
+  >
+  > Template: Survey Synthesis v9.2
+  > Model: {{#if provenance}}{{provenance.model_used}}{{else}}Unknown{{/if}}
+  > Generated: {{current_date_iso}}
 
-  **Model:** {{#if provenance}}{{provenance.model_used}}{{else}}Unknown{{/if}}
+  > **Analysis Authority**
+  >
+  > Structured statistics: deterministic — code-computed, no AI involvement
+  > Open-text interpretation: preliminary AI-assisted interpretation — not formally coded
+  > Formal qualitative coding: not performed
 
-  **Template:** survey_synthesis v9.1
-
-  **Generated at:** {{current_date_iso}}
-
-  ### Authority
-
-  | Layer | Authority |
-  |-------|-----------|
-  | Structured statistics | Deterministic — code-computed, no LLM involvement |
-  | Open-text observations | Preliminary model interpretation — not formally coded |
-  | Formal qualitative coding | NOT YET PERFORMED (Survey Slice 2) |
-
-  ### Evidence & Cascade
-
-  **Evidence constructs:** survey_dataset_summary, field_distribution, cross_tab (deterministic, accepted)
-
-  **Lineage:** DERIVED_FROM evidence source
-
-  **Cascade emissions:**
-
-  | Variable | Status |
-  |----------|--------|
-  | `survey_findings` | MODEL-DERIVED / emitted to legacy cascade |
-  | `discovered_barriers` | MODEL-DERIVED / emitted to legacy cascade — no prevalence authority |
-  | `knowledge_gaps` | MODEL-DERIVED / emitted to legacy cascade |
-  | `survey_themes` | NOT EMITTED — formal coding not yet performed |
-  | `discovered_metrics` | NOT EMITTED — authoritative metrics persist as deterministic evidence constructs |
-  | `sample_demographics` | NOT EMITTED — no confirmed demographic fields |
-
-  > [!NOTE]
-  > Model-derived cascade variables (`survey_findings`, `discovered_barriers`, `knowledge_gaps`) are legacy interpretive cascade context, not accepted evidence-layer constructs. They do not carry review/acceptance status. Progressive migration to evidence-layer acceptance state will occur in later vertical slices.
-
-  ### Integrity
-
+  > **Integrity**
+  >
   {{#if computed_facts}}
-  **Source SHA-256:** `{{computed_facts.sourceContentHash}}`
+  > SHA-256: `{{computed_facts.sourceContentHash}}`
   {{/if}}
 
   </details>
