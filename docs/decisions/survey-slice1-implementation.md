@@ -18,13 +18,27 @@ Excel support removed from survey upload modal. CSV only for Slice 1.
 
 **Record:** Filetypes changed from `["csv", "xlsx", "xls"]` to `["csv"]` in both the modal definition and the DISCOVERY_TYPES config.
 
-## Schema Inference Requires Researcher Review
+## Schema Inference Requires Complete Researcher Review
 
 Field roles are inferred by heuristic, never declared authoritative without confirmation.
 
+**Complete review enforced:** ALL fields must be reviewed before computation proceeds. Surveys with >100 columns are rejected with a clear message. Surveys with 21-100 columns use paginated schema review (20 fields per page, multiple pages). No unreviewed inferred role becomes authoritative.
+
 **Heuristic categories:** id (by field name pattern), ordinal (Likert labels or small integer range), nominal (low cardinality), continuous (mostly numeric), open_text (high cardinality or long), timestamp (date patterns), multi_select (delimiter patterns).
 
-**Ordinal gate:** No ordinal median computed without confirmed role AND confirmed category order metadata. Missing order = treated as nominal (distribution only, no median).
+## Ordinal Fields Require Explicit Category Order
+
+**Rule:** No ordinal median computed without BOTH:
+1. Researcher confirms `confirmed_role = 'ordinal'`
+2. Researcher provides/confirms explicit category order via pipe-separated text input
+
+Appearance order, lexical order, and numeric-looking values are NOT treated as authoritative ordering without researcher confirmation.
+
+For numeric ordinal scales (e.g., 1-5), Qori proposes the detected values but the researcher must explicitly confirm.
+
+If an ordinal field has no confirmed order, it is treated as nominal for statistics: distribution is shown, but median is NOT computed.
+
+**Validation:** The confirmed order must include ALL observed non-missing category values. Duplicate categories fail. Incomplete orders fail.
 
 ## Bare CSV Missingness Limitations
 
@@ -32,9 +46,21 @@ Two observable states only: `value_present`, `empty_or_missing`.
 
 No semantic missingness (`not_asked`, `no_response`, `blank`) — bare CSV cannot distinguish why a value is absent. The nonresponse limitation is documented in SurveyComputedFacts and rendered in the output.
 
-## Pending CSV Storage: Quarantine Pattern
+## Pending CSV Storage: Redis with TTL
 
-Staged CSV text stored in `survey_field_schemas.pending_csv_content` TEXT column, following the `study_notes.pending_content` quarantine pattern. Cleared to NULL on schema confirmation. PII-bearing during its lifetime (survey CSVs may contain respondent names/emails); no PII persists beyond the review step.
+**Corrected from initial design.** Raw CSV staging uses Redis with automatic TTL expiry, NOT a Postgres column.
+
+**TTL:** 2 hours. Schema review typically happens immediately after upload; 2 hours provides margin for researcher interruptions without retaining PII-bearing content indefinitely.
+
+**Key format:** `survey:pending:{projectId}:{sourcePublicId}:{userId}`
+
+**Lifecycle:**
+- Upload → `Redis SET` with TTL
+- Schema confirmation → `Redis DEL` immediately
+- TTL reached → automatic deletion (no orphan data)
+- Expired review → clear error asking researcher to re-upload
+
+**PII implications:** Survey CSVs may contain respondent names/emails. The TTL guarantees automatic deletion even if the researcher never completes review. On confirmation, content is deleted immediately. No PII persists beyond the staging window. Staged content is NOT exposed to /qori-ask, study_variables, generated artifacts, model prompts, or evidence metadata.
 
 ## Deterministic Facts in Evidence Layer
 
@@ -42,7 +68,7 @@ Survey constructs use `derivation_type: 'deterministic'` and `status: 'accepted'
 
 ## No Cascade Projection in Slice 1
 
-No evidence constructs are projected into study_variables. `sample_demographics` is NOT auto-projected because `total_responses` alone is not demographic information. The LLM may still extract cascade variables from rendered prose (existing behavior).
+No evidence constructs are projected into study_variables. `sample_demographics` is NOT auto-projected because `total_responses` alone is not demographic information — projection requires researcher-confirmed genuinely demographic fields matching the cascade schema semantics. The LLM may still extract cascade variables from rendered prose (existing behavior).
 
 ## Qualitative Coding Deferred to Slice 2
 
