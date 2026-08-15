@@ -33,11 +33,15 @@ import { generateDraftCodes, CodebookGenerationError } from '../../survey/codebo
 import { getProjectById } from '../../../services/project.service';
 import type { SurveyQualitativeEntry } from '../../../database/models/survey_qualitative_entry';
 
+const CODES_PER_PAGE = 5;
+
 interface CodebookMeta {
   evidenceSourceId: number;
   projectId: number;
   codebookId?: number;
   surveyName: string;
+  page?: number;
+  totalCodes?: number;
 }
 
 /**
@@ -85,6 +89,8 @@ export async function handleGenerateCodebook(
       projectId: rawMeta.projectId,
       codebookId: (codebook as unknown as { id: number }).id,
       surveyName: rawMeta.surveyName ?? 'Survey',
+      page: 0,
+      totalCodes: codes.length,
     };
 
     const modal = buildCodebookReviewModal(codes as SurveyCode[], meta);
@@ -134,8 +140,15 @@ export async function handleCodebookReviewSubmission(
   const values = view.state.values as unknown as Record<string, Record<string, Record<string, unknown>>>;
 
   try {
-    // Process each code's review decision
-    for (const code of result.codes) {
+    // Determine which codes are on this page
+    const page = meta.page ?? 0;
+    const startIdx = page * CODES_PER_PAGE;
+    const endIdx = Math.min(startIdx + CODES_PER_PAGE, result.codes.length);
+    const pageCodes = result.codes.slice(startIdx, endIdx);
+    const isLastPage = endIdx >= result.codes.length;
+
+    // Process this page's code review decisions
+    for (const code of pageCodes) {
       const codeId = (code as unknown as { id: number }).id;
       const decisionBlock = values[`code_decision_${codeId}`];
       const decision = (decisionBlock?.code_action?.selected_option as { value: string } | null)?.value;
@@ -179,13 +192,22 @@ export async function handleCodebookReviewSubmission(
       }
     }
 
-    // Accept the codebook
-    await acceptCodebook(meta.codebookId, userId);
+    // If not last page, navigate to next page
+    if (!isLastPage) {
+      const allCodes = await getCodebookWithCodes(meta.codebookId);
+      if (allCodes) {
+        const nextMeta = { ...meta, page: (meta.page ?? 0) + 1 };
+        const nextModal = buildCodebookReviewModal(allCodes.codes as SurveyCode[], nextMeta);
+        await client.views.open({
+          trigger_id: body.trigger_id,
+          view: nextModal as unknown as View,
+        });
+      }
+      return;
+    }
 
-    await client.chat.postMessage({
-      channel: userId,
-      text: '✅ *Response categories accepted.* This is now the accepted analytical framework for this survey.',
-    });
+    // Last page — process Add Category if provided
+    // (Add Category only on the last page)
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     await client.chat.postMessage({ channel: userId, text: `❌ Could not accept categories: ${message}` });
@@ -193,21 +215,30 @@ export async function handleCodebookReviewSubmission(
 }
 
 function buildCodebookReviewModal(
-  codes: SurveyCode[],
+  allCodes: SurveyCode[],
   meta: CodebookMeta,
 ): Record<string, unknown> {
+  const page = meta.page ?? 0;
+  const totalPages = Math.ceil(allCodes.length / CODES_PER_PAGE);
+  const startIdx = page * CODES_PER_PAGE;
+  const endIdx = Math.min(startIdx + CODES_PER_PAGE, allCodes.length);
+  const pageCodes = allCodes.slice(startIdx, endIdx);
+  const isLastPage = endIdx >= allCodes.length;
+
+  const pageLabel = totalPages > 1 ? ` — Page ${page + 1} of ${totalPages}` : '';
+
   const blocks: Record<string, unknown>[] = [
     {
       type: 'context',
       elements: [{
         type: 'mrkdwn',
-        text: `Qori grouped the open-text responses into *${codes.length} proposed categories*.\nReview these before Qori uses them for counting or synthesis.\n\nFor each category: *Accept*, *Edit* (modify details), or *Remove*.`,
+        text: `Qori grouped the open-text responses into *${allCodes.length} proposed categories*${pageLabel}.\nReview these before Qori uses them for counting or synthesis.\n\nFor each category: *Accept*, *Edit* (modify details), or *Remove*.`,
       }],
     },
     { type: 'divider' },
   ];
 
-  for (const code of codes) {
+  for (const code of pageCodes) {
     const codeId = (code as unknown as { id: number }).id;
 
     let codeText = `*${code.label}*\n\n*What this means:* ${code.definition}\n\n*Include when:* ${code.include_when}`;
@@ -292,33 +323,35 @@ function buildCodebookReviewModal(
     blocks.push({ type: 'divider' });
   }
 
-  // Add Category section
-  blocks.push({
-    type: 'context',
-    elements: [{ type: 'mrkdwn', text: '*Add a category* (optional) — create your own response category.' }],
-  });
-  blocks.push({
-    type: 'input', block_id: 'add_category_label', optional: true,
-    label: { type: 'plain_text', text: 'New category label' },
-    element: { type: 'plain_text_input', action_id: 'add_label_input', placeholder: { type: 'plain_text', text: 'e.g., Technical Interruption' } },
-  });
-  blocks.push({
-    type: 'input', block_id: 'add_category_def', optional: true,
-    label: { type: 'plain_text', text: 'Definition' },
-    element: { type: 'plain_text_input', action_id: 'add_def_input', multiline: true, placeholder: { type: 'plain_text', text: 'What this category means' } },
-  });
-  blocks.push({
-    type: 'input', block_id: 'add_category_include', optional: true,
-    label: { type: 'plain_text', text: 'Include when' },
-    element: { type: 'plain_text_input', action_id: 'add_include_input', multiline: true, placeholder: { type: 'plain_text', text: 'When a response should receive this category' } },
-  });
+  // Add Category section (last page only)
+  if (isLastPage) {
+    blocks.push({
+      type: 'context',
+      elements: [{ type: 'mrkdwn', text: '*Add a category* (optional) — create your own response category.' }],
+    });
+    blocks.push({
+      type: 'input', block_id: 'add_category_label', optional: true,
+      label: { type: 'plain_text', text: 'New category label' },
+      element: { type: 'plain_text_input', action_id: 'add_label_input', placeholder: { type: 'plain_text', text: 'e.g., Technical Interruption' } },
+    });
+    blocks.push({
+      type: 'input', block_id: 'add_category_def', optional: true,
+      label: { type: 'plain_text', text: 'Definition' },
+      element: { type: 'plain_text_input', action_id: 'add_def_input', multiline: true, placeholder: { type: 'plain_text', text: 'What this category means' } },
+    });
+    blocks.push({
+      type: 'input', block_id: 'add_category_include', optional: true,
+      label: { type: 'plain_text', text: 'Include when' },
+      element: { type: 'plain_text_input', action_id: 'add_include_input', multiline: true, placeholder: { type: 'plain_text', text: 'When a response should receive this category' } },
+    });
+  }
 
   return {
     type: 'modal',
     callback_id: 'codebook_review_modal',
     private_metadata: JSON.stringify(meta),
-    title: { type: 'plain_text', text: 'Review Categories' },
-    submit: { type: 'plain_text', text: 'Accept Response Categories' },
+    title: { type: 'plain_text', text: totalPages > 1 ? `Categories (${page + 1}/${totalPages})` : 'Review Categories' },
+    submit: { type: 'plain_text', text: isLastPage ? 'Accept Response Categories' : 'Continue →' },
     close: { type: 'plain_text', text: 'Cancel' },
     blocks,
   };
