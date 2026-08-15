@@ -90,11 +90,11 @@ Legacy survey emits audited against v9 authority model:
 
 | Variable | Decision | Rationale |
 |----------|----------|-----------|
-| survey_themes | REMOVED | Preliminary observations ≠ accepted themes |
-| discovered_metrics | REMOVED | Deterministic metrics stored as evidence constructs |
-| sample_demographics | REMOVED | No confirmed demographic fields in Slice 1 |
-| survey_findings | KEPT | Model-derived candidate findings (no new numbers) |
-| discovered_barriers | KEPT | Interpretive operation with tightened extraction |
+| survey_themes | NOT EMITTED | Returns in Slice 2 after formal coding/adjudication |
+| discovered_metrics | NOT EMITTED | Deterministic metrics stored as evidence constructs |
+| sample_demographics | NOT EMITTED | No confirmed demographic fields in Slice 1 |
+| discovered_barriers | NOT EMITTED | Returns in Slice 2 after accepted coding supports them |
+| survey_findings | KEPT | Model-derived interpretation (no new numbers) |
 | knowledge_gaps | KEPT | Identifying evidence gaps is approved interpretive work |
 
 All existing downstream consumers (stakeholder_synthesis, research_brief) use optional/conditional consumption with Handlebars `{{#if}}` guards. Absence is tolerated.
@@ -106,6 +106,18 @@ Retained survey emits (`survey_findings`, `discovered_barriers`, `knowledge_gaps
 The architectural term "candidate" is not used because `study_variables` does not represent candidate/accepted state. Precise terminology: MODEL-DERIVED CASCADE VARIABLE.
 
 **Roadmap limitation:** Legacy model-derived cascade variables remain distinguishable from canonical accepted evidence. Progressive migration to evidence-layer acceptance state will occur in later vertical slices.
+
+## Research Artifacts Do Not Expose Implementation State
+
+Internal concepts such as "legacy cascade," "evidence-layer constructs," "vertical slice," "progressive migration," and internal variable names do not appear in researcher-facing artifacts. Method & Provenance describes analysis authority in plain research language.
+
+## Researcher-Facing Display Labels
+
+Machine field names (e.g., `overall_satisfaction`) render as Title Case display labels (e.g., "Overall Satisfaction") in the research artifact. Technical field names appear in parenthetical context in Analysis Details only.
+
+## Ordinal Scale Suggestions
+
+Qori pre-populates recognized ordinal scales (satisfaction, difficulty, agreement, likelihood, numeric). Suggestions use exact case-insensitive match against known canonical scales. Researcher confirmation remains authoritative — suggestions are never auto-accepted.
 
 ## Qualitative Coding Deferred to Slice 2
 

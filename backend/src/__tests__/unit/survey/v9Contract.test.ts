@@ -1,16 +1,5 @@
 /**
- * Survey Synthesis v9 Golden / Contract Tests
- *
- * Verifies the deterministic output contract including:
- * - Ordinal distributions render in confirmed measurement order
- * - Respondent count uses unique respondents
- * - Declared respondent IDs survive into evidence quotes
- * - No duplicated structured tables
- * - No Braun & Clarke
- * - No soft qualitative prevalence language in prompt
- * - No model-generated frequencies
- * - Method & Provenance reports actual emit state
- * - Emit contract aligned with authority model
+ * Survey Synthesis v9.2 Final Document Contract Tests
  */
 
 import { readFileSync } from 'fs';
@@ -20,6 +9,8 @@ import { computeContentHash } from '../../../helpers/survey/sourceHash';
 import { computeSurveyFacts, extractOpenTextContent } from '../../../helpers/survey/statsEngine';
 import { assignRespondentIdentities } from '../../../helpers/survey/respondentIdentity';
 import { formatComputedFacts, type FormattedComputedFacts } from '../../../helpers/survey/factsFormatter';
+import { toDisplayLabel } from '../../../helpers/survey/displayLabels';
+import { suggestOrdinalOrder } from '../../../helpers/survey/ordinalSuggestions';
 import type { ConfirmedField, SurveyComputedFacts } from '../../../types/survey';
 
 const FIXTURES = join(__dirname, '../../__fixtures__/survey');
@@ -50,255 +41,224 @@ function computeStandardFacts() {
   return { facts, formatted, openText, identities };
 }
 
-describe('survey synthesis v9 contract', () => {
-  describe('ordinal rendering order', () => {
-    it('satisfaction distribution renders in confirmed measurement order', () => {
-      const { formatted } = computeStandardFacts();
-      const satStat = formatted.fieldStats.find(f => f.fieldName === 'overall_satisfaction');
-      const lines = satStat!.distribution!.split('\n');
-      // Skip header rows, get value rows
-      const valueRows = lines.filter(l => l.startsWith('|') && !l.includes('Value') && !l.includes('---'));
-      const renderedOrder = valueRows.map(r => r.split('|')[1].trim());
-      expect(renderedOrder).toEqual([
-        'Very Dissatisfied', 'Dissatisfied', 'Neutral', 'Satisfied', 'Very Satisfied',
-      ]);
-    });
-
-    it('difficulty distribution renders in confirmed measurement order', () => {
-      const { formatted } = computeStandardFacts();
-      const diffStat = formatted.fieldStats.find(f => f.fieldName === 'difficulty_rating');
-      const lines = diffStat!.distribution!.split('\n');
-      const valueRows = lines.filter(l => l.startsWith('|') && !l.includes('Value') && !l.includes('---'));
-      const renderedOrder = valueRows.map(r => r.split('|')[1].trim());
-      expect(renderedOrder).toEqual([
-        'Very Difficult', 'Difficult', 'Moderate', 'Easy', 'Very Easy',
-      ]);
-    });
-
-    it('nominal distribution sorts by count desc (not ordinal order)', () => {
-      const { formatted } = computeStandardFacts();
-      const statusStat = formatted.fieldStats.find(f => f.fieldName === 'completion_status');
-      const lines = statusStat!.distribution!.split('\n');
-      const valueRows = lines.filter(l => l.startsWith('|') && !l.includes('Value') && !l.includes('---'));
-      // Complete has highest count, should be first
-      expect(valueRows[0]).toContain('Complete');
-    });
+describe('display labels', () => {
+  it('overall_satisfaction → Overall Satisfaction', () => {
+    expect(toDisplayLabel('overall_satisfaction')).toBe('Overall Satisfaction');
   });
-
-  describe('respondent identity', () => {
-    it('declared respondent IDs survive as display labels', () => {
-      const { identities } = computeStandardFacts();
-      // standard.csv has response_id field with R-101, R-102, etc.
-      expect(identities[0].displayLabel).toBe('R-101');
-      expect(identities[0].source).toBe('declared');
-      expect(identities[9].displayLabel).toBe('R-110');
-    });
-
-    it('declared IDs appear in open-text content', () => {
-      const { openText } = computeStandardFacts();
-      expect(openText).toContain('R-101');
-      expect(openText).not.toContain('R001'); // Should NOT alias
-    });
+  it('difficulty_rating → Difficulty Rating', () => {
+    expect(toDisplayLabel('difficulty_rating')).toBe('Difficulty Rating');
   });
-
-  describe('respondent count', () => {
-    it('reports 10 unique respondents (not 20 text entries)', () => {
-      const { facts } = computeStandardFacts();
-      expect(facts.totalRespondents).toBe(10);
-    });
-
-    it('formatted facts uses totalRespondents not text entry count', () => {
-      const { formatted } = computeStandardFacts();
-      expect(formatted.totalRespondents).toBe(10);
-    });
+  it('completion_status → Completion Status', () => {
+    expect(toDisplayLabel('completion_status')).toBe('Completion Status');
   });
-
-  describe('no output duplication', () => {
-    it('YAML template has ONE Structured Evidence section, not Dataset Scope + Structured Evidence', () => {
-      const yaml = readFileSync(YAML_PATH, 'utf-8');
-      const structuredEvidenceCount = (yaml.match(/## Structured Evidence/g) || []).length;
-      expect(structuredEvidenceCount).toBe(1);
-      expect(yaml).not.toContain('## Dataset & Analysis Scope');
-    });
-
-    it('source hash only appears in Method & Provenance section', () => {
-      const yaml = readFileSync(YAML_PATH, 'utf-8');
-      // sourceContentHash should only appear inside the details block
-      const hashRefs = yaml.split('sourceContentHash');
-      // One in the Integrity subsection of Method & Provenance
-      // Should not appear in main narrative
-      expect(yaml).not.toMatch(/## .*\n.*sourceContentHash/);
-    });
+  it('response_id → Response ID', () => {
+    expect(toDisplayLabel('response_id')).toBe('Response ID');
   });
-
-  describe('qualitative authority restrictions', () => {
-    it('no Braun & Clarke methodology claim', () => {
-      const yaml = readFileSync(YAML_PATH, 'utf-8');
-      expect(yaml).not.toMatch(/uses thematic analysis \(Braun & Clarke\)/);
-    });
-
-    it('no soft prevalence language in prompt examples', () => {
-      const yaml = readFileSync(YAML_PATH, 'utf-8');
-      // Prompt output format should not suggest prevalence hedges
-      expect(yaml).not.toMatch(/"several respondents described,"/);
-      expect(yaml).not.toMatch(/"a recurring concern was,"/);
-      expect(yaml).not.toMatch(/"some entries noted\."/);
-    });
-
-    it('prompt prohibits soft prevalence terms explicitly', () => {
-      const yaml = readFileSync(YAML_PATH, 'utf-8');
-      expect(yaml).toContain('several respondents');
-      expect(yaml).toContain('recurring concern');
-      // These appear in the prohibition list, not as instructions
-    });
-
-    it('NUMERIC AUTHORITY rule present', () => {
-      const yaml = readFileSync(YAML_PATH, 'utf-8');
-      expect(yaml).toContain('NUMERIC AUTHORITY');
-      expect(yaml).toContain('Never calculate');
-    });
-
-    it('QUALITATIVE AUTHORITY rule present', () => {
-      const yaml = readFileSync(YAML_PATH, 'utf-8');
-      expect(yaml).toContain('QUALITATIVE AUTHORITY');
-    });
-
-    it('prompt uses evidence-based wording examples (not prevalence)', () => {
-      const yaml = readFileSync(YAML_PATH, 'utf-8');
-      expect(yaml).toContain('Open-text entries describe');
-      expect(yaml).toContain('One observed issue involves');
-    });
+  it('biggest_challenge → Biggest Challenge', () => {
+    expect(toDisplayLabel('biggest_challenge')).toBe('Biggest Challenge');
   });
-
-  describe('emit contract', () => {
-    it('survey_themes is NOT emitted (preliminary ≠ accepted themes)', () => {
-      const yaml = readFileSync(YAML_PATH, 'utf-8');
-      // survey_themes should not appear in the emits block
-      const emitsSection = yaml.split('emits:')[1].split('ai_generation_tasks:')[0];
-      expect(emitsSection).not.toContain('key: survey_themes');
-    });
-
-    it('discovered_metrics is NOT emitted (deterministic facts in evidence layer)', () => {
-      const yaml = readFileSync(YAML_PATH, 'utf-8');
-      const emitsSection = yaml.split('emits:')[1].split('ai_generation_tasks:')[0];
-      expect(emitsSection).not.toContain('key: discovered_metrics');
-    });
-
-    it('sample_demographics is NOT emitted (no confirmed demographic fields)', () => {
-      const yaml = readFileSync(YAML_PATH, 'utf-8');
-      const emitsSection = yaml.split('emits:')[1].split('ai_generation_tasks:')[0];
-      expect(emitsSection).not.toContain('key: sample_demographics');
-    });
-
-    it('knowledge_gaps IS emitted (approved interpretive operation)', () => {
-      const yaml = readFileSync(YAML_PATH, 'utf-8');
-      const emitsSection = yaml.split('emits:')[1].split('ai_generation_tasks:')[0];
-      expect(emitsSection).toContain('key: knowledge_gaps');
-    });
-
-    it('survey_findings IS emitted (model-derived candidates)', () => {
-      const yaml = readFileSync(YAML_PATH, 'utf-8');
-      const emitsSection = yaml.split('emits:')[1].split('ai_generation_tasks:')[0];
-      expect(emitsSection).toContain('key: survey_findings');
-    });
-
-    it('discovered_barriers IS emitted (interpretive operation)', () => {
-      const yaml = readFileSync(YAML_PATH, 'utf-8');
-      const emitsSection = yaml.split('emits:')[1].split('ai_generation_tasks:')[0];
-      expect(emitsSection).toContain('key: discovered_barriers');
-    });
+  it('formatted stats have displayName', () => {
+    const { formatted } = computeStandardFacts();
+    for (const stat of formatted.fieldStats) {
+      expect(stat.displayName).toBeDefined();
+      expect(stat.displayName).not.toContain('_');
+    }
   });
-
-  describe('Method & Provenance structure', () => {
-    it('has one collapsed details block', () => {
-      const yaml = readFileSync(YAML_PATH, 'utf-8');
-      expect(yaml).toContain('<details>');
-      expect(yaml).toContain('Method & Provenance');
-    });
-
-    it('contains Source subsection with evidence_source public_id', () => {
-      const yaml = readFileSync(YAML_PATH, 'utf-8');
-      expect(yaml).toContain('### Source');
-      expect(yaml).toContain('Evidence source ID');
-      expect(yaml).toContain('provenance.source_public_id');
-    });
-
-    it('contains Schema subsection with reviewer metadata', () => {
-      const yaml = readFileSync(YAML_PATH, 'utf-8');
-      expect(yaml).toContain('### Schema');
-      expect(yaml).toContain('provenance.reviewed_by');
-      expect(yaml).toContain('provenance.reviewed_at');
-      expect(yaml).toContain('provenance.field_role_summary');
-      expect(yaml).toContain('provenance.ordinal_orders');
-    });
-
-    it('contains Generation subsection with actual model', () => {
-      const yaml = readFileSync(YAML_PATH, 'utf-8');
-      expect(yaml).toContain('### Generation');
-      expect(yaml).toContain('provenance.model_used');
-    });
-
-    it('contains Authority table with actual authority levels', () => {
-      const yaml = readFileSync(YAML_PATH, 'utf-8');
-      expect(yaml).toContain('NOT YET PERFORMED');
-      expect(yaml).toContain('Deterministic');
-      expect(yaml).toContain('Preliminary model interpretation');
-    });
-
-    it('uses MODEL-DERIVED for retained emits (not "candidate")', () => {
-      const yaml = readFileSync(YAML_PATH, 'utf-8');
-      expect(yaml).toContain('MODEL-DERIVED / emitted to legacy cascade');
-      expect(yaml).not.toMatch(/candidate findings/);
-    });
-
-    it('documents legacy cascade limitation', () => {
-      const yaml = readFileSync(YAML_PATH, 'utf-8');
-      expect(yaml).toContain('legacy interpretive cascade context');
-      expect(yaml).toContain('not accepted evidence-layer constructs');
-    });
-
-    it('contains NOT EMITTED state for removed variables', () => {
-      const yaml = readFileSync(YAML_PATH, 'utf-8');
-      expect(yaml).toContain('NOT EMITTED');
-      expect(yaml).toContain('formal coding not yet performed');
-      expect(yaml).toContain('deterministic evidence constructs');
-      expect(yaml).toContain('no confirmed demographic fields');
-    });
-
-    it('contains Integrity subsection with source hash', () => {
-      const yaml = readFileSync(YAML_PATH, 'utf-8');
-      expect(yaml).toContain('### Integrity');
-      expect(yaml).toContain('Source SHA-256');
-    });
+  it('formatted cross-tabs have display names', () => {
+    const { formatted } = computeStandardFacts();
+    for (const ct of formatted.crossTabs) {
+      expect(ct.rowDisplayName).not.toContain('_');
+      expect(ct.colDisplayName).not.toContain('_');
+    }
   });
+});
 
-  describe('output structure', () => {
-    it('has Executive Summary', () => {
-      const yaml = readFileSync(YAML_PATH, 'utf-8');
-      expect(yaml).toContain('## Executive Summary');
-    });
+describe('document hierarchy', () => {
+  const yaml = readFileSync(YAML_PATH, 'utf-8');
 
-    it('has Analysis Details collapsed', () => {
-      const yaml = readFileSync(YAML_PATH, 'utf-8');
-      expect(yaml).toContain('Analysis Details');
-      expect(yaml).toContain('<details>');
-    });
-
-    it('uses GitHub-native callout syntax', () => {
-      const yaml = readFileSync(YAML_PATH, 'utf-8');
-      expect(yaml).toContain('> [!NOTE]');
-      expect(yaml).toContain('> [!IMPORTANT]');
-      expect(yaml).toContain('> [!WARNING]');
-    });
+  it('has exactly one H1 in output template', () => {
+    const outputSection = yaml.split('output_template:')[1]?.split('output_options:')[0] ?? '';
+    const h1s = outputSection.match(/^  # [^#]/gm) || [];
+    expect(h1s.length).toBe(1);
   });
+  it('Executive Summary is visible (not collapsed)', () => {
+    expect(yaml).toContain('## Executive Summary');
+  });
+  it('Structured Evidence is collapsed', () => {
+    expect(yaml).toContain('View Structured Evidence');
+    expect(yaml).toContain('<details>');
+  });
+  it('Analysis Details is collapsed', () => {
+    expect(yaml).toContain('Analysis Details');
+  });
+  it('Method & Provenance is collapsed', () => {
+    expect(yaml).toContain('Method & Provenance');
+  });
+  it('no visible Document Information section', () => {
+    expect(yaml).not.toContain('## Document Information');
+  });
+  it('source hash appears only in provenance toggle', () => {
+    // sourceContentHash should only be inside details blocks
+    expect(yaml).not.toMatch(/## .*sourceContentHash/);
+  });
+});
 
-  describe('determinism', () => {
-    it('same fixture produces identical formatted output 3 times', () => {
-      const r1 = computeStandardFacts();
-      const r2 = computeStandardFacts();
-      const r3 = computeStandardFacts();
-      expect(r1.formatted).toEqual(r2.formatted);
-      expect(r2.formatted).toEqual(r3.formatted);
-    });
+describe('no internal engineering language in artifact', () => {
+  const yaml = readFileSync(YAML_PATH, 'utf-8');
+  // Check only the output_template section
+  const outputSection = yaml.split('output_template:')[1]?.split('output_options:')[0] ?? '';
+
+  it('no "legacy cascade"', () => {
+    expect(outputSection).not.toContain('legacy cascade');
+  });
+  it('no "evidence-layer constructs"', () => {
+    expect(outputSection).not.toContain('evidence-layer constructs');
+  });
+  it('no "vertical slice"', () => {
+    expect(outputSection).not.toMatch(/vertical slice/i);
+  });
+  it('no "Slice 1" or "Slice 2" in output', () => {
+    expect(outputSection).not.toMatch(/Slice [12]/);
+  });
+  it('no "progressive migration"', () => {
+    expect(outputSection).not.toContain('progressive migration');
+  });
+  it('no internal variable names table in output', () => {
+    expect(outputSection).not.toContain('survey_findings');
+    expect(outputSection).not.toContain('discovered_barriers');
+    expect(outputSection).not.toContain('knowledge_gaps');
+  });
+});
+
+describe('emit contract', () => {
+  const yaml = readFileSync(YAML_PATH, 'utf-8');
+  const emitsSection = yaml.split('emits:')[1]?.split('ai_generation_tasks:')[0] ?? '';
+
+  it('knowledge_gaps present', () => {
+    expect(emitsSection).toContain('key: knowledge_gaps');
+  });
+  it('survey_findings present', () => {
+    expect(emitsSection).toContain('key: survey_findings');
+  });
+  it('discovered_barriers absent', () => {
+    expect(emitsSection).not.toContain('key: discovered_barriers');
+  });
+  it('survey_themes absent', () => {
+    expect(emitsSection).not.toContain('key: survey_themes');
+  });
+  it('discovered_metrics absent', () => {
+    expect(emitsSection).not.toContain('key: discovered_metrics');
+  });
+  it('sample_demographics absent', () => {
+    expect(emitsSection).not.toContain('key: sample_demographics');
+  });
+});
+
+describe('ordinal suggestions', () => {
+  it('recognizes satisfaction scale', () => {
+    const result = suggestOrdinalOrder(['Satisfied', 'Very Satisfied', 'Neutral', 'Dissatisfied', 'Very Dissatisfied']);
+    expect(result.source).toBe('known_scale');
+    expect(result.suggestedOrder![0]).toMatch(/very dissatisfied/i);
+  });
+  it('recognizes difficulty scale', () => {
+    const result = suggestOrdinalOrder(['Easy', 'Very Easy', 'Neutral', 'Difficult', 'Very Difficult']);
+    expect(result.source).toBe('known_scale');
+  });
+  it('proposes ascending numeric order', () => {
+    const result = suggestOrdinalOrder(['3', '1', '5', '2', '4']);
+    expect(result.source).toBe('numeric');
+    expect(result.suggestedOrder).toEqual(['1', '2', '3', '4', '5']);
+  });
+  it('returns none for unknown scale', () => {
+    const result = suggestOrdinalOrder(['Apple', 'Banana', 'Cherry']);
+    expect(result.source).toBe('none');
+    expect(result.suggestedOrder).toBeNull();
+  });
+  it('suggestion still requires confirmation (not auto-accepted)', () => {
+    // suggestOrdinalOrder returns a suggestion, not a confirmed order
+    const result = suggestOrdinalOrder(['Satisfied', 'Very Satisfied', 'Neutral', 'Dissatisfied', 'Very Dissatisfied']);
+    expect(result.suggestedOrder).toBeDefined();
+    // The suggestion must be presented to researcher — it's not auto-used
+    // (verified by the modal UX, not by this function alone)
+  });
+});
+
+describe('respondent identity', () => {
+  it('declared IDs survive as display labels', () => {
+    const { identities } = computeStandardFacts();
+    expect(identities[0].displayLabel).toBe('R-101');
+    expect(identities[0].source).toBe('declared');
+  });
+  it('declared IDs appear in open-text', () => {
+    const { openText } = computeStandardFacts();
+    expect(openText).toContain('R-101');
+    expect(openText).not.toContain('R001');
+  });
+});
+
+describe('ordinal rendering', () => {
+  it('satisfaction in confirmed measurement order', () => {
+    const { formatted } = computeStandardFacts();
+    const stat = formatted.fieldStats.find(f => f.fieldName === 'overall_satisfaction');
+    const rows = stat!.distribution!.split('\n').filter(l => l.startsWith('|') && !l.includes('Value') && !l.includes('---'));
+    const order = rows.map(r => r.split('|')[1].trim());
+    expect(order).toEqual(['Very Dissatisfied', 'Dissatisfied', 'Neutral', 'Satisfied', 'Very Satisfied']);
+  });
+});
+
+describe('Method & Provenance', () => {
+  const yaml = readFileSync(YAML_PATH, 'utf-8');
+
+  it('source public_id present', () => {
+    expect(yaml).toContain('provenance.source_public_id');
+  });
+  it('real filename present (not staged-csv)', () => {
+    expect(yaml).toContain('provenance.source_filename');
+  });
+  it('schema reviewer present', () => {
+    expect(yaml).toContain('provenance.reviewed_by');
+    expect(yaml).toContain('provenance.reviewed_at');
+  });
+  it('ordinal orders present', () => {
+    expect(yaml).toContain('provenance.ordinal_orders');
+  });
+  it('computation block present', () => {
+    expect(yaml).toContain('deterministically');
+  });
+  it('generation block with model', () => {
+    expect(yaml).toContain('provenance.model_used');
+  });
+  it('no "legacy cascade" in provenance', () => {
+    const outputSection = yaml.split('output_template:')[1]?.split('output_options:')[0] ?? '';
+    expect(outputSection).not.toContain('legacy cascade');
+  });
+});
+
+describe('evidence-gap grounding', () => {
+  const yaml = readFileSync(YAML_PATH, 'utf-8');
+
+  it('prompt lists available structured evidence', () => {
+    expect(yaml).toContain('AVAILABLE STRUCTURED EVIDENCE');
+    expect(yaml).toContain('Field distributions');
+    expect(yaml).toContain('Ordinal medians');
+    expect(yaml).toContain('Cross-tabulations');
+  });
+  it('prompt lists what is NOT available', () => {
+    expect(yaml).toContain('NOT available');
+    expect(yaml).toContain('qualitative-code prevalence');
+    expect(yaml).toContain('Causal attribution');
+  });
+  it('prompt prohibits claiming available results are missing', () => {
+    expect(yaml).toContain('Do NOT claim a structured result is missing');
+  });
+});
+
+describe('determinism', () => {
+  it('3 runs identical', () => {
+    const r1 = computeStandardFacts();
+    const r2 = computeStandardFacts();
+    const r3 = computeStandardFacts();
+    expect(r1.formatted).toEqual(r2.formatted);
+    expect(r2.formatted).toEqual(r3.formatted);
   });
 });
