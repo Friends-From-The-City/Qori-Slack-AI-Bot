@@ -150,6 +150,8 @@ ai_generation_tasks:
         - Assign prevalence ("most respondents," "X of N," "60%")
         - Use ANY soft prevalence language, including but not limited to:
           "some respondents," "some participants," "some entries,"
+          "at least some respondents," "at least some participants,"
+          "for some respondents," "for at least some respondents,"
           "several respondents," "several participants,"
           "many respondents," "many participants,"
           "a recurring concern," "recurring pattern,"
@@ -157,10 +159,14 @@ ai_generation_tasks:
           "commonly," "frequently," "often,"
           "a small number," "a majority," "most respondents,"
           "predominant," "widespread"
-        - Claim themes (no "Theme 1," no "three themes emerged")
+        - Use the word "theme" or "themes" to describe qualitative
+          groupings. Before formal coding, use: "observation,"
+          "preliminary grouping," "category," "type," or "topic."
+          Reserve "theme/themes" for accepted coded analysis.
+        - Claim themes (no "Theme 1," no "three themes emerged,"
+          no "friction themes," no "distinct themes")
         - Perform sentiment classification or distribution
         - Produce frequency tables, sentiment tables, or coded counts
-        - Use the word "theme" to describe your groupings
 
       RULE 3 — RESPONDENT TERMINOLOGY
       The reporting unit is the unique respondent. Never count text
@@ -302,6 +308,11 @@ ai_generation_tasks:
         - Generic research-practice observations
         - Product actions, feature changes, or design implementations
         - Structured distributions that ARE available (see above)
+
+      RULE 3 — TERMINOLOGY
+      Do not use "theme" or "themes" to describe qualitative groupings.
+      Use: "observation types," "qualitative categories," "friction
+      types," "preliminary groupings."
 
       ============================================================
       OUTPUT FORMAT

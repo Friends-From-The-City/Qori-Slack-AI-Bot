@@ -317,6 +317,44 @@ describe('Method & Provenance display labels', () => {
   });
 });
 
+describe('pre-main prevalence hardening', () => {
+  const yaml = readFileSync(YAML_PATH, 'utf-8');
+
+  it('prohibits "at least some respondents"', () => {
+    expect(yaml).toContain('"at least some respondents,"');
+  });
+
+  it('prohibits "for at least some respondents"', () => {
+    expect(yaml).toContain('"for at least some respondents,"');
+  });
+
+  it('prohibits "for some respondents"', () => {
+    expect(yaml).toContain('"for some respondents,"');
+  });
+});
+
+describe('theme terminology prohibition', () => {
+  const yaml = readFileSync(YAML_PATH, 'utf-8');
+
+  it('qualitative prompt prohibits "theme/themes" for groupings', () => {
+    expect(yaml).toContain('Do not use "theme" or "themes" to describe qualitative');
+  });
+
+  it('qualitative prompt prohibits "friction themes"', () => {
+    expect(yaml).toContain('"friction themes,"');
+  });
+
+  it('evidence-gap prompt prohibits "theme/themes"', () => {
+    // The evidence_gaps task should also prohibit "theme"
+    expect(yaml).toContain('Do not use "theme" or "themes" to describe qualitative groupings');
+  });
+
+  it('suggests replacement terminology', () => {
+    expect(yaml).toContain('observation');
+    expect(yaml).toContain('preliminary grouping');
+  });
+});
+
 describe('determinism', () => {
   it('3 runs identical', () => {
     const r1 = computeStandardFacts();
