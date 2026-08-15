@@ -71,7 +71,7 @@ input_variables:
 #
 # AUDIT (v9.1):
 # survey_themes:      SKIPPED — preliminary observations are not accepted themes
-# survey_findings:    KEPT — model-derived candidate findings (no new numbers)
+# survey_findings:    KEPT — model-derived interpretation (no new numbers)
 # discovered_barriers: KEPT — interpretive operation (tightened extraction)
 # discovered_metrics: SKIPPED — deterministic metrics live in evidence layer
 # sample_demographics: SKIPPED — no confirmed demographic fields in Slice 1
@@ -461,16 +461,25 @@ output_template: |
 
   | Property | Value |
   |----------|-------|
-  | **Original file** | {{document_names}} |
+  | **Original file** | {{#if provenance}}{{provenance.source_filename}}{{else}}{{document_names}}{{/if}} |
+  | **Evidence source ID** | {{#if provenance}}`{{provenance.source_public_id}}`{{else}}Not available{{/if}} |
   | **Source type** | {{document_types}} |
   | **Unique respondents** | {{#if computed_facts}}{{computed_facts.totalRespondents}}{{else}}Unknown{{/if}} |
 
   ### Schema
 
-  {{#if computed_facts}}
-  **Status:** Researcher-confirmed
+  {{#if provenance}}
+  **Review status:** Researcher-confirmed
 
-  **Fields:** {{computed_facts.schemaSummary}}
+  **Reviewed by:** {{provenance.reviewed_by}}
+
+  **Reviewed at:** {{provenance.reviewed_at}}
+
+  **Confirmed field roles:** {{provenance.field_role_summary}}
+
+  **Confirmed ordinal orders:**
+
+  {{provenance.ordinal_orders}}
   {{else}}
   **Status:** No schema — computed facts not available
   {{/if}}
@@ -489,9 +498,11 @@ output_template: |
 
   ### Generation
 
+  **Model:** {{#if provenance}}{{provenance.model_used}}{{else}}Unknown{{/if}}
+
   **Template:** survey_synthesis v9.1
 
-  **Date:** {{current_date_iso}}
+  **Generated at:** {{current_date_iso}}
 
   ### Authority
 
@@ -511,12 +522,15 @@ output_template: |
 
   | Variable | Status |
   |----------|--------|
-  | `survey_findings` | Model-derived candidate findings (no new numbers) |
-  | `discovered_barriers` | Model-derived from respondent evidence |
-  | `knowledge_gaps` | Model-derived evidence gaps |
+  | `survey_findings` | MODEL-DERIVED / emitted to legacy cascade |
+  | `discovered_barriers` | MODEL-DERIVED / emitted to legacy cascade — no prevalence authority |
+  | `knowledge_gaps` | MODEL-DERIVED / emitted to legacy cascade |
   | `survey_themes` | NOT EMITTED — formal coding not yet performed |
-  | `discovered_metrics` | NOT EMITTED — deterministic metrics stored as evidence constructs |
+  | `discovered_metrics` | NOT EMITTED — authoritative metrics persist as deterministic evidence constructs |
   | `sample_demographics` | NOT EMITTED — no confirmed demographic fields |
+
+  > [!NOTE]
+  > Model-derived cascade variables (`survey_findings`, `discovered_barriers`, `knowledge_gaps`) are legacy interpretive cascade context, not accepted evidence-layer constructs. They do not carry review/acceptance status. Progressive migration to evidence-layer acceptance state will occur in later vertical slices.
 
   ### Integrity
 

@@ -99,6 +99,14 @@ Legacy survey emits audited against v9 authority model:
 
 All existing downstream consumers (stakeholder_synthesis, research_brief) use optional/conditional consumption with Handlebars `{{#if}}` guards. Absence is tolerated.
 
+## Legacy Model-Derived Cascade Variables
+
+Retained survey emits (`survey_findings`, `discovered_barriers`, `knowledge_gaps`) are legacy model-derived interpretive cascade context, NOT accepted evidence-layer constructs. They are emitted to `study_variables` via the existing `variableExtractor` path and do not carry review/acceptance status.
+
+The architectural term "candidate" is not used because `study_variables` does not represent candidate/accepted state. Precise terminology: MODEL-DERIVED CASCADE VARIABLE.
+
+**Roadmap limitation:** Legacy model-derived cascade variables remain distinguishable from canonical accepted evidence. Progressive migration to evidence-layer acceptance state will occur in later vertical slices.
+
 ## Qualitative Coding Deferred to Slice 2
 
 No codebook generation, model coding, theme/category frequency from open-text, coding audit trail, or coded cross-tabs. Open-text content is passed to the LLM for qualitative interpretation only.

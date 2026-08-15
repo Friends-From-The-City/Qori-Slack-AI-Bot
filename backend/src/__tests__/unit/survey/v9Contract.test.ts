@@ -216,9 +216,26 @@ describe('survey synthesis v9 contract', () => {
       expect(yaml).toContain('Method & Provenance');
     });
 
-    it('contains Source subsection', () => {
+    it('contains Source subsection with evidence_source public_id', () => {
       const yaml = readFileSync(YAML_PATH, 'utf-8');
       expect(yaml).toContain('### Source');
+      expect(yaml).toContain('Evidence source ID');
+      expect(yaml).toContain('provenance.source_public_id');
+    });
+
+    it('contains Schema subsection with reviewer metadata', () => {
+      const yaml = readFileSync(YAML_PATH, 'utf-8');
+      expect(yaml).toContain('### Schema');
+      expect(yaml).toContain('provenance.reviewed_by');
+      expect(yaml).toContain('provenance.reviewed_at');
+      expect(yaml).toContain('provenance.field_role_summary');
+      expect(yaml).toContain('provenance.ordinal_orders');
+    });
+
+    it('contains Generation subsection with actual model', () => {
+      const yaml = readFileSync(YAML_PATH, 'utf-8');
+      expect(yaml).toContain('### Generation');
+      expect(yaml).toContain('provenance.model_used');
     });
 
     it('contains Authority table with actual authority levels', () => {
@@ -228,10 +245,24 @@ describe('survey synthesis v9 contract', () => {
       expect(yaml).toContain('Preliminary model interpretation');
     });
 
-    it('contains actual cascade emission state', () => {
+    it('uses MODEL-DERIVED for retained emits (not "candidate")', () => {
+      const yaml = readFileSync(YAML_PATH, 'utf-8');
+      expect(yaml).toContain('MODEL-DERIVED / emitted to legacy cascade');
+      expect(yaml).not.toMatch(/candidate findings/);
+    });
+
+    it('documents legacy cascade limitation', () => {
+      const yaml = readFileSync(YAML_PATH, 'utf-8');
+      expect(yaml).toContain('legacy interpretive cascade context');
+      expect(yaml).toContain('not accepted evidence-layer constructs');
+    });
+
+    it('contains NOT EMITTED state for removed variables', () => {
       const yaml = readFileSync(YAML_PATH, 'utf-8');
       expect(yaml).toContain('NOT EMITTED');
       expect(yaml).toContain('formal coding not yet performed');
+      expect(yaml).toContain('deterministic evidence constructs');
+      expect(yaml).toContain('no confirmed demographic fields');
     });
 
     it('contains Integrity subsection with source hash', () => {
