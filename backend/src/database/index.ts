@@ -20,6 +20,7 @@ import DispositionAuditLog from './models/disposition_audit_log';
 import EvidenceSource from './models/evidence_source';
 import EvidenceConstruct from './models/evidence_construct';
 import EvidenceRelationship from './models/evidence_relationship';
+import SurveyFieldSchema from './models/survey_field_schema';
 
 
 // Set environment and configuration
@@ -50,6 +51,7 @@ const modelDefiners = [
   EvidenceSource,
   EvidenceConstruct,
   EvidenceRelationship,
+  SurveyFieldSchema,
 ];
 
 // Register all models with Sequelize

@@ -31,6 +31,7 @@ import DispositionAuditLog from '../../../database/models/disposition_audit_log'
 import EvidenceSource from '../../../database/models/evidence_source';
 import EvidenceConstruct from '../../../database/models/evidence_construct';
 import EvidenceRelationship from '../../../database/models/evidence_relationship';
+import SurveyFieldSchema from '../../../database/models/survey_field_schema';
 
 let instance: Sequelize | null = null;
 
@@ -57,6 +58,7 @@ export function getTestDb(): Sequelize {
     StudyStatus, StudyParticipant, SessionObserver, StudyNotes,
     ResearchPlan, SessionSummary, StudyVariable, CreatedIssue, SlackUserState,
     DispositionAuditLog, EvidenceSource, EvidenceConstruct, EvidenceRelationship,
+    SurveyFieldSchema,
   ];
 
   for (const defineModel of modelDefiners) {

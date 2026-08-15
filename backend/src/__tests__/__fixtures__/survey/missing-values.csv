@@ -1,0 +1,6 @@
+response_id,overall_satisfaction,difficulty_rating,completion_status,biggest_challenge
+R-201,Satisfied,Easy,Complete,"Finding the right form"
+R-202,,Moderate,,
+R-203,Dissatisfied,,Incomplete,"Upload kept failing"
+R-204,,,Complete,""
+R-205,Very Satisfied,Very Easy,Complete,"Nothing major"

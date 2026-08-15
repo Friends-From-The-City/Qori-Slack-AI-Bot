@@ -307,12 +307,12 @@ export const discoverSurveyModal = {
       },
       hint: {
         type: "plain_text",
-        text: "CSV or Excel — up to 10 files",
+        text: "CSV format only — up to 10 files",
       },
       element: {
         type: "file_input",
         action_id: "file_upload",
-        filetypes: ["csv", "xlsx", "xls"],
+        filetypes: ["csv"],
         max_files: 10,
       },
     },
