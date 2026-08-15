@@ -49,6 +49,7 @@ import {
   formatComputedFacts,
   toDisplayLabel,
 } from '../../survey';
+import { loadPersistedFacts } from '../../survey/loadPersistedFacts';
 import { buildQualitativeEntries, persistQualitativeEntries } from '../../survey/qualitativeEntryWriter';
 import {
   getAnalysisEligibleContent as getEligibleContent,
@@ -761,8 +762,22 @@ export async function runSurveyQualitativeSynthesis(
   client: AllMiddlewareArgs['client'],
 ): Promise<void> {
   try {
-    const computedFacts = computeSurveyFacts(survey, confirmedFields, contentHash);
-    const identities = assignRespondentIdentities(survey, confirmedFields, contentHash);
+    // Load canonical persisted facts from evidence constructs — NOT recomputed from CSV
+    const evidenceConstructs = await EvidenceConstructModel.findAll({
+      where: { project_id: ctx.projectId },
+      order: [['created_at', 'ASC']],
+    });
+
+    const computedFacts = loadPersistedFacts(
+      evidenceConstructs.map(c => ({
+        construct_type: (c as unknown as { construct_type: string }).construct_type,
+        payload: (c as unknown as { payload: Record<string, unknown> | null }).payload,
+      })),
+    );
+
+    if (!computedFacts) {
+      throw new Error('No persisted structured facts found. Cannot generate synthesis without deterministic evidence.');
+    }
 
     // Load analysis-eligible entries via governance accessor
     const allEntries = await QualitativeEntryModel.findAll({
@@ -827,7 +842,7 @@ export async function runSurveyQualitativeSynthesis(
       selected_study: `discovery-${ctx.topicSlug}`,
       study_name: ctx.topic,
       document_count: 1,
-      document_names: [survey.sourceFilename],
+      document_names: [evidenceSource?.artifact_ref ? (evidenceSource.artifact_ref as Record<string, unknown>).filename as string ?? survey.sourceFilename : survey.sourceFilename],
       document_types: ['CSV'],
       _discovery_type: 'survey-synthesis',
       computed_facts: formatComputedFacts(computedFacts, confirmedFields),
