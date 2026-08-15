@@ -11,6 +11,7 @@
  */
 
 import type { SurveyComputedFacts, FieldStat, CrossTab, FieldStatSummary, ConfirmedField } from '../../types/survey';
+import { toDisplayLabel } from './displayLabels';
 
 export interface FormattedComputedFacts {
   sourceContentHash: string;
@@ -23,6 +24,7 @@ export interface FormattedComputedFacts {
 
 export interface FormattedFieldStat {
   fieldName: string;
+  displayName: string;
   role: string;
   totalRespondents: number;
   nPresent: number;
@@ -35,7 +37,9 @@ export interface FormattedFieldStat {
 
 export interface FormattedCrossTab {
   rowField: string;
+  rowDisplayName: string;
   colField: string;
+  colDisplayName: string;
   cells: string;
   totalN: number;
 }
@@ -80,6 +84,7 @@ function formatFieldStat(
 ): FormattedFieldStat {
   return {
     fieldName: stat.fieldName,
+    displayName: toDisplayLabel(stat.fieldName),
     role: stat.role,
     totalRespondents: stat.totalRespondents,
     nPresent: stat.nPresent,
@@ -169,7 +174,9 @@ function formatCrossTab(
 
   return {
     rowField: ct.rowField,
+    rowDisplayName: toDisplayLabel(ct.rowField),
     colField: ct.colField,
+    colDisplayName: toDisplayLabel(ct.colField),
     cells: [header, separator, ...rows].join('\n'),
     totalN: ct.totalN,
   };
