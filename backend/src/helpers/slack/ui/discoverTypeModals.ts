@@ -57,17 +57,20 @@ export const discoverDeskResearchModal = {
     {
       type: "input",
       block_id: "description_block",
-      optional: true,
       label: {
         type: "plain_text",
-        text: "What are these documents about?",
+        text: "What do you need this source to tell you?",
+      },
+      hint: {
+        type: "plain_text",
+        text: "How this source relates to the project problem. Gaps are derived against this.",
       },
       element: {
         type: "plain_text_input",
         action_id: "description",
         placeholder: {
           type: "plain_text",
-          text: "Optional context about the uploaded documents",
+          text: "e.g., What barriers do Veterans face with claim status tracking?",
         },
         multiline: true,
       },
@@ -147,17 +150,20 @@ export const discoverStakeholderModal = {
     {
       type: "input",
       block_id: "description_block",
-      optional: true,
       label: {
         type: "plain_text",
-        text: "What are these documents about?",
+        text: "What do you need this source to tell you?",
+      },
+      hint: {
+        type: "plain_text",
+        text: "How this source relates to the project problem. Gaps are derived against this.",
       },
       element: {
         type: "plain_text_input",
         action_id: "description",
         placeholder: {
           type: "plain_text",
-          text: "Optional context about the uploaded transcripts",
+          text: "e.g., What constraints do internal teams face with claims processing?",
         },
         multiline: true,
       },
@@ -236,6 +242,27 @@ export const discoverSurveyModal = {
     },
     {
       type: "input",
+      block_id: "description_block",
+      label: {
+        type: "plain_text",
+        text: "What do you need this source to tell you?",
+      },
+      hint: {
+        type: "plain_text",
+        text: "How this source relates to the project problem. Gaps are derived against this.",
+      },
+      element: {
+        type: "plain_text_input",
+        action_id: "description",
+        placeholder: {
+          type: "plain_text",
+          text: "e.g., What satisfaction levels exist post-launch?",
+        },
+        multiline: true,
+      },
+    },
+    {
+      type: "input",
       block_id: "survey_name_block",
       label: {
         type: "plain_text",
@@ -280,12 +307,12 @@ export const discoverSurveyModal = {
       },
       hint: {
         type: "plain_text",
-        text: "CSV or Excel — up to 10 files",
+        text: "CSV format only — up to 10 files",
       },
       element: {
         type: "file_input",
         action_id: "file_upload",
-        filetypes: ["csv", "xlsx", "xls"],
+        filetypes: ["csv"],
         max_files: 10,
       },
     },

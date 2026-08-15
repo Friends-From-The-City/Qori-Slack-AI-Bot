@@ -1,0 +1,124 @@
+# Survey Slice 1 Implementation Decisions
+
+Date: 2026-08-15
+
+## Parser Choice: csv-parse
+
+**Selected:** `csv-parse` v7 (npm `csv-parse`)
+
+**Why:** Server-side Node.js library with RFC 4180 compliance. Handles quoted fields, embedded newlines, escaped quotes, BOM, and delimiter detection. Synchronous API (`csv-parse/sync`) guarantees deterministic output. Well-maintained (part of the csv ecosystem). No browser-only dependencies.
+
+**Rejected:** `papaparse` (primarily browser-focused, Node support is secondary), hand-rolled parser (RFC compliance is non-trivial), `fast-csv` (less RFC-complete quoted field handling).
+
+## XLS/XLSX Intentionally Disabled
+
+Excel support removed from survey upload modal. CSV only for Slice 1.
+
+**Why:** The backend returned placeholder text for Excel files — accepting them in the UI while silently not parsing them was unsafe. Adding an Excel dependency (e.g., `xlsx`, `exceljs`) is not justified until researcher demand is confirmed. CSV is the universal survey export format.
+
+**Record:** Filetypes changed from `["csv", "xlsx", "xls"]` to `["csv"]` in both the modal definition and the DISCOVERY_TYPES config.
+
+## Schema Inference Requires Complete Researcher Review
+
+Field roles are inferred by heuristic, never declared authoritative without confirmation.
+
+**Complete review enforced:** ALL fields must be reviewed before computation proceeds. Surveys with >100 columns are rejected with a clear message. Surveys with 21-100 columns use paginated schema review (20 fields per page, multiple pages). No unreviewed inferred role becomes authoritative.
+
+**Heuristic categories:** id (by field name pattern), ordinal (Likert labels or small integer range), nominal (low cardinality), continuous (mostly numeric), open_text (high cardinality or long), timestamp (date patterns), multi_select (delimiter patterns).
+
+## Ordinal Fields Require Explicit Category Order
+
+**Rule:** No ordinal median computed without BOTH:
+1. Researcher confirms `confirmed_role = 'ordinal'`
+2. Researcher provides/confirms explicit category order via pipe-separated text input
+
+Appearance order, lexical order, and numeric-looking values are NOT treated as authoritative ordering without researcher confirmation.
+
+For numeric ordinal scales (e.g., 1-5), Qori proposes the detected values but the researcher must explicitly confirm.
+
+If an ordinal field has no confirmed order, it is treated as nominal for statistics: distribution is shown, but median is NOT computed.
+
+**Validation:** The confirmed order must include ALL observed non-missing category values. Duplicate categories fail. Incomplete orders fail.
+
+## Bare CSV Missingness Limitations
+
+Two observable states only: `value_present`, `empty_or_missing`.
+
+No semantic missingness (`not_asked`, `no_response`, `blank`) — bare CSV cannot distinguish why a value is absent. The nonresponse limitation is documented in SurveyComputedFacts and rendered in the output.
+
+## Pending CSV Storage: Redis with TTL
+
+**Corrected from initial design.** Raw CSV staging uses Redis with automatic TTL expiry, NOT a Postgres column.
+
+**TTL:** 2 hours. Schema review typically happens immediately after upload; 2 hours provides margin for researcher interruptions without retaining PII-bearing content indefinitely.
+
+**Key format:** `survey:pending:{projectId}:{sourcePublicId}:{userId}`
+
+**Lifecycle:**
+- Upload → `Redis SET` with TTL
+- Schema confirmation → `Redis DEL` immediately
+- TTL reached → automatic deletion (no orphan data)
+- Expired review → clear error asking researcher to re-upload
+
+**PII implications:** Survey CSVs may contain respondent names/emails. The TTL guarantees automatic deletion even if the researcher never completes review. On confirmation, content is deleted immediately. No PII persists beyond the staging window. Staged content is NOT exposed to /qori-ask, study_variables, generated artifacts, model prompts, or evidence metadata.
+
+## Deterministic Facts in Evidence Layer
+
+Survey constructs use `derivation_type: 'deterministic'` and `status: 'accepted'` (auto-accepted because they are code-computed, not model-interpreted). Three construct types: `survey_dataset_summary`, `field_distribution`, `cross_tab`.
+
+## No Cascade Projection in Slice 1
+
+No evidence constructs are projected into study_variables. `sample_demographics` is NOT auto-projected because `total_responses` alone is not demographic information — projection requires researcher-confirmed genuinely demographic fields matching the cascade schema semantics. The LLM may still extract cascade variables from rendered prose (existing behavior).
+
+## Ordinal Presentation Follows Measurement Order
+
+Ordinal distributions and cross-tab axes render categories in researcher-confirmed measurement order, NOT sorted by frequency or alphabetically. Nominal categories use count-descending with alphabetical tiebreak.
+
+## Declared Respondent Identifiers Are Provenance-Bearing
+
+When a researcher-confirmed ID field exists and values are safe to display, the declared respondent identifier (e.g., T001) is preserved as the display label in evidence quotes. Qori does not silently replace source IDs with aliases (e.g., R001). If an ID field has empty values for some rows, those rows get generated labels.
+
+## Preliminary Qualitative Interpretation Cannot Imply Prevalence
+
+Soft prevalence language ("several respondents," "a recurring concern," "some entries," "frequently," "commonly") is prohibited in Slice 1 prompt output. Preferred: "Open-text entries describe..." / "One observed issue involves..." / "An illustrative account describes..."
+
+Qualitative prevalence becomes available only after Slice 2: versioned codebook → candidate coding → researcher adjudication → accepted respondent-code membership → deterministic aggregation.
+
+## Emit Contract Aligned with v9 Authority Model
+
+Legacy survey emits audited against v9 authority model:
+
+| Variable | Decision | Rationale |
+|----------|----------|-----------|
+| survey_themes | NOT EMITTED | Returns in Slice 2 after formal coding/adjudication |
+| discovered_metrics | NOT EMITTED | Deterministic metrics stored as evidence constructs |
+| sample_demographics | NOT EMITTED | No confirmed demographic fields in Slice 1 |
+| discovered_barriers | NOT EMITTED | Returns in Slice 2 after accepted coding supports them |
+| survey_findings | KEPT | Model-derived interpretation (no new numbers) |
+| knowledge_gaps | KEPT | Identifying evidence gaps is approved interpretive work |
+
+All existing downstream consumers (stakeholder_synthesis, research_brief) use optional/conditional consumption with Handlebars `{{#if}}` guards. Absence is tolerated.
+
+## Legacy Model-Derived Cascade Variables
+
+Retained survey emits (`survey_findings`, `discovered_barriers`, `knowledge_gaps`) are legacy model-derived interpretive cascade context, NOT accepted evidence-layer constructs. They are emitted to `study_variables` via the existing `variableExtractor` path and do not carry review/acceptance status.
+
+The architectural term "candidate" is not used because `study_variables` does not represent candidate/accepted state. Precise terminology: MODEL-DERIVED CASCADE VARIABLE.
+
+**Roadmap limitation:** Legacy model-derived cascade variables remain distinguishable from canonical accepted evidence. Progressive migration to evidence-layer acceptance state will occur in later vertical slices.
+
+## Research Artifacts Do Not Expose Implementation State
+
+Internal concepts such as "legacy cascade," "evidence-layer constructs," "vertical slice," "progressive migration," and internal variable names do not appear in researcher-facing artifacts. Method & Provenance describes analysis authority in plain research language.
+
+## Researcher-Facing Display Labels
+
+Machine field names (e.g., `overall_satisfaction`) render as Title Case display labels (e.g., "Overall Satisfaction") in the research artifact. Technical field names appear in parenthetical context in Analysis Details only.
+
+## Ordinal Scale Suggestions
+
+Qori pre-populates recognized ordinal scales (satisfaction, difficulty, agreement, likelihood, numeric). Suggestions use exact case-insensitive match against known canonical scales. Researcher confirmation remains authoritative — suggestions are never auto-accepted.
+
+## Qualitative Coding Deferred to Slice 2
+
+No codebook generation, model coding, theme/category frequency from open-text, coding audit trail, or coded cross-tabs. Open-text content is passed to the LLM for qualitative interpretation only.

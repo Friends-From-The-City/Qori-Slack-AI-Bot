@@ -22,9 +22,10 @@ import { format } from 'date-fns';
 import { processYamlTemplate } from '../../yamlProcessor';
 import { processSlackFiles } from '../../pdfProcessor';
 import { parseDocuments, validateDocuments } from '../../documentParser';
-import { getProjectByChannelId } from '../../../services/project.service';
+import { getProjectByChannelId, getProjectById } from '../../../services/project.service';
 import type { VariableContext } from '../../studyVariables';
 import { postEphemeralOrDM } from '../slackHelpers';
+import { handleSurveyUploadPhase } from './surveySubmissionHandler';
 
 // ─── Types ──────────────────────────────────────────────────────
 
@@ -77,6 +78,8 @@ interface DiscoveryTemplateInput {
   effective_topic: string;
   topic_slug: string;
   project_slug: string;
+  project_problem_statement: string | null;
+  source_intent: string | null;
   description: string;
   document_content: string;
   combined_file_content: string;
@@ -127,7 +130,7 @@ const DISCOVERY_TYPES: Record<DiscoveryTypeKey, DiscoveryTypeConfig> = {
     yaml: 'survey_synthesis.yaml',
     type: 'survey-synthesis',
     fileSlug: 'survey-synthesis',
-    filetypes: ['csv', 'xlsx', 'xls'],
+    filetypes: ['csv'],
     label: 'Survey synthesis',
   },
 };
@@ -400,6 +403,31 @@ async function handleDiscoverSubmission({ ack, view, body, client }: SlackViewMi
   const typeConfig = DISCOVERY_TYPES[discoveryType as DiscoveryTypeKey];
   let topicSlug = slugifyTopic(topic);
 
+  // Survey path forks to structured ingestion handler (Survey Slice 1)
+  if (discoveryType === 'survey_synthesis') {
+    await handleSurveyUploadPhase(
+      {
+        userId,
+        projectId: projectId!,
+        projectSlug: projectSlug!,
+        channelId: channelId || userId,
+        topic: topic!,
+        topicSlug,
+        surveyName: surveyName || topic!,
+        questionFocus: questionFocus || '',
+        sourceIntent: description || topic!,
+        uploadedFiles: uploadedFiles.map(f => ({
+          id: f.id,
+          name: f.name,
+          mimetype: f.mimetype,
+          url: f.url,
+        })),
+      },
+      client,
+    );
+    return;
+  }
+
   // Duplicate handling — use project slug for folder path (Phase 2D)
   const dateIso: string = format(new Date(), 'yyyy-MM-dd');
   const expectedFilename = `${topicSlug}-${typeConfig.fileSlug}-${dateIso}.md`;
@@ -415,6 +443,10 @@ async function handleDiscoverSubmission({ ack, view, body, client }: SlackViewMi
   }
 
   console.log(`🔍 Discovery: project=${projectSlug}, type=${discoveryType}, topic="${topic}", slug="${topicSlug}", files=${uploadedFiles.length}`);
+
+  // Load project to get problem_statement for grounded gap derivation
+  const project = await getProjectById(projectId);
+  const projectProblemStatement = project?.problem_statement || null;
 
   await client.chat.postMessage({
     channel: userId,
@@ -459,6 +491,8 @@ async function handleDiscoverSubmission({ ack, view, body, client }: SlackViewMi
       effective_topic: topic,
       topic_slug: topicSlug,
       project_slug: projectSlug,
+      project_problem_statement: projectProblemStatement,
+      source_intent: description,
       description: description || topic,
       document_content: formattedDocumentContent,
       combined_file_content: formattedDocumentContent,

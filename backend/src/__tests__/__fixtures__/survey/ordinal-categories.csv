@@ -1,0 +1,8 @@
+response_id,experience_level,satisfaction_1to5,difficulty_1to5,department
+R-601,Senior,4,2,Engineering
+R-602,Junior,5,1,Design
+R-603,Mid-level,3,3,Engineering
+R-604,Senior,4,2,Research
+R-605,Junior,2,4,Design
+R-606,Mid-level,4,1,Engineering
+R-607,Senior,5,2,Research

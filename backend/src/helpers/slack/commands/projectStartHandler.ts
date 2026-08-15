@@ -106,6 +106,7 @@ async function handleProjectCreateSubmission({ ack, body, view, client }: SlackV
   const values = view.state.values;
   const projectName = values.project_name?.value?.value?.trim() || '';
   const projectDescription = values.project_description?.value?.value?.trim() || null;
+  const projectProblemStatement = values.project_problem_statement?.value?.value?.trim() || null;
 
   // Check if "create channel" toggle is selected (default ON via initial_options)
   const createChannelOptions = values.create_channel?.value?.selected_options || [];
@@ -128,6 +129,17 @@ async function handleProjectCreateSubmission({ ack, body, view, client }: SlackV
     return;
   }
 
+  // Validate problem statement (required)
+  if (!projectProblemStatement) {
+    await ack({
+      response_action: 'errors',
+      errors: {
+        project_problem_statement: 'Problem statement is required. Discovery and briefs are derived against this.',
+      },
+    });
+    return;
+  }
+
   // Parse metadata
   let metadata: ProjectCreationModalMetadata;
   try {
@@ -145,6 +157,7 @@ async function handleProjectCreateSubmission({ ack, body, view, client }: SlackV
   try {
     const project = await createProjectFromName(projectName, {
       description: projectDescription,
+      problem_statement: projectProblemStatement,
       created_by: body.user.id,
       status: 'active',
     });

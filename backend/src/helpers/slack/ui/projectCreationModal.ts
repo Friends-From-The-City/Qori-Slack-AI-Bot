@@ -91,6 +91,28 @@ export function projectCreationModal(channelId: string) {
       },
       {
         type: "input",
+        block_id: "project_problem_statement",
+        label: {
+          type: "plain_text",
+          text: "What problem are you trying to solve?",
+        },
+        hint: {
+          type: "plain_text",
+          text: "The question this research needs to answer. Gaps and research questions are derived against this.",
+        },
+        element: {
+          type: "plain_text_input",
+          action_id: "value",
+          multiline: true,
+          placeholder: {
+            type: "plain_text",
+            text: "Veterans struggle to find their claim status online, leading to high call center volume...",
+          },
+          max_length: 2000,
+        },
+      },
+      {
+        type: "input",
         block_id: "project_stakeholder",
         optional: true,
         label: {

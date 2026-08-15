@@ -46,11 +46,22 @@ input_variables:
       description: "Optional focus area. Defaults to topic if not provided."
       default: "{{topic}}"
 
+  - project_problem_statement:
+      type: "text"
+      required: false
+      description: "Project-level research problem. Knowledge gaps are derived against this."
+
+  - source_intent:
+      type: "textarea"
+      required: true
+      placeholder: "e.g., What barriers do Veterans face with claim status tracking?"
+      description: "What the researcher needs this source to tell them — how it relates to the project problem."
+
   - description:
       type: "textarea"
       required: false
       placeholder: "e.g., Competitive analysis from Q3, industry reports on telehealth"
-      description: "Optional context about the uploaded documents"
+      description: "Legacy field — use source_intent instead"
 
   - document_content:
       type: "textarea"
@@ -178,6 +189,10 @@ ai_generation_tasks:
       3. Do NOT create themes based on what you think should be covered
       4. QUOTE directly from documents when providing evidence
       5. If you can only identify 1-2 themes, that's fine - do not pad
+      6. RECOMMENDATIONS ARE NOT EVIDENCE. A source's recommendation (e.g.,
+         "Add plain-language descriptions") may be reported as what the source
+         recommends, but it cannot be quoted as evidence FOR a theme. Evidence
+         must be observational or empirical, not prescriptive.
 
       For each theme:
 
@@ -208,10 +223,28 @@ ai_generation_tasks:
       section dividers beyond the per-theme separators above. The template
       handles all document structure.
 
-  # Knowledge gaps and research implications (renamed from Recommendations)
+  # Knowledge gaps — derived against the project problem statement
   - task_id: "knowledge_gaps_prose"
+    skip_when: "not project_problem_statement"
+    skip_output: |
+      > **Knowledge gaps require a project problem statement.**
+      >
+      > Run `/qori-start` to set a problem statement for this project, then re-run discovery.
     prompt: |
-      Identify knowledge gaps and research implications from the desk research.
+      Identify knowledge gaps from the desk research.
+
+      ============================================================
+      DERIVATION RULE
+      ============================================================
+
+      A knowledge gap is: A question that the stated research problem requires
+      answering, which THIS SOURCE cannot answer.
+
+      **Research Problem (from project):**
+      {{project_problem_statement}}
+
+      **Source Intent (what researcher needs from this source):**
+      {{source_intent}}
 
       **Research Topic:** {{effective_topic}}
 
@@ -220,28 +253,40 @@ ai_generation_tasks:
       {{document_content}}
       ---END CONTENT---
 
-      CRITICAL ANTI-HALLUCINATION RULES:
-      1. If content is empty, respond: "> **No documents provided.** Unable to identify knowledge gaps."
-      2. EVERY gap must trace to a specific limitation or unanswered question in the documents
-      3. Do NOT suggest product actions, feature changes, or design implementations —
-         those belong in the research brief, not desk research
-      4. Focus on: what the literature couldn't answer, and what research methods
-         the findings suggest for investigation
+      ============================================================
+      RULES
+      ============================================================
 
-      Structure as:
+      1. EVERY gap must be a question that the research problem REQUIRES answering
+      2. For each gap, state what the source DOES establish on that question, then where it stops
+      3. Do NOT include:
+         - Questions the source answers (partially or fully)
+         - Questions unrelated to the stated problem
+         - Generic research-practice observations
+         - Product actions, feature changes, or design implementations
+      4. If the documents are comprehensive relative to the problem:
+         > The documents provide strong coverage of the research problem. One area for further investigation: [specific gap].
 
-      | Gap Identified | Why It Matters | Suggested Research Approach |
-      |:---------------|:---------------|:---------------------------|
-      | [Unanswered question from the documents] | [Why this gap matters for decisions] | [Research method to investigate — e.g., card sorting, usability testing, interviews] |
+      ============================================================
+      OUTPUT FORMAT
+      ============================================================
 
-      3-5 gaps. Each must reference specific limitations in the source documents.
+      For each gap (3-5 maximum):
 
-      If the documents are comprehensive with few gaps:
-      > The documents provide strong coverage. One area for further investigation: [specific gap].
+      **Gap N: [Question the problem requires answering]**
+
+      | What this source establishes | Where it stops |
+      |:-----------------------------|:---------------|
+      | [Specific evidence from documents] | [Specific limitation] |
+
+      **Suggested research approach:** [Method to investigate — e.g., card sorting, usability testing, interviews]
+
+      ---
 
       OUTPUT BOUNDARIES: Do not generate section headings, sub-headings,
       citation appendices, reference lists, horizontal rules, or markdown
-      section dividers. The template handles all document structure.
+      section dividers beyond the per-gap separators above. The template
+      handles all document structure.
 
   # Sources
   - task_id: "sources"
@@ -260,21 +305,14 @@ ai_generation_tasks:
       3. Do NOT invent titles, authors, organizations, or dates
       4. If author/date not stated, write "Not specified"
 
-      Format as:
-
-      | # | Document | Author/Org | Date | Contribution |
-      |:-:|:---------|:-----------|:-----|:-------------|
-      | 1 | **[Title]** | [Author] | [Date] | [Key contribution] |
-
-      For each source, add a details block:
+      Format as a single details block per source (no redundant table):
 
       <details>
-      <summary><strong>N. [Document Title]</strong></summary>
+      <summary><strong>N. [Document Title]</strong> — [Author/Org], [Date]</summary>
 
-      - **Full Citation:** [Author/Org]. ([Date]). *[Title]*. [Publisher if known].
       - **Document Type:** [Report / Study / Survey / etc.]
-      - **Key Contribution:** [2-3 sentences]
-      - **Limitations:** [Any noted limitations]
+      - **Key Contribution:** [2-3 sentences on what this source establishes]
+      - **Limitations:** [Any noted limitations or gaps]
 
       </details>
 
@@ -292,29 +330,22 @@ output_template: |
 
   **Study:** {{selected_study}} &nbsp; | &nbsp; **Topic:** {{effective_topic}} &nbsp; | &nbsp; **Documents:** {{document_count}} &nbsp; | &nbsp; **Date:** {{current_date}}
 
-  {{#if description}}
-  > **Document Context:** {{description}}
-  {{/if}}
+  ---
 
-  > [!NOTE]
-  > This analysis is based solely on the documents provided. All findings, themes, and knowledge gaps are derived from the uploaded content.
+  {{#if project_problem_statement}}
+  **Research problem:** {{project_problem_statement}}
+
+  **This document contributes:** {{source_intent}}
+  {{else}}
+  > [!WARNING]
+  > No project problem statement set. Knowledge gaps cannot be derived without a stated research problem.
+  > Run `/qori-start` to set one.
+  {{/if}}
 
   ---
 
-  ## Documents Analyzed
-
-  | # | Filename | Type |
-  |:-:|:---------|:-----|
-  {{#each document_names}}
-  | {{@index}} | {{this}} | {{lookup ../document_types @index}} |
-  {{/each}}
-
-  <details>
-  <summary><strong>Document details</strong> — source, relevance, and summaries</summary>
-
-  {{ai_generated.document_analysis}}
-
-  </details>
+  > [!NOTE]
+  > This analysis is based solely on the documents provided. All findings, themes, and knowledge gaps are derived from the uploaded content.
 
   ---
 
@@ -336,37 +367,36 @@ output_template: |
 
   ---
 
-  ## References
+  <details>
+  <summary><strong>Methodology</strong></summary>
+
+  This desk research synthesis uses thematic analysis with source triangulation.
+  Findings are corroborated across multiple documents where possible, with
+  confidence ratings reflecting evidence strength. Knowledge gaps are derived
+  against the stated research problem, not generated speculatively.
+
+  </details>
+
+  ---
+
+  ## Sources and Documents
+
+  **Documents analyzed:** {{document_count}}
+
+  {{#each document_names}}
+  - **{{this}}** ({{lookup ../document_types @index}})
+  {{/each}}
+
+  <details>
+  <summary><strong>Document details</strong> — source, relevance, and summaries</summary>
+
+  {{ai_generated.document_analysis}}
+
+  </details>
+
+  ### Source Attribution
 
   {{ai_generated.sources}}
-
-  ---
-
-  <details>
-  <summary><strong>Methodology Note</strong></summary>
-
-  | Practice | Implementation |
-  |:---------|:---------------|
-  | Source triangulation | Findings corroborated across multiple documents where possible |
-  | Evidence grounding | All claims tied to specific document content |
-  | Confidence assessment | Strength of evidence explicitly rated |
-  | Limitation acknowledgment | Gaps and constraints clearly noted |
-
-  </details>
-
-  ---
-
-  <details>
-  <summary><strong>Validity checklist</strong></summary>
-
-  | Check | Result |
-  |-------|--------|
-  | All source documents cited | |
-  | Themes supported by multiple sources | |
-  | Knowledge gaps are actionable | |
-  | No claims beyond source material | |
-
-  </details>
 
   ---
 
@@ -383,8 +413,6 @@ output_template: |
   | methodology_recommendations | Suggested research methods from the literature |
   | knowledge_gaps | Areas the research could not answer |
   | source_artifacts | Document metadata for provenance tracking |
-
-  **Documents analyzed:** {{document_count}}
 
   </details>
 
@@ -430,29 +458,35 @@ emits:
       items:
         $ref: schemas/discovered_barrier.yaml
     extract_from: |
-      Key Themes and Executive Summary — barriers, challenges, pain points.
+      DERIVATION RULE — discovered_barriers
+
+      definition: An obstacle that prevented or measurably degraded task
+        completion, evidenced by a specific observation in the source.
+
+      evidence_requirement: Must cite a specific observation showing the
+        barrier blocked or degraded a task. Include: what was attempted,
+        what happened, what the consequence was.
+
+      does_not_qualify:
+        - Dissatisfaction without a blocked or degraded task
+        - Recommendations (even if they imply a problem)
+        - Inference from absence of evidence
+        - Complaints without task context
+
       Assign sequential IDs (barrier-001).
       Include: title, summary, magnitude with numbers, evidence as array of
       supporting quotes/metrics, affected_population, source_document name,
       confidence level.
 
-      CRITICAL — barrier_categories (REQUIRED, array of 1+ values):
-      Classify each barrier by research-method category. Use ALL that apply
-      (barriers are multi-dimensional — e.g., screen-reader navigation is
-      BOTH ia AND accessibility):
-        - ia: navigation, findability, mental models, labeling, information architecture
-        - accessibility: assistive tech, WCAG, screen readers, motor/vision impairments
-        - performance: speed, latency, load times, system responsiveness
-        - content: readability, comprehension, terminology, tone, info quality
-        - task-flow: task completion, workflow steps, error recovery, form design
-        - cognitive: mental load, decision complexity, memory demands, learning curve
-        - other: ONLY if no category genuinely applies — do not force-fit a barrier
-          into a category it doesn't belong to. Prefer a real category when one fits;
-          use 'other' when none do.
-
-      Example: A barrier about "Veterans can't find benefit status" = [ia, task-flow].
-      A barrier about "Screen reader announces wrong labels" = [ia, accessibility].
-      A barrier about "Page loads too slowly on mobile" = [performance].
+      barrier_categories (REQUIRED, array of 1+ values):
+      Classify each barrier by research-method category. Use ALL that apply:
+        - ia: navigation, findability, mental models, labeling
+        - accessibility: assistive tech, WCAG, screen readers, motor/vision
+        - performance: speed, latency, load times, responsiveness
+        - content: readability, comprehension, terminology, tone
+        - task-flow: task completion, workflow steps, error recovery, forms
+        - cognitive: mental load, decision complexity, memory demands
+        - other: ONLY if no category genuinely applies
 
   - key: discovered_metrics
     pool: true

@@ -1,0 +1,11 @@
+response_id,timestamp,overall_satisfaction,difficulty_rating,completion_status,biggest_challenge,additional_feedback
+R-101,2026-06-01 10:30:00,Satisfied,Easy,Complete,"Finding the right form","Overall good experience"
+R-102,2026-06-01 11:15:00,Very Satisfied,Very Easy,Complete,"Nothing major","Loved the new interface"
+R-103,2026-06-02 09:00:00,Dissatisfied,Difficult,Incomplete,"Upload kept failing, lost my progress twice","Needs serious work on file uploads"
+R-104,2026-06-02 14:30:00,Satisfied,Moderate,Complete,"Understanding the terminology","The help section was useful"
+R-105,2026-06-03 08:45:00,Very Dissatisfied,Very Difficult,Incomplete,"Everything was confusing from the start","I gave up after 20 minutes"
+R-106,2026-06-03 16:00:00,Neutral,Moderate,Complete,"The process was long but manageable",""
+R-107,2026-06-04 10:00:00,Satisfied,Easy,Complete,"Minor layout issues","Would recommend to colleagues"
+R-108,2026-06-04 13:20:00,Dissatisfied,Difficult,Partial,"Could not find where to submit final documents","Navigation needs improvement"
+R-109,2026-06-05 09:30:00,Satisfied,Easy,Complete,"No challenges","Quick and painless"
+R-110,2026-06-05 15:45:00,Very Satisfied,Very Easy,Complete,"","Best government form I have used"
