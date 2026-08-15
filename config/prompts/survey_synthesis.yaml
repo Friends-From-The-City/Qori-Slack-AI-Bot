@@ -4,7 +4,7 @@
 id: survey_synthesis
 name: survey_response_synthesizer
 label: "Survey Synthesis"
-version: "v7.1"
+version: "v8.0"
 
 description: |
   Analyze open-ended survey responses using thematic analysis.
@@ -54,6 +54,14 @@ input_variables:
     type: textarea
     required: true
     description: "What the researcher needs this source to tell them — how it relates to the project problem."
+  - name: computed_facts
+    type: object
+    required: false
+    description: "Deterministic statistics computed from CSV data by code (ADR 0028). When present, all numeric claims must come from this object."
+  - name: open_text_content
+    type: textarea
+    required: false
+    description: "Open-text survey responses extracted from CSV, formatted with respondent labels for qualitative analysis."
 
 # ═══════════════════════════════════════════════════════════
 # CASCADE CONTRACT
@@ -230,7 +238,25 @@ ai_generation_tasks:
       Analyze ALL open-ended/text responses. Skip closed-ended questions.
       {% endif %}
 
-      RULE 8: EMPTY CONTENT
+      RULE 8: NUMERIC AUTHORITY (ADR 0028)
+      {% if computed_facts %}
+      Every number you report (count, percentage, frequency, median, ratio)
+      must appear EXACTLY in the COMPUTED FACTS section below. You may:
+      - quote a computed fact verbatim
+      - express a computed count as a proportion ("12 of 47")
+      - describe a computed distribution in words
+
+      You must NOT:
+      - calculate a new number from computed facts
+      - round a computed number differently than provided
+      - introduce a count based on your own reading of responses
+      - estimate or approximate any quantity
+
+      If a numeric claim you want to make is not present in COMPUTED FACTS,
+      state the qualitative observation without a number.
+      {% endif %}
+
+      RULE 9: EMPTY CONTENT
       If the survey data between BEGIN/END markers is empty or contains no
       text responses, respond ONLY with:
       "> **No survey responses provided.** Please upload survey data and try again."
@@ -245,9 +271,33 @@ ai_generation_tasks:
       **Focus Questions:** {{question_focus}}
       {% endif %}
 
-      **Survey Data:**
+      {% if computed_facts %}
+      ============================================================
+      COMPUTED FACTS (authoritative — do not recalculate)
+      ============================================================
+
+      Total respondents: {{computed_facts.totalRespondents}}
+
+      Field statistics:
+      {% for stat in computed_facts.fieldStats %}
+      - {{stat.fieldName}} ({{stat.role}}): {{stat.nPresent}} present, {{stat.nMissing}} missing{% if stat.median %}, median: {{stat.median}}{% endif %}{% if stat.distribution %}, distribution: {{stat.distribution}}{% endif %}
+      {% endfor %}
+
+      {% if computed_facts.crossTabs %}
+      Cross-tabulations:
+      {% for ct in computed_facts.crossTabs %}
+      - {{ct.rowField}} × {{ct.colField}} (n={{ct.totalN}}): {{ct.cells}}
+      {% endfor %}
+      {% endif %}
+
+      Note: {{computed_facts.nonresponseLimitation}}
+
+      ============================================================
+      {% endif %}
+
+      **Survey Data (open-text responses for qualitative analysis):**
       ---BEGIN DATA---
-      {{combined_file_content}}
+      {% if open_text_content %}{{open_text_content}}{% else %}{{combined_file_content}}{% endif %}
       ---END DATA---
 
       ============================================================
@@ -360,7 +410,7 @@ ai_generation_tasks:
 
       **Survey Data:**
       ---BEGIN DATA---
-      {{combined_file_content}}
+      {% if open_text_content %}{{open_text_content}}{% else %}{{combined_file_content}}{% endif %}
       ---END DATA---
 
       ============================================================
