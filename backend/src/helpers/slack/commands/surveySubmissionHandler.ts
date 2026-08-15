@@ -661,7 +661,7 @@ async function executeSurveyAnalysis(
       document_names: [survey.sourceFilename],
       document_types: ['CSV'],
       _discovery_type: 'survey-synthesis',
-      computed_facts: formatComputedFacts(computedFacts),
+      computed_facts: formatComputedFacts(computedFacts, confirmedFields),
       open_text_content: openTextContent,
       combined_file_content: openTextContent,
     };
