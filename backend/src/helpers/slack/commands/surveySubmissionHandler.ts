@@ -3,16 +3,21 @@
  *
  * Phase 1 (handleSurveyUploadPhase):
  *   CSV upload → parse → infer schema → create evidence_source →
- *   store pending_csv_content → send DM with "Review Schema" button
+ *   stage raw CSV in Redis (TTL 2h) → send DM with "Review Schema" button
  *
  * Phase 2 (handleSurveySchemaConfirmation):
- *   Schema review modal submission → read confirmed fields →
- *   read pending_csv_content → compute deterministic stats →
+ *   Schema review modal page(s) → researcher confirms ALL fields →
+ *   read CSV from Redis → compute deterministic stats →
  *   create evidence constructs + lineage → inject computed facts
- *   into template → render → clear pending_csv_content
+ *   into template → render → delete Redis staging
  *
  * Per ADR 0028: all statistics computed in code, never by LLM.
  * Per ADR 0029: evidence entities created for canonical state.
+ *
+ * Corrections applied:
+ * - Ordinal fields require explicit category order confirmation
+ * - ALL fields must be reviewed (paginated modal or fail closed)
+ * - Raw CSV staged in Redis with TTL, not in Postgres
  */
 
 import type {
@@ -23,6 +28,7 @@ import type {
   ViewSubmitAction,
   AllMiddlewareArgs,
 } from '@slack/bolt';
+import type { View } from '@slack/types';
 import type { CreationAttributes } from 'sequelize';
 import sequelize from '../../../database';
 import type { EvidenceSource } from '../../../database/models/evidence_source';
@@ -37,10 +43,16 @@ import {
   extractOpenTextContent,
   assignRespondentIdentities,
   getUniqueValues,
+  stagePendingCsv,
+  getPendingCsv,
+  deletePendingCsv,
 } from '../../survey';
 import {
   buildSchemaReviewModal,
   parseSchemaReviewValues,
+  checkFieldCountSupported,
+  getTotalPages,
+  OrdinalOrderValidationError,
   type SchemaReviewMeta,
 } from '../ui/surveySchemaReviewModal';
 import { processSlackFile } from '../../pdfProcessor';
@@ -73,21 +85,15 @@ interface SurveyUploadContext {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// PHASE 1: Upload → Parse → Infer → DM with Review Button
+// PHASE 1: Upload → Parse → Infer → Stage in Redis → DM with Button
 // ═══════════════════════════════════════════════════════════════════════
 
-/**
- * Called from discoverHandler when discoveryType is 'survey_synthesis'.
- * Downloads CSV, parses, infers schema, creates evidence_source,
- * stores pending CSV content, sends DM with schema review button.
- */
 export async function handleSurveyUploadPhase(
   ctx: SurveyUploadContext,
   client: AllMiddlewareArgs['client'],
 ): Promise<void> {
   const { userId, projectId, projectSlug, channelId, topic, topicSlug, surveyName, questionFocus, sourceIntent, uploadedFiles } = ctx;
 
-  // Download first CSV file
   const csvFile = uploadedFiles.find(f => f.name.toLowerCase().endsWith('.csv'));
   if (!csvFile) {
     await client.chat.postMessage({
@@ -114,7 +120,6 @@ export async function handleSurveyUploadPhase(
     return;
   }
 
-  // Parse CSV
   let survey;
   try {
     survey = parseCsvBuffer(rawContent, csvFile.name);
@@ -129,14 +134,21 @@ export async function handleSurveyUploadPhase(
     throw err;
   }
 
+  // Check field count is supported for complete review
+  const fieldCountError = checkFieldCountSupported(survey.headers.length);
+  if (fieldCountError) {
+    await client.chat.postMessage({
+      channel: userId,
+      text: `❌ ${fieldCountError}`,
+    });
+    return;
+  }
+
   const contentHash = computeContentHash(rawContent);
 
-  // Check for existing source with same content hash in this project
+  // Check for existing source with same content hash for reuse
   const existingSource = await EvidenceSourceModel.findOne({
-    where: {
-      project_id: projectId,
-      source_type: 'survey_dataset',
-    },
+    where: { project_id: projectId, source_type: 'survey_dataset' },
   });
 
   let existingHash: string | null = null;
@@ -145,22 +157,17 @@ export async function handleSurveyUploadPhase(
     existingHash = ref?.content_hash as string | null;
   }
 
-  // Reuse existing source + schema if same content
   if (existingSource && existingHash === contentHash) {
     const confirmedSchemas = await SurveyFieldSchemaModel.findAll({
-      where: {
-        evidence_source_id: existingSource.id,
-        review_status: 'confirmed',
-      },
+      where: { evidence_source_id: existingSource.id, review_status: 'confirmed' },
     });
 
     if (confirmedSchemas.length > 0) {
       await client.chat.postMessage({
         channel: userId,
-        text: `✅ Same survey file detected (content hash match). Reusing accepted schema and recomputing statistics...`,
+        text: '✅ Same survey file detected (content hash match). Reusing accepted schema and recomputing statistics...',
       });
 
-      // Skip to Phase 2 directly — reuse confirmed schema
       const confirmedFields: ConfirmedField[] = confirmedSchemas.map((s: SurveyFieldSchema) => ({
         fieldName: s.field_name,
         confirmedRole: s.confirmed_role!,
@@ -180,7 +187,7 @@ export async function handleSurveyUploadPhase(
   // Create evidence_source
   const evidenceSource = await EvidenceSourceModel.create({
     project_id: projectId,
-    study_id: null, // Discovery is project-scoped
+    study_id: null,
     source_type: 'survey_dataset',
     label: `${surveyName} — ${csvFile.name}`,
     artifact_ref: {
@@ -200,34 +207,36 @@ export async function handleSurveyUploadPhase(
   // Infer field schema
   const inferredFields = inferFieldSchema(survey);
 
-  // Persist inferred fields + pending CSV content
+  // Persist inferred fields
   await sequelize.transaction(async (t) => {
-    for (let i = 0; i < inferredFields.length; i++) {
-      const field = inferredFields[i];
+    for (const field of inferredFields) {
       await SurveyFieldSchemaModel.create({
         evidence_source_id: evidenceSource.id,
         field_name: field.fieldName,
         inferred_role: field.inferredRole,
         inference_source: 'heuristic',
         review_status: 'pending',
-        // Store pending CSV on first field row only
-        pending_csv_content: i === 0 ? rawContent : null,
       } as CreationAttributes<SurveyFieldSchema>, { transaction: t });
     }
   });
 
-  // Build schema summary for DM
+  // Stage raw CSV in Redis with TTL (2 hours)
+  await stagePendingCsv(projectId, evidenceSource.public_id, userId, rawContent);
+
   const summaryLines = inferredFields.map(f =>
     `• *${f.fieldName}* → ${f.inferredRole} (${f.presentCount}/${survey.rowCount} present)`
   );
+
+  const totalPages = getTotalPages(inferredFields.length);
 
   const meta: SchemaReviewMeta = {
     evidenceSourceId: evidenceSource.id,
     projectId, projectSlug, channelId,
     topic, topicSlug, surveyName, questionFocus, sourceIntent,
+    page: 0,
+    totalFields: inferredFields.length,
   };
 
-  // Send DM with schema review button
   await client.chat.postMessage({
     channel: userId,
     blocks: [
@@ -243,7 +252,9 @@ export async function handleSurveyUploadPhase(
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: 'Review and confirm field roles before analysis proceeds. Ordinal fields need category order confirmation.',
+          text: totalPages > 1
+            ? `Review all fields across ${totalPages} pages before analysis proceeds. Ordinal fields need category order confirmation.`
+            : 'Review and confirm field roles before analysis proceeds. Ordinal fields need category order confirmation.',
         },
         accessory: {
           type: 'button',
@@ -259,7 +270,7 @@ export async function handleSurveyUploadPhase(
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// SCHEMA REVIEW BUTTON → Open Modal
+// SCHEMA REVIEW BUTTON → Open Modal (page 0)
 // ═══════════════════════════════════════════════════════════════════════
 
 export async function handleSurveySchemaReviewAction(
@@ -270,7 +281,6 @@ export async function handleSurveySchemaReviewAction(
 
   const meta: SchemaReviewMeta = JSON.parse(action.value || '{}');
 
-  // Load inferred fields from DB
   const fieldSchemas = await SurveyFieldSchemaModel.findAll({
     where: { evidence_source_id: meta.evidenceSourceId },
     order: [['id', 'ASC']],
@@ -284,26 +294,49 @@ export async function handleSurveySchemaReviewAction(
     return;
   }
 
-  // Convert to SurveyField shape for modal builder
-  const fields: SurveyField[] = fieldSchemas.map((s: SurveyFieldSchema) => ({
-    fieldName: s.field_name,
-    inferredRole: s.inferred_role,
-    sampleValues: [], // Samples not stored — role and counts sufficient for review
-    distinctCount: 0,
-    presentCount: 0,
-    missingCount: 0,
-  }));
+  // Load the parsed survey to get sample values for the modal
+  const pendingCsv = await getPendingCsv(meta.projectId, '', body.user.id);
+  // Try with source public_id
+  const source = await EvidenceSourceModel.findByPk(meta.evidenceSourceId);
+  const sourcePublicId = source ? source.public_id : '';
+  const csvContent = await getPendingCsv(meta.projectId, sourcePublicId, body.user.id);
 
+  let fields: SurveyField[];
+  if (csvContent) {
+    try {
+      const survey = parseCsvBuffer(csvContent, 'staged-csv');
+      fields = inferFieldSchema(survey);
+    } catch {
+      fields = fieldSchemas.map((s: SurveyFieldSchema) => ({
+        fieldName: s.field_name,
+        inferredRole: s.inferred_role,
+        sampleValues: [],
+        distinctCount: 0,
+        presentCount: 0,
+        missingCount: 0,
+      }));
+    }
+  } else {
+    // CSV expired from Redis
+    await client.chat.postMessage({
+      channel: body.user.id,
+      text: '❌ Survey data has expired (2-hour staging window). Please re-upload via `/qori-discover`.',
+    });
+    return;
+  }
+
+  meta.page = 0;
+  meta.totalFields = fields.length;
   const modal = buildSchemaReviewModal(fields, meta);
 
   await client.views.open({
     trigger_id: body.trigger_id,
-    view: modal as unknown as import('@slack/types').View,
+    view: modal as unknown as View,
   });
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// PHASE 2: Schema Confirmation → Compute → Evidence → Render
+// PHASE 2: Schema Confirmation (paginated) → Compute → Evidence → Render
 // ═══════════════════════════════════════════════════════════════════════
 
 export async function handleSurveySchemaConfirmation(
@@ -315,13 +348,23 @@ export async function handleSurveySchemaConfirmation(
   const meta: SchemaReviewMeta = JSON.parse(view.private_metadata || '{}');
   const userId = body.user.id;
 
-  // Load existing field schemas
-  const fieldSchemas = await SurveyFieldSchemaModel.findAll({
+  // Load source for Redis key
+  const source = await EvidenceSourceModel.findByPk(meta.evidenceSourceId);
+  if (!source) {
+    await client.chat.postMessage({
+      channel: userId,
+      text: '❌ Survey source not found. Please re-upload via `/qori-discover`.',
+    });
+    return;
+  }
+
+  // Load field schemas
+  const allFieldSchemas = await SurveyFieldSchemaModel.findAll({
     where: { evidence_source_id: meta.evidenceSourceId },
     order: [['id', 'ASC']],
   });
 
-  if (fieldSchemas.length === 0) {
+  if (allFieldSchemas.length === 0) {
     await client.chat.postMessage({
       channel: userId,
       text: '❌ Survey schema expired. Please re-upload via `/qori-discover`.',
@@ -329,38 +372,19 @@ export async function handleSurveySchemaConfirmation(
     return;
   }
 
-  // Build original fields for parsing
-  const originalFields: SurveyField[] = fieldSchemas.map((s: SurveyFieldSchema) => ({
-    fieldName: s.field_name,
-    inferredRole: s.inferred_role,
-    sampleValues: [],
-    distinctCount: 0,
-    presentCount: 0,
-    missingCount: 0,
-  }));
-
-  // Parse confirmed roles from modal
-  const confirmedRoles = parseSchemaReviewValues(
-    view.state.values as unknown as Record<string, Record<string, Record<string, unknown>>>,
-    originalFields,
-  );
-
-  // Read pending CSV content from first field row
-  const firstField = fieldSchemas[0] as SurveyFieldSchema;
-  const pendingCsv = firstField.pending_csv_content;
-
-  if (!pendingCsv) {
+  // Read CSV from Redis to get field values for ordinal order validation
+  const csvContent = await getPendingCsv(meta.projectId, source.public_id, userId);
+  if (!csvContent) {
     await client.chat.postMessage({
       channel: userId,
-      text: '❌ Survey data expired. Please re-upload via `/qori-discover`.',
+      text: '❌ Survey data has expired (2-hour staging window). Please re-upload via `/qori-discover`.',
     });
     return;
   }
 
-  // Re-parse CSV from staged content
   let survey;
   try {
-    survey = parseCsvBuffer(pendingCsv, 'staged-csv');
+    survey = parseCsvBuffer(csvContent, 'staged-csv');
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     await client.chat.postMessage({
@@ -370,56 +394,122 @@ export async function handleSurveySchemaConfirmation(
     return;
   }
 
-  const contentHash = computeContentHash(pendingCsv);
+  // Get current page's fields
+  const FIELDS_PER_PAGE = 20;
+  const startIdx = meta.page * FIELDS_PER_PAGE;
+  const endIdx = Math.min(startIdx + FIELDS_PER_PAGE, allFieldSchemas.length);
+  const pageFieldSchemas = allFieldSchemas.slice(startIdx, endIdx);
+  const isLastPage = endIdx >= allFieldSchemas.length;
 
-  // For ordinal fields, detect unique values for order metadata
-  const confirmedFields: ConfirmedField[] = confirmedRoles.map(r => {
-    let orderMetadata: string[] | null = null;
-    if (r.confirmedRole === 'ordinal') {
-      // Auto-detect category order from unique values (researcher can adjust in future)
-      orderMetadata = getUniqueValues(survey, r.fieldName);
-    }
+  const pageFields: SurveyField[] = pageFieldSchemas.map((s: SurveyFieldSchema) => {
+    const fieldValues = survey.rows.map(r => r.values[s.field_name]?.trim() ?? '').filter(v => v !== '');
     return {
-      fieldName: r.fieldName,
-      confirmedRole: r.confirmedRole,
-      orderMetadata,
-      isDemographic: r.isDemographic,
+      fieldName: s.field_name,
+      inferredRole: s.inferred_role,
+      sampleValues: [...new Set(fieldValues)].slice(0, 5),
+      distinctCount: new Set(fieldValues).size,
+      presentCount: fieldValues.length,
+      missingCount: survey.rowCount - fieldValues.length,
     };
   });
 
-  // Update field schemas in DB
+  // Build map of all field values for ordinal order validation
+  const allFieldValues = new Map<string, string[]>();
+  for (const s of allFieldSchemas) {
+    const vals = survey.rows.map(r => r.values[s.field_name]?.trim() ?? '').filter(v => v !== '');
+    allFieldValues.set(s.field_name, [...new Set(vals)]);
+  }
+
+  // Parse confirmed roles from this page
+  let pageResults;
+  try {
+    pageResults = parseSchemaReviewValues(
+      view.state.values as unknown as Record<string, Record<string, Record<string, unknown>>>,
+      pageFields,
+      allFieldValues,
+    );
+  } catch (err) {
+    if (err instanceof OrdinalOrderValidationError) {
+      await client.chat.postMessage({
+        channel: userId,
+        text: `❌ ${err.message}`,
+      });
+      return;
+    }
+    throw err;
+  }
+
+  // Persist this page's confirmed fields
   await sequelize.transaction(async (t) => {
-    for (const field of confirmedFields) {
+    for (const result of pageResults) {
       await SurveyFieldSchemaModel.update(
         {
-          confirmed_role: field.confirmedRole,
-          order_metadata: field.orderMetadata,
-          is_demographic: field.isDemographic,
+          confirmed_role: result.confirmedRole,
+          order_metadata: result.orderMetadata,
+          is_demographic: result.isDemographic,
           review_status: 'confirmed',
           reviewed_by: userId,
           reviewed_at: new Date(),
-          pending_csv_content: null, // Clear staged data
         },
         {
           where: {
             evidence_source_id: meta.evidenceSourceId,
-            field_name: field.fieldName,
+            field_name: result.fieldName,
           },
           transaction: t,
         },
       );
     }
-    // Clear pending_csv_content from first row explicitly
-    await SurveyFieldSchemaModel.update(
-      { pending_csv_content: null },
-      { where: { evidence_source_id: meta.evidenceSourceId }, transaction: t },
-    );
   });
+
+  // If not last page, open next page
+  if (!isLastPage) {
+    const allFields = inferFieldSchema(survey);
+    const nextMeta = { ...meta, page: meta.page + 1 };
+    const nextModal = buildSchemaReviewModal(allFields, nextMeta);
+
+    await client.views.open({
+      trigger_id: body.trigger_id,
+      view: nextModal as unknown as View,
+    });
+    return;
+  }
+
+  // All pages complete — verify every field is confirmed
+  const unconfirmed = await SurveyFieldSchemaModel.count({
+    where: { evidence_source_id: meta.evidenceSourceId, review_status: 'pending' },
+  });
+
+  if (unconfirmed > 0) {
+    await client.chat.postMessage({
+      channel: userId,
+      text: `❌ ${unconfirmed} field(s) have not been reviewed. All fields must be confirmed before analysis can proceed. Please re-upload and review all pages.`,
+    });
+    return;
+  }
 
   await client.chat.postMessage({
     channel: userId,
-    text: 'Schema confirmed. Computing survey statistics...',
+    text: 'All fields confirmed. Computing survey statistics...',
   });
+
+  // Load all confirmed fields
+  const confirmedSchemas = await SurveyFieldSchemaModel.findAll({
+    where: { evidence_source_id: meta.evidenceSourceId, review_status: 'confirmed' },
+    order: [['id', 'ASC']],
+  });
+
+  const confirmedFields: ConfirmedField[] = confirmedSchemas.map((s: SurveyFieldSchema) => ({
+    fieldName: s.field_name,
+    confirmedRole: s.confirmed_role!,
+    orderMetadata: s.order_metadata,
+    isDemographic: s.is_demographic,
+  }));
+
+  const contentHash = computeContentHash(csvContent);
+
+  // Delete staged CSV from Redis immediately
+  await deletePendingCsv(meta.projectId, source.public_id, userId);
 
   await executeSurveyAnalysis(
     survey, confirmedFields, contentHash, meta.evidenceSourceId,
@@ -451,19 +541,13 @@ async function executeSurveyAnalysis(
   client: AllMiddlewareArgs['client'],
 ): Promise<void> {
   try {
-    // Compute deterministic facts (ADR 0028)
     const computedFacts = computeSurveyFacts(survey, confirmedFields, contentHash);
-
-    // Assign respondent identities
     const identities = assignRespondentIdentities(survey, confirmedFields, contentHash);
     const displayLabels = identities.map(id => id.displayLabel);
-
-    // Extract open-text content for LLM interpretation
     const openTextContent = extractOpenTextContent(survey, confirmedFields, displayLabels);
 
     // Create evidence constructs (deterministic, auto-accepted)
     await sequelize.transaction(async (t) => {
-      // Survey dataset summary construct
       const summaryConstruct = await EvidenceConstructModel.create({
         project_id: ctx.projectId,
         study_id: null,
@@ -488,7 +572,6 @@ async function executeSurveyAnalysis(
         provenance: { method: 'survey_structured_ingestion' },
       }, t);
 
-      // Field distribution constructs
       for (const stat of computedFacts.fieldStats) {
         if (!stat.distribution && stat.nValidNumeric === null) continue;
 
@@ -511,7 +594,6 @@ async function executeSurveyAnalysis(
         }, t);
       }
 
-      // Cross-tab constructs
       for (const ct of computedFacts.crossTabs) {
         const ctConstruct = await EvidenceConstructModel.create({
           project_id: ctx.projectId,
@@ -533,13 +615,11 @@ async function executeSurveyAnalysis(
       }
     });
 
-    // Proceed with template rendering via existing discover flow
+    // Template rendering
     const project = await getProjectById(ctx.projectId);
     const projectProblemStatement = project?.problem_statement || null;
-
     const dateIso = format(new Date(), 'yyyy-MM-dd');
 
-    // Build template input with computed facts
     const data: Record<string, unknown> = {
       topic: ctx.topic,
       effective_topic: ctx.topic,
@@ -556,28 +636,18 @@ async function executeSurveyAnalysis(
       document_names: [survey.sourceFilename],
       document_types: ['CSV'],
       _discovery_type: 'survey-synthesis',
-      // Computed facts — deterministic, code-computed (ADR 0028)
       computed_facts: computedFacts,
-      // Open-text content for LLM qualitative interpretation
       open_text_content: openTextContent,
-      // Keep combined_file_content for backward compat with template
       combined_file_content: openTextContent,
     };
 
     const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, 'survey_synthesis.yaml');
-
     const variableContext = { projectId: ctx.projectId };
 
     const renderedYaml = await processYamlTemplate(
-      file.content,
-      data,
-      '',
-      '',
-      false,
-      variableContext,
+      file.content, data, '', '', false, variableContext,
     );
 
-    // Await extraction (ADR 0019)
     if (renderedYaml.extractionPromise) {
       const extractResult = await renderedYaml.extractionPromise;
       if (!extractResult.success) {
@@ -630,7 +700,6 @@ async function executeSurveyAnalysis(
       ],
       text: `Survey synthesis complete for "${ctx.surveyName}". View: ${url}`,
     });
-
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error('Error in survey analysis:', error);

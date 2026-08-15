@@ -85,15 +85,6 @@ module.exports = {
         allowNull: true,
       },
 
-      // Staged CSV content — quarantine pattern per study_notes.pending_content.
-      // Stored on the first field row for a given evidence_source_id.
-      // Cleared to NULL on schema confirmation.
-      pending_csv_content: {
-        type: Sequelize.TEXT,
-        allowNull: true,
-        comment: 'Staged raw CSV text; cleared on confirmation. Only set on first field row per source.',
-      },
-
       created_at: {
         type: Sequelize.DATE,
         allowNull: false,

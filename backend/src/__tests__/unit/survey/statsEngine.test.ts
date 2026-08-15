@@ -166,6 +166,30 @@ describe('statsEngine', () => {
     });
   });
 
+  describe('ordinal computation gate', () => {
+    it('appearance order does not become measurement order', () => {
+      // Even if values appear in a specific order in the CSV, no median
+      // without explicit confirmed order
+      const { survey, hash } = standardSurvey();
+      const fieldsAppearanceOnly = standardFields.map(f =>
+        f.fieldName === 'overall_satisfaction'
+          ? { ...f, orderMetadata: null } // inferred as ordinal but no confirmed order
+          : f
+      );
+      const facts = computeSurveyFacts(survey, fieldsAppearanceOnly, hash);
+      const stat = facts.fieldStats.find(f => f.fieldName === 'overall_satisfaction');
+      expect(stat!.median).toBeNull(); // NO median without confirmed order
+      expect(stat!.distribution).toBeDefined(); // distribution IS shown
+    });
+
+    it('confirmed order produces deterministic median', () => {
+      const { survey, hash } = standardSurvey();
+      const facts = computeSurveyFacts(survey, standardFields, hash);
+      const stat = facts.fieldStats.find(f => f.fieldName === 'overall_satisfaction');
+      expect(stat!.median).toBe('Satisfied');
+    });
+  });
+
   describe('determinism', () => {
     it('same CSV + same schema produces identical facts 3 times', () => {
       const { survey, hash } = standardSurvey();

@@ -4,8 +4,7 @@
  * Per Survey Slice 1: stores researcher-reviewed field role assignments
  * for CSV survey data. One row per field per evidence source.
  *
- * pending_csv_content follows the study_notes.pending_content quarantine
- * pattern for staging CSV data between upload and schema confirmation.
+ * Raw CSV staging uses Redis with TTL (pendingCsvStore.ts), not this table.
  */
 
 import {
@@ -35,7 +34,6 @@ class SurveyFieldSchema extends Model<
   declare review_status: CreationOptional<SchemaReviewStatus>;
   declare reviewed_by: string | null;
   declare reviewed_at: Date | null;
-  declare pending_csv_content: string | null;
   declare created_at: CreationOptional<Date>;
   declare updated_at: CreationOptional<Date>;
 
@@ -97,10 +95,6 @@ export default (sequelize: Sequelize) => {
       },
       reviewed_at: {
         type: DataTypes.DATE,
-        allowNull: true,
-      },
-      pending_csv_content: {
-        type: DataTypes.TEXT,
         allowNull: true,
       },
       created_at: {

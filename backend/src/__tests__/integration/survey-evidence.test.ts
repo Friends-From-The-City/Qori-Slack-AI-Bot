@@ -154,21 +154,16 @@ describe('survey_field_schemas', () => {
     expect(remaining).toBe(0);
   });
 
-  it('stores and clears pending_csv_content (quarantine pattern)', async () => {
-    const csvContent = 'id,val\n1,a\n2,b';
+  it('schema rows contain no raw CSV content column', async () => {
     const schema = await SurveyFieldSchemaModel.create({
-      evidence_source_id: sourceId, field_name: 'id',
-      inferred_role: 'id', review_status: 'pending',
-      pending_csv_content: csvContent,
+      evidence_source_id: sourceId, field_name: 'test',
+      inferred_role: 'nominal', review_status: 'pending',
     } as CreationAttributes<SurveyFieldSchema>);
 
-    expect((schema as any).pending_csv_content).toBe(csvContent);
-
-    // Clear on confirmation
-    await schema.update({ pending_csv_content: null, review_status: 'confirmed' });
-    const updated = await SurveyFieldSchemaModel.findByPk((schema as any).id);
-    expect((updated as any).pending_csv_content).toBeNull();
-    expect((updated as any).review_status).toBe('confirmed');
+    // Verify the model does not have a pending_csv_content column
+    // (raw CSV staging moved to Redis)
+    const raw = schema as unknown as Record<string, unknown>;
+    expect(raw.pending_csv_content).toBeUndefined();
   });
 });
 
