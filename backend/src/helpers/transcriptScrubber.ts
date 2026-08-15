@@ -97,14 +97,9 @@ function decomposeNameVariants(fullName: string): string[] {
 
 // ─── Regex Patterns ──────────────────────────────────────────────
 
-// Phone: various formats including 7-digit local numbers
-// - XXX-XXX-XXXX, (XXX) XXX-XXXX, XXX.XXX.XXXX (10 digit)
-// - XXX-XXXX (7 digit local)
-const PHONE_PATTERN_10 = /\b(?:\+?1[-.\s]?)?\(?[0-9]{3}\)?[-.\s]?[0-9]{3}[-.\s]?[0-9]{4}\b/g;
-const PHONE_PATTERN_7 = /\b[0-9]{3}[-.\s]?[0-9]{4}\b/g;
-
-// Email: standard format
-const EMAIL_PATTERN = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g;
+// Phone and email patterns shared with survey entry scrubber via piiPatterns.ts.
+// Imported here for consistency — one canonical set of patterns.
+import { PHONE_PATTERN_10, PHONE_PATTERN_7, EMAIL_PATTERN } from './piiPatterns';
 
 // Speaker label: "XX:" at start of line or after timestamp, where XX is 2-4 uppercase letters
 const SPEAKER_LABEL_PATTERN = /^(\[[^\]]+\]\s*)?([A-Z]{2,4}):\s/gm;
