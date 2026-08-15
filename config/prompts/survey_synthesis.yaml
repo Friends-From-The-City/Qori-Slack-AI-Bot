@@ -4,17 +4,19 @@
 id: survey_synthesis
 name: survey_response_synthesizer
 label: "Survey Synthesis"
-version: "v8.0"
+version: "v9.0"
 
 description: |
-  Analyze open-ended survey responses using thematic analysis.
-  v7.0: Interleaved Handlebars/AI architecture — mechanical content
-  (masthead, methodology, references) rendered by template, LLM
-  writes bounded analytical sections. Per ADR 0005/0016.
+  Analyze survey data with deterministic structured evidence and bounded
+  qualitative interpretation.
+  v9.0: Structured Evidence rendered deterministically from computed_facts
+  by the output template. LLM limited to two tasks: qualitative observations
+  on open-text responses and evidence gaps. No LLM arithmetic.
+  Per ADR 0005/0016/0028.
 
 author: Qori R&D
 created: 2025-08-11
-last_updated: 2026-08-04
+last_updated: 2026-08-15
 
 # ═══════════════════════════════════════════════════════════
 # CONFIGURATION
@@ -131,7 +133,7 @@ emits:
       type: array
       items:
         $ref: schemas/discovered_metric.yaml
-    extract_from: "All quantitative measurements — theme frequencies, sentiment percentages, response counts. Assign sequential IDs (metric-001). Include context and survey name as source_document."
+    extract_from: "All quantitative measurements — field distributions, medians, cross-tab counts. Assign sequential IDs (metric-001). Include context and survey name as source_document."
 
   - key: sample_demographics
     pool: false
@@ -147,7 +149,7 @@ emits:
         response_rate:
           type: string
           nullable: true
-    extract_from: "Overview section — total responses analyzed, respondent composition."
+    extract_from: "Dataset & Analysis Scope section — total respondents, schema summary."
 
   - key: knowledge_gaps
     pool: true
@@ -169,97 +171,67 @@ emits:
             nullable: true
           source_document:
             type: string
-    extract_from: "Knowledge Gaps section — questions the survey couldn't answer. Assign sequential IDs (gap-001). Include why the gap matters and suggested resolution."
+    extract_from: "Evidence Gaps section — questions the survey couldn't answer. Assign sequential IDs (gap-001). Include why the gap matters and suggested resolution."
 
 # ═══════════════════════════════════════════════════════════
-# AI GENERATION — focused, bounded tasks
+# AI GENERATION — two bounded tasks, no arithmetic
 # ═══════════════════════════════════════════════════════════
 ai_generation_tasks:
 
-  # Main analytical body — theme summary, per-theme sections, sentiment overview.
-  # Kept as one task to preserve theme numbering consistency.
-  - task_id: "analysis_body"
+  # Task 1: Qualitative observations on open-text responses.
+  # NO counting, NO frequencies, NO themes, NO sentiment distributions.
+  - task_id: "qualitative_observations"
     prompt: |
-      You are synthesizing open-ended survey responses using thematic analysis.
+      You are interpreting open-text survey responses. Your output is
+      PRELIMINARY qualitative observation — not formal thematic analysis,
+      not coded data, not quantitative summary.
 
       ============================================================
       RULES
       ============================================================
 
-      RULE 1: THEME DEFINITION
-      A theme requires BOTH:
-        (a) A pattern in ≥2 INDEPENDENT data items. Two answers from the
-            SAME respondent count as ONE item.
-        (b) An interpretation of what the pattern MEANS, not a category label.
+      RULE 1 — NUMERIC AUTHORITY
+      Never calculate, re-count, infer percentages, round values, or
+      modify any supplied statistic. You have NO numeric authority.
+      All numbers appear in the Structured Evidence section rendered
+      by the template. Do not repeat, re-derive, or contradict them.
 
-      Single notable responses → "Individual Observations" section (retained,
-      not promoted to theme).
+      RULE 2 — QUALITATIVE AUTHORITY (SLICE 1)
+      Open-text interpretation is preliminary. You may:
+        - Describe what respondents wrote about
+        - Identify notable or recurring topics WITHOUT counting them
+        - Quote respondents to illustrate observations
+        - Note areas of convergence or tension across responses
 
-      RULE 2: RESPONSE CODING
-      A response counts toward a theme ONLY if its OWN content supports it.
-      R003 ("form crashed and lost my progress") is a crash, not an upload
-      failure — do not inflate unrelated themes.
+      You must NOT:
+        - Assign prevalence ("most respondents," "X of N," "60%")
+        - Claim themes (no "Theme 1," no "three themes emerged")
+        - Perform sentiment classification or distribution
+        - Produce frequency tables, sentiment tables, or coded counts
+        - Use the word "theme" to describe your groupings
 
-      When a response is coded to MULTIPLE themes, DISCLOSE this where
-      frequencies are reported:
-      > *Note: [X] responses were coded to multiple themes.*
+      RULE 3 — RESPONDENT TERMINOLOGY
+      The reporting unit is the unique respondent. Never count text
+      entries as respondents. If referring to volume, say
+      "22 open-text entries across 11 respondents" NOT "22 responses."
 
-      RULE 3: FREQUENCY + QUOTES
-      For each theme: count, percentage, 2-3 representative quotes with R-IDs.
-      Prevalence is reported; it does not alone set priority.
+      RULE 4 — RESPONDENT CITATIONS
+      Every quote must include the respondent label exactly as provided
+      in the input data: "[Direct quote]" — R00X
 
-      RULE 4: RESPONDENT CITATIONS
-      Assign IDs sequentially: R001, R002, R003...
-      Every quote: "[Direct quote]" — R00X
+      RULE 5 — EMPTY CONTENT
+      If the survey data between BEGIN/END markers is empty or contains
+      no text responses, respond ONLY with:
+      > **No open-text responses provided.** Structured evidence is
+      > available above. Re-run with open-text data for qualitative
+      > interpretation.
 
-      RULE 5: SENTIMENT CLASSIFICATION (explicit criteria)
-        - Negative: Response expresses frustration, complaint, criticism,
-          or reports a problem. Contains words like "frustrated," "annoying,"
-          "couldn't," "failed," "hate," or describes a blocked/degraded task.
-        - Positive: Response expresses satisfaction, praise, or reports
-          success. Contains words like "love," "great," "easy," "helpful,"
-          or describes a completed task with approval.
-        - Mixed: Response contains BOTH positive and negative elements
-          about the SAME topic (not separate topics). E.g., "I like the
-          new design but the navigation is confusing."
-        - Neutral: Factual, descriptive, or procedural response with no
-          evaluative language. Answers "what" without "how I felt about it."
-
-      Always explain WHAT is driving the sentiment, not just the percentage.
-
-      RULE 6: NO HALLUCINATION
-      Only report themes from the data. Counts must be accurate. Quotes verbatim.
-      If unsure about a count, say "approximately."
-
-      RULE 7: QUESTION FOCUS
+      RULE 6 — QUESTION FOCUS
       {% if question_focus %}
       PRIORITIZE these questions: {{question_focus}}
       {% else %}
-      Analyze ALL open-ended/text responses. Skip closed-ended questions.
+      Interpret ALL open-ended/text responses. Skip closed-ended data.
       {% endif %}
-
-      RULE 8: NUMERIC AUTHORITY (ADR 0028)
-      {% if computed_facts %}
-      Every number you report (count, percentage, frequency, median, ratio)
-      must appear EXACTLY in the COMPUTED FACTS section below. You may:
-      - quote a computed fact verbatim
-      - express a computed count as a proportion ("12 of 47")
-      - describe a computed distribution in words
-
-      You must NOT:
-      - calculate a new number from computed facts
-      - round a computed number differently than provided
-      - introduce a count based on your own reading of responses
-      - estimate or approximate any quantity
-
-      If a numeric claim you want to make is not present in COMPUTED FACTS,
-      state the qualitative observation without a number.
-      {% endif %}
-
-      RULE 9: EMPTY CONTENT
-      If the survey data between BEGIN/END markers is empty or contains no
-      text responses, respond ONLY with:
-      "> **No survey responses provided.** Please upload survey data and try again."
 
       ============================================================
       INPUT DATA
@@ -267,138 +239,60 @@ ai_generation_tasks:
 
       **Survey:** {{survey_name}}
       **Study:** {{selected_study}}
-      {% if question_focus %}
-      **Focus Questions:** {{question_focus}}
-      {% endif %}
 
-      {% if computed_facts %}
-      ============================================================
-      COMPUTED FACTS (authoritative — do not recalculate)
-      ============================================================
-
-      Total respondents: {{computed_facts.totalRespondents}}
-
-      Field statistics:
-      {% for stat in computed_facts.fieldStats %}
-      - {{stat.fieldName}} ({{stat.role}}): {{stat.nPresent}} present, {{stat.nMissing}} missing{% if stat.median %}, median: {{stat.median}}{% endif %}{% if stat.distribution %}, distribution: {{stat.distribution}}{% endif %}
-      {% endfor %}
-
-      {% if computed_facts.crossTabs %}
-      Cross-tabulations:
-      {% for ct in computed_facts.crossTabs %}
-      - {{ct.rowField}} × {{ct.colField}} (n={{ct.totalN}}): {{ct.cells}}
-      {% endfor %}
-      {% endif %}
-
-      Note: {{computed_facts.nonresponseLimitation}}
-
-      ============================================================
-      {% endif %}
-
-      **Survey Data (open-text responses for qualitative analysis):**
+      **Open-text responses for qualitative interpretation:**
       ---BEGIN DATA---
       {% if open_text_content %}{{open_text_content}}{% else %}{{combined_file_content}}{% endif %}
       ---END DATA---
 
       ============================================================
-      GENERATE THESE SECTIONS
+      OUTPUT FORMAT
       ============================================================
 
-      **OVERVIEW:** A summary blockquote and metadata table:
+      Write 3–7 observation groups. For each:
 
-      > **[X] themes** from **[Y] responses**
+      ### [Descriptive label — what respondents wrote about]
 
-      | | |
-      |---|---|
-      | **Responses Analyzed** | [X] |
-      | **Themes Identified** | [Y] |
-      {% if question_focus %}
-      | **Focus Questions** | {{question_focus}} |
-      {% endif %}
-      | **Top Finding** | [1 sentence — most important takeaway] |
-
-      ---
-
-      **THEME SUMMARY TABLE:**
-
-      | # | Theme | Frequency | Sentiment | Priority |
-      |---|-------|:---------:|:----------|:--------:|
-      | 1 | [Name] | [X] ([Y]%) | [Sentiment] | [Priority] |
-      [continue for each theme]
-
-      > **Note:** Percentages may exceed 100% as responses can mention multiple themes.
-
-      ---
-
-      **PER-THEME SECTIONS:** For each theme:
-
-      ## Theme N: [Name]
-
-      **Frequency:** [X] of [Total] responses ([Y]%)
-
-      **Sentiment:** [Sentiment]
-
-      **What respondents said:**
+      [1–3 sentences describing the observation. Use hedged language:
+      "several respondents described," "a recurring concern was,"
+      "some entries noted." Never assign counts or percentages.]
 
       > "[Direct quote]" — R00X
       > "[Direct quote]" — R00X
-      > "[Direct quote]" — R00X
 
-      **Pattern:** [1-2 sentences explaining what this theme MEANS — an
-      interpretation, not just a category label]
-
-      ---
-
-      [Repeat for each theme]
+      [Optional: 1 sentence on why this is notable relative to the
+      survey purpose.]
 
       ---
 
-      **INDIVIDUAL OBSERVATIONS:**
+      After all observation groups, add:
 
-      Single notable responses that do not meet the ≥2 independent items
-      threshold for a theme. Retained for completeness, not promoted.
+      > [!NOTE]
+      > These observations are preliminary and illustrative. They have
+      > not been formally coded or validated. Prevalence cannot be
+      > inferred from the groupings above.
 
-      | R-ID | Observation | Why Notable |
-      |------|-------------|-------------|
-      | R00X | "[Quote]" | [Brief reason] |
+      OUTPUT BOUNDARIES: Do not generate the document title, section
+      heading (## Preliminary Qualitative Observations), structured
+      evidence, methodology, footer, or any other structural element.
+      Output observation groups only.
 
-      If no individual observations exist, omit this section entirely.
-
-      ---
-
-      **SENTIMENT OVERVIEW:**
-
-      | Sentiment | Count | % | Key Driver |
-      |-----------|:-----:|:-:|------------|
-      | Negative | [X] | [Y]% | [What topics caused frustration] |
-      | Positive | [X] | [Y]% | [What topics caused satisfaction] |
-      | Mixed | [X] | [Y]% | [What topics had split opinions] |
-      | Neutral | [X] | [Y]% | [Factual/descriptive responses] |
-
-      **Key Insight:** [1-2 sentences on what the sentiment pattern tells us]
-
-      OUTPUT BOUNDARIES: Do not generate the document title, masthead,
-      methodology section, references, knowledge gaps section, or any
-      footer. The template handles those sections.
-      USE ## headings for each section (e.g., ## Overview, ## Theme 1: [Name]).
-      Output the analytical content with proper markdown heading hierarchy.
-
-  # Knowledge gaps — derived against the project problem statement
-  - task_id: "knowledge_gaps_prose"
+  # Task 2: Evidence gaps — what the survey cannot answer
+  - task_id: "evidence_gaps"
     skip_when: "not project_problem_statement"
     skip_output: |
-      > **Knowledge gaps require a project problem statement.**
+      > **Evidence gaps require a project problem statement.**
       >
       > Run `/qori-start` to set a problem statement for this project, then re-run discovery.
     prompt: |
-      Identify knowledge gaps from the survey data.
+      Identify evidence gaps from the survey data.
 
       ============================================================
       DERIVATION RULE
       ============================================================
 
-      A knowledge gap is: A question that the stated research problem requires
-      answering, which THIS SOURCE cannot answer.
+      An evidence gap is: A question that the stated research problem
+      requires answering, which THIS SOURCE cannot answer.
 
       **Research Problem (from project):**
       {{project_problem_statement}}
@@ -408,7 +302,14 @@ ai_generation_tasks:
 
       **Survey:** {{survey_name}}
 
-      **Survey Data:**
+      {% if computed_facts %}
+      **Structured evidence available:**
+      - {{computed_facts.totalRespondents}} unique respondents
+      - Fields analyzed: {% for stat in computed_facts.fieldStats %}{{stat.fieldName}} ({{stat.role}}){% if not loop.last %}, {% endif %}{% endfor %}
+      - Nonresponse note: {{computed_facts.nonresponseLimitation}}
+      {% endif %}
+
+      **Survey Data (open-text):**
       ---BEGIN DATA---
       {% if open_text_content %}{{open_text_content}}{% else %}{{combined_file_content}}{% endif %}
       ---END DATA---
@@ -417,21 +318,28 @@ ai_generation_tasks:
       RULES
       ============================================================
 
-      1. EVERY gap must be a question that the research problem REQUIRES answering
-      2. For each gap, state what the survey DOES establish on that question, then where it stops
+      RULE 1 — NUMERIC AUTHORITY
+      Never calculate, re-count, infer percentages, round values, or
+      modify any supplied statistic. If you reference a number, it must
+      come from the structured evidence summary above.
+
+      RULE 2 — GAP DERIVATION
+      1. EVERY gap must be a question the research problem REQUIRES answering
+      2. For each gap, state what the survey DOES establish, then where it stops
       3. Do NOT include:
          - Questions the survey answers (partially or fully)
          - Questions unrelated to the stated problem
          - Generic research-practice observations
          - Product actions, feature changes, or design implementations
       4. If the survey is comprehensive relative to the problem:
-         > The survey provides strong coverage of the research problem. One area for further investigation: [specific gap].
+         > The survey provides strong coverage of the research problem.
+         > One area for further investigation: [specific gap].
 
       ============================================================
       OUTPUT FORMAT
       ============================================================
 
-      For each gap (3-5 maximum):
+      For each gap (3–5 maximum):
 
       **Gap N: [Question the problem requires answering]**
 
@@ -439,73 +347,201 @@ ai_generation_tasks:
       |:-----------------------------|:---------------|
       | [Specific evidence from survey] | [Specific limitation] |
 
-      **Suggested research approach:** [Method to investigate — e.g., interviews, usability testing]
+      **How to investigate:** [Method — e.g., interviews, usability testing, diary study]
 
       ---
 
+      After all gaps, add:
+
+      > [!WARNING]
+      > These gaps reflect limitations of a single survey instrument.
+      > Some may be addressable through triangulation with other
+      > discovery sources already in the project.
+
       OUTPUT BOUNDARIES: Do not generate section headings or structural
-      elements beyond the per-gap separators above. The template handles
+      elements beyond the per-gap format above. The template handles
       all document structure.
 
 # ═══════════════════════════════════════════════════════════
-# OUTPUT — interleaved Handlebars + AI prose
+# OUTPUT — deterministic structured evidence + bounded AI prose
 # ═══════════════════════════════════════════════════════════
 output_template: |
   # Survey Synthesis: {{survey_name}}
 
-  **Study:** {{selected_study}} &nbsp; | &nbsp; **Survey:** {{survey_name}} &nbsp; | &nbsp; **Documents:** {{document_count}} &nbsp; | &nbsp; **Date:** {{current_date}}
-
   ---
+
+  ## Research Context
+
+  **Study:** {{selected_study}} &nbsp; | &nbsp; **Survey:** {{survey_name}} &nbsp; | &nbsp; **Date:** {{current_date}}
 
   {{#if project_problem_statement}}
   **Research problem:** {{project_problem_statement}}
 
-  **This document contributes:** {{source_intent}}
+  **This survey contributes:** {{source_intent}}
   {{else}}
   > [!WARNING]
-  > No project problem statement set. Knowledge gaps cannot be derived without a stated research problem.
+  > No project problem statement set. Evidence gaps cannot be derived without a stated research problem.
   > Run `/qori-start` to set one.
+  {{/if}}
+
+  {{#if question_focus}}
+  **Focus questions:** {{question_focus}}
   {{/if}}
 
   ---
 
-  {{ai_generated.analysis_body}}
+  ## Dataset & Analysis Scope
+
+  {{#if computed_facts}}
+  | Property | Value |
+  |----------|-------|
+  | **Unique respondents** | {{computed_facts.totalRespondents}} |
+  | **Fields analyzed** | {{computed_facts.schemaSummary}} |
+  | **Documents** | {{document_count}} ({{document_names}}) |
+  | **Source hash** | `{{computed_facts.sourceContentHash}}` |
+
+  ### Field Summary
+
+  | Field | Role | Present | Missing |{{#if computed_facts.fieldStats.[0].median}} Median |{{/if}}
+  |-------|------|--------:|--------:|{{#if computed_facts.fieldStats.[0].median}}-------:|{{/if}}
+  {{#each computed_facts.fieldStats}}
+  | {{this.fieldName}} | {{this.role}} | {{this.nPresent}} | {{this.nMissing}} |{{#if this.median}} {{this.median}} |{{/if}}
+  {{/each}}
+
+  {{#each computed_facts.fieldStats}}
+  {{#if this.distribution}}
+
+  ### {{this.fieldName}} Distribution
+
+  {{this.distribution}}
+
+  {{/if}}
+  {{/each}}
+
+  {{#if computed_facts.crossTabs}}
+
+  ### Cross-Tabulations
+
+  {{#each computed_facts.crossTabs}}
+  **{{this.rowField}} × {{this.colField}}** (n={{this.totalN}})
+
+  {{this.cells}}
+
+  {{/each}}
+  {{/if}}
+
+  > [!NOTE]
+  > {{computed_facts.nonresponseLimitation}}
+
+  {{else}}
+
+  > [!WARNING]
+  > No computed facts available. Structured evidence requires CSV input
+  > processed by the survey computation pipeline (ADR 0028). The sections
+  > below rely on qualitative interpretation only.
+
+  | Property | Value |
+  |----------|-------|
+  | **Documents** | {{document_count}} ({{document_names}}) |
+  | **Document types** | {{document_types}} |
+
+  {{/if}}
 
   ---
 
-  ## Knowledge Gaps
+  ## Structured Evidence
 
-  {{ai_generated.knowledge_gaps_prose}}
+  {{#if computed_facts}}
+
+  *All values in this section are computed deterministically from source data. No LLM interpretation.*
+
+  {{#each computed_facts.fieldStats}}
+  {{#if this.distribution}}
+
+  ### {{this.fieldName}}
+
+  **Role:** {{this.role}} &nbsp; | &nbsp; **Present:** {{this.nPresent}} of {{../computed_facts.totalRespondents}} &nbsp; | &nbsp; **Missing:** {{this.nMissing}}{{#if this.median}} &nbsp; | &nbsp; **Median:** {{this.median}}{{/if}}
+
+  {{this.distribution}}
+
+  {{/if}}
+  {{/each}}
+
+  {{#if computed_facts.crossTabs}}
+  ### Cross-Tabulations
+
+  {{#each computed_facts.crossTabs}}
+
+  #### {{this.rowField}} × {{this.colField}}
+
+  *n = {{this.totalN}}*
+
+  {{this.cells}}
+
+  {{/each}}
+  {{/if}}
+
+  {{else}}
+
+  > Structured evidence is unavailable — no `computed_facts` were provided.
+  > Upload CSV data to enable deterministic field distributions, medians,
+  > and cross-tabulations.
+
+  {{/if}}
+
+  ---
+
+  ## Preliminary Qualitative Observations
+
+  {{ai_generated.qualitative_observations}}
+
+  ---
+
+  ## Integrated Interpretation
+
+  {{#if computed_facts}}
+  The structured evidence above establishes the distributional baseline from {{computed_facts.totalRespondents}} unique respondents. The qualitative observations in the preceding section offer preliminary interpretation of open-text entries. Readers should:
+
+  - **Look for convergence** — where structured distributions and qualitative observations point the same direction
+  - **Look for complementarity** — where open-text entries explain patterns visible in the distributions
+  - **Look for dissonance** — where qualitative observations seem to contradict distributional patterns (these warrant investigation, not resolution)
+
+  No new arithmetic is introduced in this section. No causal claims are made.
+  {{else}}
+  Without computed facts, integration is limited to the qualitative observations above. Upload CSV data to enable structured-qualitative triangulation.
+  {{/if}}
+
+  ---
+
+  ## Evidence Gaps
+
+  {{ai_generated.evidence_gaps}}
 
   ---
 
   <details>
-  <summary><strong>Methodology</strong></summary>
+  <summary><strong>Method & Provenance</strong></summary>
 
-  This survey synthesis uses thematic analysis (Braun & Clarke). Open-ended
-  responses were coded for recurring themes, counted for frequency, and
-  analyzed for sentiment patterns. Knowledge gaps are derived against the
-  stated research problem, not generated speculatively.
+  **Analysis authority:** Structured evidence (distributions, medians, cross-tabs) is computed deterministically by code — the LLM has no numeric authority. Qualitative observations are preliminary LLM interpretation of open-text entries; no formal coding or thematic analysis is claimed.
 
-  </details>
+  **Source:** {{document_count}} file(s) — {{document_names}} ({{document_types}})
 
-  ---
+  **Schema review:** {{#if computed_facts}}{{computed_facts.schemaSummary}}{{else}}No schema available — computed facts not provided.{{/if}}
 
-  <details>
-  <summary><strong>Research provenance</strong></summary>
+  **Computation:** {{#if computed_facts}}Field statistics, distributions, and cross-tabulations computed per ADR 0028. Source hash: `{{computed_facts.sourceContentHash}}`.{{else}}Not applicable — no CSV pipeline output.{{/if}}
 
-  This survey synthesis emits discovery variables for downstream templates.
+  **Generation:** {{current_date_iso}} via Qori survey synthesis v9.0
+
+  **Evidence state:** This survey synthesis emits discovery variables for downstream templates:
 
   | Variable | Description |
   |----------|-------------|
-  | survey_themes | Thematic patterns with frequency, sentiment, and quotes |
-  | survey_findings | Quantitative findings across themes |
-  | discovered_barriers | Negative-sentiment themes as barriers for research brief |
-  | discovered_metrics | Theme frequencies, sentiment percentages, response counts |
-  | sample_demographics | Respondent composition and response count |
-  | knowledge_gaps | Questions the survey couldn't answer |
-
-  **Files analyzed:** {{document_count}}
+  | `survey_themes` | Qualitative observation groups with verbatim quotes |
+  | `survey_findings` | Quantitative findings from structured evidence |
+  | `discovered_barriers` | Task-blocking obstacles evidenced by respondent data |
+  | `discovered_metrics` | Field distributions, medians, cross-tab counts |
+  | `sample_demographics` | Respondent count and composition |
+  | `knowledge_gaps` | Questions the survey cannot answer relative to the research problem |
 
   </details>
 
@@ -533,18 +569,28 @@ slack_ui:
     processing_failed: "Analysis failed. Please check that your files are valid CSV or Excel format."
 
 notes: |
-  v7.0: Interleaved Handlebars/AI architecture (ADR 0005/0016 pattern).
-  - Monolithic survey_synthesis_complete task split into 2 tasks:
-    analysis_body (overview + themes + sentiment) and knowledge_gaps_prose.
-  - Handlebars renders: masthead, methodology (toggle), references (toggle),
-    declared inputs (static declaration table).
-  - Recommendations removed → Knowledge Gaps (same treatment as desk_research).
-  - survey_recommendations emit removed (orphaned — no downstream consumer).
-  - sample_demographics emit kept (orphaned but potentially useful).
-  - Anti-fabrication: added empty-content detection (Rule 7) and
-    OUTPUT BOUNDARIES rule to both tasks.
-  - Duplicate footer removed (yamlProcessor handles it).
-  - derived_variables block removed (handler computes topic_slug).
+  v9.0: Deterministic structured evidence architecture (ADR 0028 fully realized).
+  - LLM reduced to 2 tasks: qualitative_observations + evidence_gaps.
+  - Structured Evidence section rendered entirely by Handlebars from
+    computed_facts — field distributions, medians, cross-tabs, missingness.
+  - Removed from LLM prompts: Braun & Clarke references, theme definition
+    rules, response coding rules, frequency+quotes rules, sentiment
+    classification criteria, theme/sentiment/individual-observations tables,
+    respondent ID assignment (labels now come from pre-processing).
+  - Added NUMERIC AUTHORITY rule: LLM cannot calculate, re-count, or infer.
+  - Added QUALITATIVE AUTHORITY rule: observations are preliminary, no
+    prevalence, no themes, no formal coding claimed.
+  - Added RESPONDENT TERMINOLOGY rule: unique respondent is reporting unit.
+  - Output structure: Research Context → Dataset & Analysis Scope →
+    Structured Evidence → Preliminary Qualitative Observations →
+    Integrated Interpretation → Evidence Gaps → Method & Provenance.
+  - Integrated Interpretation section provides convergence/complementarity/
+    dissonance framing without new arithmetic or causal claims.
+  - Method & Provenance collapsed into single details block with all
+    authority, source, computation, and cascade state sections.
+  - Cascade contract (emits) unchanged from v8.0.
 
-  v3.1: Standards polish (superseded by v7.0).
+  v8.0: computed_facts integration, numeric authority rule (superseded).
+  v7.0: Interleaved Handlebars/AI architecture (superseded).
+  v3.1: Standards polish (superseded).
   v3.0: Claude Sonnet, improved question_focus.
