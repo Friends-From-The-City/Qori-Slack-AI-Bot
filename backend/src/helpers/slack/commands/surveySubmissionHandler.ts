@@ -662,8 +662,8 @@ async function executeSurveyAnalysis(
       ).join(', '),
       ordinal_orders: ordinalFields.length > 0
         ? ordinalFields.map(f =>
-            `**${toDisplayLabel(f.fieldName)}**\n> ${f.orderMetadata!.join(' → ')}`
-          ).join('\n>\n')
+            `>\n> **${toDisplayLabel(f.fieldName)}**\n>\n> ${f.orderMetadata!.join(' → ')}`
+          ).join('\n')
         : 'No ordinal fields confirmed',
       model_used: process.env.ANTHROPIC_MODEL_NAME || 'claude-sonnet-4-6',
     };
