@@ -47,6 +47,7 @@ import {
   getPendingCsv,
   deletePendingCsv,
   formatComputedFacts,
+  toDisplayLabel,
 } from '../../survey';
 import {
   buildSchemaReviewModal,
@@ -242,6 +243,7 @@ export async function handleSurveyUploadPhase(
     evidenceSourceId: evidenceSource.id,
     projectId, projectSlug, channelId,
     topic, topicSlug, surveyName, questionFocus, sourceIntent,
+    originalFilename: csvFile.name,
     page: 0,
     totalFields: inferredFields.length,
   };
@@ -313,7 +315,7 @@ export async function handleSurveySchemaReviewAction(
   let fields: SurveyField[];
   if (csvContent) {
     try {
-      const survey = parseCsvBuffer(csvContent, 'staged-csv');
+      const survey = parseCsvBuffer(csvContent, meta.originalFilename || 'survey.csv');
       fields = inferFieldSchema(survey);
     } catch {
       fields = fieldSchemas.map((s: SurveyFieldSchema) => ({
@@ -401,7 +403,7 @@ export async function handleSurveySchemaConfirmation(
 
   let survey;
   try {
-    survey = parseCsvBuffer(csvContent, 'staged-csv');
+    survey = parseCsvBuffer(csvContent, meta.originalFilename || 'survey.csv');
   } catch (err) {
     await ack();
     const message = err instanceof Error ? err.message : String(err);
@@ -656,11 +658,13 @@ async function executeSurveyAnalysis(
         ? new Date((firstReviewed as SurveyFieldSchema).reviewed_at!).toISOString()
         : 'unknown',
       field_role_summary: confirmedFields.map(f =>
-        `${f.fieldName} (${f.confirmedRole}${f.isDemographic ? ', demographic' : ''})`
+        `${toDisplayLabel(f.fieldName)} (${f.confirmedRole}${f.isDemographic ? ', demographic' : ''})`
       ).join(', '),
-      ordinal_orders: ordinalFields.map(f =>
-        `${f.fieldName}: ${f.orderMetadata!.join(' → ')}`
-      ).join(' | ') || 'No ordinal fields confirmed',
+      ordinal_orders: ordinalFields.length > 0
+        ? ordinalFields.map(f =>
+            `**${toDisplayLabel(f.fieldName)}**\n> ${f.orderMetadata!.join(' → ')}`
+          ).join('\n>\n')
+        : 'No ordinal fields confirmed',
       model_used: process.env.ANTHROPIC_MODEL_NAME || 'claude-sonnet-4-6',
     };
 

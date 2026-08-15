@@ -43,6 +43,8 @@ export interface SchemaReviewMeta {
   surveyName: string;
   questionFocus: string;
   sourceIntent: string;
+  /** Original uploaded filename — preserved for provenance. */
+  originalFilename: string;
   /** Current page (0-based). */
   page: number;
   /** Total number of fields. */
