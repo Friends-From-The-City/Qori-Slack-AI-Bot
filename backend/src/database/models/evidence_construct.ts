@@ -33,6 +33,9 @@ export type ConstructType =
   | 'stakeholder_constraint'
   | 'nugget'
   | 'survey_pattern'
+  | 'survey_dataset_summary'
+  | 'field_distribution'
+  | 'cross_tab'
   | 'usability_finding'
   | 'journey_stage'
   | 'recommendation'
@@ -119,6 +122,7 @@ export default (sequelize: Sequelize) => {
           isIn: [[
             'knowledge_gap', 'barrier', 'research_question',
             'stakeholder_constraint', 'nugget', 'survey_pattern',
+            'survey_dataset_summary', 'field_distribution', 'cross_tab',
             'usability_finding', 'journey_stage', 'recommendation',
             'finding', 'theme', 'persona', 'ticket_candidate',
           ]],
