@@ -174,6 +174,6 @@ export const TEMPLATE_EMITS: Record<string, string[]> = {
   research_readout: ['prioritized_findings', 'prioritized_recommendations', 'decision_inputs', 'study_methodology'],
   session_summary: ['atomic_nugget_core', 'atomic_nugget_detail', 'participant_metadata', 'task_completion_records', 'barrier_validations'],
   stakeholder_synthesis: ['stakeholder_constraints', 'stakeholder_priorities', 'alignment_gaps', 'stakeholder_questions_for_users', 'backstage_observations', 'system_failure_modes'],
-  survey_synthesis: ['survey_themes', 'survey_findings', 'discovered_barriers', 'discovered_metrics', 'sample_demographics', 'knowledge_gaps'],
+  survey_synthesis: ['survey_findings', 'discovered_barriers', 'knowledge_gaps'],
   usability_issues: ['prioritized_issues'],
 };
