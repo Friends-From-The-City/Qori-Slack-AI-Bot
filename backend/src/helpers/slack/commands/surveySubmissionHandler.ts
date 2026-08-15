@@ -49,6 +49,11 @@ import {
   formatComputedFacts,
   toDisplayLabel,
 } from '../../survey';
+import { buildQualitativeEntries, persistQualitativeEntries } from '../../survey/qualitativeEntryWriter';
+import {
+  getAnalysisEligibleContent as getEligibleContent,
+  isPrivacyReviewComplete,
+} from '../../../services/content-governance.service';
 import {
   buildSchemaReviewModal,
   parseSchemaReviewValues,
@@ -68,6 +73,8 @@ import { format } from 'date-fns';
 const EvidenceSourceModel = sequelize.models.EvidenceSource as typeof EvidenceSource;
 const EvidenceConstructModel = sequelize.models.EvidenceConstruct;
 const SurveyFieldSchemaModel = sequelize.models.SurveyFieldSchema as typeof SurveyFieldSchema;
+import type { SurveyQualitativeEntry } from '../../../database/models/survey_qualitative_entry';
+const QualitativeEntryModel = sequelize.models.SurveyQualitativeEntry as typeof SurveyQualitativeEntry;
 
 // ═══════════════════════════════════════════════════════════════════════
 // TYPES
@@ -185,11 +192,27 @@ export async function handleSurveyUploadPhase(
         isDemographic: s.is_demographic,
       }));
 
-      await executeSurveyAnalysis(
-        survey, confirmedFields, contentHash, existingSource.id,
-        { userId, projectId, projectSlug, channelId, topic, topicSlug, surveyName, questionFocus, sourceIntent },
-        client,
+      // Check if privacy review is complete for existing entries
+      const existingEntries = await QualitativeEntryModel.findAll({
+        where: { evidence_source_id: existingSource.id },
+      });
+      // isPrivacyReviewComplete imported statically above
+      const privacyComplete = existingEntries.length === 0 || isPrivacyReviewComplete(
+        existingEntries as Array<{ pii_status: 'pending' | 'clear' | 'redacted' | 'restricted' }>,
       );
+
+      if (privacyComplete) {
+        await runSurveyQualitativeSynthesis(
+          survey, confirmedFields, contentHash, existingSource.id,
+          { userId, projectId, projectSlug, channelId, topic, topicSlug, surveyName, questionFocus, sourceIntent },
+          client,
+        );
+      } else {
+        await client.chat.postMessage({
+          channel: userId,
+          text: '📊 Structured analysis exists. Complete the open-text privacy review to generate qualitative synthesis.',
+        });
+      }
       return;
     }
   }
@@ -535,21 +558,71 @@ export async function handleSurveySchemaConfirmation(
 
   const contentHash = computeContentHash(csvContent);
 
-  // Delete staged CSV from Redis immediately
+  const analysisCtx = {
+    userId, projectId: meta.projectId, projectSlug: meta.projectSlug,
+    channelId: meta.channelId, topic: meta.topic, topicSlug: meta.topicSlug,
+    surveyName: meta.surveyName, questionFocus: meta.questionFocus,
+    sourceIntent: meta.sourceIntent,
+  };
+
+  // Stage 1: Persist structured foundation + qualitative entries (all durable writes)
+  await persistSurveyFoundation(
+    survey, confirmedFields, contentHash, meta.evidenceSourceId, analysisCtx, client,
+  );
+
+  // Delete Redis staging ONLY after all durable writes succeed
   await deletePendingCsv(meta.projectId, source.public_id, userId);
 
-  await executeSurveyAnalysis(
-    survey, confirmedFields, contentHash, meta.evidenceSourceId,
-    { userId, projectId: meta.projectId, projectSlug: meta.projectSlug, channelId: meta.channelId, topic: meta.topic, topicSlug: meta.topicSlug, surveyName: meta.surveyName, questionFocus: meta.questionFocus, sourceIntent: meta.sourceIntent },
-    client,
-  );
+  // Notify researcher: structured analysis ready, privacy review needed
+  const hasOpenText = confirmedFields.some(f => f.confirmedRole === 'open_text');
+  if (hasOpenText) {
+    await client.chat.postMessage({
+      channel: userId,
+      blocks: [
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: '📊 *Structured analysis saved.* Review open-text responses before Qori uses them for qualitative synthesis.',
+          },
+        },
+        {
+          type: 'actions',
+          elements: [
+            {
+              type: 'button',
+              text: { type: 'plain_text', text: 'Review Responses' },
+              style: 'primary',
+              action_id: 'survey_privacy_review',
+              value: JSON.stringify({
+                evidenceSourceId: meta.evidenceSourceId,
+                projectId: meta.projectId,
+                projectSlug: meta.projectSlug,
+                topic: meta.topic,
+                topicSlug: meta.topicSlug,
+                surveyName: meta.surveyName,
+                questionFocus: meta.questionFocus,
+                sourceIntent: meta.sourceIntent,
+              }),
+            },
+          ],
+        },
+      ],
+      text: 'Structured analysis saved. Review open-text responses before Qori analyzes them.',
+    });
+  } else {
+    // No open-text fields — proceed directly to synthesis
+    await runSurveyQualitativeSynthesis(
+      survey, confirmedFields, contentHash, meta.evidenceSourceId, analysisCtx, client,
+    );
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// SHARED: Compute → Evidence → Template Render
+// STAGE 1: Persist Structured Foundation + Qualitative Entries
 // ═══════════════════════════════════════════════════════════════════════
 
-async function executeSurveyAnalysis(
+async function persistSurveyFoundation(
   survey: ReturnType<typeof parseCsvBuffer>,
   confirmedFields: ConfirmedField[],
   contentHash: string,
@@ -641,6 +714,74 @@ async function executeSurveyAnalysis(
         }, t);
       }
     });
+
+    // Persist qualitative entries (pii_status='pending', governed)
+    const qualEntries = buildQualitativeEntries(survey, confirmedFields, identities, {
+      evidenceSourceId,
+      projectId: ctx.projectId,
+      studyId: null, // discovery is project-scoped
+    });
+    if (qualEntries.length > 0) {
+      await sequelize.transaction(async (t) => {
+        await persistQualitativeEntries(QualitativeEntryModel, qualEntries, t);
+      });
+      console.log(`✅ ${qualEntries.length} qualitative entries persisted (pii_status=pending)`);
+    }
+
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('Error persisting survey foundation:', error);
+    await client.chat.postMessage({
+      channel: ctx.userId,
+      text: `❌ Error saving survey analysis: ${message}\n\nPlease try again.`,
+    });
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// STAGE 2: Qualitative Synthesis (after privacy review)
+// ═══════════════════════════════════════════════════════════════════════
+
+export async function runSurveyQualitativeSynthesis(
+  survey: ReturnType<typeof parseCsvBuffer>,
+  confirmedFields: ConfirmedField[],
+  contentHash: string,
+  evidenceSourceId: number,
+  ctx: {
+    userId: string;
+    projectId: number;
+    projectSlug: string;
+    channelId: string;
+    topic: string;
+    topicSlug: string;
+    surveyName: string;
+    questionFocus: string;
+    sourceIntent: string;
+  },
+  client: AllMiddlewareArgs['client'],
+): Promise<void> {
+  try {
+    const computedFacts = computeSurveyFacts(survey, confirmedFields, contentHash);
+    const identities = assignRespondentIdentities(survey, confirmedFields, contentHash);
+
+    // Load analysis-eligible entries via governance accessor
+    const allEntries = await QualitativeEntryModel.findAll({
+      where: { evidence_source_id: evidenceSourceId },
+      order: [['field_name', 'ASC'], ['source_row_index', 'ASC']],
+    });
+
+    // Build open-text content from eligible entries only
+    // getEligibleContent imported statically above (aliased from getAnalysisEligibleContent)
+    const eligibleLines: string[] = [];
+    for (const entry of allEntries) {
+      const text = getEligibleContent(entry);
+      if (text) {
+        eligibleLines.push(`${(entry as SurveyQualitativeEntry).display_respondent_id} (${(entry as SurveyQualitativeEntry).field_display_name}): "${text}"`);
+      }
+    }
+    const openTextContent = eligibleLines.length > 0
+      ? eligibleLines.join('\n')
+      : '(No eligible open-text responses after privacy review.)';
 
     // Build provenance metadata from actual execution state
     const evidenceSource = await EvidenceSourceModel.findByPk(evidenceSourceId);
