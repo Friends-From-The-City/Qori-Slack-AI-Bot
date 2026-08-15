@@ -4,14 +4,14 @@
 id: survey_synthesis
 name: survey_response_synthesizer
 label: "Survey Synthesis"
-version: "v9.0"
+version: "v9.1"
 
 description: |
   Analyze survey data with deterministic structured evidence and bounded
   qualitative interpretation.
-  v9.0: Structured Evidence rendered deterministically from computed_facts
-  by the output template. LLM limited to two tasks: qualitative observations
-  on open-text responses and evidence gaps. No LLM arithmetic.
+  v9.1: Ordinal rendering in confirmed order. De-duplicated output.
+  No soft qualitative prevalence language. Declared respondent IDs
+  preserved. Emit contract aligned with evidence authority model.
   Per ADR 0005/0016/0028.
 
 author: Qori R&D
@@ -66,19 +66,18 @@ input_variables:
     description: "Open-text survey responses extracted from CSV, formatted with respondent labels for qualitative analysis."
 
 # ═══════════════════════════════════════════════════════════
-# CASCADE CONTRACT
+# CASCADE CONTRACT — aligned with v9 authority model
 # ═══════════════════════════════════════════════════════════
-emits:
-  - key: survey_themes
-    pool: true
-    pool_strategy: append
-    extraction_model: sonnet
-    schema:
-      type: array
-      items:
-        $ref: schemas/survey_theme.yaml
-    extract_from: "Each Theme section (Theme 1, Theme 2, etc). Assign sequential IDs (theme-001). Include theme_name, frequency_count and frequency_percentage, sentiment, priority, full pattern text, and verbatim_quotes array."
+#
+# AUDIT (v9.1):
+# survey_themes:      SKIPPED — preliminary observations are not accepted themes
+# survey_findings:    KEPT — model-derived candidate findings (no new numbers)
+# discovered_barriers: KEPT — interpretive operation (tightened extraction)
+# discovered_metrics: SKIPPED — deterministic metrics live in evidence layer
+# sample_demographics: SKIPPED — no confirmed demographic fields in Slice 1
+# knowledge_gaps:     KEPT — identifying evidence gaps is approved interpretive work
 
+emits:
   - key: survey_findings
     pool: true
     pool_strategy: append
@@ -86,7 +85,7 @@ emits:
       type: array
       items:
         $ref: schemas/survey_finding.yaml
-    extract_from: "Quantitative findings across all themes. Assign sequential IDs (finding-001). Include metric_name, sample_size, affected_segment, supporting_quotes, source_question."
+    extract_from: "Integrated Interpretation or Structured Evidence sections. Assign sequential IDs (finding-001). metric_name and sample_size must come from Structured Evidence values only — do not invent or re-count. Include source_question where applicable."
 
   - key: discovered_barriers
     pool: true
@@ -111,10 +110,13 @@ emits:
         - Negative sentiment alone (frustration is not a barrier)
         - Recommendations or wishes
         - Inference from absence of evidence
+        - Qualitative prevalence claims (no "X respondents experienced")
 
       Assign sequential IDs (barrier-001).
-      Use theme pattern as summary, frequency as magnitude, respondent quotes
-      as evidence array, survey name as source_document.
+      Use observation description as summary. Do NOT use theme frequency
+      as magnitude — magnitude must come from Structured Evidence counts
+      or be omitted. Use respondent quotes as evidence array, survey name
+      as source_document.
 
       barrier_categories (REQUIRED, array of 1+ values):
       Classify each barrier by research-method category. Use ALL that apply:
@@ -125,31 +127,6 @@ emits:
         - task-flow: task completion, workflow steps, error recovery, forms
         - cognitive: mental load, decision complexity, memory demands
         - other: ONLY if no category genuinely applies
-
-  - key: discovered_metrics
-    pool: true
-    pool_strategy: append
-    schema:
-      type: array
-      items:
-        $ref: schemas/discovered_metric.yaml
-    extract_from: "All quantitative measurements — field distributions, medians, cross-tab counts. Assign sequential IDs (metric-001). Include context and survey name as source_document."
-
-  - key: sample_demographics
-    pool: false
-    pool_strategy: replace
-    schema:
-      type: object
-      properties:
-        total_responses:
-          type: integer
-        composition:
-          type: string
-          description: "Respondent composition — who responded"
-        response_rate:
-          type: string
-          nullable: true
-    extract_from: "Dataset & Analysis Scope section — total respondents, schema summary."
 
   - key: knowledge_gaps
     pool: true
@@ -180,6 +157,7 @@ ai_generation_tasks:
 
   # Task 1: Qualitative observations on open-text responses.
   # NO counting, NO frequencies, NO themes, NO sentiment distributions.
+  # NO soft prevalence language.
   - task_id: "qualitative_observations"
     prompt: |
       You are interpreting open-text survey responses. Your output is
@@ -199,12 +177,15 @@ ai_generation_tasks:
       RULE 2 — QUALITATIVE AUTHORITY (SLICE 1)
       Open-text interpretation is preliminary. You may:
         - Describe what respondents wrote about
-        - Identify notable or recurring topics WITHOUT counting them
+        - Identify notable topics WITHOUT counting them
         - Quote respondents to illustrate observations
         - Note areas of convergence or tension across responses
 
       You must NOT:
         - Assign prevalence ("most respondents," "X of N," "60%")
+        - Use soft prevalence language ("several respondents,"
+          "a recurring concern," "some entries," "frequently,"
+          "commonly," "a small number," "predominant")
         - Claim themes (no "Theme 1," no "three themes emerged")
         - Perform sentiment classification or distribution
         - Produce frequency tables, sentiment tables, or coded counts
@@ -217,7 +198,8 @@ ai_generation_tasks:
 
       RULE 4 — RESPONDENT CITATIONS
       Every quote must include the respondent label exactly as provided
-      in the input data: "[Direct quote]" — R00X
+      in the input data: "[Direct quote]" — T001 (or whatever label
+      appears in the data). Do NOT replace source labels with aliases.
 
       RULE 5 — EMPTY CONTENT
       If the survey data between BEGIN/END markers is empty or contains
@@ -253,12 +235,15 @@ ai_generation_tasks:
 
       ### [Descriptive label — what respondents wrote about]
 
-      [1–3 sentences describing the observation. Use hedged language:
-      "several respondents described," "a recurring concern was,"
-      "some entries noted." Never assign counts or percentages.]
+      [1–3 sentences describing the observation. Use evidence-based
+      language without prevalence:
+      "Open-text entries describe..."
+      "One observed issue involves..."
+      "An illustrative account describes..."
+      Never assign counts or percentages.]
 
-      > "[Direct quote]" — R00X
-      > "[Direct quote]" — R00X
+      > "[Direct quote]" — [respondent label from data]
+      > "[Direct quote]" — [respondent label from data]
 
       [Optional: 1 sentence on why this is notable relative to the
       survey purpose.]
@@ -288,11 +273,8 @@ ai_generation_tasks:
       Identify evidence gaps from the survey data.
 
       ============================================================
-      DERIVATION RULE
+      CONTEXT
       ============================================================
-
-      An evidence gap is: A question that the stated research problem
-      requires answering, which THIS SOURCE cannot answer.
 
       **Research Problem (from project):**
       {{project_problem_statement}}
@@ -305,11 +287,10 @@ ai_generation_tasks:
       {% if computed_facts %}
       **Structured evidence available:**
       - {{computed_facts.totalRespondents}} unique respondents
-      - Fields analyzed: {% for stat in computed_facts.fieldStats %}{{stat.fieldName}} ({{stat.role}}){% if not loop.last %}, {% endif %}{% endfor %}
-      - Nonresponse note: {{computed_facts.nonresponseLimitation}}
+      - Fields: {{computed_facts.schemaSummary}}
       {% endif %}
 
-      **Survey Data (open-text):**
+      **Open-text responses:**
       ---BEGIN DATA---
       {% if open_text_content %}{{open_text_content}}{% else %}{{combined_file_content}}{% endif %}
       ---END DATA---
@@ -320,20 +301,17 @@ ai_generation_tasks:
 
       RULE 1 — NUMERIC AUTHORITY
       Never calculate, re-count, infer percentages, round values, or
-      modify any supplied statistic. If you reference a number, it must
-      come from the structured evidence summary above.
+      modify any supplied statistic.
 
-      RULE 2 — GAP DERIVATION
-      1. EVERY gap must be a question the research problem REQUIRES answering
-      2. For each gap, state what the survey DOES establish, then where it stops
-      3. Do NOT include:
-         - Questions the survey answers (partially or fully)
-         - Questions unrelated to the stated problem
-         - Generic research-practice observations
-         - Product actions, feature changes, or design implementations
-      4. If the survey is comprehensive relative to the problem:
-         > The survey provides strong coverage of the research problem.
-         > One area for further investigation: [specific gap].
+      RULE 2 — GAP DEFINITION
+      A knowledge gap is: A question that the stated research problem
+      requires answering, which THIS SOURCE cannot answer.
+
+      Do NOT include:
+        - Questions the survey answers (partially or fully)
+        - Questions unrelated to the stated problem
+        - Generic research-practice observations
+        - Product actions, feature changes, or design implementations
 
       ============================================================
       OUTPUT FORMAT
@@ -341,38 +319,42 @@ ai_generation_tasks:
 
       For each gap (3–5 maximum):
 
-      **Gap N: [Question the problem requires answering]**
+      ### Gap N: [Question the problem requires answering]
 
       | What this source establishes | Where it stops |
       |:-----------------------------|:---------------|
       | [Specific evidence from survey] | [Specific limitation] |
 
-      **How to investigate:** [Method — e.g., interviews, usability testing, diary study]
+      > [!TIP]
+      > **Suggested research approach:** [Method to investigate]
 
       ---
 
-      After all gaps, add:
-
-      > [!WARNING]
-      > These gaps reflect limitations of a single survey instrument.
-      > Some may be addressable through triangulation with other
-      > discovery sources already in the project.
-
       OUTPUT BOUNDARIES: Do not generate section headings or structural
-      elements beyond the per-gap format above. The template handles
-      all document structure.
+      elements beyond the per-gap format above.
 
 # ═══════════════════════════════════════════════════════════
-# OUTPUT — deterministic structured evidence + bounded AI prose
+# OUTPUT — deterministic structure + bounded interpretation
 # ═══════════════════════════════════════════════════════════
 output_template: |
   # Survey Synthesis: {{survey_name}}
 
+  ## Executive Summary
+
+  {{#if computed_facts}}
+  > [!IMPORTANT]
+  > **{{computed_facts.totalRespondents}} unique respondents** analyzed across {{computed_facts.schemaSummary}} fields.{{#each computed_facts.fieldStats}}{{#if this.median}} {{this.fieldName}} median: **{{this.median}}**.{{/if}}{{/each}}
+
+  > [!WARNING]
+  > Empty CSV cells are reported as missing; bare CSV does not reveal why a value is absent. Qualitative observations below are preliminary — formal coding has not been performed.
+  {{else}}
+  > [!WARNING]
+  > No computed facts available. This synthesis relies on qualitative interpretation only.
+  {{/if}}
+
   ---
 
   ## Research Context
-
-  **Study:** {{selected_study}} &nbsp; | &nbsp; **Survey:** {{survey_name}} &nbsp; | &nbsp; **Date:** {{current_date}}
 
   {{#if project_problem_statement}}
   **Research problem:** {{project_problem_statement}}
@@ -380,8 +362,7 @@ output_template: |
   **This survey contributes:** {{source_intent}}
   {{else}}
   > [!WARNING]
-  > No project problem statement set. Evidence gaps cannot be derived without a stated research problem.
-  > Run `/qori-start` to set one.
+  > No project problem statement set. Run `/qori-start` to set one.
   {{/if}}
 
   {{#if question_focus}}
@@ -390,70 +371,10 @@ output_template: |
 
   ---
 
-  ## Dataset & Analysis Scope
-
   {{#if computed_facts}}
-  | Property | Value |
-  |----------|-------|
-  | **Unique respondents** | {{computed_facts.totalRespondents}} |
-  | **Fields analyzed** | {{computed_facts.schemaSummary}} |
-  | **Documents** | {{document_count}} ({{document_names}}) |
-  | **Source hash** | `{{computed_facts.sourceContentHash}}` |
-
-  ### Field Summary
-
-  | Field | Role | Present | Missing |{{#if computed_facts.fieldStats.[0].median}} Median |{{/if}}
-  |-------|------|--------:|--------:|{{#if computed_facts.fieldStats.[0].median}}-------:|{{/if}}
-  {{#each computed_facts.fieldStats}}
-  | {{this.fieldName}} | {{this.role}} | {{this.nPresent}} | {{this.nMissing}} |{{#if this.median}} {{this.median}} |{{/if}}
-  {{/each}}
-
-  {{#each computed_facts.fieldStats}}
-  {{#if this.distribution}}
-
-  ### {{this.fieldName}} Distribution
-
-  {{this.distribution}}
-
-  {{/if}}
-  {{/each}}
-
-  {{#if computed_facts.crossTabs}}
-
-  ### Cross-Tabulations
-
-  {{#each computed_facts.crossTabs}}
-  **{{this.rowField}} × {{this.colField}}** (n={{this.totalN}})
-
-  {{this.cells}}
-
-  {{/each}}
-  {{/if}}
-
-  > [!NOTE]
-  > {{computed_facts.nonresponseLimitation}}
-
-  {{else}}
-
-  > [!WARNING]
-  > No computed facts available. Structured evidence requires CSV input
-  > processed by the survey computation pipeline (ADR 0028). The sections
-  > below rely on qualitative interpretation only.
-
-  | Property | Value |
-  |----------|-------|
-  | **Documents** | {{document_count}} ({{document_names}}) |
-  | **Document types** | {{document_types}} |
-
-  {{/if}}
-
-  ---
-
   ## Structured Evidence
 
-  {{#if computed_facts}}
-
-  *All values in this section are computed deterministically from source data. No LLM interpretation.*
+  *All values below are computed deterministically from source data. No LLM interpretation.*
 
   {{#each computed_facts.fieldStats}}
   {{#if this.distribution}}
@@ -468,24 +389,38 @@ output_template: |
   {{/each}}
 
   {{#if computed_facts.crossTabs}}
+
   ### Cross-Tabulations
 
   {{#each computed_facts.crossTabs}}
 
-  #### {{this.rowField}} × {{this.colField}}
-
-  *n = {{this.totalN}}*
+  **{{this.rowField}} × {{this.colField}}** (n={{this.totalN}})
 
   {{this.cells}}
 
   {{/each}}
   {{/if}}
 
+  <details>
+  <summary><strong>Analysis Details</strong></summary>
+
+  **Source fields:** {{computed_facts.schemaSummary}}
+
+  | Field | Role | Present | Missing |
+  |-------|------|--------:|--------:|
+  {{#each computed_facts.fieldStats}}
+  | {{this.fieldName}} | {{this.role}} | {{this.nPresent}} | {{this.nMissing}} |
+  {{/each}}
+
+  > [!NOTE]
+  > {{computed_facts.nonresponseLimitation}}
+
+  </details>
+
   {{else}}
 
-  > Structured evidence is unavailable — no `computed_facts` were provided.
-  > Upload CSV data to enable deterministic field distributions, medians,
-  > and cross-tabulations.
+  > [!WARNING]
+  > Structured evidence requires CSV input processed by the survey computation pipeline.
 
   {{/if}}
 
@@ -500,7 +435,7 @@ output_template: |
   ## Integrated Interpretation
 
   {{#if computed_facts}}
-  The structured evidence above establishes the distributional baseline from {{computed_facts.totalRespondents}} unique respondents. The qualitative observations in the preceding section offer preliminary interpretation of open-text entries. Readers should:
+  The structured evidence above establishes the distributional baseline from {{computed_facts.totalRespondents}} unique respondents. The qualitative observations offer preliminary interpretation of open-text entries. Readers should:
 
   - **Look for convergence** — where structured distributions and qualitative observations point the same direction
   - **Look for complementarity** — where open-text entries explain patterns visible in the distributions
@@ -508,7 +443,7 @@ output_template: |
 
   No new arithmetic is introduced in this section. No causal claims are made.
   {{else}}
-  Without computed facts, integration is limited to the qualitative observations above. Upload CSV data to enable structured-qualitative triangulation.
+  Without computed facts, integration is limited to the qualitative observations above.
   {{/if}}
 
   ---
@@ -522,26 +457,72 @@ output_template: |
   <details>
   <summary><strong>Method & Provenance</strong></summary>
 
-  **Analysis authority:** Structured evidence (distributions, medians, cross-tabs) is computed deterministically by code — the LLM has no numeric authority. Qualitative observations are preliminary LLM interpretation of open-text entries; no formal coding or thematic analysis is claimed.
+  ### Source
 
-  **Source:** {{document_count}} file(s) — {{document_names}} ({{document_types}})
+  | Property | Value |
+  |----------|-------|
+  | **Original file** | {{document_names}} |
+  | **Source type** | {{document_types}} |
+  | **Unique respondents** | {{#if computed_facts}}{{computed_facts.totalRespondents}}{{else}}Unknown{{/if}} |
 
-  **Schema review:** {{#if computed_facts}}{{computed_facts.schemaSummary}}{{else}}No schema available — computed facts not provided.{{/if}}
+  ### Schema
 
-  **Computation:** {{#if computed_facts}}Field statistics, distributions, and cross-tabulations computed per ADR 0028. Source hash: `{{computed_facts.sourceContentHash}}`.{{else}}Not applicable — no CSV pipeline output.{{/if}}
+  {{#if computed_facts}}
+  **Status:** Researcher-confirmed
 
-  **Generation:** {{current_date_iso}} via Qori survey synthesis v9.0
+  **Fields:** {{computed_facts.schemaSummary}}
+  {{else}}
+  **Status:** No schema — computed facts not available
+  {{/if}}
 
-  **Evidence state:** This survey synthesis emits discovery variables for downstream templates:
+  ### Computation
 
-  | Variable | Description |
-  |----------|-------------|
-  | `survey_themes` | Qualitative observation groups with verbatim quotes |
-  | `survey_findings` | Quantitative findings from structured evidence |
-  | `discovered_barriers` | Task-blocking obstacles evidenced by respondent data |
-  | `discovered_metrics` | Field distributions, medians, cross-tab counts |
-  | `sample_demographics` | Respondent count and composition |
-  | `knowledge_gaps` | Questions the survey cannot answer relative to the research problem |
+  {{#if computed_facts}}
+  **Method:** Deterministic survey structured ingestion v1.0
+
+  **Operations:** Field distributions, medians (confirmed ordinal order), cross-tabulations
+
+  **Missingness:** {{computed_facts.nonresponseLimitation}}
+  {{else}}
+  **Method:** Not applicable — no CSV pipeline output
+  {{/if}}
+
+  ### Generation
+
+  **Template:** survey_synthesis v9.1
+
+  **Date:** {{current_date_iso}}
+
+  ### Authority
+
+  | Layer | Authority |
+  |-------|-----------|
+  | Structured statistics | Deterministic — code-computed, no LLM involvement |
+  | Open-text observations | Preliminary model interpretation — not formally coded |
+  | Formal qualitative coding | NOT YET PERFORMED (Survey Slice 2) |
+
+  ### Evidence & Cascade
+
+  **Evidence constructs:** survey_dataset_summary, field_distribution, cross_tab (deterministic, accepted)
+
+  **Lineage:** DERIVED_FROM evidence source
+
+  **Cascade emissions:**
+
+  | Variable | Status |
+  |----------|--------|
+  | `survey_findings` | Model-derived candidate findings (no new numbers) |
+  | `discovered_barriers` | Model-derived from respondent evidence |
+  | `knowledge_gaps` | Model-derived evidence gaps |
+  | `survey_themes` | NOT EMITTED — formal coding not yet performed |
+  | `discovered_metrics` | NOT EMITTED — deterministic metrics stored as evidence constructs |
+  | `sample_demographics` | NOT EMITTED — no confirmed demographic fields |
+
+  ### Integrity
+
+  {{#if computed_facts}}
+  **Source SHA-256:** `{{computed_facts.sourceContentHash}}`
+  {{/if}}
 
   </details>
 
@@ -552,10 +533,6 @@ output_options:
 # ═══════════════════════════════════════════════════════════
 # METADATA
 # ═══════════════════════════════════════════════════════════
-# NOTE: derived_variables removed — handler (discoverHandler.ts) computes
-# topic_slug explicitly. yamlProcessor does not process derived_variables.
-# NOTE: survey_recommendations emit removed — orphaned variable with no
-# downstream consumer. Knowledge Gaps section replaces Recommendations.
 
 slack_ui:
   modal:
@@ -566,31 +543,26 @@ slack_ui:
   error_messages:
     no_files: "Please upload at least one survey file."
     no_survey_name: "Please enter a survey name."
-    processing_failed: "Analysis failed. Please check that your files are valid CSV or Excel format."
+    processing_failed: "Analysis failed. Please check that your file is valid CSV format."
 
 notes: |
-  v9.0: Deterministic structured evidence architecture (ADR 0028 fully realized).
-  - LLM reduced to 2 tasks: qualitative_observations + evidence_gaps.
-  - Structured Evidence section rendered entirely by Handlebars from
-    computed_facts — field distributions, medians, cross-tabs, missingness.
-  - Removed from LLM prompts: Braun & Clarke references, theme definition
-    rules, response coding rules, frequency+quotes rules, sentiment
-    classification criteria, theme/sentiment/individual-observations tables,
-    respondent ID assignment (labels now come from pre-processing).
-  - Added NUMERIC AUTHORITY rule: LLM cannot calculate, re-count, or infer.
-  - Added QUALITATIVE AUTHORITY rule: observations are preliminary, no
-    prevalence, no themes, no formal coding claimed.
-  - Added RESPONDENT TERMINOLOGY rule: unique respondent is reporting unit.
-  - Output structure: Research Context → Dataset & Analysis Scope →
-    Structured Evidence → Preliminary Qualitative Observations →
-    Integrated Interpretation → Evidence Gaps → Method & Provenance.
-  - Integrated Interpretation section provides convergence/complementarity/
-    dissonance framing without new arithmetic or causal claims.
-  - Method & Provenance collapsed into single details block with all
-    authority, source, computation, and cascade state sections.
-  - Cascade contract (emits) unchanged from v8.0.
+  v9.1: Final dev acceptance corrections.
+  - Ordinal distributions/cross-tabs render in confirmed measurement order
+  - Declared respondent IDs preserved in evidence quotes (not silently aliased)
+  - De-duplicated output: Dataset Scope removed; Structured Evidence is ONE location
+  - Soft qualitative prevalence language prohibited (no "several," "recurring," etc.)
+  - Emit contract aligned with evidence authority model:
+    survey_themes REMOVED (preliminary observations ≠ accepted themes)
+    discovered_metrics REMOVED (deterministic facts in evidence layer)
+    sample_demographics REMOVED (no confirmed demographic fields)
+    survey_findings KEPT (model-derived candidates, no new numbers)
+    discovered_barriers KEPT (tightened extraction rules)
+    knowledge_gaps KEPT (approved interpretive operation)
+  - Method & Provenance reports actual emit/authority/integrity state
+  - Executive Summary added
+  - Analysis Details collapsed
+  - Source hash moved to Integrity subsection in provenance toggle
 
-  v8.0: computed_facts integration, numeric authority rule (superseded).
+  v9.0: Deterministic structured evidence architecture (superseded).
+  v8.0: computed_facts integration (superseded).
   v7.0: Interleaved Handlebars/AI architecture (superseded).
-  v3.1: Standards polish (superseded).
-  v3.0: Claude Sonnet, improved question_focus.
