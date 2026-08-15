@@ -1,15 +1,14 @@
 # Qori Consolidated Roadmap
 
-Last updated: 2026-08-15
+Last updated: 2026-08-15 (production promotion)
 
 ## Evidence + Context Architecture
 
 | Phase | Status | Reference |
 |-------|--------|-----------|
-| Evidence foundation (tables, services, ADRs 0028-0031) | BUILT + VERIFIED IN DEV | PR #278 |
-| Survey deterministic ingestion (CSV parse, schema review, stats, evidence) | IMPLEMENTED IN PR #279 / AWAITING DEV VERIFICATION | PR #279 |
-| Survey qualitative coding + adjudication (codebooks, theme frequency, coding audit) | NOT BUILT / NEXT SURVEY SLICE | |
-| Survey artifact v9 (evidence-first presentation) | CORRECTION PR / AWAITING DEV VERIFICATION | |
+| Evidence foundation (tables, services, ADRs 0028-0031) | COMPLETE / PRODUCTION | PR #278 |
+| Survey Slice 1 — deterministic ingestion + v9.2 artifact | COMPLETE / PRODUCTION | PRs #279–#285 |
+| Survey Slice 2 — qualitative coding + adjudication (codebooks, theme frequency, coding audit) | NEXT / NOT STARTED | |
 | Active Project Context Visibility (UX) | ROADMAP — not implemented | |
 | Schema Review UX improvements (plain-language labels, help cues) | ROADMAP — not implemented | |
 | Legacy cascade → evidence-layer acceptance migration | ROADMAP — progressive per vertical slice | |
