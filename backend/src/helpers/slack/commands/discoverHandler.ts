@@ -25,6 +25,7 @@ import { parseDocuments, validateDocuments } from '../../documentParser';
 import { getProjectByChannelId, getProjectById } from '../../../services/project.service';
 import type { VariableContext } from '../../studyVariables';
 import { postEphemeralOrDM } from '../slackHelpers';
+import { handleSurveyUploadPhase } from './surveySubmissionHandler';
 
 // ─── Types ──────────────────────────────────────────────────────
 
@@ -129,7 +130,7 @@ const DISCOVERY_TYPES: Record<DiscoveryTypeKey, DiscoveryTypeConfig> = {
     yaml: 'survey_synthesis.yaml',
     type: 'survey-synthesis',
     fileSlug: 'survey-synthesis',
-    filetypes: ['csv', 'xlsx', 'xls'],
+    filetypes: ['csv'],
     label: 'Survey synthesis',
   },
 };
@@ -401,6 +402,31 @@ async function handleDiscoverSubmission({ ack, view, body, client }: SlackViewMi
 
   const typeConfig = DISCOVERY_TYPES[discoveryType as DiscoveryTypeKey];
   let topicSlug = slugifyTopic(topic);
+
+  // Survey path forks to structured ingestion handler (Survey Slice 1)
+  if (discoveryType === 'survey_synthesis') {
+    await handleSurveyUploadPhase(
+      {
+        userId,
+        projectId: projectId!,
+        projectSlug: projectSlug!,
+        channelId: channelId || userId,
+        topic: topic!,
+        topicSlug,
+        surveyName: surveyName || topic!,
+        questionFocus: questionFocus || '',
+        sourceIntent: description || topic!,
+        uploadedFiles: uploadedFiles.map(f => ({
+          id: f.id,
+          name: f.name,
+          mimetype: f.mimetype,
+          url: f.url,
+        })),
+      },
+      client,
+    );
+    return;
+  }
 
   // Duplicate handling — use project slug for folder path (Phase 2D)
   const dateIso: string = format(new Date(), 'yyyy-MM-dd');

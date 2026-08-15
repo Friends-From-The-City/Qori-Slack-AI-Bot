@@ -553,6 +553,11 @@ slackApp.view('discover_desk_research_modal', handleDiscoverSubmission);
 slackApp.view('discover_stakeholder_modal', handleDiscoverSubmission);
 slackApp.view('discover_survey_modal', handleDiscoverSubmission);
 
+// Survey schema review (Survey Slice 1)
+import { handleSurveySchemaReviewAction, handleSurveySchemaConfirmation } from './commands/surveySubmissionHandler';
+slackApp.action('survey_review_schema', handleSurveySchemaReviewAction);
+slackApp.view('survey_schema_review_modal', handleSurveySchemaConfirmation);
+
 // ─── Fieldwork & participants ───────────────────────────────────
 
 slackApp.view('fieldwork_study_picker', handleFieldworkStudyPickerSubmit);
