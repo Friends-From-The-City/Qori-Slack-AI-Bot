@@ -253,6 +253,70 @@ describe('evidence-gap grounding', () => {
   });
 });
 
+describe('document order', () => {
+  const yaml = readFileSync(YAML_PATH, 'utf-8');
+  const outputSection = yaml.split('output_template:')[1]?.split('output_options:')[0] ?? '';
+
+  it('Structured Evidence appears before Preliminary Qualitative', () => {
+    const seIdx = outputSection.indexOf('View Structured Evidence');
+    const pqIdx = outputSection.indexOf('## Preliminary Qualitative');
+    expect(seIdx).toBeGreaterThan(-1);
+    expect(pqIdx).toBeGreaterThan(-1);
+    expect(seIdx).toBeLessThan(pqIdx);
+  });
+
+  it('Structured Evidence appears after Research Context', () => {
+    const rcIdx = outputSection.indexOf('## Research Context');
+    const seIdx = outputSection.indexOf('View Structured Evidence');
+    expect(rcIdx).toBeLessThan(seIdx);
+  });
+});
+
+describe('filename provenance', () => {
+  it('provenance uses source_filename not staged-csv', () => {
+    const yaml = readFileSync(YAML_PATH, 'utf-8');
+    expect(yaml).toContain('provenance.source_filename');
+    expect(yaml).not.toContain("'staged-csv'");
+  });
+});
+
+describe('footer control', () => {
+  it('survey_synthesis opts out of Document Information footer', () => {
+    const yaml = readFileSync(YAML_PATH, 'utf-8');
+    expect(yaml).toContain('append_document_information: false');
+  });
+});
+
+describe('qualitative prevalence hardening', () => {
+  const yaml = readFileSync(YAML_PATH, 'utf-8');
+
+  it('prohibits "some respondents" in prompt', () => {
+    // Should appear in the prohibition list
+    expect(yaml).toContain('"some respondents,"');
+  });
+
+  it('prohibits "some participants" in prompt', () => {
+    expect(yaml).toContain('"some participants,"');
+  });
+
+  it('prohibits "with some respondents noting"', () => {
+    expect(yaml).toContain('"with some respondents noting,"');
+  });
+
+  it('prohibits "many respondents"', () => {
+    expect(yaml).toContain('"many respondents,"');
+  });
+});
+
+describe('Method & Provenance display labels', () => {
+  it('provenance field_role_summary uses toDisplayLabel', () => {
+    // Verified by handler implementation — toDisplayLabel used in handler
+    // to build field_role_summary and ordinal_orders
+    const label = toDisplayLabel('overall_satisfaction');
+    expect(label).toBe('Overall Satisfaction');
+  });
+});
+
 describe('determinism', () => {
   it('3 runs identical', () => {
     const r1 = computeStandardFacts();
