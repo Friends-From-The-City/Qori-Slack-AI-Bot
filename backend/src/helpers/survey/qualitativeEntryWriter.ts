@@ -17,6 +17,7 @@ import type { Transaction, CreationAttributes } from 'sequelize';
 import type { ParsedSurvey, ConfirmedField, RespondentIdentity } from '../../types/survey';
 import type { SurveyQualitativeEntry } from '../../database/models/survey_qualitative_entry';
 import { toDisplayLabel } from './displayLabels';
+import { scrubEntryText, verifyRedactionConsistency } from './entryScrubber';
 
 export interface QualitativeEntryInput {
   evidenceSourceId: number;
@@ -57,6 +58,12 @@ export function buildQualitativeEntries(
 
       const entryHash = createHash('sha256').update(text).digest('hex');
 
+      // Apply deterministic scrubbing (phone/email patterns)
+      const scrubResult = scrubEntryText(text);
+      const isConsistent = verifyRedactionConsistency(
+        scrubResult.scrubbedText, scrubResult.detectedValues,
+      );
+
       entries.push({
         evidence_source_id: ctx.evidenceSourceId,
         project_id: ctx.projectId,
@@ -68,9 +75,16 @@ export function buildQualitativeEntries(
         entry_text: text,
         entry_hash: entryHash,
         pii_status: 'pending',
-        redacted_text: text, // initial: same as original (auto-scrub applied separately if needed)
+        redacted_text: scrubResult.scrubbedText,
         source_row_index: row.rowIndex,
-        metadata: {},
+        metadata: {
+          auto_scrub: {
+            has_detections: scrubResult.hasDetections,
+            phone_count: scrubResult.detections.phoneCount,
+            email_count: scrubResult.detections.emailCount,
+            is_consistent: isConsistent,
+          },
+        },
       } as CreationAttributes<SurveyQualitativeEntry>);
     }
   }
