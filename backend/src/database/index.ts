@@ -21,6 +21,10 @@ import EvidenceSource from './models/evidence_source';
 import EvidenceConstruct from './models/evidence_construct';
 import EvidenceRelationship from './models/evidence_relationship';
 import SurveyFieldSchema from './models/survey_field_schema';
+import SurveyQualitativeEntry from './models/survey_qualitative_entry';
+import SurveyCodebook from './models/survey_codebook';
+import SurveyCode from './models/survey_code';
+import SurveyCodeExample from './models/survey_code_example';
 
 
 // Set environment and configuration
@@ -52,6 +56,10 @@ const modelDefiners = [
   EvidenceConstruct,
   EvidenceRelationship,
   SurveyFieldSchema,
+  SurveyQualitativeEntry,
+  SurveyCodebook,
+  SurveyCode,
+  SurveyCodeExample,
 ];
 
 // Register all models with Sequelize
