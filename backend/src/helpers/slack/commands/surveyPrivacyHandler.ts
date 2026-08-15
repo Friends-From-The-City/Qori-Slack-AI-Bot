@@ -190,11 +190,11 @@ function buildPrivacyReviewModal(
   ];
 
   if (unflagged.length > 0) {
-    blocks.push({ type: 'context', elements: [{ type: 'mrkdwn', text: `*No identifiers detected* (${unflagged.length} entries)` }] });
+    blocks.push({ type: 'context', elements: [{ type: 'mrkdwn', text: `*No phone or email patterns detected* (${unflagged.length} entries)\nQori did not detect phone or email patterns in these responses. Please review them before approving.` }] });
     blocks.push({
       type: 'input', block_id: 'bulk_clear_unflagged', optional: true,
       label: { type: 'plain_text', text: ' ' },
-      element: { type: 'checkboxes', action_id: 'bulk_clear_check', options: [{ text: { type: 'plain_text', text: `Use all ${unflagged.length} unflagged responses as written` }, value: 'bulk_clear' }] },
+      element: { type: 'checkboxes', action_id: 'bulk_clear_check', options: [{ text: { type: 'plain_text', text: `I reviewed these ${unflagged.length} responses and approve them as written` }, value: 'bulk_clear' }] },
     });
     for (const entry of unflagged) {
       const eid = (entry as unknown as { id: number }).id;

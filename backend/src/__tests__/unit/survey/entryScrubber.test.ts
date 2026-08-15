@@ -69,6 +69,17 @@ describe('verifyRedactionConsistency', () => {
   });
 });
 
+describe('shared pattern equivalence', () => {
+  it('survey scrubber uses same patterns as transcript scrubber', () => {
+    // Both paths use piiPatterns.ts — verify equivalent behavior
+    const surveyResult = scrubEntryText('Call 555-867-5309 or email test@va.gov');
+    // The same patterns produce the same substitutions
+    expect(surveyResult.scrubbedText).toBe('Call [PHONE] or email [EMAIL]');
+    expect(surveyResult.detections.phoneCount).toBe(1);
+    expect(surveyResult.detections.emailCount).toBe(1);
+  });
+});
+
 describe('qualitative entry scrubbing integration', () => {
   it('entry_text remains original, redacted_text contains scrubbed derivative', () => {
     const originalText = 'Please call me at 555-867-5309 if you need more detail about my experience.';

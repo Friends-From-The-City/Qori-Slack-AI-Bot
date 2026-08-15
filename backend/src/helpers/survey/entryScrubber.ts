@@ -2,20 +2,15 @@
  * Survey Entry Scrubber — deterministic PII pattern detection + redaction
  * for open-text survey entries.
  *
- * Reuses phone and email regex patterns from transcriptScrubber.ts.
- * Does NOT require participant real names (survey respondents use system codes).
+ * Uses shared piiPatterns.ts (canonical phone/email patterns used by
+ * both transcript and survey paths — no duplicate regexes).
  *
  * Detection metadata is persisted alongside redacted text for consistency
  * verification: if a pattern was detected, the redacted text must not
  * contain the original pattern value.
  */
 
-// Phone patterns (from transcriptScrubber.ts)
-const PHONE_PATTERN_10 = /\b(?:\+?1[-.\s]?)?\(?[0-9]{3}\)?[-.\s]?[0-9]{3}[-.\s]?[0-9]{4}\b/g;
-const PHONE_PATTERN_7 = /\b[0-9]{3}[-.\s]?[0-9]{4}\b/g;
-
-// Email pattern (from transcriptScrubber.ts)
-const EMAIL_PATTERN = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g;
+import { scrubPhoneAndEmail } from '../piiPatterns';
 
 export interface ScrubResult {
   /** Scrubbed text with patterns replaced */
@@ -42,35 +37,14 @@ export interface ScrubResult {
  * @returns ScrubResult with scrubbed text and detection metadata
  */
 export function scrubEntryText(text: string): ScrubResult {
-  let scrubbed = text;
-  let phoneCount = 0;
-  let emailCount = 0;
-  const detectedValues: string[] = [];
-
-  // Phone (10-digit first, then 7-digit)
-  scrubbed = scrubbed.replace(PHONE_PATTERN_10, (match) => {
-    phoneCount++;
-    detectedValues.push(match);
-    return '[PHONE]';
-  });
-  scrubbed = scrubbed.replace(PHONE_PATTERN_7, (match) => {
-    phoneCount++;
-    detectedValues.push(match);
-    return '[PHONE]';
-  });
-
-  // Email
-  scrubbed = scrubbed.replace(EMAIL_PATTERN, (match) => {
-    emailCount++;
-    detectedValues.push(match);
-    return '[EMAIL]';
-  });
+  // Use shared canonical phone/email scrubber (same patterns as transcriptScrubber)
+  const result = scrubPhoneAndEmail(text);
 
   return {
-    scrubbedText: scrubbed,
-    hasDetections: phoneCount > 0 || emailCount > 0,
-    detections: { phoneCount, emailCount },
-    detectedValues,
+    scrubbedText: result.scrubbed,
+    hasDetections: result.phoneCount > 0 || result.emailCount > 0,
+    detections: { phoneCount: result.phoneCount, emailCount: result.emailCount },
+    detectedValues: result.detectedValues,
   };
 }
 
