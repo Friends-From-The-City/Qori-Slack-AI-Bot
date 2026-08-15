@@ -1,0 +1,5 @@
+response_id,satisfaction,notes
+R-301,Good,"This is fine"
+R-302,Bad
+R-303,Good,"Extra field here","unexpected column"
+R-304,,
