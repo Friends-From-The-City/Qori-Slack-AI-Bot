@@ -28,6 +28,9 @@ import StudyVariable from '../../../database/models/study_variable';
 import CreatedIssue from '../../../database/models/created_issue';
 import SlackUserState from '../../../database/models/slack_user_state';
 import DispositionAuditLog from '../../../database/models/disposition_audit_log';
+import EvidenceSource from '../../../database/models/evidence_source';
+import EvidenceConstruct from '../../../database/models/evidence_construct';
+import EvidenceRelationship from '../../../database/models/evidence_relationship';
 
 let instance: Sequelize | null = null;
 
@@ -53,7 +56,7 @@ export function getTestDb(): Sequelize {
     ChannelConfig, Project, ProjectMember, ResearchStudy, ResearchStudyUserRole,
     StudyStatus, StudyParticipant, SessionObserver, StudyNotes,
     ResearchPlan, SessionSummary, StudyVariable, CreatedIssue, SlackUserState,
-    DispositionAuditLog,
+    DispositionAuditLog, EvidenceSource, EvidenceConstruct, EvidenceRelationship,
   ];
 
   for (const defineModel of modelDefiners) {
