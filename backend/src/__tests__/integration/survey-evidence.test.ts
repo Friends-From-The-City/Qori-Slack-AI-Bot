@@ -168,6 +168,92 @@ describe('survey_field_schemas', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════
+// ACCEPTED-SCHEMA REUSE GUARD
+// ═══════════════════════════════════════════════════════════════════════
+
+describe('accepted-schema reuse guard', () => {
+  it('partially reviewed schema is NOT treated as reusable accepted schema', async () => {
+    const source = await EvidenceSourceModel.create({
+      project_id: projectId, source_type: 'survey_dataset',
+      label: 'Partial review test', artifact_ref: { content_hash: 'abc123' },
+      created_by: 'U_TEST',
+    } as CreationAttributes<EvidenceSource>);
+    const sourceId = (source as any).id;
+
+    // Simulate paginated review: first 2 fields confirmed, third still pending
+    await SurveyFieldSchemaModel.create({
+      evidence_source_id: sourceId, field_name: 'field_a',
+      inferred_role: 'nominal', confirmed_role: 'nominal',
+      review_status: 'confirmed', reviewed_by: 'U_TEST', reviewed_at: new Date(),
+    } as CreationAttributes<SurveyFieldSchema>);
+    await SurveyFieldSchemaModel.create({
+      evidence_source_id: sourceId, field_name: 'field_b',
+      inferred_role: 'ordinal', confirmed_role: 'ordinal',
+      review_status: 'confirmed', reviewed_by: 'U_TEST', reviewed_at: new Date(),
+    } as CreationAttributes<SurveyFieldSchema>);
+    await SurveyFieldSchemaModel.create({
+      evidence_source_id: sourceId, field_name: 'field_c',
+      inferred_role: 'open_text',
+      review_status: 'pending', // NOT confirmed
+    } as CreationAttributes<SurveyFieldSchema>);
+
+    // Query the same way the handler does:
+    const confirmedSchemas = await SurveyFieldSchemaModel.findAll({
+      where: { evidence_source_id: sourceId, review_status: 'confirmed' },
+    });
+    const pendingCount = await SurveyFieldSchemaModel.count({
+      where: { evidence_source_id: sourceId, review_status: 'pending' },
+    });
+
+    // Guard: must have confirmed rows AND zero pending AND count matches CSV headers
+    const csvHeaderCount = 3; // simulated: field_a, field_b, field_c
+    const isCompleteAccepted = confirmedSchemas.length > 0
+      && pendingCount === 0
+      && confirmedSchemas.length === csvHeaderCount;
+
+    // Partial review must NOT be treated as accepted
+    expect(isCompleteAccepted).toBe(false);
+    expect(pendingCount).toBe(1);
+    expect(confirmedSchemas.length).toBe(2);
+  });
+
+  it('fully reviewed schema IS treated as reusable accepted schema', async () => {
+    const source = await EvidenceSourceModel.create({
+      project_id: projectId, source_type: 'survey_dataset',
+      label: 'Full review test', artifact_ref: { content_hash: 'def456' },
+      created_by: 'U_TEST',
+    } as CreationAttributes<EvidenceSource>);
+    const sourceId = (source as any).id;
+
+    // All fields confirmed
+    await SurveyFieldSchemaModel.create({
+      evidence_source_id: sourceId, field_name: 'field_a',
+      inferred_role: 'nominal', confirmed_role: 'nominal',
+      review_status: 'confirmed', reviewed_by: 'U_TEST', reviewed_at: new Date(),
+    } as CreationAttributes<SurveyFieldSchema>);
+    await SurveyFieldSchemaModel.create({
+      evidence_source_id: sourceId, field_name: 'field_b',
+      inferred_role: 'ordinal', confirmed_role: 'ordinal',
+      review_status: 'confirmed', reviewed_by: 'U_TEST', reviewed_at: new Date(),
+    } as CreationAttributes<SurveyFieldSchema>);
+
+    const confirmedSchemas = await SurveyFieldSchemaModel.findAll({
+      where: { evidence_source_id: sourceId, review_status: 'confirmed' },
+    });
+    const pendingCount = await SurveyFieldSchemaModel.count({
+      where: { evidence_source_id: sourceId, review_status: 'pending' },
+    });
+
+    const csvHeaderCount = 2; // simulated: field_a, field_b
+    const isCompleteAccepted = confirmedSchemas.length > 0
+      && pendingCount === 0
+      && confirmedSchemas.length === csvHeaderCount;
+
+    expect(isCompleteAccepted).toBe(true);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════
 // DETERMINISTIC CONSTRUCTS + LINEAGE
 // ═══════════════════════════════════════════════════════════════════════
 

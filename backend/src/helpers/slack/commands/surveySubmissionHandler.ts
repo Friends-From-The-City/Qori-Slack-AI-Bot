@@ -161,8 +161,16 @@ export async function handleSurveyUploadPhase(
     const confirmedSchemas = await SurveyFieldSchemaModel.findAll({
       where: { evidence_source_id: existingSource.id, review_status: 'confirmed' },
     });
+    const pendingCount = await SurveyFieldSchemaModel.count({
+      where: { evidence_source_id: existingSource.id, review_status: 'pending' },
+    });
 
-    if (confirmedSchemas.length > 0) {
+    // Reuse ONLY when schema is complete: all fields confirmed, none pending
+    const isCompleteAccepted = confirmedSchemas.length > 0
+      && pendingCount === 0
+      && confirmedSchemas.length === survey.headers.length;
+
+    if (isCompleteAccepted) {
       await client.chat.postMessage({
         channel: userId,
         text: '✅ Same survey file detected (content hash match). Reusing accepted schema and recomputing statistics...',
