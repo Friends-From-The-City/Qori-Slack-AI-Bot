@@ -15,6 +15,8 @@
  */
 
 import type { SurveyField, SurveyFieldRole } from '../../../types/survey';
+import { suggestOrdinalOrder } from '../../survey/ordinalSuggestions';
+import { toDisplayLabel } from '../../survey/displayLabels';
 
 /** Maximum fields per modal page (Slack limit ~100 blocks; 4 blocks per field = 25 max). */
 const FIELDS_PER_PAGE = 20;
@@ -131,12 +133,19 @@ export function buildSchemaReviewModal(
 
     // Ordinal category order input (shown for fields inferred as ordinal)
     if (field.inferredRole === 'ordinal') {
-      const suggestedOrder = field.sampleValues.join(' | ');
+      const suggestion = suggestOrdinalOrder(field.sampleValues);
+      const suggestedValue = suggestion.suggestedOrder
+        ? suggestion.suggestedOrder.join(' | ')
+        : '';
+      const hintText = suggestion.suggestedOrder
+        ? 'Qori suggested this order. Please verify or edit it.'
+        : 'No safe category order could be inferred. Enter values from low → high.';
       blocks.push({
         type: 'input',
         block_id: `field_order_${field.fieldName}`,
         optional: true,
-        label: { type: 'plain_text', text: `Category order (low → high) for "${field.fieldName}"` },
+        label: { type: 'plain_text', text: `Category order — required for ordered statistics ("${toDisplayLabel(field.fieldName)}")` },
+        hint: { type: 'plain_text', text: hintText },
         element: {
           type: 'plain_text_input',
           action_id: 'order_input',
@@ -144,7 +153,7 @@ export function buildSchemaReviewModal(
             type: 'plain_text',
             text: 'e.g., Very Difficult | Difficult | Neutral | Easy | Very Easy',
           },
-          ...(suggestedOrder ? { initial_value: suggestedOrder } : {}),
+          ...(suggestedValue ? { initial_value: suggestedValue } : {}),
         },
       });
     }
