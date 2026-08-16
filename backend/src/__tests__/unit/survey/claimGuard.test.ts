@@ -20,6 +20,7 @@ import {
   buildEvidenceEnvelope,
   buildRetryGuidance,
   buildDeterministicEvidenceGaps,
+  buildDeterministicInterpretation,
   type EvidenceEnvelope,
   type ClaimViolation,
 } from '../../../helpers/survey/claimGuard';
@@ -968,4 +969,115 @@ describe('Fallback copy quality (v10.2.1)', () => {
       expect(fb).not.toContain('sections below');
     });
   }
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// DETERMINISTIC INTERPRETATION FALLBACK
+// ═══════════════════════════════════════════════════════════════════════
+
+describe('Deterministic interpretation fallback', () => {
+  const data = {
+    has_accepted_coding: true,
+    computed_facts: {
+      totalRespondents: 10,
+      fieldStats: [
+        { displayName: 'Overall Satisfaction', role: 'ordinal', median: 'Neutral', nPresent: 10 },
+        { displayName: 'Difficulty Rating', role: 'ordinal', median: 'Neutral', nPresent: 10 },
+      ],
+      crossTabs: [
+        { rowDisplayName: 'Completion Status', colDisplayName: 'Overall Satisfaction', totalN: 10 },
+        { rowDisplayName: 'Completion Status', colDisplayName: 'Difficulty Rating', totalN: 10 },
+      ],
+    },
+    qualitative_coding: {
+      recurringPatterns: [
+        { label: 'Eligibility Uncertainty', displayFrequency: '3 of 8 respondents' },
+        { label: 'Navigation Complexity', displayFrequency: '2 of 8 respondents' },
+      ],
+      individualObservations: [
+        { label: 'Callback Delay', displayFrequency: '1 of 8 respondents' },
+      ],
+    },
+    structured_evidence_capabilities: {
+      has_qualitative_structured_cross_tabs: false,
+      available_cross_tabs: ['Completion Status × Overall Satisfaction'],
+      sample_size: 10,
+      has_population_representativeness: false,
+    },
+  };
+
+  it('produces useful research synthesis', () => {
+    const result = buildDeterministicInterpretation(data);
+    // Contains structured evidence
+    expect(result).toContain('Overall Satisfaction');
+    expect(result).toContain('Difficulty Rating');
+    expect(result).toContain('Neutral');
+    expect(result).toContain('10 respondents');
+  });
+
+  it('does NOT contain "not available for this run"', () => {
+    const result = buildDeterministicInterpretation(data);
+    expect(result).not.toContain('not available for this run');
+    expect(result).not.toContain('not available');
+  });
+
+  it('uses accepted grouping labels', () => {
+    const result = buildDeterministicInterpretation(data);
+    expect(result).toContain('eligibility uncertainty');
+    expect(result).toContain('navigation complexity');
+    expect(result).toContain('callback delay');
+  });
+
+  it('never claims qualitative ↔ structured association without linkage', () => {
+    const result = buildDeterministicInterpretation(data);
+    expect(result).not.toMatch(/correspond/i);
+    expect(result).not.toMatch(/anchor/i);
+    expect(result).not.toMatch(/explain\w*\s+(?:why|the)/i);
+    expect(result).toContain('should not be treated as respondent-level associations');
+    expect(result).toContain('No deterministic cross-tab links');
+  });
+
+  it('contains respondent/sample limitation', () => {
+    const result = buildDeterministicInterpretation(data);
+    expect(result).toContain('10 respondents');
+    expect(result).toContain('descriptive and hypothesis-generating');
+  });
+
+  it('is deterministic for identical accepted state', () => {
+    const result1 = buildDeterministicInterpretation(data);
+    const result2 = buildDeterministicInterpretation(data);
+    expect(result1).toBe(result2);
+  });
+
+  it('includes grouping counts from displayFrequency', () => {
+    const result = buildDeterministicInterpretation(data);
+    expect(result).toContain('3 of 8 respondents');
+    expect(result).toContain('1 of 8 respondents');
+  });
+
+  it('mentions available cross-tabulations', () => {
+    const result = buildDeterministicInterpretation(data);
+    expect(result).toContain('Completion Status × Overall Satisfaction');
+  });
+
+  it('does not contain raw qualitative text', () => {
+    const result = buildDeterministicInterpretation(data);
+    expect(result).not.toContain('session timeout');
+    expect(result).not.toContain('sign-in failure');
+    expect(result).not.toContain('caregiver');
+    expect(result).not.toMatch(/\bR\d{3}\b/); // No respondent IDs
+  });
+
+  it('handles minimal data gracefully', () => {
+    const minimalData = {
+      has_accepted_coding: true,
+      computed_facts: null,
+      qualitative_coding: null,
+      structured_evidence_capabilities: null,
+    };
+    const result = buildDeterministicInterpretation(minimalData);
+    expect(result.length).toBeGreaterThan(10);
+    expect(result).not.toContain('undefined');
+    expect(result).not.toContain('null');
+  });
 });
