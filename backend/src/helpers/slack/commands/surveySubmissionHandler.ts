@@ -994,6 +994,18 @@ export async function runSurveyQualitativeSynthesis(
     const project = await getProjectById(ctx.projectId);
     const projectProblemStatement = project?.problem_statement || null;
     const dateIso = format(new Date(), 'yyyy-MM-dd');
+    const analysisDate = format(new Date(), 'MMMM d, yyyy');
+
+    // Resolve researcher display name for top-of-document metadata
+    let runBy = 'Researcher';
+    try {
+      const userInfo = await client.users.info({ user: ctx.userId });
+      runBy = userInfo.user?.profile?.display_name
+        || userInfo.user?.real_name
+        || 'Researcher';
+    } catch {
+      // Fail open — "Researcher" is acceptable fallback
+    }
 
     const data: Record<string, unknown> = {
       topic: ctx.topic,
@@ -1010,6 +1022,8 @@ export async function runSurveyQualitativeSynthesis(
       document_count: 1,
       document_names: [evidenceSource?.artifact_ref ? (evidenceSource.artifact_ref as Record<string, unknown>).filename as string ?? survey.sourceFilename : survey.sourceFilename],
       document_types: ['CSV'],
+      analysis_date: analysisDate,
+      run_by: runBy,
       _discovery_type: 'survey-synthesis',
       computed_facts: formatComputedFacts(computedFacts, confirmedFields),
       open_text_content: openTextContent,

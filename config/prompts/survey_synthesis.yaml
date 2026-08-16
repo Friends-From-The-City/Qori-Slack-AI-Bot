@@ -284,6 +284,29 @@ ai_generation_tasks:
       or other soft prevalence terms. State facts with their actual
       counts/percentages from the structured evidence.
 
+      RULE 5 — NO COMPLEMENT-BY-SUBTRACTION
+      Do NOT derive qualitative claims by subtracting a grouping frequency
+      from 100% or from the total respondent count.
+
+      Example of PROHIBITED reasoning:
+        "3 of 10 had no difficulty, so the remaining 70% had friction."
+
+      This is invalid because:
+      - qualitative groupings are NOT mutually exclusive
+      - some respondents may have no accepted grouping
+      - absence from one grouping does not imply presence in another
+
+      Instead, describe what each accepted grouping found, using its own
+      accepted frequency. Let the reader draw their own complement if the
+      evidence supports it.
+
+      RULE 6 — QUALITATIVE EVIDENCE BOUNDARY
+      When accepted qualitative groupings are provided below, they are
+      the ONLY qualitative authority. Reference only the grouping labels,
+      definitions, and frequencies supplied. Do not introduce respondent
+      details, quotes, or observations not present in the supplied
+      groupings.
+
       ============================================================
       AVAILABLE EVIDENCE
       ============================================================
@@ -304,7 +327,7 @@ ai_generation_tasks:
       {% endif %}
 
       {% if qualitative_coding and qualitative_coding.hasAcceptedCoding %}
-      **Accepted qualitative groupings:**
+      **Accepted qualitative groupings (ONLY qualitative evidence for this summary):**
       {% for p in qualitative_coding.recurringPatterns %}
       {{p.label}} — {{p.displayFrequency}}
       {% endfor %}
@@ -357,6 +380,28 @@ ai_generation_tasks:
       This survey is descriptive. Do not assert that one variable causes
       another. Associations and co-occurrence are acceptable.
 
+      RULE 6 — NO COMPLEMENT-BY-SUBTRACTION
+      Do NOT derive qualitative claims by subtracting a grouping frequency
+      from 100% or from the total respondent count. Groupings are not
+      mutually exclusive or exhaustive.
+
+      RULE 7 — QUALITATIVE EVIDENCE BOUNDARY
+      When accepted qualitative groupings are provided below, they are
+      the ONLY qualitative authority for this section. Do not reference
+      respondent IDs, quotes, details, or observations not present in
+      the accepted groupings supplied. Do not introduce information from
+      raw open-text entries, governance-only groupings, or unaccepted
+      assignments.
+
+      RULE 8 — CROSS-TAB LIMITATION
+      The structured cross-tabs show how specific field pairs co-vary
+      (e.g., completion × satisfaction, completion × difficulty). There
+      is NO cross-tab between completion status and the accepted
+      qualitative friction groupings. Do not claim or imply an
+      association between completion outcome and specific qualitative
+      groupings unless a deterministic cross-tab for that pair is
+      supplied.
+
       ============================================================
       AVAILABLE EVIDENCE
       ============================================================
@@ -369,27 +414,24 @@ ai_generation_tasks:
       {% endfor %}
 
       {% if computed_facts.crossTabs %}
-      **Cross-tabulations:**
+      **Cross-tabulations (these are the ONLY available cross-tabs):**
       {% for ct in computed_facts.crossTabs %}
       {{ct.rowDisplayName}} × {{ct.colDisplayName}} (n={{ct.totalN}})
       {% endfor %}
+      No cross-tab exists between completion status and the qualitative
+      groupings below.
       {% endif %}
 
       {% if qualitative_coding and qualitative_coding.hasAcceptedCoding %}
-      **Accepted qualitative groupings:**
+      **Accepted qualitative groupings (ONLY qualitative evidence for
+      this interpretation — do not reference respondent details or raw
+      text beyond what is stated here):**
       {% for p in qualitative_coding.recurringPatterns %}
       {{p.label}} — {{p.displayFrequency}}: {{p.definition}}
       {% endfor %}
       {% for p in qualitative_coding.individualObservations %}
       {{p.label}} — {{p.displayFrequency}}: {{p.definition}}
       {% endfor %}
-      {% endif %}
-
-      {% if open_text_content %}
-      **Open-text responses (for contextual reference):**
-      ---BEGIN DATA---
-      {{open_text_content}}
-      ---END DATA---
       {% endif %}
 
       **Research problem:** {{project_problem_statement}}
@@ -406,6 +448,8 @@ ai_generation_tasks:
       - "Readers should look for..."
       - "Readers should consider..."
       - Instructions or methodology guidance
+      - Respondent IDs not present in the supplied evidence
+      - Details from raw open-text entries
 
   - task_id: "evidence_gaps"
     skip_when: "not project_problem_statement"
@@ -510,6 +554,9 @@ ai_generation_tasks:
 # ═══════════════════════════════════════════════════════════
 output_template: |
   # Survey Synthesis: {{survey_name}}
+
+  **Analysis date:** {{analysis_date}}
+  **Run by:** {{run_by}}
 
   ## Executive Summary
 
