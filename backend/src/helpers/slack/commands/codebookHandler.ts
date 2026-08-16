@@ -277,7 +277,22 @@ export async function handleCodebookReviewSubmission(
 
     await client.chat.postMessage({
       channel: userId,
-      text: '\u2705 *Groupings approved.* Qori will use these groupings when creating the final survey summary.',
+      blocks: [
+        { type: 'section', text: { type: 'mrkdwn',
+          text: '\u2705 *Groupings approved.* Qori can now compare the approved responses with the groupings you reviewed.' } },
+        { type: 'actions', elements: [
+          { type: 'button', text: { type: 'plain_text', text: 'Match Responses' }, style: 'primary',
+            action_id: 'survey_generate_assignments',
+            value: JSON.stringify({
+              codebookId: meta.codebookId,
+              evidenceSourceId: meta.evidenceSourceId,
+              projectId: meta.projectId,
+              surveyName: meta.surveyName,
+            }),
+          },
+        ] },
+      ],
+      text: 'Groupings approved. Click "Match Responses" to continue.',
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
