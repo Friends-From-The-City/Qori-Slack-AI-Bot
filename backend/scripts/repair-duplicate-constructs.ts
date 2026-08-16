@@ -36,6 +36,18 @@ const CodeModel = sequelize.models.SurveyCode as typeof SurveyCode;
 
 const dryRun = !process.argv.includes('--fix');
 
+// Explicit allowlist for governance backfill: --governance-code-ids=uuid1,uuid2,...
+const governanceArg = process.argv.find(a => a.startsWith('--governance-code-ids='));
+const approvedGovernanceIds = new Set(
+  governanceArg ? governanceArg.split('=')[1].split(',').filter(Boolean) : [],
+);
+
+// Explicit approval for survey_context backfill: --backfill-context-ids=sourcePublicId,...
+const contextArg = process.argv.find(a => a.startsWith('--backfill-context-ids='));
+const approvedContextIds = new Set(
+  contextArg ? contextArg.split('=')[1].split(',').filter(Boolean) : [],
+);
+
 interface ConstructInfo {
   id: number;
   public_id: string;
@@ -179,10 +191,22 @@ async function main() {
   }
 
   // ═══════════════════════════════════════════════════════════════════
-  // PART 2: CODEBOOK ANALYTIC RELEVANCE BACKFILL
+  // PART 2: CODEBOOK ANALYTIC RELEVANCE — DIAGNOSTIC + EXPLICIT BACKFILL
+  //
+  // Dry-run: reports each code with current/suggested analytic_relevance.
+  // Suggestions are DIAGNOSTIC ONLY — the heuristic does not constitute
+  // authoritative classification.
+  //
+  // --fix: only applies governance_only to codes whose public_id appears
+  // in --governance-code-ids=<id1>,<id2>,... (explicit allowlist).
   // ═══════════════════════════════════════════════════════════════════
 
   console.log('\n\n=== CODEBOOK ANALYTIC RELEVANCE ===\n');
+
+  if (!dryRun && approvedGovernanceIds.size === 0) {
+    console.log('  (No --governance-code-ids provided. Skipping governance backfill.)');
+    console.log('  To backfill, re-run with: --fix --governance-code-ids=<public_id,...>');
+  }
 
   const codebooks = await CodebookModel.findAll({
     where: { status: 'accepted' },
@@ -204,81 +228,124 @@ async function main() {
       const label = code.label;
       const definition = code.definition;
 
-      // Inspect for governance-only indicators in the code definition/label.
-      // This is for DIAGNOSTIC REPORTING only — classification requires review.
-      const governanceIndicators = [
-        /\bcontact\s+information\b/i,
-        /\bpersonal\s+contact\b/i,
-        /\bfollow[\s-]?up\s+contact\b/i,
-        /\bsensitive\s+(personal\s+)?disclosure\b/i,
-        /\bthird[\s-]?party\b.*\bdisclosure\b/i,
-        /\bPII\b/i,
-        /\bredact/i,
+      // Heuristic suggestion — DIAGNOSTIC ONLY, never auto-persisted
+      const governanceIndicators: Array<{ pattern: RegExp; reason: string }> = [
+        { pattern: /\bcontact\s+information\b/i, reason: 'mentions contact information' },
+        { pattern: /\bpersonal\s+contact\b/i, reason: 'mentions personal contact' },
+        { pattern: /\bfollow[\s-]?up\s+contact\b/i, reason: 'mentions follow-up contact' },
+        { pattern: /\bsensitive\s+(personal\s+)?disclosure\b/i, reason: 'mentions sensitive disclosure' },
+        { pattern: /\bthird[\s-]?party\b.*\bdisclosure\b/i, reason: 'mentions third-party disclosure' },
+        { pattern: /\bPII\b/i, reason: 'mentions PII' },
+        { pattern: /\bredact/i, reason: 'mentions redaction' },
       ];
 
-      const suggestedRelevance = governanceIndicators.some(p =>
-        p.test(label) || p.test(definition),
-      ) ? 'governance_only' : 'research';
+      const matchedIndicator = governanceIndicators.find(ind =>
+        ind.pattern.test(label) || ind.pattern.test(definition),
+      );
+      const suggestedRelevance = matchedIndicator ? 'governance_only' : 'research';
+      const suggestionReason = matchedIndicator?.reason ?? 'no governance indicators detected';
 
       if (currentRelevance) {
-        console.log(`  ${code.public_id}: "${label}" → ${currentRelevance} (already set)`);
+        console.log(`  ${code.public_id}: "${label}"`);
+        console.log(`    current: ${currentRelevance}`);
       } else {
-        console.log(`  ${code.public_id}: "${label}" → MISSING (suggested: ${suggestedRelevance})`);
-        if (!dryRun && suggestedRelevance === 'governance_only') {
+        console.log(`  ${code.public_id}: "${label}"`);
+        console.log(`    definition: "${definition.slice(0, 100)}${definition.length > 100 ? '...' : ''}"`);
+        console.log(`    current: MISSING`);
+        console.log(`    suggested: ${suggestedRelevance} (reason: ${suggestionReason})`);
+
+        // Only persist if explicitly approved via --governance-code-ids
+        if (!dryRun && approvedGovernanceIds.has(code.public_id)) {
           await code.update({
-            metadata: { ...meta, analytic_relevance: suggestedRelevance },
+            metadata: { ...meta, analytic_relevance: 'governance_only' },
           });
-          console.log(`    ✅ Set analytic_relevance = governance_only`);
+          console.log(`    ✅ Set analytic_relevance = governance_only (explicitly approved)`);
         }
       }
     }
   }
 
   // ═══════════════════════════════════════════════════════════════════
-  // PART 3: SURVEY CONTEXT BACKFILL
+  // PART 3: SURVEY CONTEXT — DIAGNOSTIC + EXPLICIT BACKFILL
+  //
+  // Dry-run: reports current survey_context presence, available canonical
+  // DB state (project, evidence source metadata), and proposed recovery
+  // with provenance for each field.
+  //
+  // --fix: only backfills sources whose public_id appears in
+  // --backfill-context-ids=<id1>,<id2>,... (explicit allowlist).
+  // Does NOT auto-backfill by parsing source.label.
   // ═══════════════════════════════════════════════════════════════════
 
   console.log('\n\n=== SURVEY CONTEXT METADATA ===\n');
+
+  if (!dryRun && approvedContextIds.size === 0) {
+    console.log('  (No --backfill-context-ids provided. Skipping context backfill.)');
+    console.log('  To backfill, re-run with: --fix --backfill-context-ids=<source_public_id,...>');
+  }
 
   for (const source of sources) {
     const meta = source.metadata as Record<string, unknown> | null;
     const surveyContext = meta?.survey_context as Record<string, string> | undefined;
 
+    console.log(`Source ${source.public_id} (id=${source.id})`);
+    console.log(`  label: "${source.label}"`);
+
     if (surveyContext) {
-      console.log(`Source ${source.public_id}: survey_context PRESENT`);
-      console.log(`  topic: "${surveyContext.topic}"`);
-      console.log(`  topicSlug: "${surveyContext.topicSlug}"`);
-      console.log(`  surveyName: "${surveyContext.surveyName}"`);
+      console.log(`  survey_context: PRESENT`);
+      console.log(`    topic: "${surveyContext.topic}"`);
+      console.log(`    topicSlug: "${surveyContext.topicSlug}"`);
+      console.log(`    surveyName: "${surveyContext.surveyName}"`);
+      console.log(`    questionFocus: "${surveyContext.questionFocus || ''}"`);
+      console.log(`    sourceIntent: "${surveyContext.sourceIntent || ''}"`);
+      console.log(`    projectSlug: "${surveyContext.projectSlug || ''}"`);
     } else {
-      console.log(`Source ${source.public_id}: survey_context MISSING`);
+      console.log(`  survey_context: MISSING`);
 
-      // Attempt to reconstruct from canonical DB state
-      const label = source.label; // e.g., "Survey Name — filename.csv"
-      const labelParts = label.split(' — ');
-      const reconstructedName = labelParts[0] || 'Survey';
-
-      // Load project for projectSlug
+      // Report available canonical DB state
       const project = await sequelize.models.Project.findByPk(source.project_id);
-      const projectSlug = project
-        ? (project as unknown as { slug: string }).slug ?? ''
-        : '';
+      const projectName = project ? (project as unknown as { name: string }).name ?? '' : '';
+      const projectSlug = project ? (project as unknown as { slug: string }).slug ?? '' : '';
+      const projectProblem = project ? (project as unknown as { problem_statement: string | null }).problem_statement : null;
 
-      const reconstructed = {
-        topic: reconstructedName,
-        topicSlug: reconstructedName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''),
-        surveyName: reconstructedName,
-        questionFocus: '',
-        sourceIntent: '',
-        projectSlug,
-      };
+      const artifactRef = source.artifact_ref as Record<string, unknown> | null;
+      const filename = artifactRef?.filename as string ?? '';
 
-      console.log(`  Reconstructed: ${JSON.stringify(reconstructed)}`);
+      console.log(`\n  Available canonical DB state:`);
+      console.log(`    project.name: "${projectName}"`);
+      console.log(`    project.slug: "${projectSlug}"`);
+      console.log(`    project.problem_statement: "${projectProblem ?? '(null)'}"`);
+      console.log(`    evidence_source.label: "${source.label}"`);
+      console.log(`    artifact_ref.filename: "${filename}"`);
+      console.log(`    source_type: "${source.source_type}"`);
 
-      if (!dryRun) {
+      // Propose recovery with provenance for each field
+      // source.label has format: "Survey Name — filename.csv"
+      const labelParts = source.label.split(' — ');
+      const nameFromLabel = labelParts.length > 1 ? labelParts[0] : null;
+
+      console.log(`\n  Proposed survey_context (requires approval):`);
+      console.log(`    topic: "${nameFromLabel ?? '(needs manual entry)'}" — provenance: source.label prefix${nameFromLabel ? '' : ' (UNPARSEABLE)'}`);
+      console.log(`    topicSlug: "${nameFromLabel ? nameFromLabel.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') : '(needs manual entry)'}" — provenance: derived from topic`);
+      console.log(`    surveyName: "${nameFromLabel ?? '(needs manual entry)'}" — provenance: source.label prefix`);
+      console.log(`    questionFocus: "" — provenance: not persisted in legacy flow`);
+      console.log(`    sourceIntent: "" — provenance: not persisted in legacy flow`);
+      console.log(`    projectSlug: "${projectSlug}" — provenance: project.slug`);
+
+      // Only persist if explicitly approved
+      if (!dryRun && approvedContextIds.has(source.public_id) && nameFromLabel) {
+        const reconstructed = {
+          topic: nameFromLabel,
+          topicSlug: nameFromLabel.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''),
+          surveyName: nameFromLabel,
+          questionFocus: '',
+          sourceIntent: '',
+          projectSlug,
+        };
         await source.update({
           metadata: { ...(meta ?? {}), survey_context: reconstructed },
         });
-        console.log(`  ✅ Backfilled survey_context`);
+        console.log(`\n    ✅ Backfilled survey_context (explicitly approved)`);
       }
     }
   }

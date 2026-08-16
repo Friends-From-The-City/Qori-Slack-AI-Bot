@@ -23,6 +23,7 @@ import type { ConfirmedField } from '../../../types/survey';
 import { parseCsvBuffer, computeContentHash } from '../../survey';
 import { isPrivacyReviewComplete } from '../../../services/content-governance.service';
 import { findAcceptedCodingRun } from '../../../services/survey-coding-run.service';
+import { getProjectById } from '../../../services/project.service';
 import { runSurveyQualitativeSynthesis } from './surveySubmissionHandler';
 
 const EvidenceSourceModel = sequelize.models.EvidenceSource as typeof EvidenceSource;
@@ -137,11 +138,15 @@ export async function handleRunSynthesisAction(
     // 6. Invoke qualitative synthesis
     // Resolution order for survey context:
     //   1. evidence_source.metadata.survey_context (authoritative, written during upload)
-    //   2. Canonical DB state (evidence_source.label, project) — for legacy sources
-    //   3. Slack button metadata — last resort, may be fragile/incomplete
+    //   2. Persisted canonical DB state (project, evidence_source metadata)
+    //   3. evidence_source.label as last-resort display fallback (never mutated back)
+    //   4. Slack button metadata as final legacy fallback
     //
     // This avoids title corruption from metadata loss through the Slack button chain.
     const surveyContext = (sourceMetadata?.survey_context as Record<string, string> | undefined);
+
+    // Load canonical project state for fallback
+    const project = await getProjectById(meta.projectId);
 
     let resolvedTopic: string;
     let resolvedTopicSlug: string;
@@ -151,7 +156,7 @@ export async function handleRunSynthesisAction(
     let resolvedSourceIntent: string;
 
     if (surveyContext?.topic) {
-      // Priority 1: Persisted survey_context
+      // Priority 1: Persisted survey_context (authoritative)
       resolvedTopic = surveyContext.topic;
       resolvedTopicSlug = surveyContext.topicSlug ?? 'survey';
       resolvedSurveyName = surveyContext.surveyName ?? surveyContext.topic;
@@ -159,13 +164,14 @@ export async function handleRunSynthesisAction(
       resolvedQuestionFocus = surveyContext.questionFocus ?? '';
       resolvedSourceIntent = surveyContext.sourceIntent ?? '';
     } else {
-      // Priority 2: Reconstruct from canonical DB state
-      const labelParts = source.label.split(' — ');
-      const nameFromLabel = labelParts[0] || 'Survey';
-      resolvedSurveyName = nameFromLabel;
-      resolvedTopic = nameFromLabel;
-      resolvedTopicSlug = nameFromLabel.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'survey';
-      resolvedProjectSlug = meta.projectSlug ?? '';
+      // Priority 2-4: Canonical DB state + legacy fallbacks
+      // Use project slug from DB, survey name from Slack meta or source label
+      const projectSlug = project?.slug ?? meta.projectSlug ?? '';
+      const surveyName = meta.surveyName ?? source.label ?? 'Survey';
+      resolvedSurveyName = surveyName;
+      resolvedTopic = meta.topic ?? surveyName;
+      resolvedTopicSlug = meta.topicSlug ?? 'survey';
+      resolvedProjectSlug = projectSlug;
       resolvedQuestionFocus = meta.questionFocus ?? '';
       resolvedSourceIntent = meta.sourceIntent ?? '';
     }

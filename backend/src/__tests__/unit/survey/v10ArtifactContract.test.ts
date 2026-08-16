@@ -562,13 +562,15 @@ describe('idempotent foundation persistence', () => {
     expect(actionFile).toContain('survey_context');
   });
 
-  it('synthesis action reconstructs from source.label when survey_context absent', () => {
+  it('synthesis action falls back to canonical DB state when survey_context absent', () => {
     const actionFile = readFileSync(
       join(__dirname, '../../../helpers/slack/commands/surveySynthesisAction.ts'),
       'utf-8',
     );
-    // Must have canonical DB fallback for legacy sources
-    expect(actionFile).toContain('Reconstruct from canonical DB state');
-    expect(actionFile).toContain('source.label.split');
+    // Must have canonical DB fallback for legacy sources — uses project + meta, NOT label parsing
+    expect(actionFile).toContain('Canonical DB state');
+    expect(actionFile).toContain('getProjectById');
+    // Must NOT parse source.label as canonical data
+    expect(actionFile).not.toContain('source.label.split');
   });
 });
