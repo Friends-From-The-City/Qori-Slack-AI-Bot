@@ -18,9 +18,10 @@ import type { SurveyCode } from '../../../database/models/survey_code';
 import {
   getEligibleEntries, createDraftCodebook, getCodebookWithCodes,
   acceptCodebook, updateCode, addResearcherCode,
-  findActiveUnacceptedCodebook,
+  findActiveUnacceptedCodebook, findAcceptedCodebook,
   CodebookNotReadyError, CodebookImmutableError,
 } from '../../../services/survey-codebook.service';
+import { findActiveUnacceptedRun, findAcceptedCodingRun } from '../../../services/survey-coding-run.service';
 import { generateDraftCodes, CodebookGenerationError } from '../../survey/codebookGenerator';
 import { getProjectById } from '../../../services/project.service';
 
@@ -33,6 +34,73 @@ interface CodebookMeta {
   surveyName: string;
   page?: number;
   totalCodes?: number;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// RESUME STATE — canonical next action from Postgres
+// ═══════════════════════════════════════════════════════════════════════
+
+/**
+ * Determine the correct resume CTA for an accepted codebook based on coding run state.
+ * Returns Slack blocks for the appropriate next action.
+ */
+async function buildResumeCTA(
+  codebookId: number,
+  evidenceSourceId: number,
+  projectId: number,
+  surveyName: string,
+): Promise<{ text: string; blocks: unknown[] }> {
+  const acceptedRun = await findAcceptedCodingRun(evidenceSourceId);
+  if (acceptedRun) {
+    return {
+      text: 'Your survey analysis is ready. Click "Create Survey Summary" to continue.',
+      blocks: [
+        { type: 'section', text: { type: 'mrkdwn',
+          text: '✅ *Groupings and matches are already approved.* Your survey analysis is ready.' } },
+        { type: 'actions', elements: [
+          { type: 'button', text: { type: 'plain_text', text: 'Create Survey Summary' }, style: 'primary',
+            action_id: 'survey_run_synthesis',
+            value: JSON.stringify({ evidenceSourceId, projectId, projectSlug: surveyName, surveyName }),
+          },
+        ] },
+      ],
+    };
+  }
+
+  const activeRun = await findActiveUnacceptedRun(evidenceSourceId, codebookId);
+  if (activeRun) {
+    return {
+      text: 'Matches are ready for review. Click "Review Matches" to continue.',
+      blocks: [
+        { type: 'section', text: { type: 'mrkdwn',
+          text: '✅ *Groupings already approved.* Review the matches before Qori counts or summarizes them.' } },
+        { type: 'actions', elements: [
+          { type: 'button', text: { type: 'plain_text', text: 'Review Matches' }, style: 'primary',
+            action_id: 'survey_open_match_review',
+            value: JSON.stringify({
+              codingRunId: (activeRun as unknown as { id: number }).id,
+              codebookId, evidenceSourceId, projectId, surveyName,
+            }),
+          },
+        ] },
+      ],
+    };
+  }
+
+  // No coding run yet — offer Match Responses
+  return {
+    text: 'Groupings already approved. Click "Match Responses" to continue.',
+    blocks: [
+      { type: 'section', text: { type: 'mrkdwn',
+        text: '✅ *Groupings already approved.* Qori can now compare the approved responses with your groupings.' } },
+      { type: 'actions', elements: [
+        { type: 'button', text: { type: 'plain_text', text: 'Match Responses' }, style: 'primary',
+          action_id: 'survey_generate_assignments',
+          value: JSON.stringify({ codebookId, evidenceSourceId, projectId, surveyName }),
+        },
+      ] },
+    ],
+  };
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -49,8 +117,21 @@ export async function handleGenerateCodebook(
   const userId = body.user.id;
 
   try {
+    const evidenceSourceId = rawMeta.evidenceSourceId;
+    const projectId = rawMeta.projectId;
+    const surveyName = rawMeta.surveyName ?? 'Survey';
+
+    // Resume: check for already-accepted codebook first
+    const acceptedCodebook = await findAcceptedCodebook(evidenceSourceId);
+    if (acceptedCodebook) {
+      const codebookId = (acceptedCodebook as unknown as { id: number }).id;
+      const cta = await buildResumeCTA(codebookId, evidenceSourceId, projectId, surveyName);
+      await client.chat.postMessage({ channel: userId, blocks: cta.blocks as never[], text: cta.text });
+      return;
+    }
+
     // Idempotency: check for existing active unaccepted codebook
-    const existingActive = await findActiveUnacceptedCodebook(rawMeta.evidenceSourceId);
+    const existingActive = await findActiveUnacceptedCodebook(evidenceSourceId);
 
     if (existingActive) {
       // Reuse existing groupings — do NOT regenerate
@@ -67,9 +148,9 @@ export async function handleGenerateCodebook(
               action_id: 'survey_open_grouping_review',
               value: JSON.stringify({
                 codebookId: (existingActive as unknown as { id: number }).id,
-                evidenceSourceId: rawMeta.evidenceSourceId,
-                projectId: rawMeta.projectId,
-                surveyName: rawMeta.surveyName ?? 'Survey',
+                evidenceSourceId,
+                projectId,
+                surveyName,
               }),
             },
           ] },
@@ -85,8 +166,8 @@ export async function handleGenerateCodebook(
       text: 'Qori is grouping similar responses. This may take a moment.',
     });
 
-    const entries = await getEligibleEntries(rawMeta.evidenceSourceId);
-    const project = await getProjectById(rawMeta.projectId);
+    const entries = await getEligibleEntries(evidenceSourceId);
+    const project = await getProjectById(projectId);
 
     const proposedCodes = await generateDraftCodes(
       entries,
@@ -95,7 +176,7 @@ export async function handleGenerateCodebook(
     );
 
     const { codebook, codes } = await createDraftCodebook(
-      rawMeta.evidenceSourceId, rawMeta.projectId, null, userId,
+      evidenceSourceId, projectId, null, userId,
       proposedCodes,
       {
         approach: 'mixed_inductive_deductive',
@@ -115,9 +196,9 @@ export async function handleGenerateCodebook(
             action_id: 'survey_open_grouping_review',
             value: JSON.stringify({
               codebookId: (codebook as unknown as { id: number }).id,
-              evidenceSourceId: rawMeta.evidenceSourceId,
-              projectId: rawMeta.projectId,
-              surveyName: rawMeta.surveyName ?? 'Survey',
+              evidenceSourceId,
+              projectId,
+              surveyName,
             }),
           },
         ] },
@@ -273,7 +354,19 @@ export async function handleCodebookReviewSubmission(
     }
 
     // Accept the codebook
-    await acceptCodebook(meta.codebookId, userId);
+    try {
+      await acceptCodebook(meta.codebookId, userId);
+    } catch (acceptErr) {
+      if (acceptErr instanceof CodebookImmutableError) {
+        // Already accepted — treat as resume, show correct next action
+        const cta = await buildResumeCTA(
+          meta.codebookId, meta.evidenceSourceId, meta.projectId, meta.surveyName,
+        );
+        await client.chat.postMessage({ channel: userId, blocks: cta.blocks as never[], text: cta.text });
+        return;
+      }
+      throw acceptErr;
+    }
 
     await client.chat.postMessage({
       channel: userId,
