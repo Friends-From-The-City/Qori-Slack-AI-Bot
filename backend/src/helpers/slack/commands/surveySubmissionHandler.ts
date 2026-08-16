@@ -1075,14 +1075,14 @@ export async function runSurveyQualitativeSynthesis(
       const VALIDATED_TASKS = new Set(['executive_summary', 'integrated_interpretation', 'evidence_gaps']);
       const FALLBACK_TEXT: Record<string, string> = {
         executive_summary:
-          'This section could not be generated within the accepted evidence boundary. ' +
-          'The structured evidence and accepted qualitative groupings are available in the sections above.',
+          'The executive summary is not available for this run. ' +
+          'The structured evidence and accepted qualitative groupings in the sections above provide the complete findings.',
         integrated_interpretation:
-          'This section could not be generated within the accepted evidence boundary. ' +
-          'Review the structured evidence and accepted qualitative groupings above independently.',
+          'The integrated interpretation is not available for this run. ' +
+          'Review the structured evidence and accepted qualitative groupings above to assess convergence and divergence.',
         evidence_gaps:
-          'Evidence gaps could not be generated within the accepted evidence boundary. ' +
-          'Compare the research problem statement against the structured and qualitative evidence above to identify gaps.',
+          'The evidence gaps section is not available for this run. ' +
+          'Compare the research problem statement against the structured and qualitative evidence above to identify what this source cannot answer.',
       };
 
       const postValidation: PostGenerationValidation = {

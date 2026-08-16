@@ -54,11 +54,18 @@ export interface ClaimGuardResult {
  * between qualitative groupings and structured measures.
  */
 const UNSUPPORTED_ASSOCIATION_PATTERNS: RegExp[] = [
-  /(?:correspond|anchor|explain|account for|drive|underlie|map to|align with)\w*\s+(?:\w+\s+){0,3}(?:median|distribution|rating|score|satisfaction|difficulty)/i,
-  /(?:median|distribution|rating|score|satisfaction|difficulty)\s+(?:is\s+)?(?:explained|driven|anchored|accounted for|caused|attributed|mapped|aligned)\s+(?:by|to|with)/i,
-  /(?:straightforward|smooth|friction|difficulty)\s+(?:group|respondent|participant)s?\s+(?:correspond|anchor|explain|account|drive|align)/i,
+  // Active voice: "[grouping verb] [the] [measure]"
+  /(?:correspond\w*|anchor\w*|explain\w*|account\w*\s+for|driv\w+|underli\w+|map\w*\s+to|align\w*\s+with|predict\w*|contribut\w*\s+to|link\w*\s+to|associat\w*\s+with)\s+(?:\w+\s+){0,3}(?:median|distribution|rating|score|satisfaction|difficulty)/i,
+  // Passive voice: "[measure] is [verb-ed] by/to/with"
+  /(?:median|distribution|rating|score|satisfaction|difficulty)\s+(?:is\s+)?(?:explained|driven|anchored|accounted for|caused|attributed|mapped|aligned|predicted|linked|associated|contributed)\s+(?:by|to|with)/i,
+  // Grouping-subject: "[grouping type] [respondent/group] [verb]"
+  /(?:straightforward|smooth|friction|difficulty)\s+(?:group|respondent|participant)s?\s+(?:correspond|anchor|explain|account|drive|align|predict|link|associate)/i,
+  // "may explain why" + measure
   /(?:may\s+explain\s+why)\s+(?:\w+\s+){0,4}(?:rating|median|distribution|score|satisfaction|difficulty)/i,
-  /(?:the\s+\d+%?\s+\w+\s+group)\s+(?:correspond|anchor|explain)/i,
+  // "the N% [label] group [verb]"
+  /(?:the\s+\d+%?\s+\w+\s+group)\s+(?:correspond|anchor|explain|predict|link|associate)/i,
+  // Prepositional: "associated with", "linked to", "correlated with" + measure
+  /(?:associated\s+with|linked\s+to|correlated\s+with)\s+(?:\w+\s+){0,3}(?:median|distribution|rating|score|satisfaction|difficulty)/i,
 ];
 
 /**
@@ -73,10 +80,16 @@ const PROHIBITED_CAUSAL_PATTERNS: RegExp[] = [
   /\bdue\s+to\b/i,
   /\bbecause\s+of\b/i,
   /\bimpact(?:s|ed)?\s+(?:on|the)\b/i,
+  /\bnormalized?\s+(?:the\s+)?(?:friction|difficulty|experience)/i,
+  // Unmeasured psychological constructs — rejected when introduced as
+  // explanatory language ("may reflect", "suggests", "indicates")
+  /\bmay\s+reflect\s+(?:\w+\s+){0,2}(?:resignation|frustration|apathy|acceptance|habituation|expectation|trust|distrust|confidence|motivation|anxiety|fatigue)/i,
+  /\b(?:suggest|indicate|imply|reveal|signal)s?\s+(?:\w+\s+){0,3}(?:resignation|frustration|trust|distrust|confidence|motivation|anxiety|fatigue|expectation)\b/i,
+  // Standalone unmeasured constructs presented as findings
   /\bresignation\b/i,
   /\blow\s+expectation/i,
-  /\bnormalized?\s+(?:the\s+)?(?:friction|difficulty|experience)/i,
-  /\bmay\s+reflect\s+(?:resignation|frustration|apathy|acceptance|habituation|low\s+expectation)/i,
+  /\blow\s+motivation/i,
+  /\b(?:respondent|participant|user)s?\s+(?:\w+\s+){0,2}(?:trust|distrust|frustrat\w+|confiden\w+|motivat\w+|anxious|anxiet\w+|fatigu\w+)/i,
 ];
 
 // ─────────────────────────────────────────────────────────────────────
@@ -94,20 +107,58 @@ function extractRespondentReferences(text: string): string[] {
 // Numeric extraction
 // ─────────────────────────────────────────────────────────────────────
 
-/** Extract numeric claims from generated text */
-function extractNumericClaims(text: string): string[] {
+/**
+ * Extract numeric claims from generated text.
+ *
+ * Excludes:
+ * - Numbers 0-10 (trivially common: section numbers, list items)
+ * - 4-digit numbers in date context (years like 2026)
+ * - Numbers immediately following respondent ID prefixes (R001, T003)
+ * - Percentages derivable from supplied numerics (n/total × 100)
+ */
+function extractNumericClaims(
+  text: string,
+  acceptedNumerics?: Set<string>,
+): string[] {
   const results: string[] = [];
-  // Match integers and decimals that look like statistics
-  const matches = text.match(/\b\d+(?:\.\d+)?%?\b/g);
+
+  // Strip respondent IDs first to prevent extracting their numeric portions
+  const cleaned = text.replace(/\b[RPT]\d{2,4}\b/g, '');
+  // Strip date patterns: "Month DD, YYYY" and "YYYY-MM-DD"
+  const noDate = cleaned
+    .replace(/(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4}/gi, '')
+    .replace(/\b\d{4}-\d{2}-\d{2}\b/g, '');
+
+  const matches = noDate.match(/\b\d+(?:\.\d+)?%?\b/g);
   if (matches) {
     for (const m of matches) {
-      // Normalize: strip trailing % for comparison
       const normalized = m.replace(/%$/, '');
       // Skip trivially common numbers (section numbers, etc.)
       if (['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10'].includes(normalized)) continue;
+      // Skip 4-digit numbers that look like years (1900-2099)
+      if (/^(19|20)\d{2}$/.test(normalized)) continue;
       results.push(normalized);
     }
   }
+
+  // Check if any rejected numerics are derivable percentages
+  if (acceptedNumerics && acceptedNumerics.size > 0) {
+    const derivable = new Set<string>();
+    const accepted = [...acceptedNumerics].map(Number).filter(n => !isNaN(n));
+    for (const num of accepted) {
+      for (const denom of accepted) {
+        if (denom > 0 && num <= denom) {
+          const pct = Math.round((num / denom) * 100);
+          derivable.add(String(pct));
+          // Also allow one decimal place
+          const pct1 = ((num / denom) * 100).toFixed(1);
+          derivable.add(pct1);
+        }
+      }
+    }
+    return [...new Set(results)].filter(r => !derivable.has(r));
+  }
+
   return [...new Set(results)];
 }
 
@@ -166,7 +217,7 @@ export function validateClaims(
   }
 
   // Class B: Numeric values not in deterministic facts
-  const numericClaims = extractNumericClaims(generatedText);
+  const numericClaims = extractNumericClaims(generatedText, envelope.acceptedNumericValues);
   for (const num of numericClaims) {
     if (!envelope.acceptedNumericValues.has(num)) {
       violations.push({

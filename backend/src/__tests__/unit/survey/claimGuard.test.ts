@@ -100,6 +100,37 @@ describe('Class B: Numeric value validation', () => {
     const classB = result.violations.filter(v => v.class === 'B');
     expect(classB).toHaveLength(0);
   });
+
+  it('ignores dates (year numbers and date formats)', () => {
+    const text = 'Analysis date: August 16, 2026. Survey completed 2026-08-16.';
+    const result = validateClaims(text, envelope);
+    const classB = result.violations.filter(v => v.class === 'B');
+    expect(classB).toHaveLength(0);
+  });
+
+  it('ignores numbers that are part of respondent IDs', () => {
+    const text = 'R001 and R002 described their experience. T003 noted difficulties.';
+    const result = validateClaims(text, envelope);
+    const classB = result.violations.filter(v => v.class === 'B');
+    expect(classB).toHaveLength(0);
+  });
+
+  it('allows derivable percentages from accepted numerics', () => {
+    // With 3 of 10, 30% is derivable
+    const text = '30% of respondents reported the pattern.';
+    const result = validateClaims(text, envelope);
+    const classB = result.violations.filter(v => v.class === 'B');
+    expect(classB).toHaveLength(0);
+  });
+
+  it('still rejects non-derivable percentages', () => {
+    // 85% is not derivable from any pair of accepted numerics
+    const text = '85% of respondents were highly satisfied.';
+    const result = validateClaims(text, envelope);
+    const classB = result.violations.filter(v => v.class === 'B');
+    expect(classB.length).toBeGreaterThanOrEqual(1);
+    expect(classB.some(v => v.evidence === '85')).toBe(true);
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -178,6 +209,44 @@ describe('Class D: Unsupported association validation', () => {
     expect(classD.length).toBeGreaterThanOrEqual(1);
   });
 
+  it('rejects "associated with the satisfaction" language', () => {
+    const text = 'Navigation complexity is associated with the satisfaction distribution.';
+    const result = validateClaims(text, envelope);
+    const classD = result.violations.filter(v => v.class === 'D');
+    expect(classD.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('rejects "linked to the median" language', () => {
+    const text = 'The friction pattern is linked to the median rating.';
+    const result = validateClaims(text, envelope);
+    const classD = result.violations.filter(v => v.class === 'D');
+    expect(classD.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('rejects "predicts the difficulty" language', () => {
+    const text = 'Eligibility uncertainty predicts the difficulty score.';
+    const result = validateClaims(text, envelope);
+    const classD = result.violations.filter(v => v.class === 'D');
+    expect(classD.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('rejects "contributes to the rating" language', () => {
+    const text = 'Navigation complexity contributes to the satisfaction rating.';
+    const result = validateClaims(text, envelope);
+    const classD = result.violations.filter(v => v.class === 'D');
+    expect(classD.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('allows simple descriptive juxtaposition', () => {
+    const text =
+      'Median satisfaction was 3.0. Meanwhile, the qualitative data ' +
+      'identified three distinct types of friction. These two findings ' +
+      'exist alongside each other in the evidence.';
+    const result = validateClaims(text, envelope);
+    const classD = result.violations.filter(v => v.class === 'D');
+    expect(classD).toHaveLength(0);
+  });
+
   it('allows association when deterministic cross-tab exists', () => {
     const envelopeWithCrossTab = makeEnvelope({ hasQualitativeStructuredCrossTab: true });
     const text = 'The straightforward group corresponds to the satisfaction distribution.';
@@ -234,6 +303,34 @@ describe('Class E: Causal and psychological language validation', () => {
     const result = validateClaims(text, envelope);
     const classE = result.violations.filter(v => v.class === 'E');
     expect(classE).toHaveLength(0);
+  });
+
+  it('rejects "suggests trust" psychological inference', () => {
+    const text = 'The pattern suggests respondent distrust of the system.';
+    const result = validateClaims(text, envelope);
+    const classE = result.violations.filter(v => v.class === 'E');
+    expect(classE.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('rejects "respondents frustrated" psychological inference', () => {
+    const text = 'Respondents were clearly frustrated by the process.';
+    const result = validateClaims(text, envelope);
+    const classE = result.violations.filter(v => v.class === 'E');
+    expect(classE.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('rejects "may reflect confidence" psychological inference', () => {
+    const text = 'The ratings may reflect low confidence in the system.';
+    const result = validateClaims(text, envelope);
+    const classE = result.violations.filter(v => v.class === 'E');
+    expect(classE.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('rejects "indicates motivation" psychological inference', () => {
+    const text = 'This indicates low motivation among the sample.';
+    const result = validateClaims(text, envelope);
+    const classE = result.violations.filter(v => v.class === 'E');
+    expect(classE.length).toBeGreaterThanOrEqual(1);
   });
 
   it('allows descriptive language about patterns', () => {
@@ -408,6 +505,31 @@ describe('buildRetryGuidance', () => {
     expect(guidance).toContain('R099');
     expect(guidance).toContain('anchor the median');
   });
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// FALLBACK TEXT QUALITY
+// ═══════════════════════════════════════════════════════════════════════
+
+describe('Fallback text quality', () => {
+  // These match the handler's FALLBACK_TEXT values
+  const fallbacks = [
+    'The executive summary is not available for this run. The structured evidence and accepted qualitative groupings in the sections above provide the complete findings.',
+    'The integrated interpretation is not available for this run. Review the structured evidence and accepted qualitative groupings above to assess convergence and divergence.',
+    'The evidence gaps section is not available for this run. Compare the research problem statement against the structured and qualitative evidence above to identify what this source cannot answer.',
+  ];
+
+  for (const fb of fallbacks) {
+    it(`fallback does not contain debug/engineering text: "${fb.slice(0, 40)}..."`, () => {
+      expect(fb).not.toContain('generation failed');
+      expect(fb).not.toContain('error');
+      expect(fb).not.toContain('could not be generated');
+      expect(fb).not.toContain('claim guard');
+      expect(fb).not.toContain('validation');
+      expect(fb).not.toContain('retry');
+      expect(fb.trim().length).toBeGreaterThan(20);
+    });
+  }
 });
 
 // ═══════════════════════════════════════════════════════════════════════
