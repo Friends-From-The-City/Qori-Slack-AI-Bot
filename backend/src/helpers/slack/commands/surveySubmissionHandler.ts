@@ -944,6 +944,9 @@ export async function runSurveyQualitativeSynthesis(
       combined_file_content: openTextContent,
       provenance,
       qualitative_coding: qualitativeCoding,
+      // Top-level boolean for skip_when evaluation (assertSkipWhenVariablesDefined
+      // checks top-level keys only — nested property access is not supported)
+      has_accepted_coding: qualitativeCoding !== null,
     };
 
     const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, 'survey_synthesis.yaml');
