@@ -1,0 +1,410 @@
+/**
+ * Survey Synthesis v10.0 Artifact Contract Tests (Slice 2B)
+ *
+ * Verifies the accepted-coding artifact path:
+ * - "What Respondents Described" replaces "Preliminary Qualitative Observations"
+ * - Recurring patterns use deterministic counts
+ * - Individual observations (n=1) appear separately
+ * - Quotes are governed and deterministic
+ * - Two quotes prefer distinct respondents
+ * - Executive Summary includes qualitative headlines
+ * - Method & Provenance reflects full authority chain
+ * - No unsupported numbers in artifact
+ */
+
+import { readFileSync } from 'fs';
+import { join } from 'path';
+import Handlebars from 'handlebars';
+import { computeQualitativeAggregation, type PatternStat } from '../../../services/survey-aggregation.service';
+
+const YAML_PATH = join(__dirname, '../../../../../config/prompts/survey_synthesis.yaml');
+const yaml = readFileSync(YAML_PATH, 'utf-8');
+const outputSection = yaml.split('output_template:')[1]?.split('output_options:')[0] ?? '';
+
+// ═══════════════════════════════════════════════════════════════════════
+// SECTION STRUCTURE
+// ═══════════════════════════════════════════════════════════════════════
+
+describe('v10 artifact structure', () => {
+  it('has exactly one H1', () => {
+    const h1s = outputSection.match(/^  # [^#]/gm) || [];
+    expect(h1s.length).toBe(1);
+  });
+
+  it('"What Respondents Described" present in template', () => {
+    expect(outputSection).toContain('## What Respondents Described');
+  });
+
+  it('"Recurring Patterns" subsection present', () => {
+    expect(outputSection).toContain('### Recurring Patterns');
+  });
+
+  it('"Individual Observations" subsection present', () => {
+    expect(outputSection).toContain('### Individual Observations');
+  });
+
+  it('"Preliminary Qualitative Observations" still present as fallback', () => {
+    expect(outputSection).toContain('## Preliminary Qualitative Observations');
+  });
+
+  it('What Respondents Described and Preliminary are mutually exclusive (conditional)', () => {
+    // Both exist in template but gated on qualitative_coding.hasAcceptedCoding
+    expect(outputSection).toContain('qualitative_coding.hasAcceptedCoding');
+  });
+
+  it('Structured Evidence appears before qualitative section', () => {
+    const seIdx = outputSection.indexOf('View Structured Evidence');
+    const wrdIdx = outputSection.indexOf('## What Respondents Described');
+    expect(seIdx).toBeGreaterThan(-1);
+    expect(wrdIdx).toBeGreaterThan(-1);
+    expect(seIdx).toBeLessThan(wrdIdx);
+  });
+
+  it('Integrated Interpretation appears after qualitative section', () => {
+    const wrdIdx = outputSection.indexOf('## What Respondents Described');
+    const iiIdx = outputSection.indexOf('## Integrated Interpretation');
+    expect(wrdIdx).toBeLessThan(iiIdx);
+  });
+
+  it('Evidence Gaps appears after Integrated Interpretation', () => {
+    const iiIdx = outputSection.indexOf('## Integrated Interpretation');
+    const egIdx = outputSection.indexOf('## Evidence Gaps');
+    expect(iiIdx).toBeLessThan(egIdx);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// EXECUTIVE SUMMARY WITH QUALITATIVE CODING
+// ═══════════════════════════════════════════════════════════════════════
+
+describe('Executive Summary with accepted coding', () => {
+  it('shows qualitative analysis complete when coding accepted', () => {
+    expect(outputSection).toContain('Qualitative analysis complete');
+  });
+
+  it('shows eligible respondent count', () => {
+    expect(outputSection).toContain('qualitative_coding.eligibleRespondentCount');
+  });
+
+  it('shows recurring pattern headlines', () => {
+    expect(outputSection).toContain('qualitative_coding.recurringPatterns');
+    expect(outputSection).toContain('this.displayFrequency');
+  });
+
+  it('does not contain unsupported number variables', () => {
+    // No raw numerator/denominator in executive summary
+    expect(outputSection).not.toContain('this.numerator');
+    expect(outputSection).not.toContain('this.denominator');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// DETERMINISTIC COUNTS
+// ═══════════════════════════════════════════════════════════════════════
+
+describe('deterministic qualitative counts in artifact', () => {
+  it('recurring patterns render displayFrequency (not raw counts)', () => {
+    // The template uses {{this.displayFrequency}} which is pre-computed
+    expect(outputSection).toContain('this.displayFrequency');
+  });
+
+  it('recurring patterns render definition', () => {
+    expect(outputSection).toContain('this.definition');
+  });
+
+  it('determinism note present', () => {
+    expect(outputSection).toContain('computed deterministically from researcher-reviewed matches');
+  });
+
+  it('reporting unit stated', () => {
+    expect(outputSection).toContain('reporting unit is the unique respondent');
+  });
+
+  it('aggregation counts verified against service', () => {
+    const eligible = new Set(['R001', 'R002', 'R003', 'R004', 'R005']);
+    const assignments = [
+      { respondent_key: 'R001', code_public_id: 'c1', code_label: 'Pattern A', code_definition: 'def A' },
+      { respondent_key: 'R002', code_public_id: 'c1', code_label: 'Pattern A', code_definition: 'def A' },
+      { respondent_key: 'R003', code_public_id: 'c1', code_label: 'Pattern A', code_definition: 'def A' },
+      { respondent_key: 'R004', code_public_id: 'c2', code_label: 'Pattern B', code_definition: 'def B' },
+      { respondent_key: 'R005', code_public_id: 'c3', code_label: 'Single C', code_definition: 'def C' },
+    ];
+
+    const result = computeQualitativeAggregation(assignments, eligible);
+
+    // Pattern A: 3 respondents → recurring
+    expect(result.recurringPatterns).toHaveLength(1);
+    expect(result.recurringPatterns[0].codeLabel).toBe('Pattern A');
+    expect(result.recurringPatterns[0].uniqueRespondentCount).toBe(3);
+    expect(result.recurringPatterns[0].displayFrequency).toBe('3 of 5 (60%)');
+
+    // Pattern B and C: 1 respondent each → individual
+    expect(result.individualObservations).toHaveLength(2);
+    // B before C alphabetically
+    expect(result.individualObservations[0].codeLabel).toBe('Pattern B');
+    expect(result.individualObservations[1].codeLabel).toBe('Single C');
+  });
+
+  it('artifact numbers match aggregation output — 3 runs identical', () => {
+    const eligible = new Set(['R1', 'R2', 'R3']);
+    const assignments = [
+      { respondent_key: 'R1', code_public_id: 'x', code_label: 'X', code_definition: '' },
+      { respondent_key: 'R2', code_public_id: 'x', code_label: 'X', code_definition: '' },
+    ];
+    const r1 = computeQualitativeAggregation(assignments, eligible);
+    const r2 = computeQualitativeAggregation(assignments, eligible);
+    const r3 = computeQualitativeAggregation(assignments, eligible);
+    expect(r1).toEqual(r2);
+    expect(r2).toEqual(r3);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// QUOTE GOVERNANCE
+// ═══════════════════════════════════════════════════════════════════════
+
+describe('quote rendering in artifact', () => {
+  it('quotes appear in recurring pattern blocks', () => {
+    expect(outputSection).toContain('this.quotes');
+  });
+
+  it('quotes appear in individual observation blocks', () => {
+    // Both sections have {{#if this.quotes}} blocks
+    const quotesMatches = outputSection.match(/this\.quotes/g);
+    expect(quotesMatches!.length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// METHOD & PROVENANCE
+// ═══════════════════════════════════════════════════════════════════════
+
+describe('Method & Provenance with accepted coding', () => {
+  it('Privacy Review section present', () => {
+    expect(outputSection).toContain('Privacy Review');
+    expect(outputSection).toContain('qualitative_coding.privacyReview.clear');
+    expect(outputSection).toContain('qualitative_coding.privacyReview.redacted');
+    expect(outputSection).toContain('qualitative_coding.privacyReview.restricted');
+  });
+
+  it('Qualitative Method section present', () => {
+    expect(outputSection).toContain('Qualitative Method');
+    expect(outputSection).toContain('Structured qualitative content analysis');
+    expect(outputSection).toContain('Mixed inductive/deductive grouping development');
+  });
+
+  it('Grouping Review section present', () => {
+    expect(outputSection).toContain('Grouping Review');
+    expect(outputSection).toContain('qualitative_coding.codebook.version');
+    expect(outputSection).toContain('qualitative_coding.codebook.reviewed_by');
+    expect(outputSection).toContain('qualitative_coding.codebook.reviewed_at');
+  });
+
+  it('Match Review section present', () => {
+    expect(outputSection).toContain('Match Review');
+    expect(outputSection).toContain('qualitative_coding.codingRun.version');
+    expect(outputSection).toContain('qualitative_coding.codingRun.reviewed_by');
+    expect(outputSection).toContain('qualitative_coding.codingRun.reviewed_at');
+  });
+
+  it('Aggregation section present', () => {
+    expect(outputSection).toContain('Aggregation');
+    expect(outputSection).toContain('Reporting unit: unique respondent');
+    expect(outputSection).toContain('Denominator: eligible respondents');
+    expect(outputSection).toContain('Recurring pattern threshold');
+    expect(outputSection).toContain('deterministic');
+  });
+
+  it('Analysis Authority reflects researcher authority', () => {
+    expect(outputSection).toContain('Qori proposed, researcher reviewed and approved');
+  });
+
+  it('Analysis Authority covers groupings, matches, counts, and quotes', () => {
+    expect(outputSection).toContain('Qualitative groupings:');
+    expect(outputSection).toContain('Qualitative matches:');
+    expect(outputSection).toContain('Qualitative counts:');
+    expect(outputSection).toContain('Quote selection:');
+  });
+
+  it('no internal DB IDs exposed', () => {
+    expect(outputSection).not.toContain('evidence_source_id');
+    expect(outputSection).not.toContain('codebook_id');
+    expect(outputSection).not.toContain('coding_run_id');
+    // public_id was removed from source display in v10
+    expect(outputSection).not.toContain('Evidence Source ID');
+  });
+
+  it('template version is v10.0', () => {
+    expect(outputSection).toContain('Survey Synthesis v10.0');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// QUALITATIVE OBSERVATIONS SKIP
+// ═══════════════════════════════════════════════════════════════════════
+
+describe('qualitative_observations AI task behavior', () => {
+  it('skips when accepted coding exists', () => {
+    expect(yaml).toContain('skip_when: "qualitative_coding and qualitative_coding.hasAcceptedCoding"');
+  });
+
+  it('skip_output is empty string (no fallback text)', () => {
+    // When coding is accepted, the preliminary section is replaced entirely
+    expect(yaml).toContain('skip_output: ""');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// NO ENGINEERING JARGON
+// ═══════════════════════════════════════════════════════════════════════
+
+describe('no internal engineering jargon in v10 output', () => {
+  it('no "coding run" in reader-facing copy', () => {
+    // "Coding run version" appears in Method & Provenance (acceptable — technical provenance)
+    // But should not appear in main body sections
+    const mainBody = outputSection.split('Method & Provenance')[0];
+    expect(mainBody).not.toContain('coding run');
+    expect(mainBody).not.toContain('coding_run');
+  });
+
+  it('no "codebook" in main body', () => {
+    const mainBody = outputSection.split('Method & Provenance')[0];
+    expect(mainBody).not.toContain('codebook');
+  });
+
+  it('no "evidence construct" in output', () => {
+    expect(outputSection).not.toContain('evidence construct');
+    expect(outputSection).not.toContain('evidence_construct');
+  });
+
+  it('no "Slice 2B" in output', () => {
+    expect(outputSection).not.toMatch(/Slice 2[AB]/);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// SYNTHESIS GATE
+// ═══════════════════════════════════════════════════════════════════════
+
+describe('synthesis gate', () => {
+  it('surveySynthesisAction imports findAcceptedCodingRun', () => {
+    const actionFile = readFileSync(
+      join(__dirname, '../../../helpers/slack/commands/surveySynthesisAction.ts'),
+      'utf-8',
+    );
+    expect(actionFile).toContain('findAcceptedCodingRun');
+  });
+
+  it('surveySynthesisAction blocks synthesis before accepted run', () => {
+    const actionFile = readFileSync(
+      join(__dirname, '../../../helpers/slack/commands/surveySynthesisAction.ts'),
+      'utf-8',
+    );
+    expect(actionFile).toContain('Complete match review before generating');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// HANDLEBARS RENDERING — empty array conditional behavior
+// ═══════════════════════════════════════════════════════════════════════
+
+describe('Handlebars empty array conditionals', () => {
+  // Extract the output_template from the YAML file
+  const rawTemplate = yaml.split('output_template: |')[1]?.split('\noutput_options:')[0] ?? '';
+  // Remove the 2-space YAML block scalar indentation
+  const templateContent = rawTemplate.replace(/^  /gm, '');
+
+  const compile = (data: Record<string, unknown>) => {
+    const template = Handlebars.compile(templateContent, { noEscape: true });
+    return template(data);
+  };
+
+  const baseData = {
+    survey_name: 'Test Survey',
+    computed_facts: { totalRespondents: 10, fieldStats: [], crossTabs: [], schemaSummary: '', nonresponseLimitation: '', sourceContentHash: '' },
+    qualitative_coding: {
+      hasAcceptedCoding: true,
+      eligibleRespondentCount: 10,
+      recurringPatterns: [] as unknown[],
+      individualObservations: [] as unknown[],
+      codingRun: { version: 1, reviewed_by: 'U_TEST', reviewed_at: '2026-08-16' },
+      codebook: { version: 1, reviewed_by: 'U_TEST', reviewed_at: '2026-08-16' },
+      privacyReview: { clear: 8, redacted: 1, restricted: 1 },
+    },
+    provenance: { source_filename: 'test.csv', reviewed_by: 'U_TEST', reviewed_at: '2026-08-16', ordinal_orders: '', model_used: 'test' },
+    ai_generated: { qualitative_observations: '', evidence_gaps: '' },
+  };
+
+  it('empty recurringPatterns → "Recurring Patterns" heading NOT rendered', () => {
+    const result = compile({ ...baseData });
+    expect(result).not.toContain('### Recurring Patterns');
+  });
+
+  it('non-empty recurringPatterns → "Recurring Patterns" heading rendered', () => {
+    const data = {
+      ...baseData,
+      qualitative_coding: {
+        ...baseData.qualitative_coding,
+        recurringPatterns: [{
+          label: 'Test Pattern',
+          definition: 'A test',
+          displayFrequency: '2 of 10 (20%)',
+          quotes: '> "quote" — R001',
+        }],
+      },
+    };
+    const result = compile(data);
+    expect(result).toContain('### Recurring Patterns');
+    expect(result).toContain('**Test Pattern** — 2 of 10 (20%)');
+  });
+
+  it('empty individualObservations → "Individual Observations" heading NOT rendered', () => {
+    const result = compile({ ...baseData });
+    expect(result).not.toContain('### Individual Observations');
+  });
+
+  it('non-empty individualObservations → "Individual Observations" heading rendered', () => {
+    const data = {
+      ...baseData,
+      qualitative_coding: {
+        ...baseData.qualitative_coding,
+        individualObservations: [{
+          label: 'Single Observation',
+          definition: 'Seen once',
+          displayFrequency: '1 of 10 (10%)',
+          quotes: '> "solo quote" — R005',
+        }],
+      },
+    };
+    const result = compile(data);
+    expect(result).toContain('### Individual Observations');
+    expect(result).toContain('**Single Observation** — 1 of 10 (10%)');
+  });
+
+  it('"What Respondents Described" rendered when coding accepted', () => {
+    const data = {
+      ...baseData,
+      qualitative_coding: {
+        ...baseData.qualitative_coding,
+        recurringPatterns: [{
+          label: 'A', definition: 'B', displayFrequency: '2 of 3', quotes: '',
+        }],
+      },
+    };
+    const result = compile(data);
+    expect(result).toContain('## What Respondents Described');
+    expect(result).not.toContain('## Preliminary Qualitative Observations');
+  });
+
+  it('"Preliminary Qualitative Observations" rendered when NO coding', () => {
+    const data = {
+      ...baseData,
+      qualitative_coding: null,
+      ai_generated: { qualitative_observations: 'Some preliminary text', evidence_gaps: '' },
+    };
+    const result = compile(data);
+    expect(result).toContain('## Preliminary Qualitative Observations');
+    expect(result).toContain('Some preliminary text');
+    expect(result).not.toContain('## What Respondents Described');
+  });
+});

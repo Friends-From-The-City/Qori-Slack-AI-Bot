@@ -569,6 +569,12 @@ slackApp.action('survey_generate_codebook', handleGenerateCodebook);
 slackApp.action('survey_open_grouping_review', handleOpenGroupingReview);
 slackApp.view('codebook_review_modal', handleCodebookReviewSubmission);
 
+// Survey match review (Slice 2B)
+import { handleGenerateAssignments, handleOpenMatchReview, handleMatchReviewSubmission } from './commands/matchReviewHandler';
+slackApp.action('survey_generate_assignments', handleGenerateAssignments);
+slackApp.action('survey_open_match_review', handleOpenMatchReview);
+slackApp.view('match_review_modal', handleMatchReviewSubmission);
+
 // ─── Fieldwork & participants ───────────────────────────────────
 
 slackApp.view('fieldwork_study_picker', handleFieldworkStudyPickerSubmit);

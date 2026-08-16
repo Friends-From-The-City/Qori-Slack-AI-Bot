@@ -22,6 +22,7 @@ import type { SurveyQualitativeEntry } from '../../../database/models/survey_qua
 import type { ConfirmedField } from '../../../types/survey';
 import { parseCsvBuffer, computeContentHash } from '../../survey';
 import { isPrivacyReviewComplete } from '../../../services/content-governance.service';
+import { findAcceptedCodingRun } from '../../../services/survey-coding-run.service';
 import { runSurveyQualitativeSynthesis } from './surveySubmissionHandler';
 
 const EvidenceSourceModel = sequelize.models.EvidenceSource as typeof EvidenceSource;
@@ -67,7 +68,17 @@ export async function handleRunSynthesisAction(
       return;
     }
 
-    // 2. Load evidence source
+    // 2. Verify accepted coding run exists (Slice 2B gate)
+    const acceptedRun = await findAcceptedCodingRun(meta.evidenceSourceId);
+    if (!acceptedRun) {
+      await client.chat.postMessage({
+        channel: userId,
+        text: 'Complete match review before generating the final survey summary. Use the "Review Matches" button to continue.',
+      });
+      return;
+    }
+
+    // 3. Load evidence source
     const source = await EvidenceSourceModel.findByPk(meta.evidenceSourceId);
     if (!source) {
       await client.chat.postMessage({
@@ -77,7 +88,7 @@ export async function handleRunSynthesisAction(
       return;
     }
 
-    // 3. Load confirmed field schemas
+    // 4. Load confirmed field schemas
     const fieldSchemas = await SurveyFieldSchemaModel.findAll({
       where: { evidence_source_id: meta.evidenceSourceId, review_status: 'confirmed' },
       order: [['id', 'ASC']],
@@ -98,7 +109,7 @@ export async function handleRunSynthesisAction(
       isDemographic: s.is_demographic,
     }));
 
-    // 4. Reconstruct survey from evidence source metadata
+    // 5. Reconstruct survey from evidence source metadata
     // The survey headers are stored in evidence source metadata
     const sourceMetadata = source.metadata as Record<string, unknown> | null;
     const headers = (sourceMetadata?.headers as string[]) ?? [];
@@ -123,7 +134,7 @@ export async function handleRunSynthesisAction(
       text: 'Generating survey synthesis from approved responses...',
     });
 
-    // 5. Invoke qualitative synthesis
+    // 6. Invoke qualitative synthesis
     // Build a minimal survey-like object for the synthesis function
     // The function needs: sourceFilename, rows for respondent identity, headers for field context
     // Since CSV is gone from Redis, we reconstruct from evidence entries + stored metadata

@@ -50,24 +50,92 @@ Structured analysis does not wait for privacy review. Qualitative analysis canno
 
 **Use existing study_notes table for survey entries.** Would unify governance but conflates different research domains. Survey qualitative entries have different identity model (respondent_key + field_name) than session notes (participant_id + session). Separate table is cleaner.
 
+### Coding Run Lifecycle (Slice 2B — 2026-08-16)
+
+- **Versioned coding runs** reference an accepted codebook
+- Active run scoping: `findActiveUnacceptedRun(evidenceSourceId, codebookId)` — scoped to codebook to prevent reuse across grouping versions
+- Accepted runs are immutable; editing creates a new version preserving original assignment origin (`qori_proposed` / `researcher_added` — no "inherited")
+- Supersession: accepting a new version supersedes the prior accepted run for the same source+codebook
+
+### Match Review
+
+- Qori proposes response-to-grouping matches for each privacy-eligible entry
+- Researcher reviews via paginated modal: accept, reject, add from any accepted grouping, or mark as "no grouping applies" / "cannot be categorized"
+- Zero-suggestion entries (Qori proposes no match) cannot be silently bulk-approved — researcher must explicitly choose status
+- Bulk approval applies only to entries with proposed matches
+
+### Acceptance Validation
+
+Before accepting a coding run (fail-closed):
+- Zero pending entry reviews
+- Reviewed entries have ≥1 accepted assignment
+- `no_grouping_applies` and `uncodable` entries have zero accepted assignments
+- All accepted assignments reference current codebook's accepted codes
+- No restricted entries present
+- No duplicate run-entry-code assignments
+
+### Aggregation
+
+- **Reporting unit:** unique respondent (not text entries)
+- **Denominator:** eligible respondents with ≥1 privacy-approved entry
+- Multiple entries from same respondent × same code = count once
+- Respondent in multiple groupings = count once per grouping
+- **Recurring pattern:** ≥2 unique respondents
+- **Individual observation:** 1 unique respondent
+- All calculations deterministic — code-computed, never AI-generated
+
+### Evidence Promotion
+
+- Two-stage idempotent promotion (separate transaction from acceptance)
+- Construct types: `survey_qualitative_pattern`, `survey_individual_observation`
+- Idempotency key: `coding_run_public_id` + `code_public_id`
+- `survey_themes` NOT re-enabled — "themes" terminology retired
+- `discovered_barriers` NOT auto-emitted from qualitative patterns
+
+### Quote Selection
+
+- Deterministic governed quote selection (no LLM involvement)
+- Up to 2 quotes per grouping, preferring distinct respondents
+- Order: `source_row_index` ASC, `qualitative_entry_id` ASC
+- Uses governed text only (clear → entry_text, redacted → redacted_text)
+- Restricted entries never selected
+
+### Final Artifact Gate
+
+- Survey synthesis requires accepted coding run (no bypass)
+- "What Respondents Described" replaces "Preliminary Qualitative Observations" when accepted coding exists
+- Template v10.0 renders deterministic counts and governed quotes from template, not from AI
+
 ## Consequences
 
 - Open-text responses are durably persisted as governed qualitative evidence units
 - Privacy review required before any model-based analysis of open text
 - All model-facing paths use `getAnalysisEligibleContent()` — fail-closed on pending/restricted
 - Codebook versions provide full audit trail of analytical decisions
-- Respondent counts will be deterministic (Slice 2B) based on accepted coding, not model estimates
+- Respondent counts are deterministic based on accepted coding
 - Existing survey synthesis artifact generation is deferred until privacy review completes
 - Redis staging cleanup occurs only after all durable writes succeed
 - "Response groups" is the researcher-facing term; "codebook/codes" remain internal domain terms
 - The normal "Create Survey Summary" action requires accepted coding — no bypass from privacy review to final artifact
-- Slice 2B workflow: accepted groups → proposed assignments → researcher adjudication → deterministic aggregation → final survey summary
+
+## Roadmap Status
+
+| Slice | Status |
+|-------|--------|
+| 2A — Privacy, codebook, evidence foundation | Complete / dev-accepted |
+| 2B — Coding runs, assignments, aggregation, artifact | Implemented / dev review pending |
 
 ## References
 
 - ADR 0026 — PII scrubbing at ingestion (existing pipeline)
 - ADR 0028 — Deterministic research transformations
 - ADR 0029 — Canonical evidence state vs cascade projection
+- ADR 0030 — Evidence lineage identity
 - `backend/src/services/content-governance.service.ts` — privacy domain service
-- `backend/src/database/models/survey_qualitative_entry.ts` — entry model
-- `backend/src/database/models/survey_codebook.ts` — codebook model
+- `backend/src/services/survey-coding-run.service.ts` — coding run lifecycle
+- `backend/src/services/survey-aggregation.service.ts` — deterministic aggregation
+- `backend/src/helpers/survey/assignmentGenerator.ts` — model-based draft matching
+- `backend/src/database/models/survey_coding_run.ts` — coding run model
+- `backend/src/database/models/survey_coding_assignment.ts` — assignment model
+- `backend/src/database/models/survey_coding_entry_review.ts` — entry review model
+- `config/prompts/survey_synthesis.yaml` — v10.0 template with qualitative integration

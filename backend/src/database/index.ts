@@ -25,6 +25,9 @@ import SurveyQualitativeEntry from './models/survey_qualitative_entry';
 import SurveyCodebook from './models/survey_codebook';
 import SurveyCode from './models/survey_code';
 import SurveyCodeExample from './models/survey_code_example';
+import SurveyCodingRun from './models/survey_coding_run';
+import SurveyCodingAssignment from './models/survey_coding_assignment';
+import SurveyCodingEntryReview from './models/survey_coding_entry_review';
 
 
 // Set environment and configuration
@@ -60,6 +63,9 @@ const modelDefiners = [
   SurveyCodebook,
   SurveyCode,
   SurveyCodeExample,
+  SurveyCodingRun,
+  SurveyCodingAssignment,
+  SurveyCodingEntryReview,
 ];
 
 // Register all models with Sequelize

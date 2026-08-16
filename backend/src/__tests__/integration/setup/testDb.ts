@@ -36,6 +36,9 @@ import SurveyQualitativeEntry from '../../../database/models/survey_qualitative_
 import SurveyCodebook from '../../../database/models/survey_codebook';
 import SurveyCode from '../../../database/models/survey_code';
 import SurveyCodeExample from '../../../database/models/survey_code_example';
+import SurveyCodingRun from '../../../database/models/survey_coding_run';
+import SurveyCodingAssignment from '../../../database/models/survey_coding_assignment';
+import SurveyCodingEntryReview from '../../../database/models/survey_coding_entry_review';
 
 let instance: Sequelize | null = null;
 
@@ -63,6 +66,7 @@ export function getTestDb(): Sequelize {
     ResearchPlan, SessionSummary, StudyVariable, CreatedIssue, SlackUserState,
     DispositionAuditLog, EvidenceSource, EvidenceConstruct, EvidenceRelationship,
     SurveyFieldSchema, SurveyQualitativeEntry, SurveyCodebook, SurveyCode, SurveyCodeExample,
+    SurveyCodingRun, SurveyCodingAssignment, SurveyCodingEntryReview,
   ];
 
   for (const defineModel of modelDefiners) {

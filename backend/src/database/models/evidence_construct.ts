@@ -42,7 +42,9 @@ export type ConstructType =
   | 'finding'
   | 'theme'
   | 'persona'
-  | 'ticket_candidate';
+  | 'ticket_candidate'
+  | 'survey_qualitative_pattern'
+  | 'survey_individual_observation';
 
 export type DerivationType = 'deterministic' | 'model' | 'human' | 'hybrid';
 
@@ -125,6 +127,7 @@ export default (sequelize: Sequelize) => {
             'survey_dataset_summary', 'field_distribution', 'cross_tab',
             'usability_finding', 'journey_stage', 'recommendation',
             'finding', 'theme', 'persona', 'ticket_candidate',
+            'survey_qualitative_pattern', 'survey_individual_observation',
           ]],
         },
       },
