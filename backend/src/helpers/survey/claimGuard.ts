@@ -31,10 +31,14 @@ export interface EvidenceEnvelope {
   acceptedGroupingLabels: Set<string>;
   /** Whether a cross-tab exists between qualitative groupings and structured measures */
   hasQualitativeStructuredCrossTab: boolean;
+  /** Cross-tab labels that ARE available (e.g., "Completion Status × Overall Satisfaction") */
+  availableCrossTabs: string[];
+  /** Whether a median is the only central tendency available (no skew computation) */
+  hasOnlyMedian: boolean;
 }
 
 export interface ClaimViolation {
-  class: 'A' | 'B' | 'C' | 'D' | 'E';
+  class: 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G';
   description: string;
   /** The substring that triggered the violation (for diagnostics) */
   evidence: string;
@@ -90,6 +94,32 @@ const PROHIBITED_CAUSAL_PATTERNS: RegExp[] = [
   /\blow\s+expectation/i,
   /\blow\s+motivation/i,
   /\b(?:respondent|participant|user)s?\s+(?:\w+\s+){0,2}(?:trust|distrust|frustrat\w+|confiden\w+|motivat\w+|anxious|anxiet\w+|fatigu\w+)/i,
+];
+
+/**
+ * Class F: Absence claims about supplied deterministic evidence.
+ * The model must not say a supplied cross-tab, distribution, or value
+ * is missing, unavailable, or unreported when it was actually provided.
+ */
+const ABSENCE_CLAIM_PATTERNS: RegExp[] = [
+  /(?:do\s+not|don'?t|does\s+not|doesn'?t)\s+(?:supply|provide|include|contain|offer|report)\s+(?:\w+\s+){0,3}(?:cross-?tab|distribution|cell|value)/i,
+  /(?:no|without|absent|lacking|missing|unavailable)\s+(?:\w+\s+){0,3}(?:cross-?tab|cell-?level|distribution)/i,
+  /(?:cross-?tab\w*|distribution\w*|cell-?level\w*)\s+(?:is|are|were|was)\s+(?:not\s+)?(?:available|provided|supplied|included|reported|present)/i,
+];
+
+/**
+ * Class G: Skew/balance claims derived only from median.
+ * A neutral median does not establish absence of skew.
+ */
+const UNSUPPORTED_SKEW_PATTERNS: RegExp[] = [
+  /\bno\s+skew\b/i,
+  /\bwithout\s+skew\b/i,
+  /\bbalanced\s+distribution/i,
+  /\bevenly\s+distributed/i,
+  /\bsymmetric(?:al)?\s+(?:distribution|spread|pattern)/i,
+  /\bno\s+(?:clear\s+)?(?:positive|negative)\s+skew/i,
+  /\bskew(?:ed)?\s+toward\s+neither/i,
+  /\bnot\s+skew/i,
 ];
 
 // ─────────────────────────────────────────────────────────────────────
@@ -272,6 +302,34 @@ export function validateClaims(
     }
   }
 
+  // Class F: Absence claims about supplied deterministic evidence
+  if (envelope.availableCrossTabs.length > 0) {
+    for (const pattern of ABSENCE_CLAIM_PATTERNS) {
+      const match = generatedText.match(pattern);
+      if (match) {
+        violations.push({
+          class: 'F',
+          description: 'False absence claim about supplied deterministic evidence (cross-tabs/distributions are available)',
+          evidence: match[0],
+        });
+      }
+    }
+  }
+
+  // Class G: Skew/balance claims from median only
+  if (envelope.hasOnlyMedian) {
+    for (const pattern of UNSUPPORTED_SKEW_PATTERNS) {
+      const match = generatedText.match(pattern);
+      if (match) {
+        violations.push({
+          class: 'G',
+          description: 'Unsupported skew/balance claim — median alone does not establish distribution shape',
+          evidence: match[0],
+        });
+      }
+    }
+  }
+
   return {
     valid: violations.length === 0,
     violations,
@@ -332,6 +390,8 @@ export function buildEvidenceEnvelope(data: Record<string, unknown>): EvidenceEn
     crossTabs?: Array<{
       totalN?: number;
       cells?: string;
+      rowDisplayName?: string;
+      colDisplayName?: string;
     }>;
   } | null;
 
@@ -356,14 +416,36 @@ export function buildEvidenceEnvelope(data: Record<string, unknown>): EvidenceEn
     }
   }
 
+  // Extract available cross-tab labels
+  const availableCrossTabs: string[] = [];
+  if (cf?.crossTabs) {
+    for (const ct of cf.crossTabs) {
+      if (ct.rowDisplayName && ct.colDisplayName) {
+        availableCrossTabs.push(`${ct.rowDisplayName} × ${ct.colDisplayName}`);
+      }
+    }
+  }
+  // Also check structured_evidence_capabilities if present
+  const sec = data.structured_evidence_capabilities as {
+    available_cross_tabs?: string[];
+  } | null;
+  if (sec?.available_cross_tabs) {
+    for (const ct of sec.available_cross_tabs) {
+      if (!availableCrossTabs.includes(ct)) availableCrossTabs.push(ct);
+    }
+  }
+
+  // hasOnlyMedian: true when any field has a median but no computed skew
+  // (the survey pipeline doesn't compute skew, so this is always true when medians exist)
+  const hasOnlyMedian = (cf?.fieldStats ?? []).some(fs => fs.median != null);
+
   return {
     acceptedRespondentIds,
     acceptedNumericValues,
     acceptedGroupingLabels,
-    // No cross-tab between qualitative groupings and structured measures exists
-    // in the current survey pipeline. This would need to be set to true if/when
-    // such a cross-tab is computed.
     hasQualitativeStructuredCrossTab: false,
+    availableCrossTabs,
+    hasOnlyMedian,
   };
 }
 
@@ -387,4 +469,81 @@ export function buildRetryGuidance(violations: Array<{ class: string; descriptio
   lines.push('Regenerate the section with these violations corrected. If you cannot');
   lines.push('produce a valid version, write only what the accepted evidence supports.');
   return lines.join('\n');
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Deterministic evidence-gaps fallback
+// ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Build a deterministic evidence-gaps fallback from structural limitations
+ * known from template/computed state. Used when AI-generated gaps fail
+ * validation twice.
+ *
+ * Only includes gaps whose preconditions are known from the data dictionary.
+ * Does NOT invent examples, raw observations, or new findings.
+ */
+export function buildDeterministicEvidenceGaps(
+  data: Record<string, unknown>,
+): string {
+  const gaps: string[] = [];
+  let gapNum = 1;
+
+  const sec = data.structured_evidence_capabilities as {
+    has_qualitative_structured_cross_tabs?: boolean;
+    available_cross_tabs?: string[];
+    sample_size?: number;
+    has_population_representativeness?: boolean;
+    has_process_sequence_data?: boolean;
+  } | null;
+
+  const hasAccepted = data.has_accepted_coding === true;
+
+  // Gap 1: No qualitative ↔ structured cross-tabs
+  if (hasAccepted && sec && !sec.has_qualitative_structured_cross_tabs) {
+    gaps.push(
+      `### Gap ${gapNum}: Can accepted qualitative groupings be linked to structured outcomes?\n\n` +
+      '| What this source establishes | Where it stops |\n' +
+      '|:-----------------------------|:---------------|\n' +
+      '| Accepted qualitative groupings and structured distributions are both available | ' +
+      'No deterministic cross-tab links qualitative groupings to completion status, satisfaction, or difficulty |\n\n' +
+      '> [!TIP]\n' +
+      '> **Suggested research approach:** Compute respondent-level cross-tabulation between qualitative grouping membership and structured measures.',
+    );
+    gapNum++;
+  }
+
+  // Gap 2: Sample size without population representativeness
+  if (sec && sec.sample_size != null && !sec.has_population_representativeness) {
+    gaps.push(
+      `### Gap ${gapNum}: Can findings be generalized to the broader population?\n\n` +
+      '| What this source establishes | Where it stops |\n' +
+      '|:-----------------------------|:---------------|\n' +
+      `| Survey captured ${sec.sample_size} respondents | ` +
+      'No population-representativeness information is available, so findings cannot be generalized |\n\n' +
+      '> [!TIP]\n' +
+      '> **Suggested research approach:** Compare sample demographics against known population parameters, or conduct follow-up with a probability sample.',
+    );
+    gapNum++;
+  }
+
+  // Gap 3: No process-sequence data
+  if (sec && !sec.has_process_sequence_data && hasAccepted) {
+    gaps.push(
+      `### Gap ${gapNum}: At what point in the process does each type of friction occur?\n\n` +
+      '| What this source establishes | Where it stops |\n' +
+      '|:-----------------------------|:---------------|\n' +
+      '| Accepted qualitative groupings identify types of friction | ' +
+      'The survey does not capture step-level process sequence, so the exact point where each friction type occurs cannot be established |\n\n' +
+      '> [!TIP]\n' +
+      '> **Suggested research approach:** Conduct task-analysis sessions or add process-step questions to the survey instrument.',
+    );
+    gapNum++;
+  }
+
+  if (gaps.length === 0) {
+    return 'No structural evidence gaps could be determined from the available data.';
+  }
+
+  return gaps.join('\n\n---\n\n');
 }

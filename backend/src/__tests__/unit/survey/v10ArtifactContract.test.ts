@@ -224,8 +224,8 @@ describe('Method & Provenance with accepted coding', () => {
     expect(outputSection).not.toContain('Evidence Source ID');
   });
 
-  it('template version is v10.2', () => {
-    expect(outputSection).toContain('Survey Synthesis v10.2');
+  it('template version is v10.2.1', () => {
+    expect(outputSection).toContain('Survey Synthesis v10.2.1');
   });
 });
 
@@ -790,7 +790,7 @@ describe('interpretation evidence boundary', () => {
   });
 
   it('integrated_interpretation prohibits cross-tab/qualitative grouping association without deterministic data', () => {
-    expect(interpretationPrompt).toContain('No cross-tab exists between completion status and the qualitative');
+    expect(interpretationPrompt).toContain('No cross-tab exists between qualitative groupings and any');
     expect(interpretationPrompt).toContain('CROSS-TAB LIMITATION');
   });
 

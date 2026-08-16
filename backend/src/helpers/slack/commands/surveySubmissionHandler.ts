@@ -75,7 +75,7 @@ import {
   selectIllustrativeQuotes,
 } from '../../../services/survey-coding-run.service';
 import { computeQualitativeAggregation, type PatternStat } from '../../../services/survey-aggregation.service';
-import { buildEvidenceEnvelope, validateClaims, buildRetryGuidance } from '../../survey/claimGuard';
+import { buildEvidenceEnvelope, validateClaims, buildRetryGuidance, buildDeterministicEvidenceGaps } from '../../survey/claimGuard';
 import type { PostGenerationValidation } from '../../langchain';
 
 // Models
@@ -1055,6 +1055,25 @@ export async function runSurveyQualitativeSynthesis(
       run_by: runBy,
       _discovery_type: 'survey-synthesis',
       computed_facts: formattedFacts,
+      // Deterministic cross-tab capability flags — tells the model exactly which
+      // cross-tabs are available vs unavailable. Prevents false absence claims.
+      structured_evidence_capabilities: {
+        available_cross_tabs: formattedFacts.crossTabs.map(ct =>
+          `${ct.rowDisplayName} × ${ct.colDisplayName}`
+        ),
+        unavailable_cross_tabs: [
+          ...(hasAccepted ? [
+            'Completion Status × accepted qualitative grouping',
+            'Satisfaction × accepted qualitative grouping',
+            'Difficulty × accepted qualitative grouping',
+          ] : []),
+        ],
+        has_cell_level_cross_tabs: formattedFacts.crossTabs.length > 0,
+        has_qualitative_structured_cross_tabs: false,
+        sample_size: formattedFacts.totalRespondents,
+        has_population_representativeness: false,
+        has_process_sequence_data: false,
+      },
       // Evidence envelope boundary: when accepted coding exists, raw open-text
       // is withheld. All reader-facing tasks use accepted_qualitative_summary.
       open_text_content: hasAccepted ? null : openTextContent,
@@ -1073,6 +1092,7 @@ export async function runSurveyQualitativeSynthesis(
     if (hasAccepted) {
       const envelope = buildEvidenceEnvelope(data);
       const VALIDATED_TASKS = new Set(['executive_summary', 'integrated_interpretation', 'evidence_gaps']);
+      const deterministicGaps = buildDeterministicEvidenceGaps(data);
       const FALLBACK_TEXT: Record<string, string> = {
         executive_summary:
           'The executive summary is not available for this run. ' +
@@ -1080,9 +1100,7 @@ export async function runSurveyQualitativeSynthesis(
         integrated_interpretation:
           'The integrated interpretation is not available for this run. ' +
           'Review the structured evidence and accepted qualitative groupings above to assess convergence and divergence.',
-        evidence_gaps:
-          'The evidence gaps section is not available for this run. ' +
-          'Compare the research problem statement against the structured and qualitative evidence above to identify what this source cannot answer.',
+        evidence_gaps: deterministicGaps,
       };
 
       const postValidation: PostGenerationValidation = {

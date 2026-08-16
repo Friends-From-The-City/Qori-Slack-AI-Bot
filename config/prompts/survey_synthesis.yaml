@@ -4,7 +4,7 @@
 id: survey_synthesis
 name: survey_response_synthesizer
 label: "Survey Synthesis"
-version: "v10.2"
+version: "v10.2.1"
 
 description: |
   Analyze survey data with deterministic structured evidence and bounded
@@ -76,6 +76,10 @@ input_variables:
     type: textarea
     required: false
     description: "Accepted qualitative groupings formatted for evidence_gaps task. Present only when accepted coding exists. Replaces open_text_content in evidence boundary."
+  - name: structured_evidence_capabilities
+    type: object
+    required: false
+    description: "Deterministic capability flags: which cross-tabs exist, sample size, population representativeness, process-sequence data availability."
   - name: qualitative_coding
     type: object
     required: false
@@ -325,6 +329,20 @@ ai_generation_tasks:
       stated them in accepted evidence. If the evidence does not
       explain a pattern, say so.
 
+      RULE 9 — NO SKEW FROM MEDIAN
+      A neutral median does not establish absence of skew, balanced
+      distribution, or symmetric spread. Do not use: "no skew,"
+      "balanced distribution," "evenly distributed," "symmetric,"
+      or "weighted positive/negative" based only on the median.
+      Instead, state the median value and describe distributions
+      using supplied deterministic counts only.
+
+      RULE 10 — NO FALSE ABSENCE CLAIMS
+      Do not claim that a supplied cross-tabulation, distribution,
+      or deterministic value is missing, unavailable, or unreported.
+      The cross-tabulations listed below ARE available with full
+      cell-level values. Refer to them accurately.
+
       ============================================================
       AVAILABLE EVIDENCE
       ============================================================
@@ -338,10 +356,16 @@ ai_generation_tasks:
       {% endfor %}
 
       {% if computed_facts.crossTabs %}
-      **Cross-tabulations:**
+      **Cross-tabulations (AVAILABLE with cell-level values):**
       {% for ct in computed_facts.crossTabs %}
       {{ct.rowDisplayName}} × {{ct.colDisplayName}} (n={{ct.totalN}})
       {% endfor %}
+      {% endif %}
+
+      {% if structured_evidence_capabilities %}
+      **Evidence capability flags:**
+      Cross-tabs with cell-level values: {{structured_evidence_capabilities.has_cell_level_cross_tabs}}
+      Cross-tabs between qualitative groupings and structured measures: {{structured_evidence_capabilities.has_qualitative_structured_cross_tabs}}
       {% endif %}
 
       {% if qualitative_coding and qualitative_coding.hasAcceptedCoding %}
@@ -452,6 +476,18 @@ ai_generation_tasks:
         "The available evidence does not explain why respondents selected
         the neutral rating."
 
+      RULE 11 — NO SKEW FROM MEDIAN
+      A neutral median does not establish absence of skew, balanced
+      distribution, or symmetric spread. Do not use: "no skew,"
+      "balanced distribution," "evenly distributed," or "symmetric"
+      based only on the median. State the median value and describe
+      distributions using supplied deterministic counts only.
+
+      RULE 12 — NO FALSE ABSENCE CLAIMS
+      Do not claim that a supplied cross-tabulation, distribution,
+      or value is missing or unavailable. The cross-tabulations listed
+      below ARE available with full cell-level values.
+
       ============================================================
       AVAILABLE EVIDENCE
       ============================================================
@@ -464,12 +500,14 @@ ai_generation_tasks:
       {% endfor %}
 
       {% if computed_facts.crossTabs %}
-      **Cross-tabulations (these are the ONLY available cross-tabs):**
+      **Cross-tabulations (AVAILABLE with cell-level values):**
       {% for ct in computed_facts.crossTabs %}
       {{ct.rowDisplayName}} × {{ct.colDisplayName}} (n={{ct.totalN}})
       {% endfor %}
-      No cross-tab exists between completion status and the qualitative
-      groupings below.
+
+      **NOT available:**
+      No cross-tab exists between qualitative groupings and any
+      structured measure (completion, satisfaction, difficulty).
       {% endif %}
 
       {% if qualitative_coding and qualitative_coding.hasAcceptedCoding %}
@@ -845,7 +883,7 @@ output_template: |
 
   > **Generation**
   >
-  > Template: Survey Synthesis v10.2
+  > Template: Survey Synthesis v10.2.1
   > Model: {{#if provenance}}{{provenance.model_used}}{{else}}Unknown{{/if}}
   > Generated: {{current_date_iso}}
 
