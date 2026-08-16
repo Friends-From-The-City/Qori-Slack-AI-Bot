@@ -75,6 +75,10 @@ input_variables:
     type: object
     required: false
     description: "Accepted qualitative coding data from Slice 2B: recurring patterns, individual observations, review metadata, privacy counts. When present, replaces Preliminary Qualitative Observations with deterministic What Respondents Described."
+  - name: has_accepted_coding
+    type: boolean
+    required: false
+    description: "Top-level boolean for task skip_when evaluation. True when an accepted coding run exists for the current evidence source. Derived from Postgres, not from artifact text or Slack state."
 
 # ═══════════════════════════════════════════════════════════
 # CASCADE CONTRACT — aligned with v9 authority model
@@ -132,7 +136,7 @@ ai_generation_tasks:
   # NO counting, NO frequencies, NO themes, NO sentiment distributions.
   # NO soft prevalence language.
   - task_id: "qualitative_observations"
-    skip_when: "qualitative_coding and qualitative_coding.hasAcceptedCoding"
+    skip_when: "has_accepted_coding"
     skip_output: ""
     prompt: |
       You are interpreting open-text survey responses. Your output is

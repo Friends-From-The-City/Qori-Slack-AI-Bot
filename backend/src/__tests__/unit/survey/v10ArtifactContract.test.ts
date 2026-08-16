@@ -244,13 +244,27 @@ describe('Method & Provenance with accepted coding', () => {
 // ═══════════════════════════════════════════════════════════════════════
 
 describe('qualitative_observations AI task behavior', () => {
-  it('skips when accepted coding exists', () => {
-    expect(yaml).toContain('skip_when: "qualitative_coding and qualitative_coding.hasAcceptedCoding"');
+  it('skips when accepted coding exists via top-level boolean', () => {
+    // skip_when uses top-level has_accepted_coding (not nested property)
+    // because assertSkipWhenVariablesDefined checks top-level keys only
+    expect(yaml).toContain('skip_when: "has_accepted_coding"');
+  });
+
+  it('has_accepted_coding declared as input variable', () => {
+    expect(yaml).toContain('name: has_accepted_coding');
+    expect(yaml).toContain('type: boolean');
   });
 
   it('skip_output is empty string (no fallback text)', () => {
-    // When coding is accepted, the preliminary section is replaced entirely
     expect(yaml).toContain('skip_output: ""');
+  });
+
+  it('handler injects has_accepted_coding as top-level boolean', () => {
+    const handlerFile = readFileSync(
+      join(__dirname, '../../../helpers/slack/commands/surveySubmissionHandler.ts'),
+      'utf-8',
+    );
+    expect(handlerFile).toContain('has_accepted_coding:');
   });
 });
 
