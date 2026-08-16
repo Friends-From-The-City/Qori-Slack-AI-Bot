@@ -44,6 +44,11 @@ function makeEnvelope(overrides?: Partial<EvidenceEnvelope>): EvidenceEnvelope {
       'Completion Status × Difficulty Rating',
     ],
     hasOnlyMedian: true,
+    knownCategories: new Map([
+      ['completed', 5],
+      ['partial', 3],
+      ['abandoned', 2],
+    ]),
     ...overrides,
   };
 }
@@ -948,6 +953,131 @@ describe('Production false-positive regression', () => {
     const result = validateClaims(text, envelope);
     const classC = result.violations.filter(v => v.class === 'C');
     expect(classC.length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// CLASS H — Structured fact contradiction
+// ═══════════════════════════════════════════════════════════════════════
+
+describe('Class H: Structured fact contradiction', () => {
+  const envelope = makeEnvelope();
+
+  // MUST FAIL:
+
+  it('FAIL: "unknown whether any abandoned respondents are represented"', () => {
+    const text = 'It is unknown whether any abandoned respondents are represented in the respondent pool at all.';
+    const result = validateClaims(text, envelope);
+    const classH = result.violations.filter(v => v.class === 'H');
+    expect(classH.length).toBeGreaterThanOrEqual(1);
+    expect(classH[0].description).toContain('abandoned');
+  });
+
+  it('FAIL: "No respondents abandoned scheduling"', () => {
+    const text = 'No respondents abandoned scheduling in this sample.';
+    const result = validateClaims(text, envelope);
+    const classH = result.violations.filter(v => v.class === 'H');
+    expect(classH.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('FAIL: "The sample does not include abandoned attempts"', () => {
+    const text = 'The sample does not include abandoned attempts.';
+    const result = validateClaims(text, envelope);
+    const classH = result.violations.filter(v => v.class === 'H');
+    expect(classH.length).toBeGreaterThanOrEqual(1);
+  });
+
+  // MUST PASS:
+
+  it('PASS: "Two respondents were recorded as Abandoned"', () => {
+    const text = 'Two respondents were recorded as Abandoned.';
+    const result = validateClaims(text, envelope);
+    const classH = result.violations.filter(v => v.class === 'H');
+    expect(classH).toHaveLength(0);
+  });
+
+  it('PASS: "The survey cannot establish why those attempts were abandoned"', () => {
+    const text = 'The survey cannot establish why those attempts were abandoned.';
+    const result = validateClaims(text, envelope);
+    const classH = result.violations.filter(v => v.class === 'H');
+    expect(classH).toHaveLength(0);
+  });
+
+  it('PASS: "The evidence does not establish which friction types are associated with abandoned outcomes"', () => {
+    const text = 'The available evidence cannot link specific accepted qualitative friction types to those abandoned outcomes.';
+    const result = validateClaims(text, envelope);
+    const classH = result.violations.filter(v => v.class === 'H');
+    expect(classH).toHaveLength(0);
+  });
+
+  it('does not fire when knownCategories is empty', () => {
+    const emptyEnvelope = makeEnvelope({ knownCategories: new Map() });
+    const text = 'It is unknown whether abandoned respondents are represented.';
+    const result = validateClaims(text, emptyEnvelope);
+    const classH = result.violations.filter(v => v.class === 'H');
+    expect(classH).toHaveLength(0);
+  });
+
+  it('does not fire for categories with zero count', () => {
+    const zeroEnvelope = makeEnvelope({
+      knownCategories: new Map([['abandoned', 0]]),
+    });
+    const text = 'No respondents abandoned scheduling.';
+    const result = validateClaims(text, zeroEnvelope);
+    const classH = result.violations.filter(v => v.class === 'H');
+    expect(classH).toHaveLength(0);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// EVIDENCE ENVELOPE — knownCategories extraction
+// ═══════════════════════════════════════════════════════════════════════
+
+describe('buildEvidenceEnvelope knownCategories', () => {
+  it('extracts nonzero categories from distribution markdown tables', () => {
+    const data = {
+      qualitative_coding: null,
+      computed_facts: {
+        totalRespondents: 10,
+        fieldStats: [
+          {
+            displayName: 'Completion Status',
+            nPresent: 10,
+            nMissing: 0,
+            distribution: '| Value | Count |\n|-------|------:|\n| Completed | 5 |\n| Partial | 3 |\n| Abandoned | 2 |',
+          },
+        ],
+        crossTabs: [],
+      },
+      structured_evidence_capabilities: null,
+    };
+    const envelope = buildEvidenceEnvelope(data);
+    expect(envelope.knownCategories.get('completed')).toBe(5);
+    expect(envelope.knownCategories.get('partial')).toBe(3);
+    expect(envelope.knownCategories.get('abandoned')).toBe(2);
+  });
+
+  it('does not include header row or zero-count categories', () => {
+    const data = {
+      qualitative_coding: null,
+      computed_facts: {
+        totalRespondents: 10,
+        fieldStats: [
+          {
+            displayName: 'Status',
+            nPresent: 10,
+            nMissing: 0,
+            distribution: '| Value | Count |\n|-------|------:|\n| Active | 10 |\n| Inactive | 0 |',
+          },
+        ],
+        crossTabs: [],
+      },
+      structured_evidence_capabilities: null,
+    };
+    const envelope = buildEvidenceEnvelope(data);
+    expect(envelope.knownCategories.has('value')).toBe(false);
+    expect(envelope.knownCategories.has('active')).toBe(true);
+    expect(envelope.knownCategories.has('inactive')).toBe(false); // zero count excluded
   });
 });
 

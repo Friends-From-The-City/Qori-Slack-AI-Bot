@@ -568,11 +568,18 @@ ai_generation_tasks:
       The following ARE available from this survey:
       - {{computed_facts.totalRespondents}} unique respondents
       - Fields: {{computed_facts.schemaSummary}}
-      - Field distributions (value counts for all categorical fields)
+      - Field distributions with exact value counts for ALL categorical fields
+        (every category and its count is known — do not claim any category
+        is unknown, absent, or unrepresented if it appears in the distributions)
       - Ordinal medians (where researcher confirmed category order)
-      - Completion status distribution
-      - Cross-tabulations (completion × difficulty, completion × satisfaction)
+      - Completion status distribution (exact counts per status are known)
+      - Cross-tabulations with cell-level values
       - Missingness counts
+
+      IMPORTANT: All distribution categories and their counts are
+      deterministic facts. Do NOT claim that any reported category is
+      unknown, absent, or unrepresented. If Abandoned = 2, then 2
+      respondents with Abandoned status ARE represented in the sample.
 
       The following are NOT available:
       {% if qualitative_coding and qualitative_coding.hasAcceptedCoding %}
@@ -580,12 +587,16 @@ ai_generation_tasks:
       {% else %}
       - Accepted qualitative-code prevalence (coding not performed)
       {% endif %}
+      - WHY respondents selected a given completion status
+      - Which accepted qualitative groupings are associated with which
+        completion outcomes (no qualitative × completion cross-tab)
       - Population prevalence or representativeness
       - Causal attribution (survey is descriptive only)
       - Inferential significance (not computed)
 
       Do NOT claim a structured result is missing if it appears in the
-      list above.
+      list above. Gaps should focus on LINKAGE, CAUSE, and
+      GENERALIZATION — not whether categories or respondents exist.
       {% endif %}
 
       {% if accepted_qualitative_summary %}
