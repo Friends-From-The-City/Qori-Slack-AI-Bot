@@ -42,6 +42,12 @@ const approvedGovernanceIds = new Set(
   governanceArg ? governanceArg.split('=')[1].split(',').filter(Boolean) : [],
 );
 
+// Explicit allowlist for research backfill: --research-code-ids=uuid1,uuid2,...
+const researchArg = process.argv.find(a => a.startsWith('--research-code-ids='));
+const approvedResearchIds = new Set(
+  researchArg ? researchArg.split('=')[1].split(',').filter(Boolean) : [],
+);
+
 // Explicit approval for survey_context backfill: --backfill-context-ids=sourcePublicId,...
 const contextArg = process.argv.find(a => a.startsWith('--backfill-context-ids='));
 const approvedContextIds = new Set(
@@ -254,12 +260,17 @@ async function main() {
         console.log(`    current: MISSING`);
         console.log(`    suggested: ${suggestedRelevance} (reason: ${suggestionReason})`);
 
-        // Only persist if explicitly approved via --governance-code-ids
+        // Only persist if explicitly approved via allowlist flags
         if (!dryRun && approvedGovernanceIds.has(code.public_id)) {
           await code.update({
             metadata: { ...meta, analytic_relevance: 'governance_only' },
           });
           console.log(`    ✅ Set analytic_relevance = governance_only (explicitly approved)`);
+        } else if (!dryRun && approvedResearchIds.has(code.public_id)) {
+          await code.update({
+            metadata: { ...meta, analytic_relevance: 'research' },
+          });
+          console.log(`    ✅ Set analytic_relevance = research (explicitly approved)`);
         }
       }
     }
@@ -333,19 +344,50 @@ async function main() {
       console.log(`    projectSlug: "${projectSlug}" — provenance: project.slug`);
 
       // Only persist if explicitly approved
-      if (!dryRun && approvedContextIds.has(source.public_id) && nameFromLabel) {
+      if (!dryRun && approvedContextIds.has(source.public_id)) {
+        // Check for explicit context override: --context-override=topic:value,topicSlug:value,...
+        const overrideArg = process.argv.find(a => a.startsWith('--context-override='));
+        const overrides: Record<string, string> = {};
+        if (overrideArg) {
+          // Parse key:value pairs separated by "|"
+          for (const pair of overrideArg.split('=')[1].split('|')) {
+            const [k, ...vParts] = pair.split(':');
+            if (k) overrides[k] = vParts.join(':');
+          }
+        }
+
+        const topic = overrides.topic ?? nameFromLabel ?? 'Survey';
+        const topicSlug = overrides.topicSlug ?? topic.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
         const reconstructed = {
-          topic: nameFromLabel,
-          topicSlug: nameFromLabel.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''),
-          surveyName: nameFromLabel,
-          questionFocus: '',
-          sourceIntent: '',
-          projectSlug,
+          topic,
+          topicSlug,
+          surveyName: overrides.surveyName ?? topic,
+          questionFocus: overrides.questionFocus ?? '',
+          sourceIntent: overrides.sourceIntent ?? '',
+          projectSlug: overrides.projectSlug ?? projectSlug,
         };
+
+        const recoveryProvenance = {
+          method: 'legacy_dev_backfill',
+          recovered_from: [
+            'canonical project state',
+            ...(overrideArg ? ['explicit CLI override'] : []),
+            ...(!overrideArg && nameFromLabel ? ['source.label prefix'] : []),
+            ...(nameFromLabel === null ? ['peer evidence sources for same uploaded survey'] : []),
+          ],
+          recovered_at: new Date().toISOString(),
+          unavailable_fields: ['questionFocus', 'sourceIntent'].filter(f => !overrides[f]),
+        };
+
         await source.update({
-          metadata: { ...(meta ?? {}), survey_context: reconstructed },
+          metadata: {
+            ...(meta ?? {}),
+            survey_context: reconstructed,
+            survey_context_recovery: recoveryProvenance,
+          },
         });
         console.log(`\n    ✅ Backfilled survey_context (explicitly approved)`);
+        console.log(`    Recovery provenance: ${JSON.stringify(recoveryProvenance)}`);
       }
     }
   }
