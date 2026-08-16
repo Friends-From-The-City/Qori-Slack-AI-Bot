@@ -1,37 +1,27 @@
 /**
- * Codebook Handler — generate + review qualitative response categories.
+ * Codebook Handler — generate + review qualitative response groupings.
  *
- * Plain-language UX: "Review Qori's proposed response categories"
- * Internally: versioned codebook with structured qualitative codes.
+ * Researcher-facing language: "groupings" (not codebook/codes/categories).
+ * Internal domain: survey_codebooks, survey_codes.
  *
- * Researcher actions: Accept, Edit, Remove, Add Category.
- * Uses existing LangChain/ChatAnthropic pattern for generation.
+ * Two-interaction flow to avoid expired trigger_id:
+ * 1. handleGenerateCodebook: ack → model work → persist → DM with button
+ * 2. handleOpenGroupingReview: fresh trigger_id → views.open from DB
  */
 
 import type {
-  SlackActionMiddlewareArgs,
-  BlockAction,
-  ButtonAction,
-  SlackViewMiddlewareArgs,
-  ViewSubmitAction,
-  AllMiddlewareArgs,
+  SlackActionMiddlewareArgs, BlockAction, ButtonAction,
+  SlackViewMiddlewareArgs, ViewSubmitAction, AllMiddlewareArgs,
 } from '@slack/bolt';
 import type { View } from '@slack/types';
-import sequelize from '../../../database';
 import type { SurveyCode } from '../../../database/models/survey_code';
 import {
-  getEligibleEntries,
-  createDraftCodebook,
-  getCodebookWithCodes,
-  acceptCodebook,
-  updateCode,
-  addResearcherCode,
-  CodebookNotReadyError,
-  CodebookImmutableError,
+  getEligibleEntries, createDraftCodebook, getCodebookWithCodes,
+  acceptCodebook, updateCode, addResearcherCode,
+  CodebookNotReadyError, CodebookImmutableError,
 } from '../../../services/survey-codebook.service';
 import { generateDraftCodes, CodebookGenerationError } from '../../survey/codebookGenerator';
 import { getProjectById } from '../../../services/project.service';
-import type { SurveyQualitativeEntry } from '../../../database/models/survey_qualitative_entry';
 
 const CODES_PER_PAGE = 5;
 
@@ -44,21 +34,22 @@ interface CodebookMeta {
   totalCodes?: number;
 }
 
-/**
- * Handle "Generate Response Categories" button.
- */
+// ═══════════════════════════════════════════════════════════════════════
+// STEP 1: Generate groupings (no modal — posts DM with review button)
+// ═══════════════════════════════════════════════════════════════════════
+
 export async function handleGenerateCodebook(
   args: SlackActionMiddlewareArgs<BlockAction<ButtonAction>> & AllMiddlewareArgs,
 ): Promise<void> {
   const { ack, action, client, body } = args;
-  await ack();
+  await ack(); // Ack immediately — do NOT hold trigger_id across model work
 
   const rawMeta = JSON.parse(action.value || '{}');
   const userId = body.user.id;
 
   await client.chat.postMessage({
     channel: userId,
-    text: 'Grouping the approved responses... This may take a moment.',
+    text: 'Qori is grouping similar responses. This may take a moment.',
   });
 
   try {
@@ -72,10 +63,7 @@ export async function handleGenerateCodebook(
     );
 
     const { codebook, codes } = await createDraftCodebook(
-      rawMeta.evidenceSourceId,
-      rawMeta.projectId,
-      null,
-      userId,
+      rawMeta.evidenceSourceId, rawMeta.projectId, null, userId,
       proposedCodes,
       {
         approach: 'mixed_inductive_deductive',
@@ -84,39 +72,94 @@ export async function handleGenerateCodebook(
       },
     );
 
-    const meta: CodebookMeta = {
-      evidenceSourceId: rawMeta.evidenceSourceId,
-      projectId: rawMeta.projectId,
-      codebookId: (codebook as unknown as { id: number }).id,
-      surveyName: rawMeta.surveyName ?? 'Survey',
-      page: 0,
-      totalCodes: codes.length,
-    };
-
-    const modal = buildCodebookReviewModal(codes as SurveyCode[], meta);
-
-    await client.views.open({
-      trigger_id: body.trigger_id,
-      view: modal as unknown as View,
+    // Post DM with FRESH review button — do NOT use stale trigger_id
+    await client.chat.postMessage({
+      channel: userId,
+      blocks: [
+        { type: 'section', text: { type: 'mrkdwn',
+          text: `Qori found *${codes.length} proposed groupings*.\n\nQori grouped similar responses together based on what people said. Review the groupings before Qori uses them in the final survey summary.` } },
+        { type: 'actions', elements: [
+          { type: 'button', text: { type: 'plain_text', text: 'Review Groupings' }, style: 'primary',
+            action_id: 'survey_open_grouping_review',
+            value: JSON.stringify({
+              codebookId: (codebook as unknown as { id: number }).id,
+              evidenceSourceId: rawMeta.evidenceSourceId,
+              projectId: rawMeta.projectId,
+              surveyName: rawMeta.surveyName ?? 'Survey',
+            }),
+          },
+        ] },
+      ],
+      text: `Qori found ${codes.length} proposed groupings. Click "Review Groupings" to review.`,
     });
 
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    console.error('[codebook] Generation error:', err);
     if (err instanceof CodebookNotReadyError || err instanceof CodebookGenerationError) {
-      await client.chat.postMessage({ channel: userId, text: `❌ ${message}` });
+      await client.chat.postMessage({ channel: userId, text: `Qori couldn't create groupings: ${message}` });
     } else {
-      console.error('Error generating codebook:', err);
-      await client.chat.postMessage({ channel: userId, text: `❌ Error generating response categories: ${message}` });
+      await client.chat.postMessage({ channel: userId, text: "Qori couldn't open the grouping review. Try again." });
     }
   }
 }
 
-/**
- * Handle codebook review modal submission.
- *
- * Processes: Accept/Edit/Remove per code + optional Add Category.
- * Then accepts the codebook version.
- */
+// ═══════════════════════════════════════════════════════════════════════
+// STEP 2: Open review modal (fresh trigger_id from button click)
+// ═══════════════════════════════════════════════════════════════════════
+
+export async function handleOpenGroupingReview(
+  args: SlackActionMiddlewareArgs<BlockAction<ButtonAction>> & AllMiddlewareArgs,
+): Promise<void> {
+  const { ack, action, client, body } = args;
+  await ack();
+
+  const rawMeta = JSON.parse(action.value || '{}');
+
+  if (!rawMeta.codebookId) {
+    await client.chat.postMessage({
+      channel: body.user.id,
+      text: "Qori couldn't find the groupings. Try generating them again.",
+    });
+    return;
+  }
+
+  const result = await getCodebookWithCodes(rawMeta.codebookId);
+  if (!result) {
+    await client.chat.postMessage({
+      channel: body.user.id,
+      text: "Qori couldn't find the groupings. Try generating them again.",
+    });
+    return;
+  }
+
+  const meta: CodebookMeta = {
+    evidenceSourceId: rawMeta.evidenceSourceId,
+    projectId: rawMeta.projectId,
+    codebookId: rawMeta.codebookId,
+    surveyName: rawMeta.surveyName ?? 'Survey',
+    page: 0,
+    totalCodes: result.codes.length,
+  };
+
+  try {
+    await client.views.open({
+      trigger_id: body.trigger_id, // FRESH trigger_id from this button click
+      view: buildReviewModal(result.codes as SurveyCode[], meta) as unknown as View,
+    });
+  } catch (err) {
+    console.error('[codebook] views.open error:', err);
+    await client.chat.postMessage({
+      channel: body.user.id,
+      text: "Qori couldn't open the grouping review. Try clicking Review Groupings again.",
+    });
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// STEP 3: Handle review submission (paginated)
+// ═══════════════════════════════════════════════════════════════════════
+
 export async function handleCodebookReviewSubmission(
   args: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs,
 ): Promise<void> {
@@ -127,42 +170,38 @@ export async function handleCodebookReviewSubmission(
   const userId = body.user.id;
 
   if (!meta.codebookId) {
-    await client.chat.postMessage({ channel: userId, text: '❌ Codebook not found.' });
+    await client.chat.postMessage({ channel: userId, text: "Groupings not found." });
     return;
   }
 
   const result = await getCodebookWithCodes(meta.codebookId);
   if (!result) {
-    await client.chat.postMessage({ channel: userId, text: '❌ Codebook not found.' });
+    await client.chat.postMessage({ channel: userId, text: "Groupings not found." });
     return;
   }
 
-  const values = view.state.values as unknown as Record<string, Record<string, Record<string, unknown>>>;
+  const vals = view.state.values as unknown as Record<string, Record<string, Record<string, unknown>>>;
+  const page = meta.page ?? 0;
+  const startIdx = page * CODES_PER_PAGE;
+  const endIdx = Math.min(startIdx + CODES_PER_PAGE, result.codes.length);
+  const pageCodes = result.codes.slice(startIdx, endIdx);
+  const isLastPage = endIdx >= result.codes.length;
 
   try {
-    // Determine which codes are on this page
-    const page = meta.page ?? 0;
-    const startIdx = page * CODES_PER_PAGE;
-    const endIdx = Math.min(startIdx + CODES_PER_PAGE, result.codes.length);
-    const pageCodes = result.codes.slice(startIdx, endIdx);
-    const isLastPage = endIdx >= result.codes.length;
-
-    // Process this page's code review decisions
+    // Process this page's decisions
     for (const code of pageCodes) {
-      const codeId = (code as unknown as { id: number }).id;
-      const decisionBlock = values[`code_decision_${codeId}`];
-      const decision = (decisionBlock?.code_action?.selected_option as { value: string } | null)?.value;
+      const cid = (code as unknown as { id: number }).id;
+      const sel = (vals[`code_decision_${cid}`]?.code_action?.selected_option as { value: string } | null)?.value;
 
-      if (decision === 'accept') {
-        await updateCode(codeId, { status: 'accepted' });
-      } else if (decision === 'remove') {
-        await updateCode(codeId, { status: 'removed' });
-      } else if (decision === 'edit') {
-        // Read edited fields
-        const editLabel = values[`code_edit_label_${codeId}`]?.edit_label_input?.value as string | undefined;
-        const editDef = values[`code_edit_def_${codeId}`]?.edit_def_input?.value as string | undefined;
-        const editInclude = values[`code_edit_include_${codeId}`]?.edit_include_input?.value as string | undefined;
-        const editExclude = values[`code_edit_exclude_${codeId}`]?.edit_exclude_input?.value as string | undefined;
+      if (sel === 'keep') {
+        await updateCode(cid, { status: 'accepted' });
+      } else if (sel === 'remove') {
+        await updateCode(cid, { status: 'removed' });
+      } else if (sel === 'edit') {
+        const editLabel = vals[`code_edit_label_${cid}`]?.edit_label_input?.value as string | undefined;
+        const editDef = vals[`code_edit_def_${cid}`]?.edit_def_input?.value as string | undefined;
+        const editInclude = vals[`code_edit_include_${cid}`]?.edit_include_input?.value as string | undefined;
+        const editExclude = vals[`code_edit_exclude_${cid}`]?.edit_exclude_input?.value as string | undefined;
 
         const updates: Partial<Pick<SurveyCode, 'status' | 'label' | 'definition' | 'include_when' | 'exclude_when'>> = { status: 'accepted' };
         if (editLabel?.trim()) updates.label = editLabel.trim();
@@ -170,56 +209,55 @@ export async function handleCodebookReviewSubmission(
         if (editInclude?.trim()) updates.include_when = editInclude.trim();
         if (editExclude !== undefined) updates.exclude_when = editExclude?.trim() || null;
 
-        await updateCode(codeId, updates);
+        await updateCode(cid, updates);
       }
     }
 
-    // Process "Add Category" if provided
-    const addLabelBlock = values.add_category_label;
-    const addLabel = addLabelBlock?.add_label_input?.value as string | undefined;
-    if (addLabel?.trim()) {
-      const addDef = (values.add_category_def?.add_def_input?.value as string | undefined)?.trim() ?? '';
-      const addInclude = (values.add_category_include?.add_include_input?.value as string | undefined)?.trim() ?? '';
-
-      if (addDef && addInclude) {
-        const codeKey = addLabel.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
-        await addResearcherCode(meta.codebookId, {
-          code_key: codeKey,
-          label: addLabel.trim(),
-          definition: addDef,
-          include_when: addInclude,
-        });
-      }
-    }
-
-    // If not last page, navigate to next page
+    // Navigate to next page or finalize
     if (!isLastPage) {
       const allCodes = await getCodebookWithCodes(meta.codebookId);
       if (allCodes) {
-        const nextMeta = { ...meta, page: (meta.page ?? 0) + 1 };
-        const nextModal = buildCodebookReviewModal(allCodes.codes as SurveyCode[], nextMeta);
+        const nextMeta = { ...meta, page: page + 1 };
         await client.views.open({
           trigger_id: body.trigger_id,
-          view: nextModal as unknown as View,
+          view: buildReviewModal(allCodes.codes as SurveyCode[], nextMeta) as unknown as View,
         });
       }
       return;
     }
 
-    // Last page — accept the codebook
+    // Last page — process Add Grouping if provided
+    const addLabel = vals.add_grouping_label?.add_label_input?.value as string | undefined;
+    if (addLabel?.trim()) {
+      const addDef = (vals.add_grouping_def?.add_def_input?.value as string | undefined)?.trim() ?? '';
+      const addInclude = (vals.add_grouping_include?.add_include_input?.value as string | undefined)?.trim() ?? '';
+      if (addDef && addInclude) {
+        const codeKey = addLabel.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+        await addResearcherCode(meta.codebookId, {
+          code_key: codeKey, label: addLabel.trim(),
+          definition: addDef, include_when: addInclude,
+        });
+      }
+    }
+
+    // Accept the codebook
     await acceptCodebook(meta.codebookId, userId);
 
     await client.chat.postMessage({
       channel: userId,
-      text: '\u2705 *Response groups accepted.* Qori will use these groupings when creating the final survey summary.',
+      text: '\u2705 *Groupings approved.* Qori will use these groupings when creating the final survey summary.',
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    await client.chat.postMessage({ channel: userId, text: `\u274C Could not accept response groups: ${message}` });
+    await client.chat.postMessage({ channel: userId, text: `Couldn't approve groupings: ${message}` });
   }
 }
 
-function buildCodebookReviewModal(
+// ═══════════════════════════════════════════════════════════════════════
+// MODAL BUILDER
+// ═══════════════════════════════════════════════════════════════════════
+
+function buildReviewModal(
   allCodes: SurveyCode[],
   meta: CodebookMeta,
 ): Record<string, unknown> {
@@ -229,134 +267,83 @@ function buildCodebookReviewModal(
   const endIdx = Math.min(startIdx + CODES_PER_PAGE, allCodes.length);
   const pageCodes = allCodes.slice(startIdx, endIdx);
   const isLastPage = endIdx >= allCodes.length;
-
-  const pageLabel = totalPages > 1 ? ` — Page ${page + 1} of ${totalPages}` : '';
+  const pageLabel = totalPages > 1 ? ` \u2014 Page ${page + 1} of ${totalPages}` : '';
 
   const blocks: Record<string, unknown>[] = [
-    {
-      type: 'context',
-      elements: [{
-        type: 'mrkdwn',
-        text: `Qori grouped the approved responses into *${allCodes.length} possible response groups*${pageLabel}.\nReview these before Qori uses them in the final survey summary.\n\nFor each group: *Accept*, *Edit* (modify details), or *Remove*.`,
-      }],
-    },
+    { type: 'context', elements: [{ type: 'mrkdwn',
+      text: `*${allCodes.length} proposed groupings*${pageLabel}\n\nQori grouped similar responses together. For each grouping: *Keep*, *Edit*, or *Remove*.` }] },
     { type: 'divider' },
   ];
 
   for (const code of pageCodes) {
-    const codeId = (code as unknown as { id: number }).id;
+    const cid = (code as unknown as { id: number }).id;
 
-    let codeText = `*${code.label}*\n\n*What this means:* ${code.definition}\n\n*Include when:* ${code.include_when}`;
-    if (code.exclude_when) {
-      codeText += `\n\n*Do not include when:* ${code.exclude_when}`;
-    }
+    let text = `*${code.label}*\n\n*What this grouping means:* ${code.definition}\n\n*Include responses like:* ${code.include_when}`;
+    if (code.exclude_when) text += `\n\n*Do not include responses like:* ${code.exclude_when}`;
 
+    blocks.push({ type: 'section', text: { type: 'mrkdwn', text } });
     blocks.push({
-      type: 'section',
-      text: { type: 'mrkdwn', text: codeText },
-    });
-
-    // Decision dropdown: Accept / Edit / Remove
-    blocks.push({
-      type: 'input',
-      block_id: `code_decision_${codeId}`,
-      label: { type: 'plain_text', text: `Decision for "${code.label}"` },
-      element: {
-        type: 'static_select',
-        action_id: 'code_action',
-        initial_option: { text: { type: 'plain_text', text: 'Accept' }, value: 'accept' },
+      type: 'input', block_id: `code_decision_${cid}`,
+      label: { type: 'plain_text', text: `"${code.label}"` },
+      element: { type: 'static_select', action_id: 'code_action',
+        initial_option: { text: { type: 'plain_text', text: 'Keep' }, value: 'keep' },
         options: [
-          { text: { type: 'plain_text', text: 'Accept' }, value: 'accept' },
+          { text: { type: 'plain_text', text: 'Keep' }, value: 'keep' },
           { text: { type: 'plain_text', text: 'Edit' }, value: 'edit' },
           { text: { type: 'plain_text', text: 'Remove' }, value: 'remove' },
-        ],
-      },
+        ] },
     });
 
-    // Edit fields (optional — used only when "Edit" is selected)
+    // Edit fields (optional)
     blocks.push({
-      type: 'input',
-      block_id: `code_edit_label_${codeId}`,
-      optional: true,
-      label: { type: 'plain_text', text: 'Edit label (only if editing)' },
-      element: {
-        type: 'plain_text_input',
-        action_id: 'edit_label_input',
-        initial_value: code.label,
-      },
+      type: 'input', block_id: `code_edit_label_${cid}`, optional: true,
+      label: { type: 'plain_text', text: 'Edit grouping name (only if editing)' },
+      element: { type: 'plain_text_input', action_id: 'edit_label_input', initial_value: code.label },
     });
-
     blocks.push({
-      type: 'input',
-      block_id: `code_edit_def_${codeId}`,
-      optional: true,
-      label: { type: 'plain_text', text: 'Edit definition (only if editing)' },
-      element: {
-        type: 'plain_text_input',
-        action_id: 'edit_def_input',
-        multiline: true,
-        initial_value: code.definition,
-      },
+      type: 'input', block_id: `code_edit_def_${cid}`, optional: true,
+      label: { type: 'plain_text', text: 'Edit what this grouping means' },
+      element: { type: 'plain_text_input', action_id: 'edit_def_input', multiline: true, initial_value: code.definition },
     });
-
     blocks.push({
-      type: 'input',
-      block_id: `code_edit_include_${codeId}`,
-      optional: true,
-      label: { type: 'plain_text', text: 'Edit include when (only if editing)' },
-      element: {
-        type: 'plain_text_input',
-        action_id: 'edit_include_input',
-        multiline: true,
-        initial_value: code.include_when,
-      },
+      type: 'input', block_id: `code_edit_include_${cid}`, optional: true,
+      label: { type: 'plain_text', text: 'Edit include responses like' },
+      element: { type: 'plain_text_input', action_id: 'edit_include_input', multiline: true, initial_value: code.include_when },
     });
-
     blocks.push({
-      type: 'input',
-      block_id: `code_edit_exclude_${codeId}`,
-      optional: true,
-      label: { type: 'plain_text', text: 'Edit "do not include when" (only if editing)' },
-      element: {
-        type: 'plain_text_input',
-        action_id: 'edit_exclude_input',
-        multiline: true,
-        initial_value: code.exclude_when ?? '',
-      },
+      type: 'input', block_id: `code_edit_exclude_${cid}`, optional: true,
+      label: { type: 'plain_text', text: 'Edit do not include responses like' },
+      element: { type: 'plain_text_input', action_id: 'edit_exclude_input', multiline: true, initial_value: code.exclude_when ?? '' },
     });
-
     blocks.push({ type: 'divider' });
   }
 
-  // Add Category section (last page only)
+  // Add Grouping (last page only)
   if (isLastPage) {
+    blocks.push({ type: 'context', elements: [{ type: 'mrkdwn', text: '*Add a grouping* (optional) \u2014 create your own grouping that Qori missed.' }] });
     blocks.push({
-      type: 'context',
-      elements: [{ type: 'mrkdwn', text: '*Add a response group* (optional) \u2014 create your own grouping that Qori missed.' }],
+      type: 'input', block_id: 'add_grouping_label', optional: true,
+      label: { type: 'plain_text', text: 'New grouping name' },
+      element: { type: 'plain_text_input', action_id: 'add_label_input',
+        placeholder: { type: 'plain_text', text: 'e.g., Technical Interruption' } },
     });
     blocks.push({
-      type: 'input', block_id: 'add_category_label', optional: true,
-      label: { type: 'plain_text', text: 'New group name' },
-      element: { type: 'plain_text_input', action_id: 'add_label_input', placeholder: { type: 'plain_text', text: 'e.g., Technical Interruption' } },
+      type: 'input', block_id: 'add_grouping_def', optional: true,
+      label: { type: 'plain_text', text: 'What this grouping means' },
+      element: { type: 'plain_text_input', action_id: 'add_def_input', multiline: true },
     });
     blocks.push({
-      type: 'input', block_id: 'add_category_def', optional: true,
-      label: { type: 'plain_text', text: 'Definition' },
-      element: { type: 'plain_text_input', action_id: 'add_def_input', multiline: true, placeholder: { type: 'plain_text', text: 'What this category means' } },
-    });
-    blocks.push({
-      type: 'input', block_id: 'add_category_include', optional: true,
-      label: { type: 'plain_text', text: 'Include when' },
-      element: { type: 'plain_text_input', action_id: 'add_include_input', multiline: true, placeholder: { type: 'plain_text', text: 'When a response should receive this category' } },
+      type: 'input', block_id: 'add_grouping_include', optional: true,
+      label: { type: 'plain_text', text: 'Include responses like' },
+      element: { type: 'plain_text_input', action_id: 'add_include_input', multiline: true },
     });
   }
 
   return {
-    type: 'modal',
-    callback_id: 'codebook_review_modal',
+    type: 'modal', callback_id: 'codebook_review_modal',
     private_metadata: JSON.stringify(meta),
-    title: { type: 'plain_text', text: totalPages > 1 ? `Response Groups (${page + 1}/${totalPages})` : 'Review Response Groups' },
-    submit: { type: 'plain_text', text: isLastPage ? 'Accept Response Groups' : 'Continue \u2192' },
+    title: { type: 'plain_text', text: totalPages > 1 ? `Groupings (${page + 1}/${totalPages})` : 'Review Groupings' },
+    submit: { type: 'plain_text', text: isLastPage ? 'Approve Groupings' : 'Continue \u2192' },
     close: { type: 'plain_text', text: 'Cancel' },
     blocks,
   };

@@ -560,12 +560,13 @@ slackApp.view('survey_schema_review_modal', handleSurveySchemaConfirmation);
 
 // Survey privacy review + qualitative synthesis (Slice 2A)
 import { handlePrivacyReviewAction, handlePrivacyReviewSubmission } from './commands/surveyPrivacyHandler';
-import { handleGenerateCodebook, handleCodebookReviewSubmission } from './commands/codebookHandler';
+import { handleGenerateCodebook, handleOpenGroupingReview, handleCodebookReviewSubmission } from './commands/codebookHandler';
 import { handleRunSynthesisAction } from './commands/surveySynthesisAction';
 slackApp.action('survey_privacy_review', handlePrivacyReviewAction);
 slackApp.view('survey_privacy_review_modal', handlePrivacyReviewSubmission);
 slackApp.action('survey_run_synthesis', handleRunSynthesisAction);
 slackApp.action('survey_generate_codebook', handleGenerateCodebook);
+slackApp.action('survey_open_grouping_review', handleOpenGroupingReview);
 slackApp.view('codebook_review_modal', handleCodebookReviewSubmission);
 
 // ─── Fieldwork & participants ───────────────────────────────────
