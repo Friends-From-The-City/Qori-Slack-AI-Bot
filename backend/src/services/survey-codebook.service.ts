@@ -195,6 +195,21 @@ export async function findActiveUnacceptedCodebook(
   });
 }
 
+/**
+ * Find the most recent accepted codebook for an evidence source.
+ */
+export async function findAcceptedCodebook(
+  evidenceSourceId: number,
+): Promise<SurveyCodebook | null> {
+  return CodebookModel.findOne({
+    where: {
+      evidence_source_id: evidenceSourceId,
+      status: 'accepted',
+    },
+    order: [['version', 'DESC']],
+  });
+}
+
 // ═══════════════════════════════════════════════════════════════════════
 // CODE MANAGEMENT
 // ═══════════════════════════════════════════════════════════════════════
