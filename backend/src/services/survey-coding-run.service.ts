@@ -72,7 +72,7 @@ export interface CodingRunDetails {
     code_label: string;
   }>;
   entryReviews: SurveyCodingEntryReview[];
-  acceptedCodes: Array<{ id: number; public_id: string; label: string; definition: string; include_when: string; exclude_when: string | null }>;
+  acceptedCodes: Array<{ id: number; public_id: string; label: string; definition: string; include_when: string; exclude_when: string | null; metadata: Record<string, unknown> }>;
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -267,6 +267,7 @@ export async function getCodingRunWithDetails(
       definition: c.definition,
       include_when: c.include_when,
       exclude_when: c.exclude_when ?? null,
+      metadata: c.metadata ?? {},
     })),
   };
 }

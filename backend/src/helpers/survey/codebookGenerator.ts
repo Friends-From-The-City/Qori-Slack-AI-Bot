@@ -23,6 +23,8 @@ import type { SurveyQualitativeEntry } from '../../database/models/survey_qualit
 const MAX_CODES = 12;
 const MAX_RETRIES = 1;
 
+export type AnalyticRelevance = 'research' | 'governance_only';
+
 export interface GeneratedCode {
   code_key: string;
   label: string;
@@ -30,6 +32,8 @@ export interface GeneratedCode {
   include_when: string;
   exclude_when?: string;
   example_entry_public_ids: string[];
+  /** Whether this grouping is substantive research or governance metadata. */
+  analytic_relevance?: AnalyticRelevance;
 }
 
 export class CodebookGenerationError extends Error {
@@ -149,6 +153,16 @@ RULES
    - Attend to the research problem and focus questions (deductive)
    - Allow categories to emerge from the evidence (inductive)
 
+7. ANALYTIC RELEVANCE: Every category must be classified as either:
+   - "research" — substantively relevant to the research problem/question.
+     Describes what respondents experienced, thought, or described about
+     the topic under study.
+   - "governance_only" — describes a privacy/data-handling property rather
+     than substantive content. Examples: contact information offered,
+     sensitive personal disclosure, third-party mention, redaction state.
+     These categories are important for data governance but are NOT
+     research findings about the topic.
+
 ============================================================
 CONTEXT
 ============================================================
@@ -176,10 +190,13 @@ Respond with ONLY a JSON object. No markdown, no explanation.
       "definition": "What this category means — one coherent analytical idea",
       "include_when": "When a response should receive this category",
       "exclude_when": "When a response should NOT receive this category (optional)",
-      "example_entry_public_ids": ["uuid-from-entries-above"]
+      "example_entry_public_ids": ["uuid-from-entries-above"],
+      "analytic_relevance": "research"
     }
   ]
-}`;
+}
+
+IMPORTANT: analytic_relevance is REQUIRED. Use "research" for substantive findings about the research topic. Use "governance_only" for categories that describe data properties (PII, contact info, sensitive disclosure) rather than research content.`;
 }
 
 function parseCodebookResponse(responseText: string): GeneratedCode[] {
@@ -242,6 +259,7 @@ function validateCodes(
     validatedCodes.push({
       ...code,
       example_entry_public_ids: validExamples,
+      analytic_relevance: code.analytic_relevance === 'governance_only' ? 'governance_only' : 'research',
     });
   }
 
