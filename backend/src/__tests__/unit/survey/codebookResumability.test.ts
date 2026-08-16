@@ -100,3 +100,80 @@ describe('resume CTA logic', () => {
     expect(handlerCode).toContain('findActiveUnacceptedRun(evidenceSourceId, codebookId)');
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════
+// STALE "REVIEW GROUPINGS" BUTTON — backward compatibility
+// ═══════════════════════════════════════════════════════════════════════
+
+describe('stale Review Groupings button handling', () => {
+  const handlerCode = readFileSync(HANDLER_PATH, 'utf-8');
+
+  it('handleOpenGroupingReview checks codebook status before opening modal', () => {
+    // The function must check result.codebook.status === 'accepted'
+    // before opening the review modal
+    const fnStart = handlerCode.indexOf('export async function handleOpenGroupingReview');
+    const fnBody = handlerCode.slice(fnStart);
+    const statusCheck = fnBody.indexOf("result.codebook.status === 'accepted'");
+    const viewsOpen = fnBody.indexOf('client.views.open');
+    expect(statusCheck).toBeGreaterThan(-1);
+    expect(viewsOpen).toBeGreaterThan(-1);
+    expect(statusCheck).toBeLessThan(viewsOpen);
+  });
+
+  it('handleOpenGroupingReview calls buildResumeCTA for accepted codebook', () => {
+    const fnStart = handlerCode.indexOf('export async function handleOpenGroupingReview');
+    const fnBody = handlerCode.slice(fnStart);
+    expect(fnBody).toContain('buildResumeCTA');
+  });
+
+  it('handleOpenGroupingReview returns before views.open for accepted codebook', () => {
+    const fnStart = handlerCode.indexOf('export async function handleOpenGroupingReview');
+    const fnBody = handlerCode.slice(fnStart);
+    const statusCheck = fnBody.indexOf("result.codebook.status === 'accepted'");
+    const returnAfterCheck = fnBody.indexOf('return;', statusCheck);
+    const viewsOpen = fnBody.indexOf('client.views.open');
+    expect(returnAfterCheck).toBeLessThan(viewsOpen);
+  });
+
+  it('accepted codebook never reaches acceptCodebook() from stale Review Groupings', () => {
+    // handleOpenGroupingReview for accepted codebook returns before any modal
+    // so handleCodebookReviewSubmission (which calls acceptCodebook) is never invoked
+    const fnStart = handlerCode.indexOf('export async function handleOpenGroupingReview');
+    const fnEnd = handlerCode.indexOf('export async function', fnStart + 1);
+    const fnBody = handlerCode.slice(fnStart, fnEnd);
+    // The function body should NOT contain acceptCodebook
+    expect(fnBody).not.toContain('acceptCodebook');
+  });
+
+  it('all three grouping entry points use buildResumeCTA', () => {
+    // handleGenerateCodebook, handleOpenGroupingReview, handleCodebookReviewSubmission
+    // all must call buildResumeCTA for accepted codebook state
+    const generateFn = handlerCode.slice(
+      handlerCode.indexOf('export async function handleGenerateCodebook'),
+      handlerCode.indexOf('export async function handleOpenGroupingReview'),
+    );
+    const openFn = handlerCode.slice(
+      handlerCode.indexOf('export async function handleOpenGroupingReview'),
+      handlerCode.indexOf('export async function handleCodebookReviewSubmission'),
+    );
+    const submitFn = handlerCode.slice(
+      handlerCode.indexOf('export async function handleCodebookReviewSubmission'),
+    );
+
+    expect(generateFn).toContain('buildResumeCTA');
+    expect(openFn).toContain('buildResumeCTA');
+    expect(submitFn).toContain('buildResumeCTA');
+  });
+
+  it('immutable error is never shown to researcher from any entry point', () => {
+    // No postMessage should contain the raw "accepted and immutable" text
+    const errorText = 'accepted and immutable';
+    const handlerLines = handlerCode.split('\n');
+    const userFacingLines = handlerLines.filter(line =>
+      line.includes(errorText) &&
+      !line.includes('import') &&
+      !line.includes('instanceof'),
+    );
+    expect(userFacingLines).toHaveLength(0);
+  });
+});

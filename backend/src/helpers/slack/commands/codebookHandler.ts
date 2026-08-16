@@ -228,10 +228,11 @@ export async function handleOpenGroupingReview(
   await ack();
 
   const rawMeta = JSON.parse(action.value || '{}');
+  const userId = body.user.id;
 
   if (!rawMeta.codebookId) {
     await client.chat.postMessage({
-      channel: body.user.id,
+      channel: userId,
       text: "Qori couldn't find the groupings. Try generating them again.",
     });
     return;
@@ -240,9 +241,21 @@ export async function handleOpenGroupingReview(
   const result = await getCodebookWithCodes(rawMeta.codebookId);
   if (!result) {
     await client.chat.postMessage({
-      channel: body.user.id,
+      channel: userId,
       text: "Qori couldn't find the groupings. Try generating them again.",
     });
+    return;
+  }
+
+  // Resume: if codebook is already accepted, show next action instead of review modal
+  if (result.codebook.status === 'accepted') {
+    const cta = await buildResumeCTA(
+      rawMeta.codebookId,
+      rawMeta.evidenceSourceId,
+      rawMeta.projectId,
+      rawMeta.surveyName ?? 'Survey',
+    );
+    await client.chat.postMessage({ channel: userId, blocks: cta.blocks as never[], text: cta.text });
     return;
   }
 
