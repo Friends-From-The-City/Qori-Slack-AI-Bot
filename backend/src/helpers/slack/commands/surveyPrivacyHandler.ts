@@ -154,13 +154,13 @@ export async function handlePrivacyReviewSubmission(
       channel: userId,
       blocks: [
         { type: 'section', text: { type: 'mrkdwn', text: `\u2705 *All responses reviewed.*\n\n\u2022 Approved as written: ${counts.clear}\n\u2022 Approved with edits: ${counts.redacted}\n\u2022 Excluded: ${counts.restricted}` } },
-        { type: 'section', text: { type: 'mrkdwn', text: 'Qori grouped the approved responses into possible categories.\nReview them before Qori uses those groupings in the final survey summary.' } },
+        { type: 'section', text: { type: 'mrkdwn', text: 'Qori can now group similar approved responses for review.' } },
         { type: 'actions', elements: [
-          { type: 'button', text: { type: 'plain_text', text: 'Review Response Groups' }, style: 'primary',
+          { type: 'button', text: { type: 'plain_text', text: 'Review Groupings' }, style: 'primary',
             action_id: 'survey_generate_codebook', value: JSON.stringify({ ...baseMeta, surveyName: meta.surveyName, questionFocus: meta.questionFocus }) },
         ] },
       ],
-      text: 'All responses reviewed. Review response groups next.',
+      text: 'All responses reviewed. Review groupings next.',
     });
   }
 }

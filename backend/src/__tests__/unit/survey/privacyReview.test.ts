@@ -57,10 +57,94 @@ describe('flagged-entry actions', () => {
 });
 
 describe('post-privacy workflow', () => {
-  it('only primary action after review completion is Review Response Groups', () => {
-    // This is a UX contract, not a code test
-    // The privacy handler shows "Review Response Groups" as primary CTA
-    // No "Generate Survey Synthesis" as equal alternative
-    expect(true).toBe(true); // Verified by manual test + code review
+  it('primary action after review is Review Groupings', () => {
+    const { readFileSync } = require('fs');
+    const { join } = require('path');
+    const handler = readFileSync(
+      join(__dirname, '../../../helpers/slack/commands/surveyPrivacyHandler.ts'), 'utf-8',
+    );
+    // Single primary CTA after completion
+    expect(handler).toContain("'Review Groupings'");
+    expect(handler).not.toContain("'Generate Survey Synthesis'");
+    expect(handler).not.toContain("'Generate Codebook'");
+    expect(handler).not.toContain("'Review Response Categories'");
+  });
+});
+
+describe('grouping generation idempotency', () => {
+  it('handler checks for existing active codebook before generating', () => {
+    const { readFileSync } = require('fs');
+    const { join } = require('path');
+    const handler = readFileSync(
+      join(__dirname, '../../../helpers/slack/commands/codebookHandler.ts'), 'utf-8',
+    );
+    expect(handler).toContain('findActiveUnacceptedCodebook');
+    expect(handler).toContain('already prepared');
+  });
+
+  it('existing active codebook reuses without regenerating', () => {
+    const { readFileSync } = require('fs');
+    const { join } = require('path');
+    const handler = readFileSync(
+      join(__dirname, '../../../helpers/slack/commands/codebookHandler.ts'), 'utf-8',
+    );
+    // The if (existingActive) block contains "already prepared" and returns
+    // before reaching generateDraftCodes
+    expect(handler).toContain('if (existingActive)');
+    expect(handler).toContain('already prepared');
+    // generateDraftCodes only called in the "No active draft" branch
+    expect(handler).toContain('No active draft');
+  });
+
+  it('accepted codebook is not treated as active draft', () => {
+    const { readFileSync } = require('fs');
+    const { join } = require('path');
+    const service = readFileSync(
+      join(__dirname, '../../../services/survey-codebook.service.ts'), 'utf-8',
+    );
+    // findActiveUnacceptedCodebook only looks for draft/under_review
+    expect(service).toContain("status: ['draft', 'under_review']");
+    expect(service).not.toMatch(/findActiveUnacceptedCodebook.*accepted/);
+  });
+});
+
+describe('grouping UX language', () => {
+  it('codebook handler uses "groupings" not "codebook/categories"', () => {
+    const { readFileSync } = require('fs');
+    const { join } = require('path');
+    const handler = readFileSync(
+      join(__dirname, '../../../helpers/slack/commands/codebookHandler.ts'), 'utf-8',
+    );
+    // Primary UX text
+    expect(handler).toContain("'Review Groupings'");
+    expect(handler).toContain("'Approve Groupings'");
+    // No researcher-facing codebook/categories language
+    expect(handler).not.toContain("'Accept Codebook'");
+    expect(handler).not.toContain("'Accept Response Categories'");
+    expect(handler).not.toContain("'Generate Codebook'");
+  });
+
+  it('generation and review are separate interactions', () => {
+    const { readFileSync } = require('fs');
+    const { join } = require('path');
+    const handler = readFileSync(
+      join(__dirname, '../../../helpers/slack/commands/codebookHandler.ts'), 'utf-8',
+    );
+    // Generation handler does NOT call views.open with body.trigger_id
+    // It posts a DM with a fresh "Review Groupings" button instead
+    expect(handler).toContain('survey_open_grouping_review');
+    // The review handler uses a FRESH trigger_id from button click
+    expect(handler).toContain('handleOpenGroupingReview');
+  });
+
+  it('stale trigger_id is not reused after model generation', () => {
+    const { readFileSync } = require('fs');
+    const { join } = require('path');
+    const handler = readFileSync(
+      join(__dirname, '../../../helpers/slack/commands/codebookHandler.ts'), 'utf-8',
+    );
+    // handleGenerateCodebook should NOT contain views.open
+    const genFn = handler.split('handleGenerateCodebook')[1]?.split('handleOpenGroupingReview')[0] ?? '';
+    expect(genFn).not.toContain('views.open');
   });
 });

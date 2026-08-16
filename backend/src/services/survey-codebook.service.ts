@@ -176,6 +176,25 @@ export async function getCodebooksForSource(
   });
 }
 
+/**
+ * Find an active unaccepted codebook for an evidence source.
+ * Returns the most recent draft or under_review codebook, or null.
+ *
+ * Used for idempotency: if generation succeeded but DM delivery failed,
+ * retry should reuse the existing codebook rather than regenerating.
+ */
+export async function findActiveUnacceptedCodebook(
+  evidenceSourceId: number,
+): Promise<SurveyCodebook | null> {
+  return CodebookModel.findOne({
+    where: {
+      evidence_source_id: evidenceSourceId,
+      status: ['draft', 'under_review'],
+    },
+    order: [['version', 'DESC']],
+  });
+}
+
 // ═══════════════════════════════════════════════════════════════════════
 // CODE MANAGEMENT
 // ═══════════════════════════════════════════════════════════════════════
