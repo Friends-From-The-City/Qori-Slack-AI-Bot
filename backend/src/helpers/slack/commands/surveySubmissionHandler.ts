@@ -75,6 +75,8 @@ import {
   selectIllustrativeQuotes,
 } from '../../../services/survey-coding-run.service';
 import { computeQualitativeAggregation, type PatternStat } from '../../../services/survey-aggregation.service';
+import { buildEvidenceEnvelope, validateClaims, buildRetryGuidance } from '../../survey/claimGuard';
+import type { PostGenerationValidation } from '../../langchain';
 
 // Models
 const EvidenceSourceModel = sequelize.models.EvidenceSource as typeof EvidenceSource;
@@ -1007,6 +1009,33 @@ export async function runSurveyQualitativeSynthesis(
       // Fail open — "Researcher" is acceptable fallback
     }
 
+    // Evidence envelope: when accepted coding exists, ALL reader-facing AI tasks
+    // share the same accepted evidence boundary. Raw open_text_content is withheld
+    // from the template to prevent any task from reasoning outside the accepted
+    // qualitative authority. The qualitative_observations task is already skipped
+    // via skip_when; evidence_gaps uses accepted_qualitative_summary instead.
+    const hasAccepted = qualitativeCoding !== null;
+    const formattedFacts = formatComputedFacts(computedFacts, confirmedFields);
+
+    // Build accepted qualitative summary for evidence_gaps (replaces raw text)
+    let acceptedQualitativeSummary: string | null = null;
+    if (hasAccepted && qualitativeCoding) {
+      const qc = qualitativeCoding as {
+        recurringPatterns: Array<{ label: string; displayFrequency: string; definition: string }>;
+        individualObservations: Array<{ label: string; displayFrequency: string; definition: string }>;
+      };
+      const lines: string[] = [];
+      for (const p of qc.recurringPatterns) {
+        lines.push(`- ${p.label} (${p.displayFrequency}): ${p.definition}`);
+      }
+      for (const p of qc.individualObservations) {
+        lines.push(`- ${p.label} (${p.displayFrequency}): ${p.definition}`);
+      }
+      acceptedQualitativeSummary = lines.length > 0
+        ? lines.join('\n')
+        : '(No accepted qualitative groupings.)';
+    }
+
     const data: Record<string, unknown> = {
       topic: ctx.topic,
       effective_topic: ctx.topic,
@@ -1025,15 +1054,45 @@ export async function runSurveyQualitativeSynthesis(
       analysis_date: analysisDate,
       run_by: runBy,
       _discovery_type: 'survey-synthesis',
-      computed_facts: formatComputedFacts(computedFacts, confirmedFields),
-      open_text_content: openTextContent,
-      combined_file_content: openTextContent,
+      computed_facts: formattedFacts,
+      // Evidence envelope boundary: when accepted coding exists, raw open-text
+      // is withheld. All reader-facing tasks use accepted_qualitative_summary.
+      open_text_content: hasAccepted ? null : openTextContent,
+      combined_file_content: hasAccepted ? null : openTextContent,
+      accepted_qualitative_summary: acceptedQualitativeSummary,
       provenance,
       qualitative_coding: qualitativeCoding,
       // Top-level boolean for skip_when evaluation (assertSkipWhenVariablesDefined
       // checks top-level keys only — nested property access is not supported)
-      has_accepted_coding: qualitativeCoding !== null,
+      has_accepted_coding: hasAccepted,
     };
+
+    // Wire up post-generation claim guard when accepted coding exists.
+    // Validates executive_summary, integrated_interpretation, evidence_gaps
+    // against the accepted evidence envelope.
+    if (hasAccepted) {
+      const envelope = buildEvidenceEnvelope(data);
+      const VALIDATED_TASKS = new Set(['executive_summary', 'integrated_interpretation', 'evidence_gaps']);
+      const FALLBACK_TEXT: Record<string, string> = {
+        executive_summary:
+          'This section could not be generated within the accepted evidence boundary. ' +
+          'The structured evidence and accepted qualitative groupings are available in the sections above.',
+        integrated_interpretation:
+          'This section could not be generated within the accepted evidence boundary. ' +
+          'Review the structured evidence and accepted qualitative groupings above independently.',
+        evidence_gaps:
+          'Evidence gaps could not be generated within the accepted evidence boundary. ' +
+          'Compare the research problem statement against the structured and qualitative evidence above to identify gaps.',
+      };
+
+      const postValidation: PostGenerationValidation = {
+        taskIds: VALIDATED_TASKS,
+        validate: (_taskId, text) => validateClaims(text, envelope).violations,
+        buildRetryGuidance: (violations) => buildRetryGuidance(violations),
+        fallbackText: (taskId) => FALLBACK_TEXT[taskId] ?? '',
+      };
+      data.__postValidation = postValidation;
+    }
 
     const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, 'survey_synthesis.yaml');
     const variableContext = { projectId: ctx.projectId };
