@@ -18,6 +18,7 @@ import type { SurveyCode } from '../../../database/models/survey_code';
 import {
   getEligibleEntries, createDraftCodebook, getCodebookWithCodes,
   acceptCodebook, updateCode, addResearcherCode,
+  findActiveUnacceptedCodebook,
   CodebookNotReadyError, CodebookImmutableError,
 } from '../../../services/survey-codebook.service';
 import { generateDraftCodes, CodebookGenerationError } from '../../survey/codebookGenerator';
@@ -47,12 +48,43 @@ export async function handleGenerateCodebook(
   const rawMeta = JSON.parse(action.value || '{}');
   const userId = body.user.id;
 
-  await client.chat.postMessage({
-    channel: userId,
-    text: 'Qori is grouping similar responses. This may take a moment.',
-  });
-
   try {
+    // Idempotency: check for existing active unaccepted codebook
+    const existingActive = await findActiveUnacceptedCodebook(rawMeta.evidenceSourceId);
+
+    if (existingActive) {
+      // Reuse existing groupings — do NOT regenerate
+      const existingCodes = await getCodebookWithCodes((existingActive as unknown as { id: number }).id);
+      const codeCount = existingCodes?.codes.length ?? 0;
+
+      await client.chat.postMessage({
+        channel: userId,
+        blocks: [
+          { type: 'section', text: { type: 'mrkdwn',
+            text: `Qori already prepared *${codeCount} proposed groupings*. Open them for review.` } },
+          { type: 'actions', elements: [
+            { type: 'button', text: { type: 'plain_text', text: 'Review Groupings' }, style: 'primary',
+              action_id: 'survey_open_grouping_review',
+              value: JSON.stringify({
+                codebookId: (existingActive as unknown as { id: number }).id,
+                evidenceSourceId: rawMeta.evidenceSourceId,
+                projectId: rawMeta.projectId,
+                surveyName: rawMeta.surveyName ?? 'Survey',
+              }),
+            },
+          ] },
+        ],
+        text: `Qori already prepared ${codeCount} proposed groupings. Click "Review Groupings" to review.`,
+      });
+      return;
+    }
+
+    // No active draft — generate new groupings
+    await client.chat.postMessage({
+      channel: userId,
+      text: 'Qori is grouping similar responses. This may take a moment.',
+    });
+
     const entries = await getEligibleEntries(rawMeta.evidenceSourceId);
     const project = await getProjectById(rawMeta.projectId);
 
@@ -72,7 +104,7 @@ export async function handleGenerateCodebook(
       },
     );
 
-    // Post DM with FRESH review button — do NOT use stale trigger_id
+    // Post DM with FRESH review button
     await client.chat.postMessage({
       channel: userId,
       blocks: [

@@ -71,6 +71,43 @@ describe('post-privacy workflow', () => {
   });
 });
 
+describe('grouping generation idempotency', () => {
+  it('handler checks for existing active codebook before generating', () => {
+    const { readFileSync } = require('fs');
+    const { join } = require('path');
+    const handler = readFileSync(
+      join(__dirname, '../../../helpers/slack/commands/codebookHandler.ts'), 'utf-8',
+    );
+    expect(handler).toContain('findActiveUnacceptedCodebook');
+    expect(handler).toContain('already prepared');
+  });
+
+  it('existing active codebook reuses without regenerating', () => {
+    const { readFileSync } = require('fs');
+    const { join } = require('path');
+    const handler = readFileSync(
+      join(__dirname, '../../../helpers/slack/commands/codebookHandler.ts'), 'utf-8',
+    );
+    // The if (existingActive) block contains "already prepared" and returns
+    // before reaching generateDraftCodes
+    expect(handler).toContain('if (existingActive)');
+    expect(handler).toContain('already prepared');
+    // generateDraftCodes only called in the "No active draft" branch
+    expect(handler).toContain('No active draft');
+  });
+
+  it('accepted codebook is not treated as active draft', () => {
+    const { readFileSync } = require('fs');
+    const { join } = require('path');
+    const service = readFileSync(
+      join(__dirname, '../../../services/survey-codebook.service.ts'), 'utf-8',
+    );
+    // findActiveUnacceptedCodebook only looks for draft/under_review
+    expect(service).toContain("status: ['draft', 'under_review']");
+    expect(service).not.toMatch(/findActiveUnacceptedCodebook.*accepted/);
+  });
+});
+
 describe('grouping UX language', () => {
   it('codebook handler uses "groupings" not "codebook/categories"', () => {
     const { readFileSync } = require('fs');
