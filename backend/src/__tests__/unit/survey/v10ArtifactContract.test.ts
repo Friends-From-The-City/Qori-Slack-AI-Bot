@@ -60,14 +60,14 @@ describe('v10 artifact structure', () => {
     expect(seIdx).toBeLessThan(wrdIdx);
   });
 
-  it('Integrated Interpretation appears after qualitative section', () => {
+  it('What This Means appears after qualitative section', () => {
     const wrdIdx = outputSection.indexOf('## What Respondents Described');
-    const iiIdx = outputSection.indexOf('## Integrated Interpretation');
+    const iiIdx = outputSection.indexOf('## What This Means');
     expect(wrdIdx).toBeLessThan(iiIdx);
   });
 
-  it('Evidence Gaps appears after Integrated Interpretation', () => {
-    const iiIdx = outputSection.indexOf('## Integrated Interpretation');
+  it('Evidence Gaps appears after What This Means', () => {
+    const iiIdx = outputSection.indexOf('## What This Means');
     const egIdx = outputSection.indexOf('## Evidence Gaps');
     expect(iiIdx).toBeLessThan(egIdx);
   });
@@ -77,24 +77,14 @@ describe('v10 artifact structure', () => {
 // EXECUTIVE SUMMARY WITH QUALITATIVE CODING
 // ═══════════════════════════════════════════════════════════════════════
 
-describe('Executive Summary with accepted coding', () => {
-  it('shows qualitative analysis complete when coding accepted', () => {
-    expect(outputSection).toContain('Qualitative analysis complete');
+describe('Executive Summary', () => {
+  it('uses AI-generated narrative', () => {
+    expect(outputSection).toContain('ai_generated.executive_summary');
   });
 
-  it('shows eligible respondent count', () => {
-    expect(outputSection).toContain('qualitative_coding.eligibleRespondentCount');
-  });
-
-  it('shows recurring pattern headlines', () => {
-    expect(outputSection).toContain('qualitative_coding.recurringPatterns');
-    expect(outputSection).toContain('this.displayFrequency');
-  });
-
-  it('does not contain unsupported number variables', () => {
-    // No raw numerator/denominator in executive summary
-    expect(outputSection).not.toContain('this.numerator');
-    expect(outputSection).not.toContain('this.denominator');
+  it('does not contain fact-list format', () => {
+    // No more median-listing format
+    expect(outputSection).not.toMatch(/\[!IMPORTANT\].*unique respondents.*analyzed/s);
   });
 });
 
@@ -234,8 +224,8 @@ describe('Method & Provenance with accepted coding', () => {
     expect(outputSection).not.toContain('Evidence Source ID');
   });
 
-  it('template version is v10.0', () => {
-    expect(outputSection).toContain('Survey Synthesis v10.0');
+  it('template version is v10.1', () => {
+    expect(outputSection).toContain('Survey Synthesis v10.1');
   });
 });
 
@@ -346,7 +336,7 @@ describe('Handlebars empty array conditionals', () => {
       privacyReview: { clear: 8, redacted: 1, restricted: 1 },
     },
     provenance: { source_filename: 'test.csv', reviewed_by: 'U_TEST', reviewed_at: '2026-08-16', ordinal_orders: '', model_used: 'test' },
-    ai_generated: { qualitative_observations: '', evidence_gaps: '' },
+    ai_generated: { qualitative_observations: '', evidence_gaps: '', executive_summary: 'Test summary.', integrated_interpretation: 'Test interpretation.' },
   };
 
   it('empty recurringPatterns → "Recurring Patterns" heading NOT rendered', () => {
@@ -414,11 +404,171 @@ describe('Handlebars empty array conditionals', () => {
     const data = {
       ...baseData,
       qualitative_coding: null,
-      ai_generated: { qualitative_observations: 'Some preliminary text', evidence_gaps: '' },
+      ai_generated: { qualitative_observations: 'Some preliminary text', evidence_gaps: '', executive_summary: 'Summary.', integrated_interpretation: 'Interpretation.' },
     };
     const result = compile(data);
     expect(result).toContain('## Preliminary Qualitative Observations');
     expect(result).toContain('Some preliminary text');
     expect(result).not.toContain('## What Respondents Described');
+  });
+
+  it('empty source_intent omits "This survey contributes:" line', () => {
+    const data = {
+      ...baseData,
+      project_problem_statement: 'Test problem',
+      source_intent: '',
+    };
+    const result = compile(data);
+    expect(result).toContain('**Research problem:**');
+    expect(result).not.toContain('**This survey contributes:**');
+  });
+
+  it('populated source_intent renders contribution line', () => {
+    const data = {
+      ...baseData,
+      project_problem_statement: 'Test problem',
+      source_intent: 'Understand scheduling experiences',
+    };
+    const result = compile(data);
+    expect(result).toContain('**This survey contributes:** Understand scheduling experiences');
+  });
+
+  it('What This Means uses AI-generated interpretation', () => {
+    const data = {
+      ...baseData,
+      ai_generated: {
+        ...baseData.ai_generated,
+        integrated_interpretation: 'The strongest pattern is convergence between completion and satisfaction.',
+      },
+    };
+    const result = compile(data);
+    expect(result).toContain('## What This Means');
+    expect(result).toContain('The strongest pattern is convergence');
+  });
+
+  it('What This Means does NOT contain reader instructions', () => {
+    const data = {
+      ...baseData,
+      ai_generated: {
+        ...baseData.ai_generated,
+        integrated_interpretation: 'Synthesis text here.',
+      },
+    };
+    const result = compile(data);
+    // The template should NOT contain these instruction phrases
+    expect(result).not.toContain('Readers should look for convergence');
+    expect(result).not.toContain('Readers should look for complementarity');
+    expect(result).not.toContain('Readers should look for dissonance');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// GITHUB URL
+// ═══════════════════════════════════════════════════════════════════════
+
+describe('GitHub file URL', () => {
+  it('file creation returns /blob/ URLs', () => {
+    const githubFile = readFileSync(
+      join(__dirname, '../../../helpers/github.ts'),
+      'utf-8',
+    );
+    // The createOrUpdateFileOnGitHub function constructs a URL after the
+    // createOrUpdateFileContents API call. That URL must use /blob/ for files.
+    expect(githubFile).toContain("url: `https://github.com/${owner}/${repo}/blob/main/${filePath}`");
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// GOVERNANCE EXCLUSION
+// ═══════════════════════════════════════════════════════════════════════
+
+describe('governance-only code exclusion', () => {
+  it('codebook generator declares analytic_relevance in output format', () => {
+    const generatorFile = readFileSync(
+      join(__dirname, '../../../helpers/survey/codebookGenerator.ts'),
+      'utf-8',
+    );
+    expect(generatorFile).toContain('analytic_relevance');
+    expect(generatorFile).toContain('governance_only');
+  });
+
+  it('synthesis handler filters governance_only codes from patterns', () => {
+    const handlerFile = readFileSync(
+      join(__dirname, '../../../helpers/slack/commands/surveySubmissionHandler.ts'),
+      'utf-8',
+    );
+    expect(handlerFile).toContain('governanceCodeIds');
+    expect(handlerFile).toContain('governance_only');
+  });
+
+  it('ProposedCode interface includes analytic_relevance', () => {
+    const serviceFile = readFileSync(
+      join(__dirname, '../../../services/survey-codebook.service.ts'),
+      'utf-8',
+    );
+    expect(serviceFile).toContain("analytic_relevance?: 'research' | 'governance_only'");
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// IDEMPOTENT PERSISTENCE
+// ═══════════════════════════════════════════════════════════════════════
+
+describe('idempotent foundation persistence', () => {
+  it('handler checks existingSemanticKeys before creating constructs', () => {
+    const handlerFile = readFileSync(
+      join(__dirname, '../../../helpers/slack/commands/surveySubmissionHandler.ts'),
+      'utf-8',
+    );
+    expect(handlerFile).toContain('existingSemanticKeys');
+    expect(handlerFile).toContain('semantic_key');
+  });
+
+  it('handler uses source-scoped query via getConstructsForSource', () => {
+    const handlerFile = readFileSync(
+      join(__dirname, '../../../helpers/slack/commands/surveySubmissionHandler.ts'),
+      'utf-8',
+    );
+    expect(handlerFile).toContain('getConstructsForSource(evidenceSourceId');
+    expect(handlerFile).not.toMatch(/findAll\(\{\s*where:\s*\{\s*project_id:/);
+  });
+
+  it('infers semantic key from payload when derivation_context.semantic_key absent', () => {
+    const handlerFile = readFileSync(
+      join(__dirname, '../../../helpers/slack/commands/surveySubmissionHandler.ts'),
+      'utf-8',
+    );
+    // Must handle legacy constructs without explicit semantic_key
+    expect(handlerFile).toContain('Legacy inference');
+    expect(handlerFile).toContain("type === 'survey_dataset_summary'");
+    expect(handlerFile).toContain("type === 'field_distribution'");
+    expect(handlerFile).toContain("type === 'cross_tab'");
+  });
+
+  it('survey context stored in evidence_source metadata', () => {
+    const handlerFile = readFileSync(
+      join(__dirname, '../../../helpers/slack/commands/surveySubmissionHandler.ts'),
+      'utf-8',
+    );
+    expect(handlerFile).toContain('survey_context:');
+  });
+
+  it('synthesis action reloads context from evidence_source metadata', () => {
+    const actionFile = readFileSync(
+      join(__dirname, '../../../helpers/slack/commands/surveySynthesisAction.ts'),
+      'utf-8',
+    );
+    expect(actionFile).toContain('surveyContext');
+    expect(actionFile).toContain('survey_context');
+  });
+
+  it('synthesis action reconstructs from source.label when survey_context absent', () => {
+    const actionFile = readFileSync(
+      join(__dirname, '../../../helpers/slack/commands/surveySynthesisAction.ts'),
+      'utf-8',
+    );
+    // Must have canonical DB fallback for legacy sources
+    expect(actionFile).toContain('Reconstruct from canonical DB state');
+    expect(actionFile).toContain('source.label.split');
   });
 });
