@@ -772,6 +772,182 @@ describe('promotion idempotency', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════
+// PAGE REVIEW PERSISTENCE (pagination regression)
+// ═══════════════════════════════════════════════════════════════════════
+
+describe('page review persistence', () => {
+  let runId: number;
+  let reviewIds: number[];
+  let assignmentIds: number[];
+
+  beforeEach(async () => {
+    const run = await CodingRunModel.create({
+      evidence_source_id: sourceId, codebook_id: codebookId,
+      project_id: projectId, version: 1, status: 'under_review',
+      created_by: 'U_TEST', generation_metadata: {},
+    } as CreationAttributes<SurveyCodingRun>);
+    runId = (run as any).id;
+
+    assignmentIds = [];
+    for (const eid of [entry1Id, entry2Id, entry3Id]) {
+      const a = await AssignmentModel.create({
+        coding_run_id: runId, qualitative_entry_id: eid,
+        code_id: code1Id, origin: 'qori_proposed', status: 'proposed',
+        rationale: 'Match',
+      } as CreationAttributes<SurveyCodingAssignment>);
+      assignmentIds.push((a as any).id);
+    }
+
+    reviewIds = [];
+    for (const eid of [entry1Id, entry2Id, entry3Id]) {
+      const r = await EntryReviewModel.create({
+        coding_run_id: runId, qualitative_entry_id: eid, status: 'pending',
+      } as CreationAttributes<SurveyCodingEntryReview>);
+      reviewIds.push((r as any).id);
+    }
+  });
+
+  // Helper: simulate processPageReviewDecisions at model level (avoids service import with separate DB)
+  async function reviewEntries(
+    decisions: Array<{
+      reviewId: number; entryId: number; status: string;
+      acceptAssignmentIds: number[]; rejectAssignmentIds: number[];
+    }>,
+  ) {
+    const now = new Date();
+    for (const d of decisions) {
+      if (d.status === 'no_grouping_applies' || d.status === 'uncodable') {
+        await AssignmentModel.update(
+          { status: 'rejected', reviewed_by: 'U_REVIEWER', reviewed_at: now },
+          { where: { coding_run_id: runId, qualitative_entry_id: d.entryId, status: 'proposed' } },
+        );
+      }
+      if (d.acceptAssignmentIds.length > 0) {
+        await AssignmentModel.update(
+          { status: 'accepted', reviewed_by: 'U_REVIEWER', reviewed_at: now },
+          { where: { id: d.acceptAssignmentIds, coding_run_id: runId } },
+        );
+      }
+      if (d.rejectAssignmentIds.length > 0) {
+        await AssignmentModel.update(
+          { status: 'rejected', reviewed_by: 'U_REVIEWER', reviewed_at: now },
+          { where: { id: d.rejectAssignmentIds, coding_run_id: runId } },
+        );
+      }
+      await EntryReviewModel.update(
+        { status: d.status, reviewed_by: 'U_REVIEWER', reviewed_at: now },
+        { where: { id: d.reviewId } },
+      );
+    }
+  }
+
+  it('reviewing first batch reduces pending count', async () => {
+    await reviewEntries([
+      { reviewId: reviewIds[0], entryId: entry1Id, status: 'reviewed',
+        acceptAssignmentIds: [assignmentIds[0]], rejectAssignmentIds: [] },
+      { reviewId: reviewIds[1], entryId: entry2Id, status: 'reviewed',
+        acceptAssignmentIds: [assignmentIds[1]], rejectAssignmentIds: [] },
+    ]);
+
+    const pending = await EntryReviewModel.count({
+      where: { coding_run_id: runId, status: 'pending' },
+    });
+    expect(pending).toBe(1);
+
+    const reviewed = await EntryReviewModel.count({
+      where: { coding_run_id: runId, status: 'reviewed' },
+    });
+    expect(reviewed).toBe(2);
+  });
+
+  it('reviewed entries do not reappear in pending query', async () => {
+    await reviewEntries([
+      { reviewId: reviewIds[0], entryId: entry1Id, status: 'reviewed',
+        acceptAssignmentIds: [assignmentIds[0]], rejectAssignmentIds: [] },
+    ]);
+
+    const pendingReviews = await EntryReviewModel.findAll({
+      where: { coding_run_id: runId, status: 'pending' },
+    });
+    const pendingEntryIds = pendingReviews.map(r => (r as any).qualitative_entry_id);
+    expect(pendingEntryIds).not.toContain(entry1Id);
+    expect(pendingEntryIds).toContain(entry2Id);
+    expect(pendingEntryIds).toContain(entry3Id);
+  });
+
+  it('bulk approval marks entry_review.status = reviewed and assignments accepted', async () => {
+    await reviewEntries([
+      { reviewId: reviewIds[0], entryId: entry1Id, status: 'reviewed',
+        acceptAssignmentIds: [assignmentIds[0]], rejectAssignmentIds: [] },
+      { reviewId: reviewIds[1], entryId: entry2Id, status: 'reviewed',
+        acceptAssignmentIds: [assignmentIds[1]], rejectAssignmentIds: [] },
+      { reviewId: reviewIds[2], entryId: entry3Id, status: 'reviewed',
+        acceptAssignmentIds: [assignmentIds[2]], rejectAssignmentIds: [] },
+    ]);
+
+    const pending = await EntryReviewModel.count({
+      where: { coding_run_id: runId, status: 'pending' },
+    });
+    expect(pending).toBe(0);
+
+    const accepted = await AssignmentModel.count({
+      where: { coding_run_id: runId, status: 'accepted' },
+    });
+    expect(accepted).toBe(3);
+  });
+
+  it('zero-suggestion entry remains pending when not included in decisions', async () => {
+    await reviewEntries([
+      { reviewId: reviewIds[0], entryId: entry1Id, status: 'reviewed',
+        acceptAssignmentIds: [assignmentIds[0]], rejectAssignmentIds: [] },
+    ]);
+
+    const pending = await EntryReviewModel.count({
+      where: { coding_run_id: runId, status: 'pending' },
+    });
+    expect(pending).toBe(2);
+  });
+
+  it('individual override persists terminal status', async () => {
+    await reviewEntries([
+      { reviewId: reviewIds[2], entryId: entry3Id, status: 'no_grouping_applies',
+        acceptAssignmentIds: [], rejectAssignmentIds: [assignmentIds[2]] },
+    ]);
+
+    const review = await EntryReviewModel.findByPk(reviewIds[2]);
+    expect((review as any).status).toBe('no_grouping_applies');
+    expect((review as any).reviewed_by).toBe('U_REVIEWER');
+
+    const assignment = await AssignmentModel.findByPk(assignmentIds[2]);
+    expect((assignment as any).status).toBe('rejected');
+  });
+
+  it('remaining count comes from DB status filter, not metadata', async () => {
+    // Review 1 of 3
+    await reviewEntries([
+      { reviewId: reviewIds[0], entryId: entry1Id, status: 'reviewed',
+        acceptAssignmentIds: [assignmentIds[0]], rejectAssignmentIds: [] },
+    ]);
+
+    // Canonical remaining = DB count of pending
+    const remaining = await EntryReviewModel.count({
+      where: { coding_run_id: runId, status: 'pending' },
+    });
+    expect(remaining).toBe(2);
+
+    // Next batch = first N pending, ordered by ID
+    const nextBatch = await EntryReviewModel.findAll({
+      where: { coding_run_id: runId, status: 'pending' },
+      order: [['id', 'ASC']],
+      limit: 5,
+    });
+    expect(nextBatch).toHaveLength(2);
+    expect((nextBatch[0] as any).qualitative_entry_id).toBe(entry2Id);
+    expect((nextBatch[1] as any).qualitative_entry_id).toBe(entry3Id);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════
 // FK CASCADE
 // ═══════════════════════════════════════════════════════════════════════
 

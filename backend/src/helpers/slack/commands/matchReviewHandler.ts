@@ -41,8 +41,8 @@ interface MatchReviewMeta {
   projectId: number;
   studyId: number | null;
   surveyName: string;
-  page: number;
-  totalEntries: number;
+  /** Review IDs shown on this modal page — used to match form values to DB rows. */
+  visibleReviewIds: number[];
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -207,6 +207,10 @@ export async function handleOpenMatchReview(
     return;
   }
 
+  // Take first N pending entries (no offset — always first unresolved)
+  const visibleReviews = pendingReviews.slice(0, ENTRIES_PER_PAGE);
+  const visibleReviewIds = visibleReviews.map(r => (r as unknown as { id: number }).id);
+
   const meta: MatchReviewMeta = {
     codingRunId: rawMeta.codingRunId,
     codebookId: rawMeta.codebookId,
@@ -214,14 +218,13 @@ export async function handleOpenMatchReview(
     projectId: rawMeta.projectId,
     studyId: rawMeta.studyId ?? null,
     surveyName: rawMeta.surveyName ?? 'Survey',
-    page: 0,
-    totalEntries: pendingReviews.length,
+    visibleReviewIds,
   };
 
   try {
     await client.views.open({
       trigger_id: body.trigger_id,
-      view: buildMatchReviewModal(details, meta) as unknown as View,
+      view: buildMatchReviewModal(details, pendingReviews.length, visibleReviews, meta) as unknown as View,
     });
   } catch (err) {
     console.error('[match-review] views.open error:', err);
@@ -258,13 +261,12 @@ export async function handleMatchReviewSubmission(
 
   const vals = view.state.values as unknown as Record<string, Record<string, Record<string, unknown>>>;
 
-  // Get pending entries for current page
-  const pendingReviews = details.entryReviews.filter(r => r.status === 'pending');
-  const page = meta.page ?? 0;
-  const startIdx = page * ENTRIES_PER_PAGE;
-  const endIdx = Math.min(startIdx + ENTRIES_PER_PAGE, pendingReviews.length);
-  const pageReviews = pendingReviews.slice(startIdx, endIdx);
-  const isLastPage = endIdx >= pendingReviews.length;
+  // Use visibleReviewIds from metadata to identify which entries this page showed.
+  // This is the authoritative set — not derived from page offsets.
+  const visibleReviewIds = new Set(meta.visibleReviewIds ?? []);
+  const pageReviews = details.entryReviews.filter(
+    r => visibleReviewIds.has((r as unknown as { id: number }).id),
+  );
 
   try {
     // Check bulk approval
@@ -285,27 +287,32 @@ export async function handleMatchReviewSubmission(
       const proposedAssignments = entryAssignments.filter(a => a.origin === 'qori_proposed');
       const hasProposedMatches = proposedAssignments.length > 0;
 
-      // Read entry status selection
-      const statusSel = (vals[`entry_status_${reviewId}`]?.entry_status_select?.selected_option as { value: string } | null)?.value;
+      // Read entry status selection (null if user didn't interact with optional select)
+      const statusBlock = vals[`entry_status_${reviewId}`];
+      const statusSel = (statusBlock?.entry_status_select?.selected_option as { value: string } | null)?.value ?? null;
 
-      // Read selected grouping IDs from checkboxes
+      // Read selected grouping IDs from checkboxes (may include initial_options)
+      const codeBlock = vals[`match_codes_${reviewId}`];
       const selectedCodeIds = (
-        vals[`match_codes_${reviewId}`]?.match_codes_select?.selected_options as Array<{ value: string }> | undefined
+        codeBlock?.match_codes_select?.selected_options as Array<{ value: string }> | undefined
       )?.map(o => o.value) ?? [];
+      const hasExplicitCodeSelection = codeBlock !== undefined && selectedCodeIds.length > 0;
 
-      // Determine effective status
+      // Determine effective status — individual override beats bulk
       let effectiveStatus: EntryReviewStatus;
 
       if (statusSel === 'no_grouping_applies' || statusSel === 'uncodable') {
         effectiveStatus = statusSel;
-      } else if (statusSel === 'reviewed' || (!statusSel && doBulk && hasProposedMatches)) {
-        // Explicit reviewed OR bulk approval (only for entries with proposed matches)
+      } else if (statusSel === 'reviewed') {
+        effectiveStatus = 'reviewed';
+      } else if (doBulk && hasProposedMatches) {
+        // Bulk approval applies to entries with Qori suggestions
         effectiveStatus = 'reviewed';
       } else if (!statusSel && !doBulk) {
-        // No selection and no bulk — skip (leave pending)
+        // No selection and no bulk — leave pending
         continue;
       } else {
-        // Zero-suggestion entry without explicit selection — skip
+        // Zero-suggestion entry without explicit selection — leave pending
         continue;
       }
 
@@ -321,7 +328,6 @@ export async function handleMatchReviewSubmission(
       } else {
         // 'reviewed' — process grouping selections
         const proposedCodeIds = new Set(proposedAssignments.map(a => String(a.code_id)));
-        const selectedCodeIdSet = new Set(selectedCodeIds);
 
         // Build code ID lookup from accepted codes
         const codeIdByInternalId = new Map<string, number>();
@@ -329,13 +335,14 @@ export async function handleMatchReviewSubmission(
           codeIdByInternalId.set(String(code.id), code.id);
         }
 
-        // If bulk and no individual override, accept all proposed
-        const isExplicitSelection = statusSel === 'reviewed' || selectedCodeIds.length > 0;
-        const effectiveSelectedIds = isExplicitSelection
-          ? selectedCodeIdSet
+        // Determine which codes are selected:
+        // 1. Explicit checkbox interaction → use those values
+        // 2. Bulk approval (no checkbox interaction) → accept all proposed
+        const effectiveSelectedIds: Set<string> = hasExplicitCodeSelection
+          ? new Set(selectedCodeIds)
           : (doBulk && hasProposedMatches
             ? proposedCodeIds
-            : new Set<string>());
+            : new Set());
 
         const acceptIds: number[] = [];
         const rejectIds: number[] = [];
@@ -363,8 +370,7 @@ export async function handleMatchReviewSubmission(
 
         // Validate: reviewed must have ≥1 accepted assignment
         if (acceptIds.length === 0 && newAssigns.length === 0) {
-          // If bulk was selected but no codes chosen, treat as error
-          // Skip this entry — it will remain pending
+          // No codes selected and no proposed — leave pending
           continue;
         }
 
@@ -479,25 +485,21 @@ export async function handleMatchReviewSubmission(
 
 function buildMatchReviewModal(
   details: CodingRunDetails,
+  pendingCount: number,
+  visibleReviews: CodingRunDetails['entryReviews'],
   meta: MatchReviewMeta,
 ): Record<string, unknown> {
-  const pendingReviews = details.entryReviews.filter(r => r.status === 'pending');
-  const page = meta.page ?? 0;
-  const totalPages = Math.ceil(pendingReviews.length / ENTRIES_PER_PAGE);
-  const startIdx = page * ENTRIES_PER_PAGE;
-  const endIdx = Math.min(startIdx + ENTRIES_PER_PAGE, pendingReviews.length);
-  const pageReviews = pendingReviews.slice(startIdx, endIdx);
-
   const blocks: Record<string, unknown>[] = [];
 
-  // Header context
-  const pageLabel = totalPages > 1 ? ` (${page + 1}/${totalPages})` : '';
+  // Header — remaining count from DB, not page math
   blocks.push({
     type: 'context',
     elements: [{ type: 'mrkdwn',
-      text: `*${pendingReviews.length} responses* to review${pageLabel}\nQori suggested which groupings fit each response. Review the matches before Qori counts or summarizes them.` }],
+      text: `*${pendingCount} responses* remaining\nQori suggested which groupings fit each response. Review the matches before Qori counts or summarizes them.` }],
   });
   blocks.push({ type: 'divider' });
+
+  const pageReviews = visibleReviews;
 
   // Track entries with proposed matches for bulk approval
   let entriesWithProposals = 0;
@@ -619,12 +621,13 @@ function buildMatchReviewModal(
     });
   }
 
+  const isLastBatch = visibleReviews.length >= pendingCount;
   return {
     type: 'modal',
     callback_id: 'match_review_modal',
     private_metadata: JSON.stringify(meta),
-    title: { type: 'plain_text', text: totalPages > 1 ? `Review Matches (${page + 1}/${totalPages})` : 'Review Matches' },
-    submit: { type: 'plain_text', text: endIdx >= pendingReviews.length ? 'Approve Matches' : 'Continue \u2192' },
+    title: { type: 'plain_text', text: 'Review Matches' },
+    submit: { type: 'plain_text', text: isLastBatch ? 'Approve Matches' : 'Continue \u2192' },
     close: { type: 'plain_text', text: 'Cancel' },
     blocks,
   };
