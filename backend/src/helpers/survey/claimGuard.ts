@@ -1,21 +1,27 @@
 /**
  * Post-generation Claim Guard (MVP) — v10.2
  *
- * Validates AI-generated narrative sections against the accepted evidence
- * envelope. Detects five failure classes:
+ * TRANSITIONAL SAFETY NET. This regex/pattern-based post-prose validator
+ * is a temporary measure. The Platform Hardening Gate will replace it with:
  *
+ *   Canonical Evidence → Structured Claim Plan → deterministic claim
+ *   validation → validated claims → narrative rendering
+ *
+ * Do not add new semantic/regex classes beyond A–H. Invest in the
+ * structured claim pipeline instead.
+ *
+ * Current classes:
  *   A. Respondent IDs not present in accepted evidence
  *   B. Numeric values not present in deterministic supplied facts
  *   C. Qualitative grouping labels not present in accepted research groupings
- *   D. Unsupported relationship language between qualitative groupings
- *      and structured measures without a deterministic linkage
- *   E. Prohibited causal language
+ *   D. Unsupported relationship language (qualitative ↔ structured)
+ *   E. Prohibited causal / psychological language
+ *   F. False absence claims about supplied deterministic evidence
+ *   G. Skew/balance claims from median only
+ *   H. Structured fact contradiction (nonzero category claimed absent)
  *
  * Returns a list of violations. The caller decides whether to retry or
  * render a deterministic fallback.
- *
- * This is the MVP precursor to the broader claim validator scheduled
- * for the Platform Hardening Gate.
  */
 
 // ─────────────────────────────────────────────────────────────────────
@@ -802,6 +808,98 @@ export function buildDeterministicInterpretation(
 
   if (paragraphs.length === 0) {
     return 'Structured and qualitative evidence are available in this report for independent review.';
+  }
+
+  return paragraphs.join('\n\n');
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Deterministic executive summary fallback
+// ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Build a deterministic executive summary from validated state.
+ * Used when AI-generated executive summary fails validation twice.
+ *
+ * Reads as a concise research narrative — not a fact dump.
+ * No model call. No raw text. No unsupported associations.
+ */
+export function buildDeterministicExecutiveSummary(
+  data: Record<string, unknown>,
+): string {
+  const paragraphs: string[] = [];
+
+  const cf = data.computed_facts as {
+    totalRespondents?: number;
+    fieldStats?: Array<{
+      displayName?: string;
+      role?: string;
+      median?: string | number | null;
+      nPresent?: number;
+      distribution?: string;
+    }>;
+    crossTabs?: Array<{
+      rowDisplayName?: string;
+      colDisplayName?: string;
+      totalN?: number;
+    }>;
+  } | null;
+
+  const qc = data.qualitative_coding as {
+    recurringPatterns?: Array<{ label: string; displayFrequency: string }>;
+    individualObservations?: Array<{ label: string; displayFrequency: string }>;
+  } | null;
+
+  const respondentCount = cf?.totalRespondents ?? 0;
+
+  // Paragraph 1: Main structured outcome
+  const mediansDescribed: string[] = [];
+  for (const fs of cf?.fieldStats ?? []) {
+    if (fs.median != null && fs.displayName) {
+      mediansDescribed.push(`${fs.displayName} of ${fs.median}`);
+    }
+  }
+
+  if (respondentCount > 0 && mediansDescribed.length > 0) {
+    paragraphs.push(
+      `A survey of ${respondentCount} respondents produced median ` +
+      `${mediansDescribed.join(' and ')}. ` +
+      `Full value distributions and ${cf?.crossTabs?.length ?? 0} cross-tabulation${(cf?.crossTabs?.length ?? 0) === 1 ? '' : 's'} are available in the structured evidence section.`,
+    );
+  } else if (respondentCount > 0) {
+    paragraphs.push(
+      `A survey of ${respondentCount} respondents produced structured distributions for each measured field, available in the structured evidence section.`,
+    );
+  }
+
+  // Paragraph 2: Qualitative patterns
+  const recurring = qc?.recurringPatterns ?? [];
+  const individual = qc?.individualObservations ?? [];
+  if (recurring.length > 0 || individual.length > 0) {
+    const parts: string[] = [];
+    if (recurring.length > 0) {
+      const labels = recurring.map(p => `${p.label.toLowerCase()} (${p.displayFrequency})`);
+      parts.push(`${recurring.length} recurring pattern${recurring.length === 1 ? '' : 's'}: ${formatList(labels)}`);
+    }
+    if (individual.length > 0) {
+      const labels = individual.map(p => p.label.toLowerCase());
+      parts.push(`${individual.length} individual observation${individual.length === 1 ? '' : 's'}: ${formatList(labels)}`);
+    }
+    paragraphs.push(
+      `Accepted qualitative coding identified ${parts.join('; and ')}.`,
+    );
+  }
+
+  // Paragraph 3: Limitation
+  if (respondentCount > 0) {
+    paragraphs.push(
+      `With ${respondentCount} respondents and no population-representativeness data, these findings are descriptive. ` +
+      'Qualitative groupings and structured measures describe different aspects of the experience and have not been linked at the respondent level.',
+    );
+  }
+
+  if (paragraphs.length === 0) {
+    return 'Structured and qualitative evidence are available in this report.';
   }
 
   return paragraphs.join('\n\n');
