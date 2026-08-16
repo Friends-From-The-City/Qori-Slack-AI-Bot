@@ -74,19 +74,21 @@ const UNSUPPORTED_ASSOCIATION_PATTERNS: RegExp[] = [
 
 /**
  * Class E: Prohibited causal language in descriptive survey context.
+ *
+ * Targets substantive causal claims where one research variable/grouping
+ * is asserted to produce/change another outcome. Does NOT target
+ * methodological limitation language (e.g., "limits confidence",
+ * "prevents causal inference", "cannot determine").
  */
 const PROHIBITED_CAUSAL_PATTERNS: RegExp[] = [
-  /\bcauses?\b/i,
-  /\bcaused\s+by\b/i,
-  /\bresult(?:s|ed|ing)\s+(?:in|from)\b/i,
-  /\bleads?\s+to\b/i,
-  /\bled\s+to\b/i,
-  /\bdue\s+to\b/i,
-  /\bbecause\s+of\b/i,
-  /\bimpact(?:s|ed)?\s+(?:on|the)\b/i,
+  // Substantive causal claims: [variable/grouping] caused/led to [outcome]
+  /\bcaused\s+(?!by\b)(?:\w+\s+){0,3}(?:abandonment|completion|dissatisfaction|satisfaction|difficulty|failure|success)/i,
+  /\bcaused\s+by\s+(?:\w+\s+){0,3}(?:confusion|friction|complexity|uncertainty|difficulty)/i,
+  /\bresulted\s+in\s+(?:\w+\s+){0,3}(?:completion|abandonment|satisfaction|dissatisfaction|failure|success)/i,
+  /\bled\s+to\s+(?:\w+\s+){0,3}(?:lower|higher|increased|decreased|more|less|greater|reduced)/i,
+  /\bdrove\s+(?:\w+\s+){0,3}(?:dissatisfaction|satisfaction|abandonment|completion)/i,
   /\bnormalized?\s+(?:the\s+)?(?:friction|difficulty|experience)/i,
-  // Unmeasured psychological constructs — rejected when introduced as
-  // explanatory language ("may reflect", "suggests", "indicates")
+  // Unmeasured psychological constructs as explanatory language
   /\bmay\s+reflect\s+(?:\w+\s+){0,2}(?:resignation|frustration|apathy|acceptance|habituation|expectation|trust|distrust|confidence|motivation|anxiety|fatigue)/i,
   /\b(?:suggest|indicate|imply|reveal|signal)s?\s+(?:\w+\s+){0,3}(?:resignation|frustration|trust|distrust|confidence|motivation|anxiety|fatigue|expectation)\b/i,
   // Standalone unmeasured constructs presented as findings
@@ -97,15 +99,16 @@ const PROHIBITED_CAUSAL_PATTERNS: RegExp[] = [
 ];
 
 /**
- * Class F: Absence claims about supplied deterministic evidence.
- * The model must not say a supplied cross-tab, distribution, or value
- * is missing, unavailable, or unreported when it was actually provided.
+ * Class F: False absence claims about supplied deterministic evidence.
+ *
+ * Validates AGAINST capability flags — only rejects when the capability
+ * flag says a structure IS present but the text claims it's absent.
+ *
+ * True limitation statements (e.g., "no qualitative × structured cross-tab")
+ * are allowed when the capability flag confirms the structure is absent.
+ *
+ * Implementation is in validateClaims, not pattern-based.
  */
-const ABSENCE_CLAIM_PATTERNS: RegExp[] = [
-  /(?:do\s+not|don'?t|does\s+not|doesn'?t)\s+(?:supply|provide|include|contain|offer|report)\s+(?:\w+\s+){0,3}(?:cross-?tab|distribution|cell|value)/i,
-  /(?:no|without|absent|lacking|missing|unavailable)\s+(?:\w+\s+){0,3}(?:cross-?tab|cell-?level|distribution)/i,
-  /(?:cross-?tab\w*|distribution\w*|cell-?level\w*)\s+(?:is|are|were|was)\s+(?:not\s+)?(?:available|provided|supplied|included|reported|present)/i,
-];
 
 /**
  * Class G: Skew/balance claims derived only from median.
@@ -121,6 +124,15 @@ const UNSUPPORTED_SKEW_PATTERNS: RegExp[] = [
   /\bskew(?:ed)?\s+toward\s+neither/i,
   /\bnot\s+skew/i,
 ];
+
+// ─────────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────────
+
+/** Escape special regex characters in a string for use in RegExp constructor */
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
 // ─────────────────────────────────────────────────────────────────────
 // Respondent ID extraction
@@ -197,8 +209,45 @@ function extractNumericClaims(
 // ─────────────────────────────────────────────────────────────────────
 
 /**
+ * Document structure labels that should NOT be treated as qualitative groupings.
+ * These are headings, table labels, callout labels, and other structural elements.
+ */
+const DOCUMENT_STRUCTURE_LABELS = new Set([
+  'suggested research approach',
+  'suggested research approach:',
+  'what this source establishes',
+  'where it stops',
+  'evidence gaps',
+  'executive summary',
+  'what this means',
+  'what respondents described',
+  'research context',
+  'analysis details',
+  'method & provenance',
+  'recurring patterns',
+  'individual observations',
+  'structured evidence',
+  'view structured evidence',
+  'cross-tabulations',
+  'analysis authority',
+  'privacy review',
+  'qualitative method',
+  'grouping review',
+  'match review',
+  'aggregation',
+  'computation',
+  'generation',
+  'integrity',
+  'source',
+  'schema',
+  'note',
+  'tip',
+  'warning',
+]);
+
+/**
  * Check if text references qualitative grouping labels not in the accepted set.
- * Uses quoted or bold-formatted labels as signals.
+ * Uses bold-formatted labels as signals, excluding document structure elements.
  */
 function extractGroupingReferences(text: string): string[] {
   const refs: string[] = [];
@@ -206,15 +255,26 @@ function extractGroupingReferences(text: string): string[] {
   const boldMatches = text.match(/\*\*([^*]+)\*\*/g);
   if (boldMatches) {
     for (const m of boldMatches) {
-      refs.push(m.replace(/\*\*/g, '').toLowerCase().trim());
+      const label = m.replace(/\*\*/g, '').toLowerCase().trim().replace(/:$/, '');
+      // Skip document structure labels
+      if (DOCUMENT_STRUCTURE_LABELS.has(label)) continue;
+      if (DOCUMENT_STRUCTURE_LABELS.has(label + ':')) continue;
+      // Skip labels that end with colon (likely headings/callouts)
+      if (m.replace(/\*\*/g, '').trim().endsWith(':')) continue;
+      refs.push(label);
     }
   }
   // Match "label" patterns in context of grouping/pattern/observation language
-  const quotedInContext = text.match(/(?:grouping|pattern|observation|category|type)\s+(?:"|")([^""]+)(?:"|")/gi);
+  const quotedInContext = text.match(/(?:grouping|pattern|observation|category|type)\s+(?:"|"\u201c)([^""\u201d]+)(?:"|"\u201d)/gi);
   if (quotedInContext) {
     for (const m of quotedInContext) {
-      const inner = m.match(/(?:"|")([^""]+)(?:"|")/);
-      if (inner) refs.push(inner[1].toLowerCase().trim());
+      const inner = m.match(/(?:"|"\u201c)([^""\u201d]+)(?:"|"\u201d)/);
+      if (inner) {
+        const label = inner[1].toLowerCase().trim();
+        if (!DOCUMENT_STRUCTURE_LABELS.has(label)) {
+          refs.push(label);
+        }
+      }
     }
   }
   return [...new Set(refs)];
@@ -302,17 +362,44 @@ export function validateClaims(
     }
   }
 
-  // Class F: Absence claims about supplied deterministic evidence
+  // Class F: False absence claims — validated against capability flags.
+  // Only flags claims that a SUPPLIED structure is absent.
+  // True limitations (e.g., "no qualitative × structured cross-tab") pass.
   if (envelope.availableCrossTabs.length > 0) {
-    for (const pattern of ABSENCE_CLAIM_PATTERNS) {
-      const match = generatedText.match(pattern);
-      if (match) {
-        violations.push({
-          class: 'F',
-          description: 'False absence claim about supplied deterministic evidence (cross-tabs/distributions are available)',
-          evidence: match[0],
-        });
+    const textLower = generatedText.toLowerCase();
+    for (const ct of envelope.availableCrossTabs) {
+      const ctLower = ct.toLowerCase();
+      // Extract the field names from "Field A × Field B"
+      const parts = ctLower.split(/\s*×\s*/);
+      if (parts.length === 2) {
+        // Check if text claims this specific cross-tab is absent/missing/unavailable
+        const fieldA = parts[0].trim();
+        const fieldB = parts[1].trim();
+        // Look for absence language near mentions of both fields
+        const absenceNearFields = new RegExp(
+          `(?:no|without|missing|unavailable|absent|lacking|do\\s+not)\\s+(?:\\w+\\s+){0,5}(?:${escapeRegex(fieldA)}|${escapeRegex(fieldB)})\\s*(?:×|x|cross|\\*)\\s*(?:\\w+\\s+){0,3}(?:${escapeRegex(fieldA)}|${escapeRegex(fieldB)})`,
+          'i',
+        );
+        const match = generatedText.match(absenceNearFields);
+        if (match) {
+          violations.push({
+            class: 'F',
+            description: `False absence claim: ${ct} cross-tab IS available but text claims otherwise`,
+            evidence: match[0],
+          });
+        }
       }
+    }
+    // Also check for blanket "no cell-level values" when cell-level cross-tabs exist
+    const blanketAbsence = generatedText.match(
+      /(?:do\s+not|don'?t|does\s+not|doesn'?t)\s+(?:supply|provide|include)\s+(?:\w+\s+){0,3}(?:cell-?level|deterministic\s+cell)/i,
+    );
+    if (blanketAbsence) {
+      violations.push({
+        class: 'F',
+        description: 'False absence claim: cell-level cross-tab values ARE available',
+        evidence: blanketAbsence[0],
+      });
     }
   }
 
