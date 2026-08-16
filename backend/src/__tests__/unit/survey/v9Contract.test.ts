@@ -1,5 +1,6 @@
 /**
- * Survey Synthesis v9.2 Final Document Contract Tests
+ * Survey Synthesis Document Contract Tests
+ * (Covers v9.x baseline; v10 additions in v10ArtifactContract.test.ts)
  */
 
 import { readFileSync } from 'fs';
@@ -209,9 +210,6 @@ describe('ordinal rendering', () => {
 describe('Method & Provenance', () => {
   const yaml = readFileSync(YAML_PATH, 'utf-8');
 
-  it('source public_id present', () => {
-    expect(yaml).toContain('provenance.source_public_id');
-  });
   it('real filename present (not staged-csv)', () => {
     expect(yaml).toContain('provenance.source_filename');
   });
@@ -257,12 +255,13 @@ describe('document order', () => {
   const yaml = readFileSync(YAML_PATH, 'utf-8');
   const outputSection = yaml.split('output_template:')[1]?.split('output_options:')[0] ?? '';
 
-  it('Structured Evidence appears before Preliminary Qualitative', () => {
+  it('Structured Evidence appears before qualitative section', () => {
     const seIdx = outputSection.indexOf('View Structured Evidence');
-    const pqIdx = outputSection.indexOf('## Preliminary Qualitative');
+    // v10: "What Respondents Described" appears before "Preliminary Qualitative"
+    const qualIdx = outputSection.indexOf('## What Respondents Described');
     expect(seIdx).toBeGreaterThan(-1);
-    expect(pqIdx).toBeGreaterThan(-1);
-    expect(seIdx).toBeLessThan(pqIdx);
+    expect(qualIdx).toBeGreaterThan(-1);
+    expect(seIdx).toBeLessThan(qualIdx);
   });
 
   it('Structured Evidence appears after Research Context', () => {
