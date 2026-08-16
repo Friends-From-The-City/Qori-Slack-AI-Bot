@@ -276,22 +276,22 @@ describe('Class E: Causal and psychological language validation', () => {
     expect(classE.length).toBeGreaterThanOrEqual(1);
   });
 
-  it('rejects "causes" language', () => {
-    const text = 'Navigation complexity causes user abandonment.';
+  it('rejects substantive "caused abandonment" language', () => {
+    const text = 'Navigation complexity caused abandonment.';
     const result = validateClaims(text, envelope);
     const classE = result.violations.filter(v => v.class === 'E');
     expect(classE.length).toBeGreaterThanOrEqual(1);
   });
 
-  it('rejects "leads to" language', () => {
-    const text = 'This leads to higher dissatisfaction.';
+  it('rejects "led to lower satisfaction" language', () => {
+    const text = 'This led to lower satisfaction across the sample.';
     const result = validateClaims(text, envelope);
     const classE = result.violations.filter(v => v.class === 'E');
     expect(classE.length).toBeGreaterThanOrEqual(1);
   });
 
-  it('rejects "due to" language', () => {
-    const text = 'The low satisfaction is due to poor interface design.';
+  it('rejects "drove dissatisfaction" language', () => {
+    const text = 'Eligibility confusion drove dissatisfaction with the process.';
     const result = validateClaims(text, envelope);
     const classE = result.violations.filter(v => v.class === 'E');
     expect(classE.length).toBeGreaterThanOrEqual(1);
@@ -520,9 +520,8 @@ describe('buildRetryGuidance', () => {
 describe('Fallback text quality', () => {
   // These match the handler's FALLBACK_TEXT values
   const fallbacks = [
-    'The executive summary is not available for this run. The structured evidence and accepted qualitative groupings in the sections above provide the complete findings.',
-    'The integrated interpretation is not available for this run. Review the structured evidence and accepted qualitative groupings above to assess convergence and divergence.',
-    'The evidence gaps section is not available for this run. Compare the research problem statement against the structured and qualitative evidence above to identify what this source cannot answer.',
+    'The executive summary is not available for this run. The structured evidence and accepted qualitative findings in this report provide the available results.',
+    'The integrated interpretation is not available for this run. Review the structured evidence and accepted qualitative groupings in this report to assess convergence and divergence.',
   ];
 
   for (const fb of fallbacks) {
@@ -608,43 +607,35 @@ describe('YAML executive_summary rules', () => {
 // CLASS F — False absence claims about supplied evidence
 // ═══════════════════════════════════════════════════════════════════════
 
-describe('Class F: False absence claims', () => {
+describe('Class F: False absence claims (capability-flag validated)', () => {
   const envelope = makeEnvelope();
 
-  it('rejects "do not supply cell-level cross-tabs" when they are supplied', () => {
+  it('rejects claim that Completion × Satisfaction cross-tab is missing when it exists', () => {
+    const text = 'No Completion Status × Overall Satisfaction cross-tab exists.';
+    const result = validateClaims(text, envelope);
+    const classF = result.violations.filter(v => v.class === 'F');
+    expect(classF.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('rejects blanket "do not supply cell-level" when cell-level cross-tabs exist', () => {
     const text = 'The cross-tabulations do not supply deterministic cell-level values.';
     const result = validateClaims(text, envelope);
     const classF = result.violations.filter(v => v.class === 'F');
     expect(classF.length).toBeGreaterThanOrEqual(1);
   });
 
-  it('rejects "no cross-tab available" when cross-tabs are supplied', () => {
-    const text = 'No cross-tab is available for this analysis.';
+  it('allows true absence: "no qualitative × structured cross-tab" when flag confirms', () => {
+    const text = 'No deterministic cross-tab links accepted qualitative groupings to completion status.';
     const result = validateClaims(text, envelope);
     const classF = result.violations.filter(v => v.class === 'F');
-    expect(classF.length).toBeGreaterThanOrEqual(1);
+    expect(classF).toHaveLength(0);
   });
 
-  it('rejects "missing cell-level" claims', () => {
-    const text = 'Cell-level distributions are not available.';
+  it('allows "the evidence cannot establish respondent-level correspondence"', () => {
+    const text = 'The evidence cannot establish respondent-level correspondence between groupings and outcomes.';
     const result = validateClaims(text, envelope);
     const classF = result.violations.filter(v => v.class === 'F');
-    expect(classF.length).toBeGreaterThanOrEqual(1);
-  });
-
-  it('allows correct description of unavailable qualitative cross-tabs', () => {
-    // This is a TRUE absence — no cross-tab between qualitative and structured
-    const text = 'No cross-tab exists between accepted qualitative groupings and completion status.';
-    // This text doesn't match ABSENCE_CLAIM_PATTERNS because it's specific to
-    // qualitative groupings, not general cross-tabs. The patterns detect claims
-    // about cross-tabs/distributions being generally unavailable.
-    const result = validateClaims(text, envelope);
-    const classF = result.violations.filter(v => v.class === 'F');
-    // The pattern may catch "No cross-tab" generically — let's check
-    // If it does, that's acceptable since the model should use the exact
-    // supplied language about what IS and ISN'T available.
-    // This test documents the behavior.
-    expect(result.violations).toBeDefined();
+    expect(classF).toHaveLength(0);
   });
 
   it('does not fire when no cross-tabs are available', () => {
@@ -857,4 +848,124 @@ describe('Extraction ordering invariant', () => {
     // aiResponses is populated from executeAiGenerationTasks (which runs claim guard)
     expect(yamlProcessor).toContain('aiResponses = await executeAiGenerationTasks');
   });
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// PRODUCTION FALSE-POSITIVE REGRESSION TESTS
+// ═══════════════════════════════════════════════════════════════════════
+
+describe('Production false-positive regression', () => {
+  const envelope = makeEnvelope();
+
+  // These MUST PASS (no violations):
+
+  it('PASS: "The small respondent count limits the confidence of broader inference."', () => {
+    const text = 'The small respondent count limits the confidence of broader inference.';
+    const result = validateClaims(text, envelope);
+    expect(result.valid).toBe(true);
+  });
+
+  it('PASS: "The sample size limits generalizability."', () => {
+    const text = 'The sample size limits generalizability.';
+    const result = validateClaims(text, envelope);
+    expect(result.valid).toBe(true);
+  });
+
+  it('PASS: "No deterministic cross-tab links accepted qualitative groupings to completion status."', () => {
+    const text = 'No deterministic cross-tab links accepted qualitative groupings to completion status.';
+    const result = validateClaims(text, envelope);
+    const classF = result.violations.filter(v => v.class === 'F');
+    expect(classF).toHaveLength(0);
+  });
+
+  it('PASS: "Suggested research approach:" (document structure, not grouping)', () => {
+    const text = '> [!TIP]\n> **Suggested research approach:** Conduct follow-up interviews.';
+    const result = validateClaims(text, envelope);
+    const classC = result.violations.filter(v => v.class === 'C');
+    expect(classC).toHaveLength(0);
+  });
+
+  it('PASS: "The evidence cannot establish respondent-level correspondence."', () => {
+    const text = 'The evidence cannot establish respondent-level correspondence.';
+    const result = validateClaims(text, envelope);
+    expect(result.valid).toBe(true);
+  });
+
+  it('PASS: "design prevents causal inference"', () => {
+    const text = 'The cross-sectional design prevents causal inference.';
+    const result = validateClaims(text, envelope);
+    const classE = result.violations.filter(v => v.class === 'E');
+    expect(classE).toHaveLength(0);
+  });
+
+  it('PASS: "data do not establish" (limitation, not causal)', () => {
+    const text = 'These data do not establish whether the pattern is widespread.';
+    const result = validateClaims(text, envelope);
+    const classE = result.violations.filter(v => v.class === 'E');
+    expect(classE).toHaveLength(0);
+  });
+
+  it('PASS: "cannot determine" (limitation, not causal)', () => {
+    const text = 'The survey cannot determine whether friction caused non-completion.';
+    const result = validateClaims(text, envelope);
+    const classE = result.violations.filter(v => v.class === 'E');
+    expect(classE).toHaveLength(0);
+  });
+
+  // These MUST FAIL (violations expected):
+
+  it('FAIL: "Eligibility uncertainty caused abandonment."', () => {
+    const text = 'Eligibility uncertainty caused abandonment.';
+    const result = validateClaims(text, envelope);
+    const classE = result.violations.filter(v => v.class === 'E');
+    expect(classE.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('FAIL: "Staff assistance resulted in completion."', () => {
+    const text = 'Staff assistance resulted in completion.';
+    const result = validateClaims(text, envelope);
+    const classE = result.violations.filter(v => v.class === 'E');
+    expect(classE.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('FAIL: "The straightforward group corresponded to higher satisfaction."', () => {
+    const text = 'The straightforward group corresponded to higher satisfaction.';
+    const result = validateClaims(text, envelope);
+    const classD = result.violations.filter(v => v.class === 'D');
+    expect(classD.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('FAIL: claim Completion × Satisfaction cross-tab missing when flag says it exists', () => {
+    const text = 'No Completion Status × Overall Satisfaction cross-tab is available.';
+    const result = validateClaims(text, envelope);
+    const classF = result.violations.filter(v => v.class === 'F');
+    expect(classF.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('FAIL: unknown qualitative grouping introduced as accepted evidence', () => {
+    const text = '**Session timeout** was the most common barrier to completion.';
+    const result = validateClaims(text, envelope);
+    const classC = result.violations.filter(v => v.class === 'C');
+    expect(classC.length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// FALLBACK COPY REGRESSION
+// ═══════════════════════════════════════════════════════════════════════
+
+describe('Fallback copy quality (v10.2.1)', () => {
+  const fallbacks = [
+    'The executive summary is not available for this run. The structured evidence and accepted qualitative findings in this report provide the available results.',
+    'The integrated interpretation is not available for this run. Review the structured evidence and accepted qualitative groupings in this report to assess convergence and divergence.',
+  ];
+
+  for (const fb of fallbacks) {
+    it(`no directional wording: "${fb.slice(0, 40)}..."`, () => {
+      expect(fb).not.toContain('above');
+      expect(fb).not.toContain('below');
+      expect(fb).not.toContain('sections above');
+      expect(fb).not.toContain('sections below');
+    });
+  }
 });

@@ -1096,10 +1096,10 @@ export async function runSurveyQualitativeSynthesis(
       const FALLBACK_TEXT: Record<string, string> = {
         executive_summary:
           'The executive summary is not available for this run. ' +
-          'The structured evidence and accepted qualitative groupings in the sections above provide the complete findings.',
+          'The structured evidence and accepted qualitative findings in this report provide the available results.',
         integrated_interpretation:
           'The integrated interpretation is not available for this run. ' +
-          'Review the structured evidence and accepted qualitative groupings above to assess convergence and divergence.',
+          'Review the structured evidence and accepted qualitative groupings in this report to assess convergence and divergence.',
         evidence_gaps: deterministicGaps,
       };
 
