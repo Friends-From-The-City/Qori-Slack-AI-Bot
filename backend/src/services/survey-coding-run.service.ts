@@ -746,8 +746,24 @@ export async function promoteAcceptedPatterns(
   // Compute aggregation
   const aggregation = computeQualitativeAggregation(assignmentRows, eligibleRespondentKeys);
 
-  // Check existing constructs for idempotency
+  // Load all qualitative constructs for this project once (bounded by codes × run versions)
   const EvidenceConstructModel = sequelize.models.EvidenceConstruct;
+  const existingConstructs = await EvidenceConstructModel.findAll({
+    where: {
+      project_id: projectId,
+      construct_type: ['survey_qualitative_pattern', 'survey_individual_observation'],
+    },
+  });
+
+  // Build a set of already-promoted keys: "construct_type|coding_run_public_id|code_public_id"
+  const promotedKeys = new Set<string>();
+  for (const c of existingConstructs) {
+    const payload = (c as unknown as { payload: Record<string, unknown> | null }).payload;
+    const type = (c as unknown as { construct_type: string }).construct_type;
+    if (payload?.coding_run_public_id && payload?.code_public_id) {
+      promotedKeys.add(`${type}|${payload.coding_run_public_id}|${payload.code_public_id}`);
+    }
+  }
 
   const createdConstructs: EvidenceConstruct[] = [];
 
@@ -755,23 +771,10 @@ export async function promoteAcceptedPatterns(
     pattern: PatternStat,
     constructType: 'survey_qualitative_pattern' | 'survey_individual_observation',
   ) => {
-    // Idempotency check: coding_run_public_id + code_public_id + construct_type
-    const existing = await EvidenceConstructModel.findOne({
-      where: {
-        construct_type: constructType,
-        project_id: projectId,
-      },
-    });
-
-    // Check payload for matching coding_run + code combination
-    if (existing) {
-      const payload = (existing as unknown as { payload: Record<string, unknown> }).payload;
-      if (
-        payload?.coding_run_public_id === run.public_id &&
-        payload?.code_public_id === pattern.codePublicId
-      ) {
-        return; // Already promoted
-      }
+    // Idempotency: exact match on construct_type + coding_run_public_id + code_public_id
+    const key = `${constructType}|${run.public_id}|${pattern.codePublicId}`;
+    if (promotedKeys.has(key)) {
+      return; // Already promoted for this exact run + code + type
     }
 
     const result = await createDerivation({

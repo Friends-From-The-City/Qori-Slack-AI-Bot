@@ -14,6 +14,7 @@
 
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import Handlebars from 'handlebars';
 import { computeQualitativeAggregation, type PatternStat } from '../../../services/survey-aggregation.service';
 
 const YAML_PATH = join(__dirname, '../../../../../config/prompts/survey_synthesis.yaml');
@@ -300,5 +301,110 @@ describe('synthesis gate', () => {
       'utf-8',
     );
     expect(actionFile).toContain('Complete match review before generating');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// HANDLEBARS RENDERING — empty array conditional behavior
+// ═══════════════════════════════════════════════════════════════════════
+
+describe('Handlebars empty array conditionals', () => {
+  // Extract the output_template from the YAML file
+  const rawTemplate = yaml.split('output_template: |')[1]?.split('\noutput_options:')[0] ?? '';
+  // Remove the 2-space YAML block scalar indentation
+  const templateContent = rawTemplate.replace(/^  /gm, '');
+
+  const compile = (data: Record<string, unknown>) => {
+    const template = Handlebars.compile(templateContent, { noEscape: true });
+    return template(data);
+  };
+
+  const baseData = {
+    survey_name: 'Test Survey',
+    computed_facts: { totalRespondents: 10, fieldStats: [], crossTabs: [], schemaSummary: '', nonresponseLimitation: '', sourceContentHash: '' },
+    qualitative_coding: {
+      hasAcceptedCoding: true,
+      eligibleRespondentCount: 10,
+      recurringPatterns: [] as unknown[],
+      individualObservations: [] as unknown[],
+      codingRun: { version: 1, reviewed_by: 'U_TEST', reviewed_at: '2026-08-16' },
+      codebook: { version: 1, reviewed_by: 'U_TEST', reviewed_at: '2026-08-16' },
+      privacyReview: { clear: 8, redacted: 1, restricted: 1 },
+    },
+    provenance: { source_filename: 'test.csv', reviewed_by: 'U_TEST', reviewed_at: '2026-08-16', ordinal_orders: '', model_used: 'test' },
+    ai_generated: { qualitative_observations: '', evidence_gaps: '' },
+  };
+
+  it('empty recurringPatterns → "Recurring Patterns" heading NOT rendered', () => {
+    const result = compile({ ...baseData });
+    expect(result).not.toContain('### Recurring Patterns');
+  });
+
+  it('non-empty recurringPatterns → "Recurring Patterns" heading rendered', () => {
+    const data = {
+      ...baseData,
+      qualitative_coding: {
+        ...baseData.qualitative_coding,
+        recurringPatterns: [{
+          label: 'Test Pattern',
+          definition: 'A test',
+          displayFrequency: '2 of 10 (20%)',
+          quotes: '> "quote" — R001',
+        }],
+      },
+    };
+    const result = compile(data);
+    expect(result).toContain('### Recurring Patterns');
+    expect(result).toContain('**Test Pattern** — 2 of 10 (20%)');
+  });
+
+  it('empty individualObservations → "Individual Observations" heading NOT rendered', () => {
+    const result = compile({ ...baseData });
+    expect(result).not.toContain('### Individual Observations');
+  });
+
+  it('non-empty individualObservations → "Individual Observations" heading rendered', () => {
+    const data = {
+      ...baseData,
+      qualitative_coding: {
+        ...baseData.qualitative_coding,
+        individualObservations: [{
+          label: 'Single Observation',
+          definition: 'Seen once',
+          displayFrequency: '1 of 10 (10%)',
+          quotes: '> "solo quote" — R005',
+        }],
+      },
+    };
+    const result = compile(data);
+    expect(result).toContain('### Individual Observations');
+    expect(result).toContain('**Single Observation** — 1 of 10 (10%)');
+  });
+
+  it('"What Respondents Described" rendered when coding accepted', () => {
+    const data = {
+      ...baseData,
+      qualitative_coding: {
+        ...baseData.qualitative_coding,
+        recurringPatterns: [{
+          label: 'A', definition: 'B', displayFrequency: '2 of 3', quotes: '',
+        }],
+      },
+    };
+    const result = compile(data);
+    expect(result).toContain('## What Respondents Described');
+    expect(result).not.toContain('## Preliminary Qualitative Observations');
+  });
+
+  it('"Preliminary Qualitative Observations" rendered when NO coding', () => {
+    const data = {
+      ...baseData,
+      qualitative_coding: null,
+      ai_generated: { qualitative_observations: 'Some preliminary text', evidence_gaps: '' },
+    };
+    const result = compile(data);
+    expect(result).toContain('## Preliminary Qualitative Observations');
+    expect(result).toContain('Some preliminary text');
+    expect(result).not.toContain('## What Respondents Described');
   });
 });

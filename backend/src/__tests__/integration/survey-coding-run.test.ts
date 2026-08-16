@@ -647,6 +647,134 @@ describe('restricted entry exclusion', () => {
 // FK CASCADE
 // ═══════════════════════════════════════════════════════════════════════
 
+// ═══════════════════════════════════════════════════════════════════════
+// PROMOTION IDEMPOTENCY
+// ═══════════════════════════════════════════════════════════════════════
+
+describe('promotion idempotency', () => {
+  it('same run + same code + same type promoted twice → exactly one construct', async () => {
+    const runPublicId = 'run-idem-001';
+    // Create two constructs with same key — should be idempotent
+    await ConstructModel.create({
+      project_id: projectId,
+      construct_type: 'survey_qualitative_pattern',
+      label: 'Test Pattern',
+      payload: {
+        coding_run_public_id: runPublicId,
+        code_public_id: code1PublicId,
+        derivation_method: 'deterministic_from_accepted_coding',
+      },
+      derivation_type: 'deterministic',
+      status: 'accepted',
+      created_by: 'U_TEST',
+    });
+
+    // Count constructs matching the exact key
+    const all = await ConstructModel.findAll({
+      where: { project_id: projectId, construct_type: 'survey_qualitative_pattern' },
+    });
+    const matching = (all as any[]).filter(c =>
+      c.payload?.coding_run_public_id === runPublicId &&
+      c.payload?.code_public_id === code1PublicId,
+    );
+    expect(matching).toHaveLength(1);
+  });
+
+  it('same source + different codes → separate constructs', async () => {
+    const runPublicId = 'run-multi-code';
+    await ConstructModel.create({
+      project_id: projectId,
+      construct_type: 'survey_qualitative_pattern',
+      label: 'Pattern A',
+      payload: { coding_run_public_id: runPublicId, code_public_id: code1PublicId },
+      derivation_type: 'deterministic', status: 'accepted', created_by: 'U_TEST',
+    });
+    await ConstructModel.create({
+      project_id: projectId,
+      construct_type: 'survey_qualitative_pattern',
+      label: 'Pattern B',
+      payload: { coding_run_public_id: runPublicId, code_public_id: code2PublicId },
+      derivation_type: 'deterministic', status: 'accepted', created_by: 'U_TEST',
+    });
+
+    const all = await ConstructModel.findAll({
+      where: { project_id: projectId, construct_type: 'survey_qualitative_pattern' },
+    });
+    const forRun = (all as any[]).filter(c => c.payload?.coding_run_public_id === runPublicId);
+    expect(forRun).toHaveLength(2);
+    const codeIds = forRun.map(c => c.payload?.code_public_id).sort();
+    expect(codeIds).toEqual([code1PublicId, code2PublicId].sort());
+  });
+
+  it('same code + different coding run versions → separate constructs', async () => {
+    await ConstructModel.create({
+      project_id: projectId,
+      construct_type: 'survey_qualitative_pattern',
+      label: 'Pattern v1',
+      payload: { coding_run_public_id: 'run-v1', code_public_id: code1PublicId, coding_run_version: 1 },
+      derivation_type: 'deterministic', status: 'accepted', created_by: 'U_TEST',
+    });
+    await ConstructModel.create({
+      project_id: projectId,
+      construct_type: 'survey_qualitative_pattern',
+      label: 'Pattern v2',
+      payload: { coding_run_public_id: 'run-v2', code_public_id: code1PublicId, coding_run_version: 2 },
+      derivation_type: 'deterministic', status: 'accepted', created_by: 'U_TEST',
+    });
+
+    const all = await ConstructModel.findAll({
+      where: { project_id: projectId, construct_type: 'survey_qualitative_pattern' },
+    });
+    const forCode = (all as any[]).filter(c => c.payload?.code_public_id === code1PublicId);
+    expect(forCode).toHaveLength(2);
+    expect(forCode.map(c => c.payload?.coding_run_public_id).sort()).toEqual(['run-v1', 'run-v2']);
+  });
+
+  it('recurring in v1 becomes singleton in v2 → both constructs preserved', async () => {
+    // v1: code1 is a recurring pattern
+    await ConstructModel.create({
+      project_id: projectId,
+      construct_type: 'survey_qualitative_pattern',
+      label: 'Recurring in v1',
+      payload: { coding_run_public_id: 'run-v1', code_public_id: code1PublicId, numerator: 3 },
+      derivation_type: 'deterministic', status: 'accepted', created_by: 'U_TEST',
+    });
+
+    // v2: same code is now an individual observation
+    await ConstructModel.create({
+      project_id: projectId,
+      construct_type: 'survey_individual_observation',
+      label: 'Individual in v2',
+      payload: { coding_run_public_id: 'run-v2', code_public_id: code1PublicId, numerator: 1 },
+      derivation_type: 'deterministic', status: 'accepted', created_by: 'U_TEST',
+    });
+
+    // v1 recurring pattern construct remains
+    const patterns = await ConstructModel.findAll({
+      where: { project_id: projectId, construct_type: 'survey_qualitative_pattern' },
+    });
+    const v1Pattern = (patterns as any[]).find(c =>
+      c.payload?.coding_run_public_id === 'run-v1' && c.payload?.code_public_id === code1PublicId,
+    );
+    expect(v1Pattern).toBeDefined();
+    expect(v1Pattern.payload.numerator).toBe(3);
+
+    // v2 individual observation construct exists separately
+    const observations = await ConstructModel.findAll({
+      where: { project_id: projectId, construct_type: 'survey_individual_observation' },
+    });
+    const v2Obs = (observations as any[]).find(c =>
+      c.payload?.coding_run_public_id === 'run-v2' && c.payload?.code_public_id === code1PublicId,
+    );
+    expect(v2Obs).toBeDefined();
+    expect(v2Obs.payload.numerator).toBe(1);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// FK CASCADE
+// ═══════════════════════════════════════════════════════════════════════
+
 describe('FK cascade', () => {
   it('deleting a coding run cascades to assignments and entry reviews', async () => {
     const run = await CodingRunModel.create({

@@ -432,7 +432,7 @@ output_template: |
 
   *All counts below are computed deterministically from researcher-reviewed matches. The reporting unit is the unique respondent.*
 
-  {{#if qualitative_coding.recurringPatterns.length}}
+  {{#if qualitative_coding.recurringPatterns}}
   ### Recurring Patterns
 
   {{#each qualitative_coding.recurringPatterns}}
@@ -449,7 +449,7 @@ output_template: |
   {{/each}}
   {{/if}}
 
-  {{#if qualitative_coding.individualObservations.length}}
+  {{#if qualitative_coding.individualObservations}}
   ### Individual Observations
 
   {{#each qualitative_coding.individualObservations}}
