@@ -75,7 +75,7 @@ import {
   selectIllustrativeQuotes,
 } from '../../../services/survey-coding-run.service';
 import { computeQualitativeAggregation, type PatternStat } from '../../../services/survey-aggregation.service';
-import { buildEvidenceEnvelope, validateClaims, buildRetryGuidance, buildDeterministicEvidenceGaps } from '../../survey/claimGuard';
+import { buildEvidenceEnvelope, validateClaims, buildRetryGuidance, buildDeterministicEvidenceGaps, buildDeterministicInterpretation } from '../../survey/claimGuard';
 import type { PostGenerationValidation } from '../../langchain';
 
 // Models
@@ -1093,13 +1093,12 @@ export async function runSurveyQualitativeSynthesis(
       const envelope = buildEvidenceEnvelope(data);
       const VALIDATED_TASKS = new Set(['executive_summary', 'integrated_interpretation', 'evidence_gaps']);
       const deterministicGaps = buildDeterministicEvidenceGaps(data);
+      const deterministicInterpretation = buildDeterministicInterpretation(data);
       const FALLBACK_TEXT: Record<string, string> = {
         executive_summary:
           'The executive summary is not available for this run. ' +
           'The structured evidence and accepted qualitative findings in this report provide the available results.',
-        integrated_interpretation:
-          'The integrated interpretation is not available for this run. ' +
-          'Review the structured evidence and accepted qualitative groupings in this report to assess convergence and divergence.',
+        integrated_interpretation: deterministicInterpretation,
         evidence_gaps: deterministicGaps,
       };
 

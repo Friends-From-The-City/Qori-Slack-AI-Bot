@@ -634,3 +634,129 @@ export function buildDeterministicEvidenceGaps(
 
   return gaps.join('\n\n---\n\n');
 }
+
+// ─────────────────────────────────────────────────────────────────────
+// Deterministic interpretation fallback
+// ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Build a deterministic "What This Means" interpretation from validated state.
+ * Used when AI-generated interpretation fails validation twice.
+ *
+ * Assembles a publication-quality narrative from:
+ * - computed_facts (respondent count, medians, field stats)
+ * - accepted qualitative grouping labels and counts
+ * - cross-tab capability flags
+ * - sample size / methodological limitations
+ *
+ * No model call. No raw text. No unsupported associations.
+ */
+export function buildDeterministicInterpretation(
+  data: Record<string, unknown>,
+): string {
+  const paragraphs: string[] = [];
+
+  const cf = data.computed_facts as {
+    totalRespondents?: number;
+    fieldStats?: Array<{
+      displayName?: string;
+      role?: string;
+      median?: string | number | null;
+      nPresent?: number;
+    }>;
+    crossTabs?: Array<{
+      rowDisplayName?: string;
+      colDisplayName?: string;
+    }>;
+  } | null;
+
+  const qc = data.qualitative_coding as {
+    recurringPatterns?: Array<{ label: string; displayFrequency: string }>;
+    individualObservations?: Array<{ label: string; displayFrequency: string }>;
+  } | null;
+
+  const sec = data.structured_evidence_capabilities as {
+    has_qualitative_structured_cross_tabs?: boolean;
+    available_cross_tabs?: string[];
+    sample_size?: number;
+  } | null;
+
+  const respondentCount = cf?.totalRespondents ?? sec?.sample_size ?? 0;
+
+  // Paragraph 1: Structured evidence summary
+  const mediansDescribed: string[] = [];
+  for (const fs of cf?.fieldStats ?? []) {
+    if (fs.median != null && fs.displayName) {
+      mediansDescribed.push(`${fs.displayName} of ${fs.median}`);
+    }
+  }
+
+  if (mediansDescribed.length > 0) {
+    paragraphs.push(
+      `The structured results show median ${mediansDescribed.join(' and ')} ` +
+      `across ${respondentCount} respondents.` +
+      (cf?.crossTabs && cf.crossTabs.length > 0
+        ? ` Cross-tabulations are available for ${cf.crossTabs.map(ct => `${ct.rowDisplayName} × ${ct.colDisplayName}`).join(' and ')}.`
+        : ''),
+    );
+  } else if (respondentCount > 0) {
+    paragraphs.push(
+      `The survey captured ${respondentCount} respondents with structured distributions available for each measured field.`,
+    );
+  }
+
+  // Paragraph 2: Accepted qualitative evidence
+  const allGroupings: string[] = [];
+  for (const p of qc?.recurringPatterns ?? []) {
+    allGroupings.push(`${p.label.toLowerCase()} (${p.displayFrequency})`);
+  }
+  for (const p of qc?.individualObservations ?? []) {
+    allGroupings.push(`${p.label.toLowerCase()} (${p.displayFrequency})`);
+  }
+
+  if (allGroupings.length > 0) {
+    paragraphs.push(
+      `Separately, accepted qualitative evidence includes ${allGroupings.length} ` +
+      `grouping${allGroupings.length === 1 ? '' : 's'}: ` +
+      formatList(allGroupings) + '.',
+    );
+  }
+
+  // Paragraph 3: Cross-evidence boundary
+  if (allGroupings.length > 0 && mediansDescribed.length > 0) {
+    const unavailableCrossTabs = sec?.has_qualitative_structured_cross_tabs === false;
+    if (unavailableCrossTabs) {
+      paragraphs.push(
+        'These bodies of evidence describe different aspects of the experience ' +
+        'and should not be treated as respondent-level associations. No deterministic ' +
+        'cross-tab links accepted qualitative groupings to completion status, ' +
+        'satisfaction, or difficulty ratings.',
+      );
+    }
+  }
+
+  // Paragraph 4: Methodological limitation
+  if (respondentCount > 0) {
+    paragraphs.push(
+      `The sample contains ${respondentCount} respondent${respondentCount === 1 ? '' : 's'}, ` +
+      'so findings should remain descriptive and hypothesis-generating rather than ' +
+      'representative of the broader population.',
+    );
+  }
+
+  if (paragraphs.length === 0) {
+    return 'Structured and qualitative evidence are available in this report for independent review.';
+  }
+
+  return paragraphs.join('\n\n');
+}
+
+/**
+ * Format a list with Oxford comma: "a, b, and c"
+ */
+function formatList(items: string[]): string {
+  if (items.length === 0) return '';
+  if (items.length === 1) return items[0];
+  if (items.length === 2) return `${items[0]} and ${items[1]}`;
+  return items.slice(0, -1).join(', ') + ', and ' + items[items.length - 1];
+}
