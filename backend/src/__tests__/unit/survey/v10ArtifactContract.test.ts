@@ -336,6 +336,8 @@ describe('Handlebars empty array conditionals', () => {
       privacyReview: { clear: 8, redacted: 1, restricted: 1 },
     },
     provenance: { source_filename: 'test.csv', reviewed_by: 'U_TEST', reviewed_at: '2026-08-16', ordinal_orders: '', model_used: 'test' },
+    analysis_date: 'August 16, 2026',
+    run_by: 'Jane Researcher',
     ai_generated: { qualitative_observations: '', evidence_gaps: '', executive_summary: 'Test summary.', integrated_interpretation: 'Test interpretation.' },
   };
 
@@ -410,6 +412,17 @@ describe('Handlebars empty array conditionals', () => {
     expect(result).toContain('## Preliminary Qualitative Observations');
     expect(result).toContain('Some preliminary text');
     expect(result).not.toContain('## What Respondents Described');
+  });
+
+  it('renders Analysis date and Run by before Executive Summary', () => {
+    const result = compile({ ...baseData });
+    const dateIdx = result.indexOf('**Analysis date:** August 16, 2026');
+    const runIdx = result.indexOf('**Run by:** Jane Researcher');
+    const execIdx = result.indexOf('## Executive Summary');
+    expect(dateIdx).toBeGreaterThan(-1);
+    expect(runIdx).toBeGreaterThan(-1);
+    expect(dateIdx).toBeLessThan(execIdx);
+    expect(runIdx).toBeLessThan(execIdx);
   });
 
   it('empty source_intent omits "This survey contributes:" line', () => {
@@ -659,14 +672,13 @@ describe('AI task prompt Nunjucks rendering (production path)', () => {
     expect(rendered).toContain('3 of 8 (38%)');
   });
 
-  it('integrated_interpretation prompt includes qualitative data after render', () => {
+  it('integrated_interpretation prompt includes accepted grouping data after render', () => {
     const task = tasks.find((t: { task_id: string }) => t.task_id === 'integrated_interpretation');
     expect(task).toBeDefined();
     const rendered = nunjucks.renderString(convertHandlebarsToNunjucks(task!.prompt), testContext);
     expect(rendered).toContain('Pattern A');
     expect(rendered).toContain('Test def A');
     expect(rendered).toContain('Obs B');
-    expect(rendered).toContain('Test response');
   });
 
   it('AI task prompts do not contain unconverted Handlebars block syntax', () => {
@@ -676,5 +688,113 @@ describe('AI task prompt Nunjucks rendering (production path)', () => {
       const unconverted = nunjucksTemplate.match(/\{\{[#\/](if|each|unless)\b/g);
       expect(unconverted).toBeNull();
     }
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// INTERPRETATION EVIDENCE BOUNDARY CONTRACTS
+// ═══════════════════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════════════════
+// TOP-OF-DOCUMENT METADATA
+// ═══════════════════════════════════════════════════════════════════════
+
+describe('top-of-document metadata', () => {
+  it('Analysis date appears in template between title and Executive Summary', () => {
+    const titleIdx = outputSection.indexOf('# Survey Synthesis:');
+    const execIdx = outputSection.indexOf('## Executive Summary');
+    const dateIdx = outputSection.indexOf('**Analysis date:**');
+    expect(dateIdx).toBeGreaterThan(titleIdx);
+    expect(dateIdx).toBeLessThan(execIdx);
+  });
+
+  it('Run by appears in template between title and Executive Summary', () => {
+    const titleIdx = outputSection.indexOf('# Survey Synthesis:');
+    const execIdx = outputSection.indexOf('## Executive Summary');
+    const runIdx = outputSection.indexOf('**Run by:**');
+    expect(runIdx).toBeGreaterThan(titleIdx);
+    expect(runIdx).toBeLessThan(execIdx);
+  });
+
+  it('uses template variables, not hardcoded values', () => {
+    expect(outputSection).toContain('{{analysis_date}}');
+    expect(outputSection).toContain('{{run_by}}');
+  });
+
+  it('raw Slack user ID is not rendered in top metadata', () => {
+    // The template should reference {{run_by}} which is resolved to display name,
+    // not {{userId}} or a raw U-prefixed Slack ID
+    const metaBlock = outputSection.split('## Executive Summary')[0];
+    expect(metaBlock).not.toContain('{{userId}}');
+    expect(metaBlock).not.toContain('ctx.userId');
+  });
+
+  it('no global Document Information block exists', () => {
+    expect(outputSection).not.toContain('## Document Information');
+  });
+
+  it('handler resolves display name from Slack profile', () => {
+    const handlerFile = readFileSync(
+      join(__dirname, '../../../helpers/slack/commands/surveySubmissionHandler.ts'),
+      'utf-8',
+    );
+    expect(handlerFile).toContain('users.info');
+    expect(handlerFile).toContain('display_name');
+    expect(handlerFile).toContain('analysis_date');
+    expect(handlerFile).toContain('run_by');
+  });
+});
+
+describe('interpretation evidence boundary', () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const jsYaml = require('js-yaml');
+  const config = jsYaml.load(yaml) as { ai_generation_tasks?: Array<{ task_id: string; prompt: string }> };
+  const tasks = config.ai_generation_tasks ?? [];
+
+  const execSummaryPrompt = tasks.find((t: { task_id: string }) => t.task_id === 'executive_summary')?.prompt ?? '';
+  const interpretationPrompt = tasks.find((t: { task_id: string }) => t.task_id === 'integrated_interpretation')?.prompt ?? '';
+
+  it('executive_summary prohibits complement-by-subtraction', () => {
+    expect(execSummaryPrompt).toContain('NO COMPLEMENT-BY-SUBTRACTION');
+    expect(execSummaryPrompt).toContain('groupings are NOT mutually exclusive');
+  });
+
+  it('integrated_interpretation prohibits complement-by-subtraction', () => {
+    expect(interpretationPrompt).toContain('NO COMPLEMENT-BY-SUBTRACTION');
+  });
+
+  it('integrated_interpretation does NOT include raw open_text_content when accepted coding exists', () => {
+    // The interpretation prompt must not inject raw open-text entries.
+    // Accepted groupings are the qualitative authority boundary.
+    expect(interpretationPrompt).not.toContain('open_text_content');
+    expect(interpretationPrompt).not.toContain('combined_file_content');
+    expect(interpretationPrompt).not.toContain('BEGIN DATA');
+  });
+
+  it('integrated_interpretation declares accepted groupings as ONLY qualitative evidence', () => {
+    expect(interpretationPrompt).toContain('ONLY qualitative evidence');
+  });
+
+  it('integrated_interpretation prohibits raw respondent details beyond accepted evidence', () => {
+    expect(interpretationPrompt).toContain('do not reference respondent details');
+    expect(interpretationPrompt).toContain('Do not introduce information from');
+    expect(interpretationPrompt).toContain('raw open-text entries');
+  });
+
+  it('integrated_interpretation prohibits governance-only content', () => {
+    expect(interpretationPrompt).toContain('governance-only groupings');
+  });
+
+  it('executive_summary declares accepted groupings as ONLY qualitative evidence', () => {
+    expect(execSummaryPrompt).toContain('ONLY qualitative evidence');
+  });
+
+  it('integrated_interpretation prohibits cross-tab/qualitative grouping association without deterministic data', () => {
+    expect(interpretationPrompt).toContain('No cross-tab exists between completion status and the qualitative');
+    expect(interpretationPrompt).toContain('CROSS-TAB LIMITATION');
+  });
+
+  it('integrated_interpretation prohibits respondent IDs not in supplied evidence', () => {
+    expect(interpretationPrompt).toContain('Respondent IDs not present in the supplied evidence');
   });
 });
