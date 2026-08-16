@@ -261,6 +261,18 @@ export async function handleMatchReviewSubmission(
 
   const vals = view.state.values as unknown as Record<string, Record<string, Record<string, unknown>>>;
 
+  // ── DIAGNOSTIC: trace the exact submission shape ──
+  const valBlockIds = Object.keys(vals);
+  console.log('[match-review-diag] meta.visibleReviewIds:', JSON.stringify(meta.visibleReviewIds ?? null));
+  console.log('[match-review-diag] meta.codingRunId:', meta.codingRunId);
+  console.log('[match-review-diag] vals block_ids:', JSON.stringify(valBlockIds));
+  console.log('[match-review-diag] vals.bulk_approve_matches:', JSON.stringify(vals.bulk_approve_matches ?? null));
+  // Log first entry block shape (safe — just block IDs and action structure, no PII)
+  for (const blockId of valBlockIds.slice(0, 3)) {
+    console.log(`[match-review-diag] vals[${blockId}]:`, JSON.stringify(vals[blockId]));
+  }
+  // ── END DIAGNOSTIC ──
+
   // Use visibleReviewIds from metadata to identify which entries this page showed.
   // This is the authoritative set — not derived from page offsets.
   const visibleReviewIds = new Set(meta.visibleReviewIds ?? []);
@@ -268,10 +280,16 @@ export async function handleMatchReviewSubmission(
     r => visibleReviewIds.has((r as unknown as { id: number }).id),
   );
 
+  console.log('[match-review-diag] visibleReviewIds set size:', visibleReviewIds.size);
+  console.log('[match-review-diag] pageReviews matched:', pageReviews.length);
+  console.log('[match-review-diag] total entryReviews in run:', details.entryReviews.length);
+  console.log('[match-review-diag] entryReview IDs in run:', details.entryReviews.map(r => (r as unknown as { id: number }).id));
+
   try {
     // Check bulk approval
     const bulkSel = (vals.bulk_approve_matches?.bulk_approve_check?.selected_options as Array<{ value: string }> | undefined);
     const doBulk = bulkSel?.some(o => o.value === 'bulk_approve') ?? false;
+    console.log('[match-review-diag] doBulk:', doBulk, 'bulkSel:', JSON.stringify(bulkSel ?? null));
 
     // Build decisions for each entry on this page
     const decisions: EntryReviewDecision[] = [];
@@ -297,6 +315,8 @@ export async function handleMatchReviewSubmission(
         codeBlock?.match_codes_select?.selected_options as Array<{ value: string }> | undefined
       )?.map(o => o.value) ?? [];
       const hasExplicitCodeSelection = codeBlock !== undefined && selectedCodeIds.length > 0;
+
+      console.log(`[match-review-diag] entry reviewId=${reviewId} entryId=${entryId} proposedCount=${proposedAssignments.length} statusSel=${statusSel} codeBlockExists=${codeBlock !== undefined} selectedCodeIds=${JSON.stringify(selectedCodeIds)} hasExplicit=${hasExplicitCodeSelection} doBulk=${doBulk} hasProposed=${hasProposedMatches}`);
 
       // Determine effective status — individual override beats bulk
       let effectiveStatus: EntryReviewStatus;
@@ -386,13 +406,20 @@ export async function handleMatchReviewSubmission(
     }
 
     // Process all decisions
+    console.log(`[match-review-diag] decisions.length=${decisions.length} decisions:`, decisions.map(d => ({ id: d.entryReviewId, status: d.status, acceptCount: d.acceptAssignmentIds.length, rejectCount: d.rejectAssignmentIds.length })));
+
     if (decisions.length > 0) {
       await processPageReviewDecisions(meta.codingRunId, decisions, userId);
+      console.log('[match-review-diag] processPageReviewDecisions completed');
+    } else {
+      console.log('[match-review-diag] WARNING: zero decisions produced — no DB mutations');
     }
 
-    // Re-check pending count
+    // Re-check pending count — canonical from DB
     const updatedDetails = await getCodingRunWithDetails(meta.codingRunId);
     const remainingPending = updatedDetails?.entryReviews.filter(r => r.status === 'pending') ?? [];
+    const reviewedCount = updatedDetails?.entryReviews.filter(r => r.status === 'reviewed').length ?? 0;
+    console.log(`[match-review-diag] POST-COMMIT: pending=${remainingPending.length} reviewed=${reviewedCount} total=${updatedDetails?.entryReviews.length}`);
 
     if (remainingPending.length > 0) {
       // More pages to review — post continue button
