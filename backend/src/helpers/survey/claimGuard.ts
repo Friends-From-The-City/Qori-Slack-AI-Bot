@@ -35,10 +35,12 @@ export interface EvidenceEnvelope {
   availableCrossTabs: string[];
   /** Whether a median is the only central tendency available (no skew computation) */
   hasOnlyMedian: boolean;
+  /** Known nonzero categorical values: lowercased label → count. Used for contradiction detection. */
+  knownCategories: Map<string, number>;
 }
 
 export interface ClaimViolation {
-  class: 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G';
+  class: 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H';
   description: string;
   /** The substring that triggered the violation (for diagnostics) */
   evidence: string;
@@ -417,6 +419,34 @@ export function validateClaims(
     }
   }
 
+  // Class H: Structured fact contradiction — claims absence/zero for a
+  // category that has a known nonzero count in deterministic facts.
+  if (envelope.knownCategories.size > 0) {
+    const textLower = generatedText.toLowerCase();
+    for (const [category, count] of envelope.knownCategories) {
+      if (count === 0) continue; // only check nonzero categories
+      // Check for absence/unknown claims about this category
+      const absencePatterns = [
+        new RegExp(`(?:unknown|unclear|uncertain)\\s+(?:\\w+\\s+){0,5}${escapeRegex(category)}`, 'i'),
+        new RegExp(`(?:whether|if)\\s+(?:any\\s+)?(?:\\w+\\s+){0,3}${escapeRegex(category)}\\s+(?:\\w+\\s+){0,3}(?:represented|included|present|exist|captured)`, 'i'),
+        new RegExp(`(?:no|zero|without|absent|lacking)\\s+(?:\\w+\\s+){0,3}${escapeRegex(category)}`, 'i'),
+        new RegExp(`${escapeRegex(category)}\\s+(?:\\w+\\s+){0,3}(?:not\\s+(?:represented|included|present|captured|recorded))`, 'i'),
+        new RegExp(`(?:does\\s+not|do\\s+not|doesn'?t|don'?t)\\s+(?:\\w+\\s+){0,3}(?:include|contain|capture|represent)\\s+(?:\\w+\\s+){0,3}${escapeRegex(category)}`, 'i'),
+      ];
+      for (const pattern of absencePatterns) {
+        const match = textLower.match(pattern);
+        if (match) {
+          violations.push({
+            class: 'H',
+            description: `Fact contradiction: "${category}" has ${count} respondents in deterministic facts but text claims absence/unknown`,
+            evidence: match[0],
+          });
+          break; // one violation per category is enough
+        }
+      }
+    }
+  }
+
   return {
     valid: violations.length === 0,
     violations,
@@ -469,6 +499,7 @@ export function buildEvidenceEnvelope(data: Record<string, unknown>): EvidenceEn
   const cf = data.computed_facts as {
     totalRespondents?: number;
     fieldStats?: Array<{
+      displayName?: string;
       nPresent?: number;
       nMissing?: number;
       median?: string | number;
@@ -526,6 +557,30 @@ export function buildEvidenceEnvelope(data: Record<string, unknown>): EvidenceEn
   // (the survey pipeline doesn't compute skew, so this is always true when medians exist)
   const hasOnlyMedian = (cf?.fieldStats ?? []).some(fs => fs.median != null);
 
+  // Extract known nonzero categorical values from distribution tables.
+  // Used by Class H to detect contradiction claims (e.g., claiming "Abandoned"
+  // respondents are absent when the distribution shows Abandoned = 2).
+  const knownCategories = new Map<string, number>();
+  for (const fs of cf?.fieldStats ?? []) {
+    if (fs.distribution) {
+      // Parse markdown table rows: "| Value | Count |"
+      const rows = fs.distribution.match(/\|\s*([^|]+?)\s*\|\s*(\d+)\s*\|/g);
+      if (rows) {
+        for (const row of rows) {
+          const match = row.match(/\|\s*([^|]+?)\s*\|\s*(\d+)\s*\|/);
+          if (match) {
+            const label = match[1].trim();
+            const count = parseInt(match[2], 10);
+            // Skip header rows and zero counts
+            if (label.toLowerCase() !== 'value' && label !== '---' && count > 0) {
+              knownCategories.set(label.toLowerCase(), count);
+            }
+          }
+        }
+      }
+    }
+  }
+
   return {
     acceptedRespondentIds,
     acceptedNumericValues,
@@ -533,6 +588,7 @@ export function buildEvidenceEnvelope(data: Record<string, unknown>): EvidenceEn
     hasQualitativeStructuredCrossTab: false,
     availableCrossTabs,
     hasOnlyMedian,
+    knownCategories,
   };
 }
 
