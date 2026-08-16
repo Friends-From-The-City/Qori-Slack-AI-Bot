@@ -69,6 +69,12 @@ import { fetchFileFromRepo, getConfigRepo, YAML_TEMPLATE_PATH } from '../../gith
 import { processYamlTemplate } from '../../yamlProcessor';
 import { getProjectById } from '../../../services/project.service';
 import { format } from 'date-fns';
+import {
+  findAcceptedCodingRun,
+  getCodingRunWithDetails,
+  selectIllustrativeQuotes,
+} from '../../../services/survey-coding-run.service';
+import { computeQualitativeAggregation, type PatternStat } from '../../../services/survey-aggregation.service';
 
 // Models
 const EvidenceSourceModel = sequelize.models.EvidenceSource as typeof EvidenceSource;
@@ -824,6 +830,94 @@ export async function runSurveyQualitativeSynthesis(
       model_used: process.env.ANTHROPIC_MODEL_NAME || 'claude-sonnet-4-6',
     };
 
+    // Load accepted qualitative coding data (Slice 2B)
+    const acceptedRun = await findAcceptedCodingRun(evidenceSourceId);
+    let qualitativeCoding: Record<string, unknown> | null = null;
+
+    if (acceptedRun) {
+      const runId = (acceptedRun as unknown as { id: number }).id;
+      const details = await getCodingRunWithDetails(runId);
+
+      if (details) {
+        // Build assignment rows for aggregation
+        const assignmentRows: Array<{ respondent_key: string; code_public_id: string; code_label: string; code_definition: string }> = [];
+        for (const a of details.assignments.filter(a => a.status === 'accepted')) {
+          assignmentRows.push({
+            respondent_key: a.entry_respondent_key,
+            code_public_id: a.code_public_id,
+            code_label: a.code_label,
+            code_definition: '', // definition loaded separately
+          });
+        }
+
+        // Get code definitions from accepted codes
+        const codeDefMap = new Map(details.acceptedCodes.map(c => [c.public_id, c.definition]));
+        for (const row of assignmentRows) {
+          row.code_definition = codeDefMap.get(row.code_public_id) ?? '';
+        }
+
+        const eligibleRespondentKeys = new Set(allEntries.filter(e => getEligibleContent(e)).map(e => (e as SurveyQualitativeEntry).respondent_key));
+        const aggregation = computeQualitativeAggregation(assignmentRows, eligibleRespondentKeys);
+
+        // Select illustrative quotes for each pattern
+        const buildQuoteBlock = async (pattern: PatternStat) => {
+          const quotes = await selectIllustrativeQuotes(runId, pattern.codePublicId);
+          return quotes.map(q => `> "${q.governedText}" — ${q.respondentDisplayId} (${q.fieldDisplayName})`).join('\n>\n');
+        };
+
+        const recurringPatterns = [];
+        for (const p of aggregation.recurringPatterns) {
+          recurringPatterns.push({
+            label: p.codeLabel,
+            definition: p.codeDefinition,
+            displayFrequency: p.displayFrequency,
+            quotes: await buildQuoteBlock(p),
+          });
+        }
+
+        const individualObservations = [];
+        for (const p of aggregation.individualObservations) {
+          individualObservations.push({
+            label: p.codeLabel,
+            definition: p.codeDefinition,
+            displayFrequency: p.displayFrequency,
+            quotes: await buildQuoteBlock(p),
+          });
+        }
+
+        // Review metadata for Method & Provenance
+        const codebook = await sequelize.models.SurveyCodebook.findByPk(acceptedRun.codebook_id);
+        const codebookMeta = codebook ? {
+          version: (codebook as unknown as { version: number }).version,
+          reviewed_by: (codebook as unknown as { reviewed_by: string | null }).reviewed_by ?? 'unknown',
+          reviewed_at: (codebook as unknown as { reviewed_at: Date | null }).reviewed_at
+            ? new Date((codebook as unknown as { reviewed_at: Date }).reviewed_at).toISOString()
+            : 'unknown',
+        } : null;
+
+        qualitativeCoding = {
+          hasAcceptedCoding: true,
+          recurringPatterns,
+          individualObservations,
+          eligibleRespondentCount: aggregation.eligibleRespondentCount,
+          codingRun: {
+            version: acceptedRun.version,
+            reviewed_by: acceptedRun.reviewed_by ?? 'unknown',
+            reviewed_at: acceptedRun.reviewed_at
+              ? new Date(acceptedRun.reviewed_at).toISOString()
+              : 'unknown',
+          },
+          codebook: codebookMeta,
+          // Privacy review summary
+          privacyReview: {
+            clear: allEntries.filter(e => (e as SurveyQualitativeEntry).pii_status === 'clear').length,
+            redacted: allEntries.filter(e => (e as SurveyQualitativeEntry).pii_status === 'redacted').length,
+            restricted: allEntries.filter(e => (e as SurveyQualitativeEntry).pii_status === 'restricted').length,
+          },
+        };
+      }
+    }
+
     // Template rendering
     const project = await getProjectById(ctx.projectId);
     const projectProblemStatement = project?.problem_statement || null;
@@ -849,6 +943,7 @@ export async function runSurveyQualitativeSynthesis(
       open_text_content: openTextContent,
       combined_file_content: openTextContent,
       provenance,
+      qualitative_coding: qualitativeCoding,
     };
 
     const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, 'survey_synthesis.yaml');

@@ -4,19 +4,20 @@
 id: survey_synthesis
 name: survey_response_synthesizer
 label: "Survey Synthesis"
-version: "v9.2"
+version: "v10.0"
 
 description: |
   Analyze survey data with deterministic structured evidence and bounded
-  qualitative interpretation.
-  v9.1: Ordinal rendering in confirmed order. De-duplicated output.
-  No soft qualitative prevalence language. Declared respondent IDs
-  preserved. Emit contract aligned with evidence authority model.
-  Per ADR 0005/0016/0028.
+  qualitative interpretation. When accepted qualitative coding exists,
+  renders deterministic "What Respondents Described" section with
+  researcher-reviewed groupings, governed quotes, and code-computed counts.
+  v10.0: Slice 2B — accepted coding integration, deterministic qualitative
+  section, redesigned Executive Summary, updated Method & Provenance.
+  Per ADR 0005/0016/0028/0032.
 
 author: Qori R&D
 created: 2025-08-11
-last_updated: 2026-08-15
+last_updated: 2026-08-16
 
 # ═══════════════════════════════════════════════════════════
 # CONFIGURATION
@@ -25,7 +26,7 @@ input_type: slack_modal_form
 input_processing: form_based
 discovery_scope: true
 
-# Survey v9.2 renders generation/model/provenance inside its own
+# Survey v10.0 renders generation/model/provenance inside its own
 # Method & Provenance details block. The shared footer is suppressed
 # to avoid duplication and document-hierarchy disruption.
 document:
@@ -70,15 +71,19 @@ input_variables:
     type: textarea
     required: false
     description: "Open-text survey responses extracted from CSV, formatted with respondent labels for qualitative analysis."
+  - name: qualitative_coding
+    type: object
+    required: false
+    description: "Accepted qualitative coding data from Slice 2B: recurring patterns, individual observations, review metadata, privacy counts. When present, replaces Preliminary Qualitative Observations with deterministic What Respondents Described."
 
 # ═══════════════════════════════════════════════════════════
 # CASCADE CONTRACT — aligned with v9 authority model
 # ═══════════════════════════════════════════════════════════
 #
-# AUDIT (v9.2):
-# survey_themes:       NOT EMITTED — returns in Slice 2 after formal coding
+# AUDIT (v10.0):
+# survey_themes:       NOT EMITTED — "themes" terminology retired (Slice 2B decision)
 # survey_findings:     KEPT — model-derived interpretation (no new numbers)
-# discovered_barriers: NOT EMITTED — returns in Slice 2 after accepted coding
+# discovered_barriers: NOT EMITTED — not auto-emitted from qualitative patterns
 # discovered_metrics:  NOT EMITTED — deterministic metrics in evidence layer
 # sample_demographics: NOT EMITTED — no confirmed demographic fields
 # knowledge_gaps:      KEPT — identifying evidence gaps is approved interpretive work
@@ -121,9 +126,14 @@ emits:
 ai_generation_tasks:
 
   # Task 1: Qualitative observations on open-text responses.
+  # SKIPPED when accepted qualitative coding exists (Slice 2B).
+  # When coding is accepted, the "What Respondents Described" section
+  # renders deterministic counts and governed quotes from the template.
   # NO counting, NO frequencies, NO themes, NO sentiment distributions.
   # NO soft prevalence language.
   - task_id: "qualitative_observations"
+    skip_when: "qualitative_coding and qualitative_coding.hasAcceptedCoding"
+    skip_output: ""
     prompt: |
       You are interpreting open-text survey responses. Your output is
       PRELIMINARY qualitative observation — not formal thematic analysis,
@@ -276,7 +286,11 @@ ai_generation_tasks:
       - Missingness counts
 
       The following are NOT available:
+      {% if qualitative_coding and qualitative_coding.hasAcceptedCoding %}
+      - (Accepted qualitative coding IS available — do not list as missing)
+      {% else %}
       - Accepted qualitative-code prevalence (coding not performed)
+      {% endif %}
       - Population prevalence or representativeness
       - Causal attribution (survey is descriptive only)
       - Inferential significance (not computed)
@@ -344,10 +358,13 @@ output_template: |
 
   {{#if computed_facts}}
   > [!IMPORTANT]
-  > **{{computed_facts.totalRespondents}} unique respondents** analyzed.{{#each computed_facts.fieldStats}}{{#if this.median}} {{this.displayName}} median: **{{this.median}}**.{{/if}}{{/each}}{{#each computed_facts.fieldStats}}{{#if this.distribution}}{{/if}}{{/each}}
-
-  > [!WARNING]
-  > This survey is descriptive. Formal qualitative coding has not been performed. Empty cells are reported as missing without further distinction.
+  > **{{computed_facts.totalRespondents}} unique respondents** analyzed.{{#each computed_facts.fieldStats}}{{#if this.median}} {{this.displayName}} median: **{{this.median}}**.{{/if}}{{/each}}
+  {{#if qualitative_coding}}
+  {{#if qualitative_coding.hasAcceptedCoding}}
+  >
+  > **Qualitative analysis complete.** {{qualitative_coding.eligibleRespondentCount}} respondents with eligible open-text entries.{{#each qualitative_coding.recurringPatterns}} **{{this.label}}** — {{this.displayFrequency}}.{{/each}}
+  {{/if}}
+  {{/if}}
   {{else}}
   > [!WARNING]
   > No computed facts available. This synthesis relies on qualitative interpretation only.
@@ -409,24 +426,76 @@ output_template: |
 
   ---
 
+  {{#if qualitative_coding}}
+  {{#if qualitative_coding.hasAcceptedCoding}}
+  ## What Respondents Described
+
+  *All counts below are computed deterministically from researcher-reviewed matches. The reporting unit is the unique respondent.*
+
+  {{#if qualitative_coding.recurringPatterns.length}}
+  ### Recurring Patterns
+
+  {{#each qualitative_coding.recurringPatterns}}
+  **{{this.label}}** — {{this.displayFrequency}}
+
+  {{this.definition}}
+
+  {{#if this.quotes}}
+  {{this.quotes}}
+  {{/if}}
+
+  ---
+
+  {{/each}}
+  {{/if}}
+
+  {{#if qualitative_coding.individualObservations.length}}
+  ### Individual Observations
+
+  {{#each qualitative_coding.individualObservations}}
+  **{{this.label}}** — {{this.displayFrequency}}
+
+  {{this.definition}}
+
+  {{#if this.quotes}}
+  {{this.quotes}}
+  {{/if}}
+
+  ---
+
+  {{/each}}
+  {{/if}}
+  {{/if}}
+  {{else}}
   ## Preliminary Qualitative Observations
 
   {{ai_generated.qualitative_observations}}
 
   ---
 
+  {{/if}}
+
   ## Integrated Interpretation
 
   {{#if computed_facts}}
-  The structured evidence above establishes the distributional baseline from {{computed_facts.totalRespondents}} unique respondents. The qualitative observations offer preliminary interpretation of open-text entries. Readers should:
+  The structured evidence above establishes the distributional baseline from {{computed_facts.totalRespondents}} unique respondents.
+  {{#if qualitative_coding}}
+  {{#if qualitative_coding.hasAcceptedCoding}}
+  The qualitative findings represent researcher-reviewed groupings with deterministic counts. Readers should:
+  {{else}}
+  The qualitative observations offer preliminary interpretation of open-text entries. Readers should:
+  {{/if}}
+  {{else}}
+  The qualitative observations offer preliminary interpretation of open-text entries. Readers should:
+  {{/if}}
 
-  - **Look for convergence** — where structured distributions and qualitative observations point the same direction
+  - **Look for convergence** — where structured distributions and qualitative findings point the same direction
   - **Look for complementarity** — where open-text entries explain patterns visible in the distributions
-  - **Look for dissonance** — where qualitative observations seem to contradict distributional patterns (these warrant investigation, not resolution)
+  - **Look for dissonance** — where qualitative findings seem to contradict distributional patterns (these warrant investigation, not resolution)
 
   No new arithmetic is introduced in this section. No causal claims are made.
   {{else}}
-  Without computed facts, integration is limited to the qualitative observations above.
+  Without computed facts, integration is limited to the qualitative analysis above.
   {{/if}}
 
   ---
@@ -463,7 +532,6 @@ output_template: |
   > **Source**
   >
   > Original file: {{#if provenance}}{{provenance.source_filename}}{{else}}{{document_names}}{{/if}}
-  > Evidence Source ID: {{#if provenance}}`{{provenance.source_public_id}}`{{else}}Not available{{/if}}
   > Respondents: {{#if computed_facts}}{{computed_facts.totalRespondents}}{{else}}Unknown{{/if}}
 
   > **Schema**
@@ -478,6 +546,42 @@ output_template: |
   > No schema — computed facts not available.
   {{/if}}
 
+  {{#if qualitative_coding}}
+  {{#if qualitative_coding.hasAcceptedCoding}}
+  > **Privacy Review**
+  >
+  > Approved as written: {{qualitative_coding.privacyReview.clear}}
+  > Approved with edits: {{qualitative_coding.privacyReview.redacted}}
+  > Excluded: {{qualitative_coding.privacyReview.restricted}}
+
+  > **Qualitative Method**
+  >
+  > Structured qualitative content analysis.
+  > Mixed inductive/deductive grouping development.
+
+  > **Grouping Review**
+  >
+  {{#if qualitative_coding.codebook}}
+  > Codebook version: {{qualitative_coding.codebook.version}}
+  > Reviewed by: {{qualitative_coding.codebook.reviewed_by}}
+  > Reviewed at: {{qualitative_coding.codebook.reviewed_at}}
+  {{/if}}
+
+  > **Match Review**
+  >
+  > Coding run version: {{qualitative_coding.codingRun.version}}
+  > Reviewed by: {{qualitative_coding.codingRun.reviewed_by}}
+  > Reviewed at: {{qualitative_coding.codingRun.reviewed_at}}
+
+  > **Aggregation**
+  >
+  > Reporting unit: unique respondent
+  > Denominator: eligible respondents with privacy-approved entries
+  > Recurring pattern threshold: ≥2 unique respondents
+  > All calculations deterministic — code-computed, not AI-generated
+  {{/if}}
+  {{/if}}
+
   > **Computation**
   >
   {{#if computed_facts}}
@@ -490,15 +594,25 @@ output_template: |
 
   > **Generation**
   >
-  > Template: Survey Synthesis v9.2
+  > Template: Survey Synthesis v10.0
   > Model: {{#if provenance}}{{provenance.model_used}}{{else}}Unknown{{/if}}
   > Generated: {{current_date_iso}}
 
   > **Analysis Authority**
   >
   > Structured statistics: deterministic — code-computed, no AI involvement
+  {{#if qualitative_coding}}
+  {{#if qualitative_coding.hasAcceptedCoding}}
+  > Qualitative groupings: Qori proposed, researcher reviewed and approved
+  > Qualitative matches: Qori proposed, researcher reviewed and approved
+  > Qualitative counts: deterministic — code-computed from accepted matches
+  > Quote selection: deterministic — governed text, code-selected (not AI-selected)
+  {{else}}
   > Open-text interpretation: preliminary AI-assisted interpretation — not formally coded
-  > Formal qualitative coding: not performed
+  {{/if}}
+  {{else}}
+  > Open-text interpretation: preliminary AI-assisted interpretation — not formally coded
+  {{/if}}
 
   > **Integrity**
   >
@@ -528,23 +642,22 @@ slack_ui:
     processing_failed: "Analysis failed. Please check that your file is valid CSV format."
 
 notes: |
-  v9.1: Final dev acceptance corrections.
-  - Ordinal distributions/cross-tabs render in confirmed measurement order
-  - Declared respondent IDs preserved in evidence quotes (not silently aliased)
-  - De-duplicated output: Dataset Scope removed; Structured Evidence is ONE location
-  - Soft qualitative prevalence language prohibited (no "several," "recurring," etc.)
-  - Emit contract aligned with evidence authority model:
-    survey_themes REMOVED (preliminary observations ≠ accepted themes)
-    discovered_metrics REMOVED (deterministic facts in evidence layer)
-    sample_demographics REMOVED (no confirmed demographic fields)
-    survey_findings KEPT (model-derived candidates, no new numbers)
-    discovered_barriers KEPT (tightened extraction rules)
-    knowledge_gaps KEPT (approved interpretive operation)
-  - Method & Provenance reports actual emit/authority/integrity state
-  - Executive Summary added
-  - Analysis Details collapsed
-  - Source hash moved to Integrity subsection in provenance toggle
+  v10.0: Slice 2B — accepted qualitative coding integration.
+  - "What Respondents Described" section replaces "Preliminary Qualitative
+    Observations" when accepted coding run exists
+  - Recurring patterns (≥2 unique respondents) with deterministic counts
+  - Individual observations (1 respondent) — not called themes
+  - Deterministic governed illustrative quotes (up to 2 per grouping,
+    preferring distinct respondents, restricted entries excluded)
+  - Executive Summary includes qualitative pattern headlines when available
+  - Method & Provenance expanded with Privacy Review, Qualitative Method,
+    Grouping Review, Match Review, and Aggregation subsections
+  - Analysis Authority reflects researcher approval chain
+  - qualitative_observations AI task skipped when accepted coding exists
+  - survey_themes NOT emitted — "themes" terminology retired
+  - discovered_barriers NOT auto-emitted from qualitative patterns
 
+  v9.2: Emit contract and cascade alignment (superseded by v10.0).
   v9.0: Deterministic structured evidence architecture (superseded).
   v8.0: computed_facts integration (superseded).
   v7.0: Interleaved Handlebars/AI architecture (superseded).
