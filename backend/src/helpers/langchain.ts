@@ -72,6 +72,27 @@ interface AiGenerationTask {
   [key: string]: unknown;
 }
 
+// ---------------------------------------------------------------------------
+// Post-generation validation (claim guard)
+// ---------------------------------------------------------------------------
+
+export interface ClaimViolationLike {
+  class: string;
+  description: string;
+  evidence: string;
+}
+
+export interface PostGenerationValidation {
+  /** Which task IDs to validate. If empty, no validation runs. */
+  taskIds: Set<string>;
+  /** Validate generated text. Return violations or empty array. */
+  validate: (taskId: string, text: string) => ClaimViolationLike[];
+  /** Build retry guidance from violations. Prepended to prompt on retry. */
+  buildRetryGuidance: (violations: ClaimViolationLike[]) => string;
+  /** Deterministic fallback text when retry also fails. Per task ID. */
+  fallbackText: (taskId: string) => string;
+}
+
 type AiResponses = Record<string, string>;
 
 // Convert Handlebars-style conditionals to Nunjucks syntax
@@ -123,6 +144,9 @@ export async function executeAiGenerationTasks(
   inputValues: Record<string, any>,
   piiContext?: PiiRedactionContext,
 ): Promise<AiResponses> {
+  // Extract post-generation validation from inputValues if present.
+  // This avoids changing the processYamlTemplate signature chain.
+  const postValidation = inputValues.__postValidation as PostGenerationValidation | undefined;
   const modelName = process.env.ANTHROPIC_MODEL_NAME || 'claude-sonnet-4-6';
   const temperature = parseFloat(process.env.ANTHROPIC_TEMPERATURE || '0.4');
   const maxTokens = parseInt(process.env.ANTHROPIC_MAX_TOKENS || '8192', 10);
@@ -187,7 +211,37 @@ export async function executeAiGenerationTasks(
           })
         : llm;
       const response = await taskLlm.invoke(finalPrompt);
-      return { taskId: task.task_id, response: response.content as string };
+      let responseText = response.content as string;
+
+      // Post-generation claim guard: validate + bounded retry
+      if (postValidation?.taskIds.has(task.task_id)) {
+        const violations = postValidation.validate(task.task_id, responseText);
+        if (violations.length > 0) {
+          console.warn(
+            `⚠️  Claim guard: ${violations.length} violation(s) in task ${task.task_id}: ` +
+            violations.map(v => `[${v.class}] ${v.evidence}`).join(', '),
+          );
+          // Bounded retry: prepend guidance and re-invoke once
+          const guidance = postValidation.buildRetryGuidance(violations);
+          const retryPrompt = `${guidance}\n\n---\n\n${finalPrompt}`;
+          const retryResponse = await taskLlm.invoke(retryPrompt);
+          const retryText = retryResponse.content as string;
+
+          const retryViolations = postValidation.validate(task.task_id, retryText);
+          if (retryViolations.length > 0) {
+            console.error(
+              `❌ Claim guard: retry still has ${retryViolations.length} violation(s) in task ${task.task_id}. ` +
+              `Using deterministic fallback.`,
+            );
+            responseText = postValidation.fallbackText(task.task_id);
+          } else {
+            console.log(`✅ Claim guard: retry for task ${task.task_id} passed validation`);
+            responseText = retryText;
+          }
+        }
+      }
+
+      return { taskId: task.task_id, response: responseText };
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       console.error(`Error processing task ${task.task_id}:`, message);

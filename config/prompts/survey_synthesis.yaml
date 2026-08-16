@@ -4,15 +4,16 @@
 id: survey_synthesis
 name: survey_response_synthesizer
 label: "Survey Synthesis"
-version: "v10.1"
+version: "v10.2"
 
 description: |
   Analyze survey data with deterministic structured evidence and bounded
   qualitative interpretation. When accepted qualitative coding exists,
   renders deterministic "What Respondents Described" section with
   researcher-reviewed groupings, governed quotes, and code-computed counts.
-  v10.0: Slice 2B — accepted coding integration, deterministic qualitative
-  section, redesigned Executive Summary, updated Method & Provenance.
+  v10.2: Evidence envelope — all reader-facing tasks share one accepted
+  evidence boundary. Raw open-text withheld when accepted coding exists.
+  Post-generation claim guard validates narrative against evidence envelope.
   Per ADR 0005/0016/0028/0032.
 
 author: Qori R&D
@@ -70,7 +71,11 @@ input_variables:
   - name: open_text_content
     type: textarea
     required: false
-    description: "Open-text survey responses extracted from CSV, formatted with respondent labels for qualitative analysis."
+    description: "Open-text survey responses extracted from CSV. NULL when accepted coding exists — evidence envelope withholds raw text from reader-facing tasks."
+  - name: accepted_qualitative_summary
+    type: textarea
+    required: false
+    description: "Accepted qualitative groupings formatted for evidence_gaps task. Present only when accepted coding exists. Replaces open_text_content in evidence boundary."
   - name: qualitative_coding
     type: object
     required: false
@@ -307,6 +312,19 @@ ai_generation_tasks:
       details, quotes, or observations not present in the supplied
       groupings.
 
+      RULE 7 — NO UNSUPPORTED ASSOCIATIONS
+      Do not claim respondent-level correspondence, alignment,
+      explanation, or co-occurrence between qualitative groupings and
+      structured measures unless a deterministic cross-tab for that
+      specific pair is supplied. Descriptive comparison is allowed;
+      causal or explanatory linkage is not.
+
+      RULE 8 — NO UNMEASURED PSYCHOLOGICAL EXPLANATIONS
+      Do not introduce latent motivations, expectations, emotions,
+      or psychological explanations unless respondents explicitly
+      stated them in accepted evidence. If the evidence does not
+      explain a pattern, say so.
+
       ============================================================
       AVAILABLE EVIDENCE
       ============================================================
@@ -401,6 +419,38 @@ ai_generation_tasks:
       association between completion outcome and specific qualitative
       groupings unless a deterministic cross-tab for that pair is
       supplied.
+
+      RULE 9 — NO UNSUPPORTED ASSOCIATIONS
+      You may compare two bodies of evidence descriptively, but you must
+      NOT claim respondent-level correspondence, alignment, explanation,
+      association, or co-occurrence between qualitative groupings and
+      structured measures unless a deterministic linkage/cross-tab for
+      that specific pair is supplied.
+
+      Allowed:
+        "The structured results show neutral median satisfaction and
+        difficulty. Separately, accepted qualitative responses describe
+        both smooth experiences and several types of friction."
+
+      Not allowed:
+        "The smooth-experience respondents anchor the neutral median."
+        "Staff assistance may explain why difficulty ratings did not
+        skew more negative."
+        "The 30% straightforward group corresponds to the
+        satisfaction/difficulty distribution."
+
+      RULE 10 — NO UNMEASURED PSYCHOLOGICAL EXPLANATIONS
+      Do not introduce latent motivations, expectations, emotions, or
+      psychological explanations unless directly supported by accepted
+      participant evidence (i.e., respondents explicitly stated them).
+
+      Not allowed:
+        "Neutral ratings may reflect resignation or low expectation."
+        "Respondents may have normalized the friction."
+
+      Instead:
+        "The available evidence does not explain why respondents selected
+        the neutral rating."
 
       ============================================================
       AVAILABLE EVIDENCE
@@ -500,10 +550,25 @@ ai_generation_tasks:
       list above.
       {% endif %}
 
+      {% if accepted_qualitative_summary %}
+      **Accepted qualitative groupings (ONLY qualitative evidence for gap identification):**
+      {{accepted_qualitative_summary}}
+
+      QUALITATIVE AUTHORITY: The groupings above are the ONLY qualitative
+      evidence available. Do not reference observations, friction types,
+      technical failures, or respondent behaviors not represented in these
+      accepted groupings. Do not introduce raw open-text material.
+      {% elif open_text_content %}
       **Open-text responses:**
       ---BEGIN DATA---
-      {% if open_text_content %}{{open_text_content}}{% else %}{{combined_file_content}}{% endif %}
+      {{open_text_content}}
       ---END DATA---
+      {% elif combined_file_content %}
+      **Open-text responses:**
+      ---BEGIN DATA---
+      {{combined_file_content}}
+      ---END DATA---
+      {% endif %}
 
       ============================================================
       RULES
@@ -524,7 +589,18 @@ ai_generation_tasks:
         - Product actions, feature changes, or design implementations
         - Structured distributions that ARE available (see above)
 
-      RULE 3 — TERMINOLOGY
+      RULE 3 — QUALITATIVE AUTHORITY BOUNDARY
+      When accepted qualitative groupings are provided above, they are
+      the ONLY qualitative evidence for gap identification. You may
+      identify what the accepted evidence cannot answer. You must NOT:
+        - Reference observations, friction types, or behaviors not
+          present in the accepted groupings
+        - Introduce raw open-text material, governance-only groupings,
+          no_grouping entries, or uncodable entries
+        - Resurrect discarded or pre-coding observations to invent
+          new gap premises
+
+      RULE 4 — TERMINOLOGY
       Do not use "theme" or "themes" to describe qualitative groupings.
       Use: "observation types," "qualitative categories," "friction
       types," "preliminary groupings."
@@ -769,7 +845,7 @@ output_template: |
 
   > **Generation**
   >
-  > Template: Survey Synthesis v10.1
+  > Template: Survey Synthesis v10.2
   > Model: {{#if provenance}}{{provenance.model_used}}{{else}}Unknown{{/if}}
   > Generated: {{current_date_iso}}
 
@@ -817,6 +893,15 @@ slack_ui:
     processing_failed: "Analysis failed. Please check that your file is valid CSV format."
 
 notes: |
+  v10.2: Evidence envelope — anti-fabrication boundary for all reader-facing tasks.
+  - All reader-facing AI tasks share one accepted evidence envelope
+  - Raw open_text_content withheld when accepted coding exists
+  - Evidence Gaps receives accepted_qualitative_summary instead of raw text
+  - Qualitative authority boundary rule added to Evidence Gaps
+  - Unsupported association rules (RULE 9/10 in integrated_interpretation, RULE 7/8 in executive_summary)
+  - Post-generation claim guard validates narrative against evidence envelope
+  - Bounded retry on claim violation; deterministic fallback on persistent failure
+
   v10.1: Artifact correctness — idempotent foundation, narrative summary, bounded interpretation.
   - Executive Summary is now AI-generated narrative (not fact-list)
   - "Integrated Interpretation" renamed to "What This Means" with actual synthesis

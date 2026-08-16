@@ -224,8 +224,8 @@ describe('Method & Provenance with accepted coding', () => {
     expect(outputSection).not.toContain('Evidence Source ID');
   });
 
-  it('template version is v10.1', () => {
-    expect(outputSection).toContain('Survey Synthesis v10.1');
+  it('template version is v10.2', () => {
+    expect(outputSection).toContain('Survey Synthesis v10.2');
   });
 });
 
