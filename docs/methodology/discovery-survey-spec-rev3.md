@@ -65,16 +65,58 @@ The survey methodology distinguishes between structured (quantitative) and quali
 - Recurring pattern promotion
 - XLS/XLSX ingestion
 
-### Slice 2: Qualitative Coding + Adjudication (NOT BUILT)
+### Slice 2A: Qualitative Evidence + Response Groups (BUILT)
+
+**Scope:**
+
+- Governed qualitative evidence units (one per respondent × open-text field)
+- Privacy-gated two-stage processing: structured facts first, qualitative after review
+- Deterministic PII pattern detection (phone → [PHONE], email → [EMAIL])
+- Human privacy review with bulk (unflagged) + individual (flagged) disposition
+- Qori proposes response groups from approved evidence (mixed inductive/deductive)
+- Researcher reviews, edits, removes, adds response groups
+- Accepted response-group set (versioned, immutable after acceptance)
+
+**Researcher-facing terminology:**
+- "Response groups" — researcher-visible term for qualitative groupings
+- "Codebook/codes" — internal methodological/domain terms only
+
+**No authoritative qualitative counts exist until Slice 2B adjudicated assignments.**
+
+### Slice 2B: Coding Adjudication + Deterministic Aggregation (NOT BUILT)
+
+**Required workflow sequence:**
+
+```
+privacy review complete
+→ Review Response Groups (Slice 2A)
+→ researcher accepts/edits/removes/adds groups
+→ accepted response-group set
+→ Qori proposes response-to-group assignments (Slice 2B)
+→ researcher adjudicates assignments
+→ accepted coding assignments
+→ deterministic unique-respondent aggregation
+→ accepted recurring patterns / barriers
+→ integrated interpretation
+→ final survey summary (Create Survey Summary)
+```
+
+**Rules:**
+- The normal "Create Survey Summary" action is not available until accepted coding exists
+- No bypass from privacy review directly to a final survey artifact
+- No authoritative qualitative counts before adjudicated assignments
+- Reporting unit is the unique respondent, not text entries
+- Model cannot calculate counts — all aggregation is deterministic from accepted assignments
 
 **Planned scope:**
 
-- Codebook generation from open-text responses
-- Model-assisted coding with researcher review
-- Theme frequency from coded responses
+- Qori proposes response-to-group assignments
+- Researcher adjudicates (accept/reject per assignment)
+- Deterministic respondent-level frequency from accepted assignments
+- Accepted recurring patterns / barriers
 - Coded challenge × completion cross-tabs
 - Coding audit trail
-- Researcher adjudication workflow (accept/reject/override)
+- Final survey synthesis artifact generation
 
 ### Nonresponse Semantics
 
