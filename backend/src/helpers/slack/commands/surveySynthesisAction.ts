@@ -135,19 +135,51 @@ export async function handleRunSynthesisAction(
     });
 
     // 6. Invoke qualitative synthesis
-    // Build a minimal survey-like object for the synthesis function
-    // The function needs: sourceFilename, rows for respondent identity, headers for field context
-    // Since CSV is gone from Redis, we reconstruct from evidence entries + stored metadata
+    // Resolution order for survey context:
+    //   1. evidence_source.metadata.survey_context (authoritative, written during upload)
+    //   2. Canonical DB state (evidence_source.label, project) — for legacy sources
+    //   3. Slack button metadata — last resort, may be fragile/incomplete
+    //
+    // This avoids title corruption from metadata loss through the Slack button chain.
+    const surveyContext = (sourceMetadata?.survey_context as Record<string, string> | undefined);
+
+    let resolvedTopic: string;
+    let resolvedTopicSlug: string;
+    let resolvedSurveyName: string;
+    let resolvedProjectSlug: string;
+    let resolvedQuestionFocus: string;
+    let resolvedSourceIntent: string;
+
+    if (surveyContext?.topic) {
+      // Priority 1: Persisted survey_context
+      resolvedTopic = surveyContext.topic;
+      resolvedTopicSlug = surveyContext.topicSlug ?? 'survey';
+      resolvedSurveyName = surveyContext.surveyName ?? surveyContext.topic;
+      resolvedProjectSlug = surveyContext.projectSlug ?? meta.projectSlug ?? '';
+      resolvedQuestionFocus = surveyContext.questionFocus ?? '';
+      resolvedSourceIntent = surveyContext.sourceIntent ?? '';
+    } else {
+      // Priority 2: Reconstruct from canonical DB state
+      const labelParts = source.label.split(' — ');
+      const nameFromLabel = labelParts[0] || 'Survey';
+      resolvedSurveyName = nameFromLabel;
+      resolvedTopic = nameFromLabel;
+      resolvedTopicSlug = nameFromLabel.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'survey';
+      resolvedProjectSlug = meta.projectSlug ?? '';
+      resolvedQuestionFocus = meta.questionFocus ?? '';
+      resolvedSourceIntent = meta.sourceIntent ?? '';
+    }
+
     const ctx = {
       userId,
       projectId: meta.projectId,
-      projectSlug: meta.projectSlug ?? '',
+      projectSlug: resolvedProjectSlug,
       channelId: userId,
-      topic: meta.topic ?? 'Survey',
-      topicSlug: meta.topicSlug ?? 'survey',
-      surveyName: meta.surveyName ?? 'Survey',
-      questionFocus: meta.questionFocus ?? '',
-      sourceIntent: meta.sourceIntent ?? '',
+      topic: resolvedTopic,
+      topicSlug: resolvedTopicSlug,
+      surveyName: resolvedSurveyName,
+      questionFocus: resolvedQuestionFocus,
+      sourceIntent: resolvedSourceIntent,
     };
 
     // Create a minimal ParsedSurvey-compatible object from stored metadata
