@@ -23,6 +23,7 @@ import type { ConfirmedField } from '../../../types/survey';
 import { parseCsvBuffer, computeContentHash } from '../../survey';
 import { isPrivacyReviewComplete } from '../../../services/content-governance.service';
 import { findAcceptedCodingRun } from '../../../services/survey-coding-run.service';
+import { getProjectById } from '../../../services/project.service';
 import { runSurveyQualitativeSynthesis } from './surveySubmissionHandler';
 
 const EvidenceSourceModel = sequelize.models.EvidenceSource as typeof EvidenceSource;
@@ -135,19 +136,56 @@ export async function handleRunSynthesisAction(
     });
 
     // 6. Invoke qualitative synthesis
-    // Build a minimal survey-like object for the synthesis function
-    // The function needs: sourceFilename, rows for respondent identity, headers for field context
-    // Since CSV is gone from Redis, we reconstruct from evidence entries + stored metadata
+    // Resolution order for survey context:
+    //   1. evidence_source.metadata.survey_context (authoritative, written during upload)
+    //   2. Persisted canonical DB state (project, evidence_source metadata)
+    //   3. evidence_source.label as last-resort display fallback (never mutated back)
+    //   4. Slack button metadata as final legacy fallback
+    //
+    // This avoids title corruption from metadata loss through the Slack button chain.
+    const surveyContext = (sourceMetadata?.survey_context as Record<string, string> | undefined);
+
+    // Load canonical project state for fallback
+    const project = await getProjectById(meta.projectId);
+
+    let resolvedTopic: string;
+    let resolvedTopicSlug: string;
+    let resolvedSurveyName: string;
+    let resolvedProjectSlug: string;
+    let resolvedQuestionFocus: string;
+    let resolvedSourceIntent: string;
+
+    if (surveyContext?.topic) {
+      // Priority 1: Persisted survey_context (authoritative)
+      resolvedTopic = surveyContext.topic;
+      resolvedTopicSlug = surveyContext.topicSlug ?? 'survey';
+      resolvedSurveyName = surveyContext.surveyName ?? surveyContext.topic;
+      resolvedProjectSlug = surveyContext.projectSlug ?? meta.projectSlug ?? '';
+      resolvedQuestionFocus = surveyContext.questionFocus ?? '';
+      resolvedSourceIntent = surveyContext.sourceIntent ?? '';
+    } else {
+      // Priority 2-4: Canonical DB state + legacy fallbacks
+      // Use project slug from DB, survey name from Slack meta or source label
+      const projectSlug = project?.slug ?? meta.projectSlug ?? '';
+      const surveyName = meta.surveyName ?? source.label ?? 'Survey';
+      resolvedSurveyName = surveyName;
+      resolvedTopic = meta.topic ?? surveyName;
+      resolvedTopicSlug = meta.topicSlug ?? 'survey';
+      resolvedProjectSlug = projectSlug;
+      resolvedQuestionFocus = meta.questionFocus ?? '';
+      resolvedSourceIntent = meta.sourceIntent ?? '';
+    }
+
     const ctx = {
       userId,
       projectId: meta.projectId,
-      projectSlug: meta.projectSlug ?? '',
+      projectSlug: resolvedProjectSlug,
       channelId: userId,
-      topic: meta.topic ?? 'Survey',
-      topicSlug: meta.topicSlug ?? 'survey',
-      surveyName: meta.surveyName ?? 'Survey',
-      questionFocus: meta.questionFocus ?? '',
-      sourceIntent: meta.sourceIntent ?? '',
+      topic: resolvedTopic,
+      topicSlug: resolvedTopicSlug,
+      surveyName: resolvedSurveyName,
+      questionFocus: resolvedQuestionFocus,
+      sourceIntent: resolvedSourceIntent,
     };
 
     // Create a minimal ParsedSurvey-compatible object from stored metadata

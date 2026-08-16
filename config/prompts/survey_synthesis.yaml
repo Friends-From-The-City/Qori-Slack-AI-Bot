@@ -4,7 +4,7 @@
 id: survey_synthesis
 name: survey_response_synthesizer
 label: "Survey Synthesis"
-version: "v10.0"
+version: "v10.1"
 
 description: |
   Analyze survey data with deterministic structured evidence and bounded
@@ -100,7 +100,7 @@ emits:
       type: array
       items:
         $ref: schemas/survey_finding.yaml
-    extract_from: "Integrated Interpretation or Structured Evidence sections. Assign sequential IDs (finding-001). metric_name and sample_size must come from Structured Evidence values only — do not invent or re-count. Include source_question where applicable."
+    extract_from: "What This Means or Structured Evidence sections. Assign sequential IDs (finding-001). metric_name and sample_size must come from Structured Evidence values only — do not invent or re-count. Include source_question where applicable."
 
   - key: knowledge_gaps
     pool: true
@@ -253,7 +253,164 @@ ai_generation_tasks:
       evidence, methodology, footer, or any other structural element.
       Output observation groups only.
 
-  # Task 2: Evidence gaps — what the survey cannot answer
+  # Task 2: Executive Summary — bounded research narrative
+  - task_id: "executive_summary"
+    prompt: |
+      Write a research narrative summarizing the key findings from this survey.
+
+      ============================================================
+      RULES
+      ============================================================
+
+      RULE 1 — NARRATIVE SYNTHESIS, NOT FACT RECITAL
+      Synthesize the evidence into a concise story. Do NOT:
+      - List medians/distributions as bullet points
+      - Repeat the same statistic multiple times
+      - Produce a "key metric: value" format
+
+      RULE 2 — NUMERIC AUTHORITY
+      Every number in the summary must come from the structured evidence
+      below. Do not calculate, re-count, or modify any supplied value.
+      You may cite numbers to support narrative claims.
+
+      RULE 3 — STRUCTURE
+      Write 2–4 short paragraphs (120–220 words total):
+      - Paragraph 1: main outcome pattern from the structured evidence
+      - Paragraph 2: what qualitative evidence helps explain
+      - Paragraph 3: uncertainty, limitation, or research implication
+
+      RULE 4 — NO PREVALENCE LANGUAGE
+      Do not use "most respondents," "some participants," "frequently,"
+      or other soft prevalence terms. State facts with their actual
+      counts/percentages from the structured evidence.
+
+      ============================================================
+      AVAILABLE EVIDENCE
+      ============================================================
+
+      **Respondents:** {{computed_facts.totalRespondents}}
+      **Fields:** {{computed_facts.schemaSummary}}
+
+      **Field distributions:**
+      {{#each computed_facts.fieldStats}}
+      {{this.displayName}} ({{this.role}}): Present {{this.nPresent}}/{{../computed_facts.totalRespondents}}{{#if this.median}}, Median: {{this.median}}{{/if}}
+      {{/each}}
+
+      {{#if computed_facts.crossTabs}}
+      **Cross-tabulations:**
+      {{#each computed_facts.crossTabs}}
+      {{this.rowDisplayName}} × {{this.colDisplayName}} (n={{this.totalN}})
+      {{/each}}
+      {{/if}}
+
+      {{#if qualitative_coding}}
+      {{#if qualitative_coding.hasAcceptedCoding}}
+      **Accepted qualitative groupings:**
+      {{#each qualitative_coding.recurringPatterns}}
+      {{this.label}} — {{this.displayFrequency}}
+      {{/each}}
+      {{#each qualitative_coding.individualObservations}}
+      {{this.label}} — {{this.displayFrequency}}
+      {{/each}}
+      {{/if}}
+      {{/if}}
+
+      **Research problem:** {{project_problem_statement}}
+      **Source intent:** {{source_intent}}
+
+      ============================================================
+      OUTPUT
+      ============================================================
+
+      Write the narrative paragraphs directly. No heading, no markdown
+      formatting beyond basic bold/italic. No bullet lists. Just prose.
+
+  # Task 3: Integrated interpretation — bounded synthesis across evidence types
+  - task_id: "integrated_interpretation"
+    prompt: |
+      Synthesize the structured and qualitative evidence from this survey into
+      an interpretation that tells researchers what the evidence means together.
+
+      ============================================================
+      RULES
+      ============================================================
+
+      RULE 1 — YOU PERFORM THE SYNTHESIS
+      State where evidence converges, complements, or conflicts.
+      Do NOT instruct readers to look for convergence or dissonance.
+      Do NOT write methodology instructions.
+
+      RULE 2 — NUMERIC AUTHORITY
+      Every number must come from the structured evidence below.
+      Do not calculate, re-count, or modify any supplied value.
+
+      RULE 3 — NO PREVALENCE LANGUAGE
+      Do not use "most respondents," "some participants," "frequently,"
+      or other soft prevalence language.
+
+      RULE 4 — STRUCTURE
+      Write 2–4 concise paragraphs covering:
+      - Strongest convergence between structured and qualitative evidence
+      - What qualitative evidence explains about structured patterns
+      - Any dissonance or exceptions worth noting
+      - What CANNOT be concluded from this evidence
+
+      RULE 5 — NO CAUSAL CLAIMS
+      This survey is descriptive. Do not assert that one variable causes
+      another. Associations and co-occurrence are acceptable.
+
+      ============================================================
+      AVAILABLE EVIDENCE
+      ============================================================
+
+      **Respondents:** {{computed_facts.totalRespondents}}
+
+      **Field distributions:**
+      {{#each computed_facts.fieldStats}}
+      {{this.displayName}} ({{this.role}}): Present {{this.nPresent}}/{{../computed_facts.totalRespondents}}{{#if this.median}}, Median: {{this.median}}{{/if}}
+      {{/each}}
+
+      {{#if computed_facts.crossTabs}}
+      **Cross-tabulations:**
+      {{#each computed_facts.crossTabs}}
+      {{this.rowDisplayName}} × {{this.colDisplayName}} (n={{this.totalN}})
+      {{/each}}
+      {{/if}}
+
+      {{#if qualitative_coding}}
+      {{#if qualitative_coding.hasAcceptedCoding}}
+      **Accepted qualitative groupings:**
+      {{#each qualitative_coding.recurringPatterns}}
+      {{this.label}} — {{this.displayFrequency}}: {{this.definition}}
+      {{/each}}
+      {{#each qualitative_coding.individualObservations}}
+      {{this.label}} — {{this.displayFrequency}}: {{this.definition}}
+      {{/each}}
+      {{/if}}
+      {{/if}}
+
+      {{#if open_text_content}}
+      **Open-text responses (for contextual reference):**
+      ---BEGIN DATA---
+      {{open_text_content}}
+      ---END DATA---
+      {{/if}}
+
+      **Research problem:** {{project_problem_statement}}
+      **Source intent:** {{source_intent}}
+
+      ============================================================
+      OUTPUT
+      ============================================================
+
+      Write the interpretation paragraphs directly. No heading, no bullet
+      lists. Just prose that synthesizes across evidence types.
+
+      Do NOT output:
+      - "Readers should look for..."
+      - "Readers should consider..."
+      - Instructions or methodology guidance
+
   - task_id: "evidence_gaps"
     skip_when: "not project_problem_statement"
     skip_output: |
@@ -360,19 +517,7 @@ output_template: |
 
   ## Executive Summary
 
-  {{#if computed_facts}}
-  > [!IMPORTANT]
-  > **{{computed_facts.totalRespondents}} unique respondents** analyzed.{{#each computed_facts.fieldStats}}{{#if this.median}} {{this.displayName}} median: **{{this.median}}**.{{/if}}{{/each}}
-  {{#if qualitative_coding}}
-  {{#if qualitative_coding.hasAcceptedCoding}}
-  >
-  > **Qualitative analysis complete.** {{qualitative_coding.eligibleRespondentCount}} respondents with eligible open-text entries.{{#each qualitative_coding.recurringPatterns}} **{{this.label}}** — {{this.displayFrequency}}.{{/each}}
-  {{/if}}
-  {{/if}}
-  {{else}}
-  > [!WARNING]
-  > No computed facts available. This synthesis relies on qualitative interpretation only.
-  {{/if}}
+  {{ai_generated.executive_summary}}
 
   ---
 
@@ -381,7 +526,9 @@ output_template: |
   {{#if project_problem_statement}}
   **Research problem:** {{project_problem_statement}}
 
+  {{#if source_intent}}
   **This survey contributes:** {{source_intent}}
+  {{/if}}
   {{else}}
   > [!WARNING]
   > No project problem statement set. Run `/qori-start` to set one.
@@ -479,28 +626,9 @@ output_template: |
 
   {{/if}}
 
-  ## Integrated Interpretation
+  ## What This Means
 
-  {{#if computed_facts}}
-  The structured evidence above establishes the distributional baseline from {{computed_facts.totalRespondents}} unique respondents.
-  {{#if qualitative_coding}}
-  {{#if qualitative_coding.hasAcceptedCoding}}
-  The qualitative findings represent researcher-reviewed groupings with deterministic counts. Readers should:
-  {{else}}
-  The qualitative observations offer preliminary interpretation of open-text entries. Readers should:
-  {{/if}}
-  {{else}}
-  The qualitative observations offer preliminary interpretation of open-text entries. Readers should:
-  {{/if}}
-
-  - **Look for convergence** — where structured distributions and qualitative findings point the same direction
-  - **Look for complementarity** — where open-text entries explain patterns visible in the distributions
-  - **Look for dissonance** — where qualitative findings seem to contradict distributional patterns (these warrant investigation, not resolution)
-
-  No new arithmetic is introduced in this section. No causal claims are made.
-  {{else}}
-  Without computed facts, integration is limited to the qualitative analysis above.
-  {{/if}}
+  {{ai_generated.integrated_interpretation}}
 
   ---
 
@@ -598,7 +726,7 @@ output_template: |
 
   > **Generation**
   >
-  > Template: Survey Synthesis v10.0
+  > Template: Survey Synthesis v10.1
   > Model: {{#if provenance}}{{provenance.model_used}}{{else}}Unknown{{/if}}
   > Generated: {{current_date_iso}}
 
@@ -646,6 +774,12 @@ slack_ui:
     processing_failed: "Analysis failed. Please check that your file is valid CSV format."
 
 notes: |
+  v10.1: Artifact correctness — idempotent foundation, narrative summary, bounded interpretation.
+  - Executive Summary is now AI-generated narrative (not fact-list)
+  - "Integrated Interpretation" renamed to "What This Means" with actual synthesis
+  - governance_only groupings excluded from research findings
+  - Empty "This survey contributes:" conditionally omitted
+
   v10.0: Slice 2B — accepted qualitative coding integration.
   - "What Respondents Described" section replaces "Preliminary Qualitative
     Observations" when accepted coding run exists

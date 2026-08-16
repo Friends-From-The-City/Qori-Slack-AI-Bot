@@ -205,7 +205,7 @@ export async function createOrUpdateFileOnGitHub(
       return {
         path: data.content!.path!,
         sha: data.content!.sha!,
-        url: `https://github.com/${owner}/${repo}/tree/main/${filePath}`,
+        url: `https://github.com/${owner}/${repo}/blob/main/${filePath}`,
       };
     } catch (err: unknown) {
       const octokitErr = err as { status?: number; message?: string };

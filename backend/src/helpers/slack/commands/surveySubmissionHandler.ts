@@ -49,7 +49,7 @@ import {
   formatComputedFacts,
   toDisplayLabel,
 } from '../../survey';
-import { loadPersistedFacts } from '../../survey/loadPersistedFacts';
+import { loadPersistedFacts, FactInvariantError } from '../../survey/loadPersistedFacts';
 import { buildQualitativeEntries, persistQualitativeEntries } from '../../survey/qualitativeEntryWriter';
 import {
   getAnalysisEligibleContent as getEligibleContent,
@@ -64,7 +64,7 @@ import {
   type SchemaReviewMeta,
 } from '../ui/surveySchemaReviewModal';
 import { processSlackFile } from '../../pdfProcessor';
-import { createSourceToConstruct } from '../../../services/evidence.service';
+import { createSourceToConstruct, getConstructsForSource } from '../../../services/evidence.service';
 import { fetchFileFromRepo, getConfigRepo, YAML_TEMPLATE_PATH } from '../../github';
 import { processYamlTemplate } from '../../yamlProcessor';
 import { getProjectById } from '../../../services/project.service';
@@ -240,6 +240,16 @@ export async function handleSurveyUploadPhase(
       column_count: survey.headers.length,
       headers: survey.headers,
       parse_warnings: survey.parseWarnings,
+      // Canonical survey context — reloaded during synthesis to avoid
+      // metadata loss through Slack button chains (codebook→match→synthesis).
+      survey_context: {
+        topic,
+        topicSlug,
+        surveyName,
+        questionFocus,
+        sourceIntent,
+        projectSlug,
+      },
     },
     created_by: userId,
   } as CreationAttributes<EvidenceSource>);
@@ -653,34 +663,78 @@ async function persistSurveyFoundation(
     const displayLabels = identities.map(id => id.displayLabel);
     const openTextContent = extractOpenTextContent(survey, confirmedFields, displayLabels);
 
-    // Create evidence constructs (deterministic, auto-accepted)
-    await sequelize.transaction(async (t) => {
-      const summaryConstruct = await EvidenceConstructModel.create({
-        project_id: ctx.projectId,
-        study_id: null,
-        construct_type: 'survey_dataset_summary',
-        label: `${ctx.surveyName} — ${computedFacts.totalRespondents} respondents`,
-        payload: {
-          total_respondents: computedFacts.totalRespondents,
-          schema_summary: computedFacts.schemaSummary,
-          nonresponse_limitation: computedFacts.nonresponseLimitation,
-          source_content_hash: contentHash,
-        },
-        derivation_type: 'deterministic',
-        derivation_context: { method: 'survey_structured_ingestion', version: '1.0' },
-        status: 'accepted',
-        created_by: ctx.userId,
-      }, { transaction: t });
+    // Create evidence constructs (deterministic, auto-accepted) — IDEMPOTENT.
+    //
+    // Semantic identity per construct type:
+    //   dataset_summary:    evidence_source + construct_type
+    //   field_distribution: evidence_source + construct_type + field_name
+    //   cross_tab:          evidence_source + construct_type + row_field + column_field
+    //
+    // Source→construct lineage (evidence_relationships) establishes scoping.
+    // If a construct with the same semantic_key already exists for this source,
+    // the duplicate is NOT created. This prevents retry duplication.
 
-      await createSourceToConstruct({
-        from_source_id: evidenceSourceId,
-        to_construct_id: (summaryConstruct as unknown as { id: number }).id,
-        relationship_type: 'DERIVED_FROM',
-        provenance: { method: 'survey_structured_ingestion' },
-      }, t);
+    // Load existing constructs for this source to check for duplicates.
+    // Supports BOTH new constructs (with explicit semantic_key in derivation_context)
+    // AND legacy constructs (without semantic_key — infer from construct_type + payload).
+    const existingConstructs = await getConstructsForSource(evidenceSourceId, {
+      derivation_type: 'deterministic',
+    });
+    const existingSemanticKeys = new Set(
+      existingConstructs
+        .map(c => {
+          const dc = (c as unknown as { derivation_context: Record<string, unknown> | null }).derivation_context;
+          const explicitKey = dc?.semantic_key as string | undefined;
+          if (explicitKey) return explicitKey;
+
+          // Legacy inference: derive semantic key from construct_type + payload
+          const type = (c as unknown as { construct_type: string }).construct_type;
+          const payload = (c as unknown as { payload: Record<string, unknown> | null }).payload;
+          if (type === 'survey_dataset_summary') return 'dataset_summary';
+          if (type === 'field_distribution' && payload?.fieldName) {
+            return `field_distribution:${payload.fieldName}`;
+          }
+          if (type === 'cross_tab' && payload?.rowField && payload?.colField) {
+            return `cross_tab:${payload.rowField}:${payload.colField}`;
+          }
+          return undefined;
+        })
+        .filter((k): k is string => !!k),
+    );
+
+    await sequelize.transaction(async (t) => {
+      const summaryKey = 'dataset_summary';
+      if (!existingSemanticKeys.has(summaryKey)) {
+        const summaryConstruct = await EvidenceConstructModel.create({
+          project_id: ctx.projectId,
+          study_id: null,
+          construct_type: 'survey_dataset_summary',
+          label: `${ctx.surveyName} — ${computedFacts.totalRespondents} respondents`,
+          payload: {
+            total_respondents: computedFacts.totalRespondents,
+            schema_summary: computedFacts.schemaSummary,
+            nonresponse_limitation: computedFacts.nonresponseLimitation,
+            source_content_hash: contentHash,
+          },
+          derivation_type: 'deterministic',
+          derivation_context: { method: 'survey_structured_ingestion', version: '1.0', semantic_key: summaryKey },
+          status: 'accepted',
+          created_by: ctx.userId,
+        }, { transaction: t });
+
+        await createSourceToConstruct({
+          from_source_id: evidenceSourceId,
+          to_construct_id: (summaryConstruct as unknown as { id: number }).id,
+          relationship_type: 'DERIVED_FROM',
+          provenance: { method: 'survey_structured_ingestion' },
+        }, t);
+      }
 
       for (const stat of computedFacts.fieldStats) {
         if (!stat.distribution && stat.nValidNumeric === null) continue;
+
+        const fieldKey = `field_distribution:${stat.fieldName}`;
+        if (existingSemanticKeys.has(fieldKey)) continue;
 
         const distConstruct = await EvidenceConstructModel.create({
           project_id: ctx.projectId,
@@ -689,7 +743,7 @@ async function persistSurveyFoundation(
           label: `${stat.fieldName} distribution`,
           payload: stat,
           derivation_type: 'deterministic',
-          derivation_context: { method: 'survey_structured_ingestion', version: '1.0' },
+          derivation_context: { method: 'survey_structured_ingestion', version: '1.0', semantic_key: fieldKey },
           status: 'accepted',
           created_by: ctx.userId,
         }, { transaction: t });
@@ -702,6 +756,9 @@ async function persistSurveyFoundation(
       }
 
       for (const ct of computedFacts.crossTabs) {
+        const ctKey = `cross_tab:${ct.rowField}:${ct.colField}`;
+        if (existingSemanticKeys.has(ctKey)) continue;
+
         const ctConstruct = await EvidenceConstructModel.create({
           project_id: ctx.projectId,
           study_id: null,
@@ -709,7 +766,7 @@ async function persistSurveyFoundation(
           label: `${ct.rowField} × ${ct.colField}`,
           payload: ct,
           derivation_type: 'deterministic',
-          derivation_context: { method: 'survey_structured_ingestion', version: '1.0' },
+          derivation_context: { method: 'survey_structured_ingestion', version: '1.0', semantic_key: ctKey },
           status: 'accepted',
           created_by: ctx.userId,
         }, { transaction: t });
@@ -768,10 +825,10 @@ export async function runSurveyQualitativeSynthesis(
   client: AllMiddlewareArgs['client'],
 ): Promise<void> {
   try {
-    // Load canonical persisted facts from evidence constructs — NOT recomputed from CSV
-    const evidenceConstructs = await EvidenceConstructModel.findAll({
-      where: { project_id: ctx.projectId },
-      order: [['created_at', 'ASC']],
+    // Load canonical persisted facts from evidence constructs via source lineage —
+    // NOT project_id scoped. One synthesis → one source → one coherent fact set.
+    const evidenceConstructs = await getConstructsForSource(evidenceSourceId, {
+      derivation_type: 'deterministic',
     });
 
     const computedFacts = loadPersistedFacts(
@@ -850,11 +907,24 @@ export async function runSurveyQualitativeSynthesis(
           });
         }
 
-        // Get code definitions from accepted codes
+        // Get code definitions and analytic relevance from accepted codes
         const codeDefMap = new Map(details.acceptedCodes.map(c => [c.public_id, c.definition]));
+        const codeRelevanceMap = new Map(details.acceptedCodes.map(c => [
+          c.public_id,
+          (c.metadata as Record<string, unknown>)?.analytic_relevance as string ?? 'research',
+        ]));
         for (const row of assignmentRows) {
           row.code_definition = codeDefMap.get(row.code_public_id) ?? '';
         }
+
+        // Filter out governance-only codes from research patterns/observations.
+        // governance_only codes remain in the audit trail but are NOT promoted
+        // to reader-facing research findings.
+        const governanceCodeIds = new Set(
+          [...codeRelevanceMap.entries()]
+            .filter(([, relevance]) => relevance === 'governance_only')
+            .map(([id]) => id),
+        );
 
         const eligibleRespondentKeys = new Set(allEntries.filter(e => getEligibleContent(e)).map(e => (e as SurveyQualitativeEntry).respondent_key));
         const aggregation = computeQualitativeAggregation(assignmentRows, eligibleRespondentKeys);
@@ -867,6 +937,7 @@ export async function runSurveyQualitativeSynthesis(
 
         const recurringPatterns = [];
         for (const p of aggregation.recurringPatterns) {
+          if (governanceCodeIds.has(p.codePublicId)) continue;
           recurringPatterns.push({
             label: p.codeLabel,
             definition: p.codeDefinition,
@@ -877,6 +948,7 @@ export async function runSurveyQualitativeSynthesis(
 
         const individualObservations = [];
         for (const p of aggregation.individualObservations) {
+          if (governanceCodeIds.has(p.codePublicId)) continue;
           individualObservations.push({
             label: p.codeLabel,
             definition: p.codeDefinition,
@@ -993,7 +1065,7 @@ export async function runSurveyQualitativeSynthesis(
           elements: [
             {
               type: 'mrkdwn',
-              text: `Evidence entities created: 1 source, ${computedFacts.fieldStats.length + computedFacts.crossTabs.length + 1} constructs with lineage`,
+              text: `<${url}|Open in GitHub> · Evidence entities: 1 source, ${computedFacts.fieldStats.length + computedFacts.crossTabs.length + 1} constructs with lineage`,
             },
           ],
         },
@@ -1009,6 +1081,14 @@ export async function runSurveyQualitativeSynthesis(
       text: `Survey synthesis complete for "${ctx.surveyName}". View: ${url}`,
     });
   } catch (error) {
+    if (error instanceof FactInvariantError) {
+      console.error('❌ Fact invariant violations:', error.violations);
+      await client.chat.postMessage({
+        channel: ctx.userId,
+        text: '❌ Qori found inconsistent survey evidence and couldn\'t create the summary.\n\nThis may be caused by duplicate data from a previous attempt. Please contact support or re-upload the survey.',
+      });
+      return;
+    }
     const message = error instanceof Error ? error.message : String(error);
     console.error('Error in survey analysis:', error);
     await client.chat.postMessage({

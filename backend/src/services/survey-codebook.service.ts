@@ -30,6 +30,7 @@ export interface ProposedCode {
   include_when: string;
   exclude_when?: string;
   example_entry_public_ids: string[];
+  analytic_relevance?: 'research' | 'governance_only';
 }
 
 export class CodebookNotReadyError extends Error {
@@ -122,7 +123,9 @@ export async function createDraftCodebook(
         origin: 'qori_proposed',
         status: 'proposed',
         sort_order: i,
-        metadata: {},
+        metadata: {
+          ...(pc.analytic_relevance ? { analytic_relevance: pc.analytic_relevance } : {}),
+        },
       } as CreationAttributes<SurveyCode>, { transaction: t });
 
       // Create example references

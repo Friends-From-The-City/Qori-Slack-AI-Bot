@@ -351,6 +351,53 @@ export async function createDerivation(input: DerivationInput): Promise<{
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+// SOURCE-SCOPED CONSTRUCT RETRIEVAL
+// ═══════════════════════════════════════════════════════════════════════
+
+/**
+ * Load all constructs derived from a specific evidence source.
+ * Uses source→construct lineage (evidence_relationships) as the authority,
+ * NOT project_id scoping.
+ *
+ * One synthesis request → one evidence_source → one coherent fact set.
+ */
+export async function getConstructsForSource(
+  sourceId: number,
+  filters?: {
+    construct_type?: ConstructType;
+    status?: ConstructStatus;
+    derivation_type?: string;
+  },
+): Promise<EvidenceConstruct[]> {
+  // Find all construct IDs linked from this source via DERIVED_FROM
+  const relationships = await EvidenceRelationshipModel.findAll({
+    where: {
+      from_source_id: sourceId,
+      relationship_type: 'DERIVED_FROM',
+    },
+    attributes: ['to_construct_id'],
+  });
+
+  const constructIds = relationships
+    .map(r => (r as unknown as { to_construct_id: number | null }).to_construct_id)
+    .filter((id): id is number => id !== null);
+
+  if (constructIds.length === 0) return [];
+
+  const where: Record<string, unknown> = {
+    id: { [Op.in]: constructIds },
+  };
+  if (filters?.construct_type) where.construct_type = filters.construct_type;
+  if (filters?.status) where.status = filters.status;
+  if (filters?.derivation_type) where.derivation_type = filters.derivation_type;
+
+  return EvidenceConstructModel.findAll({
+    where,
+    order: [['created_at', 'ASC']],
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════
 // EVIDENCE RECORD COUNTS (for audit/deletion)
 // ═══════════════════════════════════════════════════════════════════════
 
