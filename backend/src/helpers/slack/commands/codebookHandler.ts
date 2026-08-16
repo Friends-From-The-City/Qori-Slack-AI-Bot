@@ -58,7 +58,7 @@ export async function handleGenerateCodebook(
 
   await client.chat.postMessage({
     channel: userId,
-    text: 'Analyzing open-text responses to propose response categories...',
+    text: 'Grouping the approved responses... This may take a moment.',
   });
 
   try {
@@ -206,11 +206,16 @@ export async function handleCodebookReviewSubmission(
       return;
     }
 
-    // Last page — process Add Category if provided
-    // (Add Category only on the last page)
+    // Last page — accept the codebook
+    await acceptCodebook(meta.codebookId, userId);
+
+    await client.chat.postMessage({
+      channel: userId,
+      text: '\u2705 *Response groups accepted.* Qori will use these groupings when creating the final survey summary.',
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    await client.chat.postMessage({ channel: userId, text: `❌ Could not accept categories: ${message}` });
+    await client.chat.postMessage({ channel: userId, text: `\u274C Could not accept response groups: ${message}` });
   }
 }
 
@@ -232,7 +237,7 @@ function buildCodebookReviewModal(
       type: 'context',
       elements: [{
         type: 'mrkdwn',
-        text: `Qori grouped the open-text responses into *${allCodes.length} proposed categories*${pageLabel}.\nReview these before Qori uses them for counting or synthesis.\n\nFor each category: *Accept*, *Edit* (modify details), or *Remove*.`,
+        text: `Qori grouped the approved responses into *${allCodes.length} possible response groups*${pageLabel}.\nReview these before Qori uses them in the final survey summary.\n\nFor each group: *Accept*, *Edit* (modify details), or *Remove*.`,
       }],
     },
     { type: 'divider' },
@@ -327,11 +332,11 @@ function buildCodebookReviewModal(
   if (isLastPage) {
     blocks.push({
       type: 'context',
-      elements: [{ type: 'mrkdwn', text: '*Add a category* (optional) — create your own response category.' }],
+      elements: [{ type: 'mrkdwn', text: '*Add a response group* (optional) \u2014 create your own grouping that Qori missed.' }],
     });
     blocks.push({
       type: 'input', block_id: 'add_category_label', optional: true,
-      label: { type: 'plain_text', text: 'New category label' },
+      label: { type: 'plain_text', text: 'New group name' },
       element: { type: 'plain_text_input', action_id: 'add_label_input', placeholder: { type: 'plain_text', text: 'e.g., Technical Interruption' } },
     });
     blocks.push({
@@ -350,8 +355,8 @@ function buildCodebookReviewModal(
     type: 'modal',
     callback_id: 'codebook_review_modal',
     private_metadata: JSON.stringify(meta),
-    title: { type: 'plain_text', text: totalPages > 1 ? `Categories (${page + 1}/${totalPages})` : 'Review Categories' },
-    submit: { type: 'plain_text', text: isLastPage ? 'Accept Response Categories' : 'Continue →' },
+    title: { type: 'plain_text', text: totalPages > 1 ? `Response Groups (${page + 1}/${totalPages})` : 'Review Response Groups' },
+    submit: { type: 'plain_text', text: isLastPage ? 'Accept Response Groups' : 'Continue \u2192' },
     close: { type: 'plain_text', text: 'Cancel' },
     blocks,
   };

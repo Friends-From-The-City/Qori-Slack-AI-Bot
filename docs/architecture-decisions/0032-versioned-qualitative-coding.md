@@ -59,6 +59,9 @@ Structured analysis does not wait for privacy review. Qualitative analysis canno
 - Respondent counts will be deterministic (Slice 2B) based on accepted coding, not model estimates
 - Existing survey synthesis artifact generation is deferred until privacy review completes
 - Redis staging cleanup occurs only after all durable writes succeed
+- "Response groups" is the researcher-facing term; "codebook/codes" remain internal domain terms
+- The normal "Create Survey Summary" action requires accepted coding — no bypass from privacy review to final artifact
+- Slice 2B workflow: accepted groups → proposed assignments → researcher adjudication → deterministic aggregation → final survey summary
 
 ## References
 
