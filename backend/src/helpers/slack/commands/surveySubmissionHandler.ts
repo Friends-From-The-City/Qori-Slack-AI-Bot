@@ -1091,9 +1091,14 @@ export async function runSurveyQualitativeSynthesis(
     }
     const message = error instanceof Error ? error.message : String(error);
     console.error('Error in survey analysis:', error);
+    // Do not expose parser/template internals to researcher
+    const isTemplateError = message.includes('unexpected token') || message.includes('Template render error');
+    const userMessage = isTemplateError
+      ? '❌ Qori couldn\'t create the survey summary. Please try again.'
+      : `❌ Error running survey analysis: ${message}`;
     await client.chat.postMessage({
       channel: ctx.userId,
-      text: `❌ Error running survey analysis: ${message}\n\nPlease try again or contact support.`,
+      text: `${userMessage}\n\nPlease try again or contact support.`,
     });
   }
 }

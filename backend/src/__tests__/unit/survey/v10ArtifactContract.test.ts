@@ -574,3 +574,107 @@ describe('idempotent foundation persistence', () => {
     expect(actionFile).not.toContain('source.label.split');
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════
+// PRODUCTION-PATH RENDER TEST — Nunjucks AI task prompts
+// ═══════════════════════════════════════════════════════════════════════
+
+describe('AI task prompt Nunjucks rendering (production path)', () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const nunjucks = require('nunjucks');
+  nunjucks.configure({ autoescape: false });
+
+  // Extract AI task prompts from YAML
+  const jsYaml = require('js-yaml');
+  const config = jsYaml.load(yaml) as { ai_generation_tasks?: Array<{ task_id: string; prompt: string; skip_when?: string }> };
+  const tasks = config.ai_generation_tasks ?? [];
+
+  // Realistic accepted-coding context matching production data shape
+  const testContext: Record<string, unknown> = {
+    survey_name: 'Test Survey',
+    selected_study: 'discovery-test',
+    topic: 'Test Topic',
+    source_intent: 'Understand scheduling',
+    project_problem_statement: 'Test problem statement',
+    question_focus: 'Q5, Q8',
+    computed_facts: {
+      totalRespondents: 10,
+      schemaSummary: 'satisfaction (ordinal), difficulty (ordinal)',
+      fieldStats: [
+        { fieldName: 'satisfaction', displayName: 'Satisfaction', role: 'ordinal', nPresent: 10, nMissing: 0, median: 'Good', distribution: { Good: 7, Fair: 3 } },
+        { fieldName: 'difficulty', displayName: 'Difficulty', role: 'ordinal', nPresent: 9, nMissing: 1, median: 'Easy', distribution: { Easy: 5, Hard: 4 } },
+      ],
+      crossTabs: [
+        { rowField: 'completion', colField: 'satisfaction', rowDisplayName: 'Completion', colDisplayName: 'Satisfaction', totalN: 10, cells: {} },
+      ],
+      nonresponseLimitation: 'Test limitation',
+      sourceContentHash: 'abc123',
+    },
+    open_text_content: 'R001 (feedback): "Test response"',
+    combined_file_content: 'R001 (feedback): "Test response"',
+    qualitative_coding: {
+      hasAcceptedCoding: true,
+      eligibleRespondentCount: 8,
+      recurringPatterns: [
+        { label: 'Pattern A', definition: 'Test def A', displayFrequency: '3 of 8 (38%)' },
+      ],
+      individualObservations: [
+        { label: 'Obs B', definition: 'Test def B', displayFrequency: '1 of 8 (13%)' },
+      ],
+    },
+    has_accepted_coding: true,
+  };
+
+  // Simplified version of convertHandlebarsToNunjucks from langchain.ts
+  function convertHandlebarsToNunjucks(template: string): string {
+    let converted = template;
+    converted = converted.replace(/\{\{else\}\}/g, '{% else %}');
+    converted = converted.replace(/\{\{#if\s+(\w+)\s*\}\}/g, '{% if $1 %}');
+    converted = converted.replace(/\{\{#unless\s+(\w+)\s*\}\}/g, '{% if not $1 %}');
+    converted = converted.replace(/\{\{\/if\}\}/g, '{% endif %}');
+    converted = converted.replace(/\{\{\/unless\}\}/g, '{% endif %}');
+    converted = converted.replace(/\{\{#each\s+(\w+)\s*\}\}/g, '{% for item in $1 %}');
+    converted = converted.replace(/\{\{\/each\}\}/g, '{% endfor %}');
+    return converted;
+  }
+
+  for (const task of tasks) {
+    it(`task "${task.task_id}" renders without Nunjucks parse error`, () => {
+      const nunjucksTemplate = convertHandlebarsToNunjucks(task.prompt);
+      // This is the exact production path: nunjucks.renderString with the converted template
+      expect(() => {
+        nunjucks.renderString(nunjucksTemplate, testContext);
+      }).not.toThrow();
+    });
+  }
+
+  it('executive_summary prompt includes field distribution data after render', () => {
+    const task = tasks.find((t: { task_id: string }) => t.task_id === 'executive_summary');
+    expect(task).toBeDefined();
+    const rendered = nunjucks.renderString(convertHandlebarsToNunjucks(task!.prompt), testContext);
+    expect(rendered).toContain('Satisfaction');
+    expect(rendered).toContain('Median: Good');
+    expect(rendered).toContain('Completion × Satisfaction');
+    expect(rendered).toContain('Pattern A');
+    expect(rendered).toContain('3 of 8 (38%)');
+  });
+
+  it('integrated_interpretation prompt includes qualitative data after render', () => {
+    const task = tasks.find((t: { task_id: string }) => t.task_id === 'integrated_interpretation');
+    expect(task).toBeDefined();
+    const rendered = nunjucks.renderString(convertHandlebarsToNunjucks(task!.prompt), testContext);
+    expect(rendered).toContain('Pattern A');
+    expect(rendered).toContain('Test def A');
+    expect(rendered).toContain('Obs B');
+    expect(rendered).toContain('Test response');
+  });
+
+  it('AI task prompts do not contain unconverted Handlebars block syntax', () => {
+    for (const task of tasks) {
+      const nunjucksTemplate = convertHandlebarsToNunjucks(task.prompt);
+      // After conversion, no {{#...}} or {{/...}} should remain
+      const unconverted = nunjucksTemplate.match(/\{\{[#\/](if|each|unless)\b/g);
+      expect(unconverted).toBeNull();
+    }
+  });
+});

@@ -292,28 +292,26 @@ ai_generation_tasks:
       **Fields:** {{computed_facts.schemaSummary}}
 
       **Field distributions:**
-      {{#each computed_facts.fieldStats}}
-      {{this.displayName}} ({{this.role}}): Present {{this.nPresent}}/{{../computed_facts.totalRespondents}}{{#if this.median}}, Median: {{this.median}}{{/if}}
-      {{/each}}
+      {% for field in computed_facts.fieldStats %}
+      {{field.displayName}} ({{field.role}}): Present {{field.nPresent}}/{{computed_facts.totalRespondents}}{% if field.median %}, Median: {{field.median}}{% endif %}
+      {% endfor %}
 
-      {{#if computed_facts.crossTabs}}
+      {% if computed_facts.crossTabs %}
       **Cross-tabulations:**
-      {{#each computed_facts.crossTabs}}
-      {{this.rowDisplayName}} × {{this.colDisplayName}} (n={{this.totalN}})
-      {{/each}}
-      {{/if}}
+      {% for ct in computed_facts.crossTabs %}
+      {{ct.rowDisplayName}} × {{ct.colDisplayName}} (n={{ct.totalN}})
+      {% endfor %}
+      {% endif %}
 
-      {{#if qualitative_coding}}
-      {{#if qualitative_coding.hasAcceptedCoding}}
+      {% if qualitative_coding and qualitative_coding.hasAcceptedCoding %}
       **Accepted qualitative groupings:**
-      {{#each qualitative_coding.recurringPatterns}}
-      {{this.label}} — {{this.displayFrequency}}
-      {{/each}}
-      {{#each qualitative_coding.individualObservations}}
-      {{this.label}} — {{this.displayFrequency}}
-      {{/each}}
-      {{/if}}
-      {{/if}}
+      {% for p in qualitative_coding.recurringPatterns %}
+      {{p.label}} — {{p.displayFrequency}}
+      {% endfor %}
+      {% for p in qualitative_coding.individualObservations %}
+      {{p.label}} — {{p.displayFrequency}}
+      {% endfor %}
+      {% endif %}
 
       **Research problem:** {{project_problem_statement}}
       **Source intent:** {{source_intent}}
@@ -366,35 +364,33 @@ ai_generation_tasks:
       **Respondents:** {{computed_facts.totalRespondents}}
 
       **Field distributions:**
-      {{#each computed_facts.fieldStats}}
-      {{this.displayName}} ({{this.role}}): Present {{this.nPresent}}/{{../computed_facts.totalRespondents}}{{#if this.median}}, Median: {{this.median}}{{/if}}
-      {{/each}}
+      {% for field in computed_facts.fieldStats %}
+      {{field.displayName}} ({{field.role}}): Present {{field.nPresent}}/{{computed_facts.totalRespondents}}{% if field.median %}, Median: {{field.median}}{% endif %}
+      {% endfor %}
 
-      {{#if computed_facts.crossTabs}}
+      {% if computed_facts.crossTabs %}
       **Cross-tabulations:**
-      {{#each computed_facts.crossTabs}}
-      {{this.rowDisplayName}} × {{this.colDisplayName}} (n={{this.totalN}})
-      {{/each}}
-      {{/if}}
+      {% for ct in computed_facts.crossTabs %}
+      {{ct.rowDisplayName}} × {{ct.colDisplayName}} (n={{ct.totalN}})
+      {% endfor %}
+      {% endif %}
 
-      {{#if qualitative_coding}}
-      {{#if qualitative_coding.hasAcceptedCoding}}
+      {% if qualitative_coding and qualitative_coding.hasAcceptedCoding %}
       **Accepted qualitative groupings:**
-      {{#each qualitative_coding.recurringPatterns}}
-      {{this.label}} — {{this.displayFrequency}}: {{this.definition}}
-      {{/each}}
-      {{#each qualitative_coding.individualObservations}}
-      {{this.label}} — {{this.displayFrequency}}: {{this.definition}}
-      {{/each}}
-      {{/if}}
-      {{/if}}
+      {% for p in qualitative_coding.recurringPatterns %}
+      {{p.label}} — {{p.displayFrequency}}: {{p.definition}}
+      {% endfor %}
+      {% for p in qualitative_coding.individualObservations %}
+      {{p.label}} — {{p.displayFrequency}}: {{p.definition}}
+      {% endfor %}
+      {% endif %}
 
-      {{#if open_text_content}}
+      {% if open_text_content %}
       **Open-text responses (for contextual reference):**
       ---BEGIN DATA---
       {{open_text_content}}
       ---END DATA---
-      {{/if}}
+      {% endif %}
 
       **Research problem:** {{project_problem_statement}}
       **Source intent:** {{source_intent}}
