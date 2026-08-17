@@ -107,6 +107,7 @@ Start with `0001` and read forward. The history is itself useful — it shows ho
 - [0032 — Versioned researcher-adjudicated qualitative coding](./0032-versioned-qualitative-coding.md) — Governed qualitative evidence; privacy-gated model access; immutable versioned codebooks
 - [0033 — State classification and GitHub projection removal](./0033-state-classification-and-github-projection-removal.md) — Six-class state taxonomy; GitHub .variables writes removed; Postgres sole cascade authority
 - [0034 — Model provider boundary](./0034-model-provider-boundary.md) — Workflows select tier (haiku/sonnet/opus); single factory owns provider instantiation
+- [0035 — Unstructured content privacy gate](./0035-unstructured-content-privacy-gate.md) — Platform-wide invariant: all unstructured content → privacy policy → authorized representation → model access
 
 ### Lessons (informal ADRs from failure modes)
 

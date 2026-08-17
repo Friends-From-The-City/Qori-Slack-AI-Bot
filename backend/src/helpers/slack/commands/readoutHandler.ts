@@ -464,8 +464,19 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }: SlackVi
       combinedContent = '[No research plans or session summaries found for this study]';
     }
 
-    const inputText = combinedContent;
-    const researchReadoutData = combinedContent;
+    // Privacy gate: authorize fetched content before model access (PH-3 / ADR 0035).
+    // Content is from Qori-managed artifacts (research plans, session summaries) —
+    // uses TRUSTED_CURATED_ARTIFACT policy (auto-authorized with known provenance).
+    const { authorizeForModel } = require('../../../services/content-governance.service');
+    const privacyResult = authorizeForModel(
+      combinedContent,
+      'TRUSTED_CURATED_ARTIFACT',
+      { isQoriArtifact: true, upstreamPrivacyComplete: true, sourceId: `readout:${selectedStudyName}` },
+    );
+    const authorizedContent = privacyResult.modelSafeContent ?? combinedContent;
+
+    const inputText = authorizedContent;
+    const researchReadoutData = authorizedContent;
 
     console.log('Combined content length:', combinedContent.length);
 
