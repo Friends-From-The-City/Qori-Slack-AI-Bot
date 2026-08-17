@@ -21,6 +21,8 @@ import type { PiiRedactionContext } from "../../../helpers/langchain";
 import { readStudyVariablesByContext, type VariableContext } from '../../studyVariables';
 import { assertStudyAccess, AuthorizationError } from '../../../services/authorization.service';
 import { redactTranscript } from '../../../helpers/piiRedaction';
+import { resolveSessionSource, createNuggetConstructs, type NuggetInput } from '../../../services/session-evidence.service';
+import { getDefaultModelName } from '../../modelProvider';
 
 // ─── Cascade context ─────────────────────────────────────────────
 
@@ -435,6 +437,32 @@ const handleAnalyzeNotesSubmission = async ({ ack, body, view, client }: SlackVi
     const studyPath = study?.path;
     if (!studyPath) throw new Error('Unexpected: study.path missing after resolution');
 
+    // PH-5A: Resolve canonical evidence_source BEFORE model generation.
+    // Source identity must exist before derived evidence is generated.
+    const governedContent = [coded_transcript_content, notes_content].filter(Boolean).join('\n\n---\n\n');
+    let evidenceSourceId: number | null = null;
+    let evidenceSourcePublicId: string | null = null;
+    if (transcriptNotes.length > 0) {
+      try {
+        const primaryTranscript = transcriptNotes[0];
+        const resolvedSource = await resolveSessionSource({
+          projectId,
+          studyId: resolvedStudyId,
+          studyNotesId: primaryTranscript.id,
+          sourceType: primaryTranscript.transcript ? 'session_transcript' : 'session_notes',
+          label: primaryTranscript.filename || 'Session transcript',
+          governedContent,
+          createdBy: body.user.id,
+        });
+        evidenceSourceId = resolvedSource.id;
+        evidenceSourcePublicId = resolvedSource.publicId;
+        console.log(`✅ Evidence source ${resolvedSource.isNew ? 'created' : 'reused'}: ${evidenceSourcePublicId}`);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.warn(`⚠️ Evidence source creation failed (non-blocking): ${message}`);
+      }
+    }
+
     // H9: Construct PII context for pre-transmission assertion in langchain
     const piiContext: PiiRedactionContext | undefined = participantName
       ? { knownNames: [participantName], participantCode }
@@ -458,6 +486,46 @@ const handleAnalyzeNotesSubmission = async ({ ack, body, view, client }: SlackVi
         throw new Error(`Cascade variable extraction failed: ${extractResult.error}. Document was saved but variables were not written.`);
       }
       console.log(`✅ Cascade variables committed: ${extractResult.variableCount} items (${extractResult.keys?.join(', ')})`);
+
+      // PH-5A: Create nugget evidence_constructs from extracted atomic_nugget_core.
+      // Source identity was established before model call; now persist derived constructs.
+      if (evidenceSourceId && extractResult.keys?.includes('atomic_nugget_core')) {
+        try {
+          const vars = await readStudyVariablesByContext({ projectId, studyId: resolvedStudyId });
+          const nuggetCoreItems = vars.variables?.atomic_nugget_core;
+          if (Array.isArray(nuggetCoreItems) && nuggetCoreItems.length > 0) {
+            // Filter to only this participant's nuggets (pool may contain other participants)
+            const thisParticipantNuggets = nuggetCoreItems.filter(
+              (n: Record<string, unknown>) => n.participant === participantCode,
+            );
+            const nuggetInputs: NuggetInput[] = thisParticipantNuggets.map((n: Record<string, unknown>) => ({
+              displayId: (n.id as string) || `nugget-${participantCode}-unknown`,
+              nuggetType: (n.nugget_type as string) || 'unknown',
+              severity: (n.severity as number) ?? 0,
+              text: (n.text as string) || '',
+              participantCode: (n.participant as string) || participantCode,
+              session: (n.session as string) || '',
+            }));
+
+            const createdNuggets = await createNuggetConstructs(
+              evidenceSourceId,
+              projectId,
+              resolvedStudyId,
+              nuggetInputs,
+              {
+                templateId: 'session_summary',
+                templateVersion: 'v7.2',
+                modelName: getDefaultModelName(),
+              },
+              body.user.id,
+            );
+            console.log(`✅ Evidence lineage: ${createdNuggets.length} nugget constructs linked to source ${evidenceSourcePublicId}`);
+          }
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          console.warn(`⚠️ Nugget evidence construct creation failed (non-blocking): ${message}`);
+        }
+      }
     }
 
     const { result } = renderedYaml;
