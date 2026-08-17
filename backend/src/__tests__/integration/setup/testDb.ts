@@ -41,6 +41,8 @@ import SurveyCodingAssignment from '../../../database/models/survey_coding_assig
 import SurveyCodingEntryReview from '../../../database/models/survey_coding_entry_review';
 import ResearchArtifact from '../../../database/models/research_artifact';
 import ArtifactEvidenceRef from '../../../database/models/artifact_evidence_ref';
+import DataSubject from '../../../database/models/data_subject';
+import DataSubjectLink from '../../../database/models/data_subject_link';
 
 let instance: Sequelize | null = null;
 
@@ -70,6 +72,7 @@ export function getTestDb(): Sequelize {
     SurveyFieldSchema, SurveyQualitativeEntry, SurveyCodebook, SurveyCode, SurveyCodeExample,
     SurveyCodingRun, SurveyCodingAssignment, SurveyCodingEntryReview,
     ResearchArtifact, ArtifactEvidenceRef,
+    DataSubject, DataSubjectLink,
   ];
 
   for (const defineModel of modelDefiners) {
