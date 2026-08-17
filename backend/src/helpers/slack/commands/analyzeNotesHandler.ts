@@ -481,81 +481,64 @@ const handleAnalyzeNotesSubmission = async ({ ack, body, view, client }: SlackVi
       ? { knownNames: [participantName], participantCode }
       : undefined;
 
-    const renderedYaml = await processYamlTemplate(
-      yamlTemplateFile.content,
-      templateData,
-      studyPath,
-      '',
-      false,
-      variableContext,
-      piiContext,  // H9: Pre-transmission PII assertion
+    // PH-6D2: Use prepare/finalize flow for single GitHub write
+    const { prepareYamlTemplate, finalizeArtifactWrite } = require('../../../helpers/yamlProcessor');
+    const prepared = await prepareYamlTemplate(
+      yamlTemplateFile.content, templateData, studyPath, '', variableContext, piiContext,
     );
 
-    // CRITICAL: Await extraction to ensure cascade variables are committed before returning success.
-    // Without this, downstream modals (synthesis) may read stale data. See ADR 0019.
-    if (renderedYaml.extractionPromise) {
-      const extractResult = await renderedYaml.extractionPromise;
-      if (!extractResult.success) {
-        throw new Error(`Cascade variable extraction failed: ${extractResult.error}. Document was saved but variables were not written.`);
-      }
-      console.log(`✅ Cascade variables committed: ${extractResult.variableCount} items (${extractResult.keys?.join(', ')})`);
+    if (!prepared.extractionOutcome.success) {
+      throw new Error(`Cascade variable extraction failed: ${prepared.extractionOutcome.error}. Generation complete but variables were not written.`);
+    }
+    console.log(`✅ Cascade variables committed: ${prepared.extractionOutcome.variableCount} items (${prepared.extractionKeys.join(', ')})`);
 
-      // PH-5A: Create nugget evidence_constructs from extracted atomic_nugget_core.
-      // Source identity was established before model call; now persist derived constructs.
-      if (evidenceSourceId && extractResult.keys?.includes('atomic_nugget_core')) {
-        try {
-          const vars = await readStudyVariablesByContext({ projectId, studyId: resolvedStudyId });
-          const nuggetCoreItems = vars.variables?.atomic_nugget_core;
-          if (Array.isArray(nuggetCoreItems) && nuggetCoreItems.length > 0) {
-            // Filter to only this participant's nuggets (pool may contain other participants)
-            const thisParticipantNuggets = nuggetCoreItems.filter(
-              (n: Record<string, unknown>) => n.participant === participantCode,
-            );
-            const nuggetInputs: NuggetInput[] = thisParticipantNuggets.map((n: Record<string, unknown>) => ({
-              displayId: (n.id as string) || `nugget-${participantCode}-unknown`,
-              nuggetType: (n.nugget_type as string) || 'unknown',
-              severity: (n.severity as number) ?? 0,
-              text: (n.text as string) || '',
-              participantCode: (n.participant as string) || participantCode,
-              session: (n.session as string) || '',
-            }));
+    // PH-5A: Create nugget evidence_constructs from extracted atomic_nugget_core.
+    // Nugget anchoring deferred to PH-7 (nuggets are table-embedded, not individual sections).
+    if (evidenceSourceId && prepared.extractionKeys.includes('atomic_nugget_core')) {
+      try {
+        const vars = await readStudyVariablesByContext({ projectId, studyId: resolvedStudyId });
+        const nuggetCoreItems = vars.variables?.atomic_nugget_core;
+        if (Array.isArray(nuggetCoreItems) && nuggetCoreItems.length > 0) {
+          const thisParticipantNuggets = nuggetCoreItems.filter(
+            (n: Record<string, unknown>) => n.participant === participantCode,
+          );
+          const nuggetInputs: NuggetInput[] = thisParticipantNuggets.map((n: Record<string, unknown>) => ({
+            displayId: (n.id as string) || `nugget-${participantCode}-unknown`,
+            nuggetType: (n.nugget_type as string) || 'unknown',
+            severity: (n.severity as number) ?? 0,
+            text: (n.text as string) || '',
+            participantCode: (n.participant as string) || participantCode,
+            session: (n.session as string) || '',
+          }));
 
-            const createdNuggets = await createNuggetConstructs(
-              evidenceSourceId,
-              projectId,
-              resolvedStudyId,
-              nuggetInputs,
-              {
-                templateId: 'session_summary',
-                templateVersion: 'v7.2',
-                modelName: getDefaultModelName(),
-              },
-              body.user.id,
-            );
-            console.log(`✅ Evidence lineage: ${createdNuggets.length} nugget constructs linked to source ${evidenceSourcePublicId}`);
+          const createdNuggets = await createNuggetConstructs(
+            evidenceSourceId, projectId, resolvedStudyId, nuggetInputs,
+            { templateId: 'session_summary', templateVersion: 'v7.2', modelName: getDefaultModelName() },
+            body.user.id,
+          );
+          console.log(`✅ Evidence lineage: ${createdNuggets.length} nugget constructs linked to source ${evidenceSourcePublicId}`);
 
-            // PH-6C: Attach canonical nugget evidence refs to session summary artifact
-            if (createdNuggets.length > 0) {
-              const nuggetConstructIds = createdNuggets.map(c => c.constructId);
-              const attachResult = await attachEvidenceRefsVerified(
-                renderedYaml.artifactPublicId,
-                nuggetConstructIds,
-                {
-                  projectId,
-                  studyId: resolvedStudyId,
-                  templateId: 'session_summary',
-                  workflow: 'analyze',
-                },
-              );
-              if (attachResult.attached > 0) {
-                console.log(`✅ Artifact→evidence: ${attachResult.attached} nugget refs attached to artifact ${renderedYaml.artifactPublicId}`);
-              }
-            }
-          }
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          console.warn(`⚠️ Nugget evidence construct creation failed (non-blocking): ${message}`);
+          // Store nugget IDs for post-finalize attachment
+          (templateData as unknown as Record<string, unknown>).__createdNuggetIds = createdNuggets.map(c => c.constructId);
         }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.warn(`⚠️ Nugget evidence construct creation failed (non-blocking): ${message}`);
+      }
+    }
+
+    // FINALIZE: Single GitHub write (no canonical ref section for session summaries — deferred to PH-7)
+    const renderedYaml = await finalizeArtifactWrite(prepared);
+
+    // PH-6C: Attach nugget evidence refs (artifact now status=written)
+    const nuggetIds = (templateData as unknown as Record<string, unknown>).__createdNuggetIds as number[] | undefined;
+    if (nuggetIds && nuggetIds.length > 0) {
+      const attachResult = await attachEvidenceRefsVerified(
+        renderedYaml.artifactPublicId, nuggetIds,
+        { projectId, studyId: resolvedStudyId, templateId: 'session_summary', workflow: 'analyze' },
+      );
+      if (attachResult.attached > 0) {
+        console.log(`✅ Artifact→evidence: ${attachResult.attached} nugget refs attached to artifact ${renderedYaml.artifactPublicId}`);
       }
     }
 
