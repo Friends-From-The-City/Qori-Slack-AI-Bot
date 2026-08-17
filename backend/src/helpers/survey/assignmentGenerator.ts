@@ -3,7 +3,7 @@
  *
  * For each privacy-eligible qualitative entry, proposes zero or more
  * grouping matches from the accepted codebook. Uses the existing
- * LangChain/ChatAnthropic pattern consistent with codebookGenerator.ts.
+ * Uses the shared model provider boundary (modelProvider.ts).
  *
  * Rules:
  * - Every entry_public_id must exist in the supplied entry set
@@ -14,7 +14,7 @@
  * - Invalid model output → reject + bounded retry
  */
 
-import { ChatAnthropic } from '@langchain/anthropic';
+import { createModel } from '../modelProvider';
 import { getAnalysisEligibleContent } from '../../services/content-governance.service';
 import type { SurveyQualitativeEntry } from '../../database/models/survey_qualitative_entry';
 
@@ -87,13 +87,7 @@ export async function generateDraftAssignments(
 
   const prompt = buildAssignmentPrompt(entryContext, codeContext, researchProblem, focusQuestions, validEntryIds.size, acceptedCodes.length);
 
-  const modelName = process.env.ANTHROPIC_MODEL_NAME || 'claude-sonnet-4-6';
-  const model = new ChatAnthropic({
-    modelName,
-    anthropicApiKey: process.env.ANTHROPIC_API_KEY,
-    maxTokens: 4096,
-    temperature: 0,
-  });
+  const model = createModel({ tier: 'sonnet', temperature: 0, maxTokens: 4096, purpose: 'assignment-generation' });
 
   let lastError: Error | null = null;
 

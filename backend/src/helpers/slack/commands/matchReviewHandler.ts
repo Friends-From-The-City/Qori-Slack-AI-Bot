@@ -15,6 +15,7 @@ import type {
   SlackViewMiddlewareArgs, ViewSubmitAction, AllMiddlewareArgs,
 } from '@slack/bolt';
 import type { View } from '@slack/types';
+import { getDefaultModelName } from '../../modelProvider';
 import {
   findActiveUnacceptedRun,
   createDraftCodingRun,
@@ -128,7 +129,7 @@ export async function handleGenerateAssignments(
       userId, generatedAssignments, entries,
       {
         approach: 'assignment_matching',
-        model: process.env.ANTHROPIC_MODEL_NAME || 'claude-sonnet-4-6',
+        model: getDefaultModelName(),
         entry_count: entries.length,
         code_count: acceptedCodes.length,
       },

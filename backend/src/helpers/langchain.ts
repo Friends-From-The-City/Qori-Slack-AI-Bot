@@ -1,5 +1,5 @@
 import nunjucks from 'nunjucks';
-import { ChatAnthropic } from '@langchain/anthropic';
+import { createModel, resolveModelTier } from './modelProvider';
 import { assertKnownNamesRedacted } from './piiRedaction';
 
 // Default environment for prompt rendering — tolerates undefined variables
@@ -147,20 +147,10 @@ export async function executeAiGenerationTasks(
   // Extract post-generation validation from inputValues if present.
   // This avoids changing the processYamlTemplate signature chain.
   const postValidation = inputValues.__postValidation as PostGenerationValidation | undefined;
-  const modelName = process.env.ANTHROPIC_MODEL_NAME || 'claude-sonnet-4-6';
   const temperature = parseFloat(process.env.ANTHROPIC_TEMPERATURE || '0.4');
   const maxTokens = parseInt(process.env.ANTHROPIC_MAX_TOKENS || '8192', 10);
 
-  if (!process.env.ANTHROPIC_API_KEY) {
-    throw new Error('ANTHROPIC_API_KEY is not set in environment variables');
-  }
-
-  const llm = new ChatAnthropic({
-    anthropicApiKey: process.env.ANTHROPIC_API_KEY,
-    modelName,
-    temperature,
-    maxTokens,
-  });
+  const llm = createModel({ tier: 'sonnet', temperature, maxTokens, purpose: 'yaml-task-generation' });
 
   // Escape Nunjucks-sensitive sequences in upstream data to prevent
   // participant quotes like "I typed {{username}}" from crashing the renderer
@@ -202,13 +192,8 @@ export async function executeAiGenerationTasks(
       }
 
       // Per-task model override (P4 ruling: trivial transforms on Haiku)
-      const taskLlm = task.model && task.model !== modelName
-        ? new ChatAnthropic({
-            anthropicApiKey: process.env.ANTHROPIC_API_KEY,
-            modelName: task.model,
-            temperature,
-            maxTokens,
-          })
+      const taskLlm = task.model
+        ? createModel({ tier: resolveModelTier(task.model), temperature, maxTokens, purpose: `task-${task.task_id}` })
         : llm;
       const response = await taskLlm.invoke(finalPrompt);
       let responseText = response.content as string;
