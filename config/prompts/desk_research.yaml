@@ -417,7 +417,7 @@ output_template: |
   </details>
 
 output_options:
-  filename: "{{topic_slug}}-desk-research-{{current_date_iso}}.md"
+  filename: "{{project_slug}}--desk-research--{{__derivation_fp}}.md"
   path: "{{project_slug}}/00-discovery/"
 
   delivery:

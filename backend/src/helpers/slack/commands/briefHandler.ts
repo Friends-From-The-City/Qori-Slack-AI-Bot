@@ -531,6 +531,17 @@ async function handleBriefSubmission({ ack, body, view, client }: SlackViewMiddl
 
   // ── Process YAML template (prose tasks + rendering + extraction) ──
   const variableContext: VariableContext = { projectId, studyId };
+
+  // PH-6D1: Canonical artifact identity for research brief
+  (data as unknown as Record<string, unknown>).__artifactContext = {
+    projectId,
+    studyId,
+    artifactType: 'brief',
+    title: `Research brief — ${studyName}`,
+    canonicalUpstreamInputs: [], // No canonical evidence constructs; cascade fingerprint used
+    createdBy: body.user.id,
+  };
+
   const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, "research_brief.yaml");
   const renderedYaml = await processYamlTemplate(file.content, data, study.path ?? '', '', false, variableContext);
 

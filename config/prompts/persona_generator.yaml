@@ -376,7 +376,7 @@ output_template: |
 
 output_options:
   path: "04-synthesis/"
-  filename: "{{selected_study}}-personas-{{current_date_iso}}.md"
+  filename: "{{selected_study}}--personas--{{__derivation_fp}}.md"
 
 # ═══════════════════════════════════════════════════════════
 # METADATA

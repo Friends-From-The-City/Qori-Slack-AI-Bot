@@ -354,7 +354,7 @@ output_template: |
 
 output_options:
   path: "04-synthesis/"
-  filename: "{{selected_study}}-jobs-to-be-done-{{current_date_iso}}.md"
+  filename: "{{selected_study}}--jobs-to-be-done--{{__derivation_fp}}.md"
 
 # ═══════════════════════════════════════════════════════════
 # METADATA

@@ -386,7 +386,7 @@ output_template: |
 
 output_options:
   path: "05-readouts/"
-  filename: "{{selected_study}}-designer-readout-{{current_date_iso}}.md"
+  filename: "{{selected_study}}--designer-readout--{{__derivation_fp}}.md"
 
 # ═══════════════════════════════════════════════════════════
 # METADATA

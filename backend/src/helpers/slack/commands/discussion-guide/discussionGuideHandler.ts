@@ -436,6 +436,16 @@ async function handleDiscussionGuideSubmission({ ack, body, view, client }: Slac
     lead_researcher: leadResearcherName || body.user?.name || '',
   };
 
+  // PH-6D1: Canonical artifact identity for discussion guide
+  (guideData as unknown as Record<string, unknown>).__artifactContext = {
+    projectId,
+    studyId,
+    artifactType: 'plan', // shares 02-plan/ folder with research plan
+    title: `Discussion guide — ${studyName}`,
+    canonicalUpstreamInputs: [], // No canonical evidence constructs; cascade fingerprint used
+    createdBy: body.user.id,
+  };
+
   const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, 'discussion_guide.yaml');
   const renderedYaml = await processYamlTemplate(file.content, guideData, study!.path ?? '', '', false, variableContext);
 

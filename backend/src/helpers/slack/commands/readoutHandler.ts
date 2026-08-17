@@ -604,6 +604,21 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }: SlackVi
           try {
             const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, templateName);
             const audienceReportData: ReadoutTemplateInput = { ...reportData, target_audience: audience };
+            // PH-6D1: Each targeted audience gets its own artifact identity.
+            // Audience is explicit in canonicalUpstreamInputs so different audiences
+            // always produce distinct artifact identities, even with the same template.
+            const normalizedAudience = audience.toLowerCase().replace(/\s+/g, '-');
+            (audienceReportData as unknown as Record<string, unknown>).__artifactContext = {
+              projectId: resolved.projectId,
+              studyId: resolved.studyId,
+              artifactType: 'readout',
+              title: `${audience} readout — ${selectedStudyName}`,
+              canonicalUpstreamInputs: [
+                ...canonicalReadoutInputs,
+                `audience:${normalizedAudience}`,
+              ],
+              createdBy: body.user.id,
+            };
             const rendered = await processYamlTemplate(file.content, audienceReportData, selectedStudy.path ?? '', '', false, variableContext);
 
             // CRITICAL: Await extraction to ensure ticket_candidates are committed before notifying user.

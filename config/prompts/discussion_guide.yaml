@@ -808,7 +808,7 @@ output_template: |
 
 output_options:
   path: "02-plan/"
-  filename: "{{selected_study}}-discussion-guide-{{current_date_iso}}.md"
+  filename: "{{selected_study}}--discussion-guide--{{__derivation_fp}}.md"
 
 # ═══════════════════════════════════════════════════════════
 # METADATA (documentation only — not read by backend)
