@@ -32,6 +32,7 @@ import ResearchArtifact from './models/research_artifact';
 import ArtifactEvidenceRef from './models/artifact_evidence_ref';
 import DataSubject from './models/data_subject';
 import DataSubjectLink from './models/data_subject_link';
+import EvidenceSubjectAttribution from './models/evidence_subject_attribution';
 
 
 // Set environment and configuration
@@ -74,6 +75,7 @@ const modelDefiners = [
   ArtifactEvidenceRef,
   DataSubject,
   DataSubjectLink,
+  EvidenceSubjectAttribution,
 ];
 
 // Register all models with Sequelize
