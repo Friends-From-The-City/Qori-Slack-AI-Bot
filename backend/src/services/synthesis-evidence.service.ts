@@ -27,12 +27,23 @@ import {
 import type { ConstructType, ConstructStatus, DerivationContext } from '../database/models/evidence_construct';
 import type { EvidenceConstruct } from '../database/models/evidence_construct';
 import type { RelationshipType, RelationshipProvenance } from '../database/models/evidence_relationship';
+import { createHash } from 'crypto';
 import sequelize from '../database';
-import type { Model } from 'sequelize';
 
 // Lazy accessor to support test DB swapping
 function getConstructModel() {
   return sequelize.models.EvidenceConstruct;
+}
+
+/**
+ * Compute a deterministic fingerprint from a set of upstream evidence IDs.
+ * Sort lexicographically, deduplicate, then SHA-256 hash.
+ * Same upstream refs in any order → same fingerprint.
+ * Different upstream refs → different fingerprint.
+ */
+export function computeUpstreamFingerprint(evidenceIds: string[]): string {
+  const normalized = [...new Set(evidenceIds)].sort();
+  return createHash('sha256').update(normalized.join(',')).digest('hex').substring(0, 12);
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -202,8 +213,11 @@ export async function createSynthesizedConstructs(
       continue;
     }
 
-    // Dedup: check for existing construct with same semantic key
-    const semanticKey = `${config.constructType}:${config.studyId}:${item.displayId}:${config.templateVersion}`;
+    // Dedup: check for existing construct with same semantic key.
+    // Includes upstream evidence fingerprint so changed upstream refs
+    // create a distinct candidate construct.
+    const upstreamHash = computeUpstreamFingerprint(validation.valid);
+    const semanticKey = `${config.constructType}:${config.studyId}:${item.displayId}:${config.templateVersion}:${upstreamHash}`;
     const existing = await getConstructModel().findOne({
       where: sequelize.literal(
         `derivation_context->>'semantic_key' = '${semanticKey}'`,
