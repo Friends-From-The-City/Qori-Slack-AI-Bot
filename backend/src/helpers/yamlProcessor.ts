@@ -385,6 +385,26 @@ export async function processYamlTemplate(
     aiGenerated: aiResponses,
   });
 
+  // 5.5 PH-6D1: Compute derivation fingerprint early so it's available for
+  // filename templates (as {{__derivation_fp}}) and for artifact reservation.
+  const artifactCtx = inputValues.__artifactContext as ArtifactContext | undefined;
+  let derivationFingerprint = '';
+  let artifactId: number | null = null;
+  let artifactPublicId: string | undefined;
+
+  if (artifactCtx) {
+    try {
+      const { computeDerivationFingerprint, computeCascadeInputFingerprint } =
+        require('../services/artifact.service');
+      derivationFingerprint = artifactCtx.canonicalUpstreamInputs.length > 0
+        ? computeDerivationFingerprint(artifactCtx.canonicalUpstreamInputs, yamlConfig.version || '')
+        : computeCascadeInputFingerprint(inputValues, yamlConfig.version || '');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(`⚠️ Derivation fingerprint computation failed: ${msg}`);
+    }
+  }
+
   // 6. Generate filename and path from YAML configuration
   const filenameTemplate =
     (yamlConfig.output_options && yamlConfig.output_options.filename) || 'research_brief.md';
@@ -396,6 +416,7 @@ export async function processYamlTemplate(
     aiGenerated: aiResponses,
     current_date: format(new Date(), 'MMMM d, yyyy'),
     current_date_iso: format(new Date(), 'yyyy-MM-dd'),
+    __derivation_fp: derivationFingerprint.substring(0, 12),
   });
   const filename = slugifyFilename(rawFilename);
 
@@ -426,22 +447,14 @@ export async function processYamlTemplate(
   }
 
   // PH-6B: Reserve canonical artifact identity before GitHub write
-  const artifactCtx = inputValues.__artifactContext as ArtifactContext | undefined;
-  let artifactId: number | null = null;
-  let artifactPublicId: string | undefined;
-
-  if (artifactCtx) {
+  if (artifactCtx && derivationFingerprint) {
     try {
-      const { reserveArtifact, computeDerivationFingerprint, buildSemanticKey, computeCascadeInputFingerprint } =
+      const { reserveArtifact, buildSemanticKey } =
         require('../services/artifact.service');
-
-      const fingerprint = artifactCtx.canonicalUpstreamInputs.length > 0
-        ? computeDerivationFingerprint(artifactCtx.canonicalUpstreamInputs, yamlConfig.version || '')
-        : computeCascadeInputFingerprint(inputValues, yamlConfig.version || '');
 
       const semanticKey = buildSemanticKey(
         yamlConfig.id, artifactCtx.projectId, artifactCtx.studyId,
-        artifactCtx.artifactType, fingerprint,
+        artifactCtx.artifactType, derivationFingerprint,
       );
 
       const repo = `${process.env.GITHUB_OWNER}/${process.env.GITHUB_REPO}`;

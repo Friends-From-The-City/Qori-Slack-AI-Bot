@@ -638,7 +638,7 @@ output_template: |
 
 output_options:
   path: "05-readouts/"
-  filename: "research-readout-{{study_name}}-{{current_date_iso}}.md"
+  filename: "{{study_name}}--research-readout--{{__derivation_fp}}.md"
 
 # ═══════════════════════════════════════════════════════════
 # METADATA

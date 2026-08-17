@@ -384,7 +384,7 @@ output_template: |
 
 output_options:
   path: "04-synthesis/"
-  filename: "{{selected_study}}-usability-issues-{{current_date_iso}}.md"
+  filename: "{{selected_study}}--usability-issues--{{__derivation_fp}}.md"
 
 # ═══════════════════════════════════════════════════════════
 # METADATA

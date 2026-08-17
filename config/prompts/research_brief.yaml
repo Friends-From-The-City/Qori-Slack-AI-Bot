@@ -565,7 +565,7 @@ output_template: |
 
 output_options:
   path: "01-brief/"
-  filename: "{{selected_study}}-research-brief-{{current_date_iso}}.md"
+  filename: "{{selected_study}}--research-brief--{{__derivation_fp}}.md"
 
 # ═══════════════════════════════════════════════════════════
 # METADATA (documentation only — not read by backend)

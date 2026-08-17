@@ -924,7 +924,7 @@ output_template: |
 
 output_options:
   path: "{{project_slug}}/00-discovery/"
-  filename: "{{topic_slug}}-survey-synthesis-{{current_date_iso}}.md"
+  filename: "{{project_slug}}--survey-synthesis--{{__derivation_fp}}.md"
 
 # ═══════════════════════════════════════════════════════════
 # METADATA

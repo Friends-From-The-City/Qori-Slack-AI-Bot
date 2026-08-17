@@ -528,7 +528,7 @@ output_template: |
 
 output_options:
   path: "03-fieldwork/sessions/"
-  filename: "{{participant_id}}-session-summary-{{current_date_iso}}.md"
+  filename: "{{study_name}}--{{participant_id}}--session-summary--{{__derivation_fp}}.md"
 
 # ═══════════════════════════════════════════════════════════
 # METADATA

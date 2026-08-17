@@ -1111,6 +1111,29 @@ export async function runSurveyQualitativeSynthesis(
       data.__postValidation = postValidation;
     }
 
+    // PH-6D1: Canonical artifact identity for survey synthesis.
+    // Fingerprint includes source identity + accepted analysis state (coding run version).
+    const surveyCanonicalInputs: string[] = [];
+    const evSourceForFp = await EvidenceSourceModel.findByPk(evidenceSourceId);
+    if (evSourceForFp) {
+      surveyCanonicalInputs.push(`source:${(evSourceForFp as unknown as { public_id: string }).public_id}`);
+    }
+    if (acceptedRun) {
+      const runVersion = (acceptedRun as unknown as { version: number }).version;
+      const runId = (acceptedRun as unknown as { id: number }).id;
+      surveyCanonicalInputs.push(`coding-run:${runId}:v${runVersion}`);
+    }
+    surveyCanonicalInputs.push(`content:${contentHash.substring(0, 16)}`);
+
+    (data as unknown as Record<string, unknown>).__artifactContext = {
+      projectId: ctx.projectId,
+      studyId: null,
+      artifactType: 'discovery',
+      title: `Survey synthesis — ${ctx.topic}`,
+      canonicalUpstreamInputs: surveyCanonicalInputs,
+      createdBy: ctx.userId,
+    };
+
     const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, 'survey_synthesis.yaml');
     const variableContext = { projectId: ctx.projectId };
 

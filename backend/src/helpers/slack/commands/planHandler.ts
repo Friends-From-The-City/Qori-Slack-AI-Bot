@@ -229,6 +229,16 @@ async function handlePlanSubmission({ ack, body, view, client }: SlackViewMiddle
 
   console.log(`📋 Assembled plan data: ${Object.keys(data).length} fields, ${data.objectives_count} objectives, ${data.research_questions_count} RQs, study: ${studyName}`);
 
+  // PH-6D1: Canonical artifact identity for research plan
+  (data as unknown as Record<string, unknown>).__artifactContext = {
+    projectId,
+    studyId,
+    artifactType: 'plan',
+    title: `Research plan — ${studyName}`,
+    canonicalUpstreamInputs: [], // No canonical evidence constructs; cascade fingerprint used
+    createdBy: userId,
+  };
+
   // TemplateContractError propagates to global error middleware in events.ts
   const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, 'research_plan.yaml');
   const studyPath = study?.path;
