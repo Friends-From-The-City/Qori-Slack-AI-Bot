@@ -30,6 +30,8 @@ import SurveyCodingAssignment from './models/survey_coding_assignment';
 import SurveyCodingEntryReview from './models/survey_coding_entry_review';
 import ResearchArtifact from './models/research_artifact';
 import ArtifactEvidenceRef from './models/artifact_evidence_ref';
+import DataSubject from './models/data_subject';
+import DataSubjectLink from './models/data_subject_link';
 
 
 // Set environment and configuration
@@ -70,6 +72,8 @@ const modelDefiners = [
   SurveyCodingEntryReview,
   ResearchArtifact,
   ArtifactEvidenceRef,
+  DataSubject,
+  DataSubjectLink,
 ];
 
 // Register all models with Sequelize
