@@ -76,6 +76,7 @@ import {
 } from '../../../services/survey-coding-run.service';
 import { computeQualitativeAggregation, type PatternStat } from '../../../services/survey-aggregation.service';
 import { buildEvidenceEnvelope, validateClaims, buildRetryGuidance, buildDeterministicEvidenceGaps, buildDeterministicInterpretation, buildDeterministicExecutiveSummary } from '../../survey/claimGuard';
+import { getDefaultModelName } from '../../modelProvider';
 import type { PostGenerationValidation } from '../../langchain';
 
 // Models
@@ -886,7 +887,7 @@ export async function runSurveyQualitativeSynthesis(
             `>\n> **${toDisplayLabel(f.fieldName)}**\n>\n> ${f.orderMetadata!.join(' → ')}`
           ).join('\n')
         : 'No ordinal fields confirmed',
-      model_used: process.env.ANTHROPIC_MODEL_NAME || 'claude-sonnet-4-6',
+      model_used: getDefaultModelName(),
     };
 
     // Load accepted qualitative coding data (Slice 2B)

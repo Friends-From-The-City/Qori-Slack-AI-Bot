@@ -4,9 +4,8 @@
  * Generates structured JSON output proposing response categories from
  * approved qualitative evidence. Uses mixed inductive/deductive approach.
  *
- * Uses the existing LangChain/ChatAnthropic pattern consistent with
- * langchain.ts and variableExtractor.ts. Provider/model identity is
- * recorded in generation metadata.
+ * Uses the shared model provider boundary (modelProvider.ts).
+ * Provider/model identity is recorded in generation metadata.
  *
  * Rules:
  * - Target 3-12 codes, hard max 12, no hard minimum (1-2 valid when evidence supports it)
@@ -16,7 +15,7 @@
  * - Invalid model output (prohibited language) → reject + bounded retry, not silent strip
  */
 
-import { ChatAnthropic } from '@langchain/anthropic';
+import { createModel, getDefaultModelName } from '../modelProvider';
 import { getAnalysisEligibleContent } from '../../services/content-governance.service';
 import type { SurveyQualitativeEntry } from '../../database/models/survey_qualitative_entry';
 
@@ -74,14 +73,7 @@ export async function generateDraftCodes(
 
   const prompt = buildCodebookPrompt(entryContext, researchProblem, focusQuestions, validPublicIds.size);
 
-  // Use existing LangChain/ChatAnthropic pattern (consistent with langchain.ts)
-  const modelName = process.env.ANTHROPIC_MODEL_NAME || 'claude-sonnet-4-6';
-  const model = new ChatAnthropic({
-    modelName,
-    anthropicApiKey: process.env.ANTHROPIC_API_KEY,
-    maxTokens: 4096,
-    temperature: 0,
-  });
+  const model = createModel({ tier: 'sonnet', temperature: 0, maxTokens: 4096, purpose: 'codebook-generation' });
 
   let lastError: Error | null = null;
 

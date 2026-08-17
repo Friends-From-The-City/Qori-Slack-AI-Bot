@@ -1,5 +1,5 @@
-// variableExtractor.ts — Extract structured variables from generated documents using Haiku
-import { ChatAnthropic } from '@langchain/anthropic';
+// variableExtractor.ts — Extract structured variables from generated documents
+import { createModel, resolveModelTier } from './modelProvider';
 import yaml from 'js-yaml';
 import fs from 'fs';
 import path from 'path';
@@ -524,29 +524,27 @@ function validateLinkage(
 // ─── Model selection ─────────────────────────────────────────────────
 
 /**
- * Select extraction model based on emit config or schema complexity.
+ * Select extraction tier based on emit config or schema complexity.
+ * Returns a logical tier ('haiku' | 'sonnet'), not a provider model name.
  */
-function selectExtractionModel(emitConfig: EmitSpec, schema: SchemaDefinition | null): string {
+function selectExtractionTier(emitConfig: EmitSpec, schema: SchemaDefinition | null): string {
   // Explicit override from YAML config
   if (emitConfig.extraction_model) {
-    if (emitConfig.extraction_model === 'sonnet') {
-      return process.env.EXTRACTION_MODEL_SONNET || 'claude-sonnet-4-6';
-    }
-    return process.env.EXTRACTION_MODEL_NAME || 'claude-haiku-4-5-20251001';
+    return emitConfig.extraction_model === 'sonnet' ? 'sonnet' : 'haiku';
   }
 
-  // Complexity heuristic
+  // Complexity heuristic: Sonnet for complex schemas
   if (schema && schema.properties) {
     const propertyCount = Object.keys(schema.properties).length;
     const hasMultiValueEnum = Object.values(schema.properties).some(
       (p): p is SchemaDefinition => !!(p && typeof p === 'object' && 'enum' in p && Array.isArray((p as SchemaDefinition).enum) && ((p as SchemaDefinition).enum!.length > 5))
     );
     if (propertyCount > 10 || hasMultiValueEnum) {
-      return process.env.EXTRACTION_MODEL_SONNET || 'claude-sonnet-4-6';
+      return 'sonnet';
     }
   }
 
-  return process.env.EXTRACTION_MODEL_NAME || 'claude-haiku-4-5-20251001';
+  return 'haiku';
 }
 
 // ─── Type guard for cascade variable keys ────────────────────────────
@@ -600,27 +598,22 @@ async function extractVariables(
 
   const maxTokens = parseInt(process.env.EXTRACTION_MAX_TOKENS || '8192', 10);
 
-  // Group emits by their selected model
-  const modelGroups: Record<string, EmitSpec[]> = {};
+  // Group emits by their selected logical tier
+  const tierGroups: Record<string, EmitSpec[]> = {};
   for (const emit of emitsSpec) {
     const schema = resolveSchemaRefs(emit.schema);
-    const model = selectExtractionModel(emit, schema);
-    if (!modelGroups[model]) modelGroups[model] = [];
-    modelGroups[model].push(emit);
+    const tier = selectExtractionTier(emit, schema);
+    if (!tierGroups[tier]) tierGroups[tier] = [];
+    tierGroups[tier].push(emit);
   }
 
-  const modelNames = Object.keys(modelGroups);
-  console.log(`🔄 Extraction: ${emitsSpec.length} variables across ${modelNames.length} model(s): ${modelNames.map(m => `${m.split('-')[1] || m}(${modelGroups[m].length})`).join(', ')}`);
+  const tiers = Object.keys(tierGroups);
+  console.log(`🔄 Extraction: ${emitsSpec.length} variables across ${tiers.length} tier(s): ${tiers.map(t => `${t}(${tierGroups[t].length})`).join(', ')}`);
 
   const allExtracted: Record<string, unknown> = {};
 
-  for (const [modelName, groupEmits] of Object.entries(modelGroups)) {
-    const llm = new ChatAnthropic({
-      anthropicApiKey: process.env.ANTHROPIC_API_KEY,
-      modelName: modelName,
-      temperature: 0,
-      maxTokens: maxTokens,
-    });
+  for (const [tier, groupEmits] of Object.entries(tierGroups)) {
+    const llm = createModel({ tier: tier as 'haiku' | 'sonnet' | 'opus', temperature: 0, maxTokens, purpose: 'variable-extraction' });
 
     const prompt = buildExtractionPrompt(renderedOutput, groupEmits, inputValues);
     let extracted: Record<string, unknown> | null = null;
@@ -636,25 +629,25 @@ async function extractVariables(
         const parsed = parseExtractionResponse(typeof response.content === 'string' ? response.content : JSON.stringify(response.content));
 
         if (!parsed) {
-          console.warn(`⚠️ [${modelName}] Extraction attempt ${attempts}/${maxAttempts}: JSON parse failed`);
+          console.warn(`⚠️ [${tier}] Extraction attempt ${attempts}/${maxAttempts}: JSON parse failed`);
           continue;
         }
 
         const validation = validateExtraction(parsed, groupEmits);
 
         if (validation.errors.length > 0) {
-          console.warn(`⚠️ [${modelName}] Attempt ${attempts}/${maxAttempts}: Validation errors:`, validation.errors);
+          console.warn(`⚠️ [${tier}] Attempt ${attempts}/${maxAttempts}: Validation errors:`, validation.errors);
           if (attempts < maxAttempts) continue;
         }
 
         if (validation.structureErrors.length > 0) {
-          console.error(`❌ [${modelName}] Attempt ${attempts}/${maxAttempts}: Schema structure mismatch:`);
+          console.error(`❌ [${tier}] Attempt ${attempts}/${maxAttempts}: Schema structure mismatch:`);
           validation.structureErrors.forEach(e => console.error(`   ${e}`));
           if (attempts < maxAttempts) {
             console.warn(`🔄 Retrying with stricter prompt...`);
             continue;
           }
-          console.error(`❌ CRITICAL: [${modelName}] Extraction failed schema validation after ${maxAttempts} attempts. These variables will NOT be written.`);
+          console.error(`❌ CRITICAL: [${tier}] Extraction failed schema validation after ${maxAttempts} attempts. These variables will NOT be written.`);
           // Don't return null — other model groups may have succeeded
           break;
         }
@@ -662,7 +655,7 @@ async function extractVariables(
         // Linkage validation: ensure required traceability fields are populated
         const linkageValidation = validateLinkage(parsed, groupEmits);
         if (!linkageValidation.valid) {
-          console.warn(`⚠️ [${modelName}] Linkage gaps detected (traceable role-transformation):`);
+          console.warn(`⚠️ [${tier}] Linkage gaps detected (traceable role-transformation):`);
           linkageValidation.linkageErrors.forEach(e => console.warn(`   ${e}`));
           // Log but don't block — linkage gaps are surfaced, not fatal
           // The data will be written with empty linkage fields for manual review
@@ -671,9 +664,9 @@ async function extractVariables(
         extracted = parsed;
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
-        console.error(`❌ [${modelName}] Attempt ${attempts}/${maxAttempts} failed:`, message);
+        console.error(`❌ [${tier}] Attempt ${attempts}/${maxAttempts} failed:`, message);
         if (attempts >= maxAttempts) {
-          console.error(`❌ [${modelName}] All extraction attempts failed`);
+          console.error(`❌ [${tier}] All extraction attempts failed`);
         }
       }
     }

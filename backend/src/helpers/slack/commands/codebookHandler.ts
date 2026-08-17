@@ -15,6 +15,7 @@ import type {
 } from '@slack/bolt';
 import type { View } from '@slack/types';
 import type { SurveyCode } from '../../../database/models/survey_code';
+import { getDefaultModelName } from '../../modelProvider';
 import {
   getEligibleEntries, createDraftCodebook, getCodebookWithCodes,
   acceptCodebook, updateCode, addResearcherCode,
@@ -180,7 +181,7 @@ export async function handleGenerateCodebook(
       proposedCodes,
       {
         approach: 'mixed_inductive_deductive',
-        model: process.env.ANTHROPIC_MODEL_NAME || 'claude-sonnet-4-6',
+        model: getDefaultModelName(),
         entry_count: entries.length,
       },
     );

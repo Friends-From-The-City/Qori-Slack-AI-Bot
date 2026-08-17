@@ -130,7 +130,8 @@ function buildTraceabilityFooter(
 ): string {
   const now = new Date();
   const dateStr = format(now, "MMMM d, yyyy 'at' h:mm a") + ' UTC';
-  const model = process.env.ANTHROPIC_MODEL_NAME || 'claude-sonnet-4-6';
+  const { getDefaultModelName } = require('./modelProvider');
+  const model = getDefaultModelName();
   const templateId = yamlConfig.id;
   const templateVersion = yamlConfig.version;
   const study =
