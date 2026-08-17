@@ -465,32 +465,9 @@ export function parseGitHubIssues(issuesContent: string): ParsedGitHubIssue[] {
   return issues;
 }
 
-export async function createGitHubIssues(issues: ParsedGitHubIssue[]): Promise<CreatedGitHubIssue[]> {
-  const { Octokit } = await import('@octokit/rest');
-  const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
-  const owner = process.env.GITHUB_OWNER!;
-  const repo = process.env.GITHUB_REPO!;
-
-  const createdIssues: CreatedGitHubIssue[] = [];
-
-  for (const issue of issues) {
-    try {
-      const { data } = await octokit.rest.issues.create({
-        owner, repo, title: issue.title, body: issue.body, labels: issue.labels || [],
-      });
-      createdIssues.push({
-        number: data.number, title: data.title, url: data.html_url,
-        priority: issue.priority, effort: issue.effort,
-      });
-      console.log(`✅ Created issue #${data.number}: ${data.title}`);
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error(`❌ Failed to create issue "${issue.title}":`, message);
-    }
-  }
-
-  return createdIssues;
-}
+// createGitHubIssues REMOVED (PH-4 / ADR 0036).
+// Dead code — never called. Issue creation now goes through ticketHandler
+// with idempotent CreatedIssue mapping.
 
 export async function deleteStudyFolderFromGitHub(folderPath: string, repo: string): Promise<DeleteFolderResult> {
   const { Octokit } = await import('@octokit/rest');

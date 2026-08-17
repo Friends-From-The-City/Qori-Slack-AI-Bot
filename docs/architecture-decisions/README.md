@@ -108,6 +108,7 @@ Start with `0001` and read forward. The history is itself useful — it shows ho
 - [0033 — State classification and GitHub projection removal](./0033-state-classification-and-github-projection-removal.md) — Six-class state taxonomy; GitHub .variables writes removed; Postgres sole cascade authority
 - [0034 — Model provider boundary](./0034-model-provider-boundary.md) — Workflows select tier (haiku/sonnet/opus); single factory owns provider instantiation
 - [0035 — Unstructured content privacy gate](./0035-unstructured-content-privacy-gate.md) — Platform-wide invariant: all unstructured content → privacy policy → authorized representation → model access
+- [0036 — External side-effect idempotency](./0036-external-side-effect-idempotency.md) — External actions require stable semantic identity; retries converge on one action
 
 ### Lessons (informal ADRs from failure modes)
 

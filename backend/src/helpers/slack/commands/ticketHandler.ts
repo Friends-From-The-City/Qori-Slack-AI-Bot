@@ -86,6 +86,19 @@ interface StudyOption {
   value: string;
 }
 
+/** Typed accessors for CreatedIssue model attributes used by the handler */
+interface CreatedIssueRecord {
+  id: number;
+  public_id: string;
+  study_id: number;
+  audience: string;
+  ticket_id: string;
+  github_issue_number: number | null;
+  github_url: string | null;
+  github_repo: string;
+  status: string;
+}
+
 interface CreatedIssueResult {
   number: number;
   url: string;
@@ -458,18 +471,107 @@ const handleStep2Submit = async ({ ack, body, view, client }: SlackViewMiddlewar
 
   for (const ticket of tickets) {
     try {
+      // Step A: Check if this semantic action already has a mapping
+      let existingMapping = null;
+      if (CreatedIssue) {
+        existingMapping = await CreatedIssue.findOne({
+          where: { study_id: studyId, audience, ticket_id: ticket.id },
+        });
+      }
+
+      if (existingMapping) {
+        const em = existingMapping as unknown as CreatedIssueRecord;
+        if (em.status === 'created' && em.github_issue_number) {
+          // Already created — resolve existing issue, don't duplicate
+          created.push({ number: em.github_issue_number, url: em.github_url ?? '', title: ticket.title, id: ticket.id });
+          console.log(`♻️  Issue already exists for ${ticket.id}: #${em.github_issue_number} (idempotent resolve)`);
+          continue;
+        }
+        // Status is 'pending' or 'failed' — attempt recovery below
+      }
+
       const issueBody = formatIssueBody(ticket, audience, studyName, findingsMap, nuggetDetails, studyPath);
       const labels = buildLabels(ticket, audience, studyName);
 
+      // Step B: Reserve pending mapping (if model available and no existing mapping)
+      let mappingId: number | null = null;
+      let actionPublicId: string | null = null;
+      if (CreatedIssue && !existingMapping) {
+        try {
+          const pending = await CreatedIssue.create({
+            study_id: studyId,
+            audience,
+            ticket_id: ticket.id,
+            github_repo: repoFull,
+            created_by: userId,
+            status: 'pending',
+            github_issue_number: null,
+            github_url: null,
+          });
+          const pendingRecord = pending as unknown as CreatedIssueRecord;
+          mappingId = pendingRecord.id;
+          actionPublicId = pendingRecord.public_id;
+        } catch (dbErr) {
+          // Unique constraint violation = concurrent request already reserved
+          const dbMessage = dbErr instanceof Error ? dbErr.message : String(dbErr);
+          if (dbMessage.includes('unique') || dbMessage.includes('duplicate')) {
+            const concurrent = await CreatedIssue.findOne({
+              where: { study_id: studyId, audience, ticket_id: ticket.id },
+            });
+            if (concurrent) {
+              const cc = concurrent as unknown as CreatedIssueRecord;
+              if (cc.status === 'created' && cc.github_issue_number) {
+                created.push({ number: cc.github_issue_number, url: cc.github_url ?? '', title: ticket.title, id: ticket.id });
+                console.log(`♻️  Concurrent issue resolved for ${ticket.id}: #${cc.github_issue_number}`);
+                continue;
+              }
+              mappingId = cc.id;
+              actionPublicId = cc.public_id;
+            }
+          } else {
+            console.warn(`⚠️ Could not reserve mapping: ${dbMessage}`);
+          }
+        }
+      } else if (existingMapping) {
+        const emRecord = existingMapping as unknown as CreatedIssueRecord;
+        mappingId = emRecord.id;
+        actionPublicId = emRecord.public_id;
+      }
+
+      // Append Qori action marker to issue body for recovery
+      const markerLine = actionPublicId
+        ? `\n\n<!-- qori-action-id: ${actionPublicId} -->`
+        : '';
+      const issueBodyWithMarker = issueBody + markerLine;
+
+      // Step C: Create GitHub issue
       const { data } = await octokit.rest.issues.create({
         owner,
         repo,
         title: ticket.title,
-        body: issueBody,
+        body: issueBodyWithMarker,
         labels,
       });
 
-      if (CreatedIssue) {
+      // Step D: Update mapping with GitHub issue details
+      if (CreatedIssue && mappingId) {
+        try {
+          await CreatedIssue.update(
+            {
+              github_issue_number: data.number,
+              github_url: data.html_url,
+              status: 'created',
+              updated_at: new Date(),
+            },
+            { where: { id: mappingId } },
+          );
+        } catch (dbErr) {
+          const dbMessage = dbErr instanceof Error ? dbErr.message : String(dbErr);
+          console.warn(`⚠️ GitHub issue #${data.number} created but DB update failed: ${dbMessage}`);
+          // Issue exists on GitHub — next retry will recover via marker
+        }
+      } else if (CreatedIssue && !mappingId) {
+        // No prior mapping — create full record
         try {
           await CreatedIssue.create({
             study_id: studyId,
@@ -479,6 +581,7 @@ const handleStep2Submit = async ({ ack, body, view, client }: SlackViewMiddlewar
             github_url: data.html_url,
             github_repo: repoFull,
             created_by: userId,
+            status: 'created',
           });
         } catch (dbErr) {
           const dbMessage = dbErr instanceof Error ? dbErr.message : String(dbErr);
