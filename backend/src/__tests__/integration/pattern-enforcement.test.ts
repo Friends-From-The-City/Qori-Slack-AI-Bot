@@ -161,7 +161,9 @@ describe('pattern: as-any budget enforcement', () => {
     // Budget raised 215 → 223 by PR #272 (transcript review DM swap).
     // Budget raised 223 → 225 by PH-5B (evidence lineage integration tests
     // use `as any` for Sequelize model attribute access in test assertions).
-    expect(total).toBeLessThanOrEqual(225);
+    // Budget raised 225 → 229 by GOV-1 (authorization guards add EvidenceSource model refs
+    // with `as typeof EvidenceSource` casts in codebookHandler, matchReviewHandler, surveyPrivacyHandler).
+    expect(total).toBeLessThanOrEqual(229);
   });
 
   it('events.ts has no more than 1 as-any cast (excluding comments)', () => {
@@ -932,7 +934,7 @@ describe('pattern: authorization enforcement (ADR 0024)', () => {
     'repo/syncHandler.ts',          // Folder sync
     'qa/askStudyHandler.ts',        // Disabled RAG
     'qa/runTemplateHandler.ts',     // Legacy template runner
-    'briefHandler.ts',              // Creates new study (auth at project level)
+    // briefHandler.ts: removed from AUTH_EXEMPT in GOV-1 — now has assertProjectAccess
   ];
 
   it('handlers accepting studyId from modal input call assertStudyAccess (backstop)', () => {
@@ -971,6 +973,52 @@ describe('pattern: authorization enforcement (ADR 0024)', () => {
     // Note: This is a BACKSTOP, not proof of coverage.
     // The authoritative list is the handler catalog in ADR 0023.
     // Regex can false-pass (extraction patterns not matched).
+    expect(violations).toEqual([]);
+  });
+
+  // GOV-1: Handlers that parse projectId from JSON metadata must call an auth assert
+  it('handlers parsing projectId from JSON metadata call an authorization assert (GOV-1 backstop)', () => {
+    const files = findTsFiles(commandsDir);
+    const violations: string[] = [];
+
+    // Handlers that legitimately operate without project authorization:
+    const PROJECT_AUTH_EXEMPT = [
+      'projectStartHandler.ts',       // Creates new project
+      'qoriMainHandler.ts',           // Hub menu
+      'learn/learnHandler.ts',        // User onboarding
+      'repo/syncHandler.ts',          // Folder sync — GOV-2 candidate
+      'qa/askStudyHandler.ts',        // Disabled RAG
+      'qa/runTemplateHandler.ts',     // Legacy template runner
+      'surveySubmissionHandler.ts',   // Internal helper called from guarded discoverHandler
+      'surveySynthesisAction.ts',     // Internal action called from guarded survey flow
+    ];
+
+    for (const file of files) {
+      const content = readFile(file);
+      const rel = relative(SRC_ROOT, file);
+
+      if (PROJECT_AUTH_EXEMPT.some(exempt => rel.includes(exempt))) continue;
+
+      // Pattern: handler parses projectId from private_metadata or button value JSON
+      const parsesProjectId =
+        content.includes('projectId') &&
+        (content.includes('JSON.parse(view.private_metadata') ||
+         content.includes('JSON.parse(action.value'));
+
+      if (!parsesProjectId) continue;
+
+      const hasAuthCheck =
+        content.includes('assertStudyAccess') ||
+        content.includes('assertProjectAccess') ||
+        content.includes('assertStudyOwner') ||
+        content.includes('assertProjectOwner') ||
+        content.includes('assertApproverAccess');
+
+      if (!hasAuthCheck) {
+        violations.push(`${rel}: parses projectId from JSON metadata but doesn't call an authorization assert`);
+      }
+    }
+
     expect(violations).toEqual([]);
   });
 });

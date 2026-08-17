@@ -12,6 +12,8 @@ import type { AllMiddlewareArgs, SlackCommandMiddlewareArgs, SlackActionMiddlewa
 
 import { listOrgRepos, listAllTopLevelFolders, readFolderContents } from '../../../github';
 import { addChannelConfig } from '../../../../services/channel-config.service';
+import { getProjectByChannelId } from '../../../../services/project.service';
+import { assertProjectOwner, AuthorizationError } from '../../../../services/authorization.service';
 
 // ─── /qori-repo command ────────────────────────────────────────────
 
@@ -19,6 +21,32 @@ async function repoConfigCommandHandler({ ack, command, client }: SlackCommandMi
   await ack();
 
   const channelId = command.channel_id;
+
+  // ── GOV-1: Authorization check ──
+  // Repo configuration is a project-owner operation. Unbound channels fail closed.
+  const repoProject = await getProjectByChannelId(channelId);
+  if (!repoProject) {
+    await client.chat.postEphemeral({
+      channel: channelId,
+      user: command.user_id,
+      text: 'This channel is not linked to a project. Run `/qori-start` first to create a project.',
+    });
+    return;
+  }
+  try {
+    await assertProjectOwner(command.user_id, repoProject.id);
+  } catch (err) {
+    if (err instanceof AuthorizationError) {
+      console.warn(`[AUTH] Repo config denied: user=${command.user_id} project=${repoProject.id}`);
+      await client.chat.postEphemeral({
+        channel: channelId,
+        user: command.user_id,
+        text: 'Access denied: only the project owner can configure repository settings.',
+      });
+      return;
+    }
+    throw err;
+  }
 
   // fetch org repos
   const repos = await listOrgRepos();
@@ -229,6 +257,29 @@ async function handleRepoFolderSubfolderSubmission({ ack, body, view, client }: 
   await ack();
 
   const { channelId, repoId, repoName, folderPath } = JSON.parse(view.private_metadata);
+
+  // ── GOV-1: Re-authorize at submission boundary ──
+  const submitProject = await getProjectByChannelId(channelId);
+  if (!submitProject) {
+    await client.chat.postMessage({
+      channel: body.user.id,
+      text: 'This channel is not linked to a project. Repo configuration requires a project context.',
+    });
+    return;
+  }
+  try {
+    await assertProjectOwner(body.user.id, submitProject.id);
+  } catch (err) {
+    if (err instanceof AuthorizationError) {
+      console.warn(`[AUTH] Repo config submission denied: user=${body.user.id} project=${submitProject.id}`);
+      await client.chat.postMessage({
+        channel: body.user.id,
+        text: 'Access denied: only the project owner can configure repository settings.',
+      });
+      return;
+    }
+    throw err;
+  }
 
   console.log('repo-folder-subfolder-modal ~ private_metadata:', view.private_metadata);
   const repoSel = view.state.values.repo_block.repo_selected.selected_option;

@@ -20,6 +20,7 @@ import type { ResearchQuestion, TargetBarrier } from '../../../types/cascade';
 
 import { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo } from '../../github';
 import { getStudyById } from '../../../services/research_study.service';
+import { assertStudyAccess, AuthorizationError } from '../../../services/authorization.service';
 import { processYamlTemplate } from '../../yamlProcessor';
 import { addStudyStatus } from '../../../services/study-status.service';
 import { calculatePerPersonCompensation } from '../../../utils/compensationCalculator';
@@ -82,6 +83,22 @@ async function handlePlanSubmission({ ack, body, view, client }: SlackViewMiddle
     return;
   }
 
+  // ── GOV-1: Authorization check ──
+  // Re-authorize at submission boundary. Do not trust modal opener's check.
+  try {
+    await assertStudyAccess(body.user.id, studyId, client);
+  } catch (err) {
+    if (err instanceof AuthorizationError) {
+      console.warn(`[AUTH] Plan submission denied: user=${body.user.id} study=${studyId}`);
+      await client.chat.postEphemeral({
+        channel: channelId || body.user.id,
+        user: body.user.id,
+        text: 'Access denied: you are not a member of this study\'s project.',
+      });
+      return;
+    }
+    throw err;
+  }
 
   // Post "working" message to researcher's DM (consistent with completion DM)
   try {

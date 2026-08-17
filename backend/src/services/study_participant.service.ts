@@ -271,6 +271,11 @@ class StudyParticipantService {
 
   /**
    * Delete a participant and update the study count.
+   *
+   * @deprecated Use DSAR path (dsar.service.ts → deleteParticipantDSAR) for participant
+   * deletion. This method bypasses audit logging, authorization, and cascade cleanup of
+   * study_variables/study_notes. Zero handler call sites. Retained for migration tooling only.
+   * Scheduled for removal or access restriction in GOV-2.
    */
   async deleteParticipant(participantId: number): Promise<{ success: boolean; message: string }> {
     try {
