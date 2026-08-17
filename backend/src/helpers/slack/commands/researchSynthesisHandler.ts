@@ -22,6 +22,7 @@ import { TEMPLATE_CONSUMES } from "../ui/cascadeReadinessBlocks";
 import { assertStudyAccess } from '../../../services/authorization.service';
 import { createSynthesizedConstructs, type SynthesizedConstructInput } from '../../../services/synthesis-evidence.service';
 import { enrichProjectionWithEvidenceRefs } from '../../../services/projection-enrichment.service';
+import { attachEvidenceRefsVerified } from '../../../services/artifact.service';
 import { getDefaultModelName } from '../../modelProvider';
 import sequelize from '../../../database';
 
@@ -630,6 +631,22 @@ const handleResearchSynthesisSubmission = async ({ ack, body, view, client }: Sl
                 );
                 if (enriched > 0) {
                   console.log(`✅ Projection enriched: ${enriched} validated_themes items carry evidence_construct_ref`);
+                }
+
+                // PH-6C: Attach canonical theme evidence refs to the artifact
+                const themeConstructIds = result.created.map((c: { constructId: number }) => c.constructId);
+                const attachResult = await attachEvidenceRefsVerified(
+                  renderedAnalysis.artifactPublicId,
+                  themeConstructIds,
+                  {
+                    projectId: resolved.projectId,
+                    studyId: resolvedStudyId,
+                    templateId: analysisMethod,
+                    workflow: 'synthesis',
+                  },
+                );
+                if (attachResult.attached > 0) {
+                  console.log(`✅ Artifact→evidence: ${attachResult.attached} theme refs attached to artifact ${renderedAnalysis.artifactPublicId}`);
                 }
               }
               if (result.rejected.length > 0) {
