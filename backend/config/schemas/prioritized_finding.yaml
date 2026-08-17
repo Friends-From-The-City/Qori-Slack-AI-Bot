@@ -34,6 +34,12 @@ properties:
     items:
       type: string
     description: "REQUIRED: Validated theme IDs (theme-XX) that ground this finding. Every finding must trace to themes."
+  supporting_theme_evidence_ids:
+    type: array
+    items:
+      type: string
+      format: uuid
+    description: "Canonical evidence_construct public_ids (UUIDs) of themes supporting this finding. Required for canonical lineage."
   supporting_nuggets:
     type: array
     items:

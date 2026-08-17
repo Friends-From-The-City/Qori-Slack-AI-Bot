@@ -468,6 +468,9 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }: SlackVi
     // Content is from Qori-managed artifacts (research plans, session summaries) —
     // uses TRUSTED_CURATED_ARTIFACT policy (auto-authorized with known provenance).
     const { authorizeForModel } = require('../../../services/content-governance.service');
+    const { createSynthesizedConstructs } = require('../../../services/synthesis-evidence.service');
+    const { getDefaultModelName } = require('../../modelProvider');
+    const sequelizeDb = require('../../../database').default;
     const privacyResult = authorizeForModel(
       combinedContent,
       'TRUSTED_CURATED_ARTIFACT',
@@ -663,6 +666,120 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }: SlackVi
           return;
         }
         console.log(`✅ Readout variables committed: ${extractResult.variableCount} items (${extractResult.keys?.join(', ')})`);
+
+        // PH-5B: Create canonical evidence constructs for findings and recommendations.
+        if (extractResult.keys?.includes('prioritized_findings') || extractResult.keys?.includes('prioritized_recommendations')) {
+          try {
+            const resolvedStudyId = resolved.studyId;
+            const { readStudyVariablesByContext: readVars } = require('../../studyVariables');
+            const vars = await readVars({ projectId: resolved.projectId, studyId: resolvedStudyId });
+
+            // Load upstream theme evidence constructs
+            const EvidenceConstructModel = sequelizeDb.models.EvidenceConstruct;
+            const themeConstructs = await EvidenceConstructModel.findAll({
+              where: { study_id: resolvedStudyId, construct_type: 'theme' },
+            });
+            type ConstructRecord = { public_id: string; label: string };
+            const themePublicIds = new Set(themeConstructs.map((c: unknown) => (c as ConstructRecord).public_id));
+            const themeDisplayToPublicId = new Map(
+              themeConstructs.map((c: unknown) => [(c as ConstructRecord).label, (c as ConstructRecord).public_id]),
+            );
+
+            // Create finding constructs
+            const findings = vars.variables?.prioritized_findings;
+            if (Array.isArray(findings) && findings.length > 0 && themePublicIds.size > 0) {
+              const findingItems = findings.map((f: Record<string, unknown>) => {
+                let evidenceIds: string[] = [];
+                if (Array.isArray(f.supporting_theme_evidence_ids) && f.supporting_theme_evidence_ids.length > 0) {
+                  evidenceIds = f.supporting_theme_evidence_ids as string[];
+                } else if (Array.isArray(f.supporting_themes)) {
+                  evidenceIds = (f.supporting_themes as string[])
+                    .map(displayId => themeDisplayToPublicId.get(displayId))
+                    .filter((id): id is string => id !== undefined);
+                }
+                return {
+                  displayId: (f.id as string) || 'finding-unknown',
+                  label: (f.finding as string)?.substring(0, 100) || (f.id as string) || '',
+                  payload: f,
+                  proposedEvidenceIds: evidenceIds,
+                };
+              });
+
+              const findingResult = await createSynthesizedConstructs(findingItems, {
+                projectId: resolved.projectId,
+                studyId: resolvedStudyId,
+                constructType: 'finding',
+                upstreamConstructType: 'theme',
+                relationshipType: 'SYNTHESIZED_FROM',
+                suppliedEvidenceIds: themePublicIds,
+                cascadeVariableKey: 'prioritized_findings',
+                templateId: 'research_readout',
+                templateVersion: 'v7.0',
+                modelName: getDefaultModelName(),
+                createdBy: body.user.id,
+              });
+
+              if (findingResult.created.length > 0) {
+                console.log(`✅ Evidence lineage: ${findingResult.created.length} finding constructs`);
+
+                // Create recommendation constructs (depend on finding constructs)
+                const recommendations = vars.variables?.prioritized_recommendations;
+                if (Array.isArray(recommendations) && recommendations.length > 0) {
+                  const findingPublicIds = new Set(findingResult.created.map((c: { publicId: string }) => c.publicId));
+                  const findingDisplayToPublicId = new Map(
+                    findingResult.created.map((c: { displayId: string; publicId: string }) => [c.displayId, c.publicId]),
+                  );
+
+                  const recItems = recommendations.map((r: Record<string, unknown>) => {
+                    let evidenceIds: string[] = [];
+                    if (Array.isArray(r.supporting_finding_evidence_ids) && r.supporting_finding_evidence_ids.length > 0) {
+                      evidenceIds = r.supporting_finding_evidence_ids as string[];
+                    } else if (Array.isArray(r.addresses_findings)) {
+                      evidenceIds = (r.addresses_findings as string[])
+                        .map(displayId => findingDisplayToPublicId.get(displayId))
+                        .filter((id): id is string => id !== undefined);
+                    }
+                    return {
+                      displayId: (r.id as string) || 'rec-unknown',
+                      label: (r.recommendation as string)?.substring(0, 100) || (r.id as string) || '',
+                      payload: r,
+                      proposedEvidenceIds: evidenceIds,
+                    };
+                  });
+
+                  const recResult = await createSynthesizedConstructs(recItems, {
+                    projectId: resolved.projectId,
+                    studyId: resolvedStudyId,
+                    constructType: 'recommendation',
+                    upstreamConstructType: 'finding',
+                    relationshipType: 'SUPPORTS',
+                    suppliedEvidenceIds: findingPublicIds,
+                    cascadeVariableKey: 'prioritized_recommendations',
+                    templateId: 'research_readout',
+                    templateVersion: 'v7.0',
+                    modelName: getDefaultModelName(),
+                    createdBy: body.user.id,
+                  });
+
+                  if (recResult.created.length > 0) {
+                    console.log(`✅ Evidence lineage: ${recResult.created.length} recommendation constructs`);
+                  }
+                  if (recResult.rejected.length > 0) {
+                    console.warn(`⚠️ ${recResult.rejected.length} recommendations rejected (invalid refs)`);
+                  }
+                }
+              }
+              if (findingResult.rejected.length > 0) {
+                console.warn(`⚠️ ${findingResult.rejected.length} findings rejected (invalid refs)`);
+              }
+            } else if (themePublicIds.size === 0) {
+              console.log('ℹ️ No canonical theme constructs found — skipping finding evidence lineage');
+            }
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            console.warn(`⚠️ Finding/recommendation evidence creation failed (non-blocking): ${message}`);
+          }
+        }
       }
 
       await client.chat.postMessage({

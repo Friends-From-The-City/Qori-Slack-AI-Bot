@@ -147,6 +147,8 @@ emits:
         Look for "Evidence chain: theme-01, theme-02" or similar references.
       - supporting_nuggets: REQUIRED — Extract nugget-XX-XXX IDs from evidence citations.
         Look for "nugget-PT-001-001" or similar references in the Evidence table.
+      - supporting_theme_evidence_ids: If themes include evidence_id (canonical UUID),
+        extract those UUIDs. Enables canonical evidence lineage.
       CRITICAL: Every finding MUST have non-empty supporting_themes AND supporting_nuggets arrays.
       Parse the IDs from Evidence chain/Sources citations in each finding section.
   - key: prioritized_recommendations
@@ -164,6 +166,8 @@ emits:
       - priority: P0-P3 from Priority column
       - addresses_findings: REQUIRED — Extract finding-XX IDs from "Addresses" column.
         Example: "Addresses: Finding 01, Finding 03" → addresses_findings: ["finding-01", "finding-03"]
+      - supporting_finding_evidence_ids: If findings include evidence_id (canonical UUID),
+        extract those UUIDs. Enables canonical evidence lineage.
       CRITICAL: Every recommendation MUST have a non-empty addresses_findings array.
   - key: decision_inputs
     pool: false
