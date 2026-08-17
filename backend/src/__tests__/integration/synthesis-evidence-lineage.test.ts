@@ -12,6 +12,7 @@ import type { EvidenceConstruct } from '../../database/models/evidence_construct
 import {
   validateEvidenceRefs,
   createSynthesizedConstructs,
+  computeUpstreamFingerprint,
   type SynthesizedConstructInput,
 } from '../../services/synthesis-evidence.service';
 import { createSource, createConstruct } from '../../services/evidence.service';
@@ -279,6 +280,121 @@ describe('PH-5B: createSynthesizedConstructs', () => {
     const construct = await ConstructModel.findByPk(result.created[0].constructId);
     expect((construct as any).status).toBe('candidate');
     expect((construct as any).reviewed_by).toBeNull();
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// DERIVATION IDENTITY — upstream fingerprint
+// ═══════════════════════════════════════════════════════════════════════
+
+describe('PH-5B: Derivation identity with upstream fingerprint', () => {
+  const baseConfig = () => ({
+    projectId,
+    studyId,
+    constructType: 'theme' as const,
+    upstreamConstructType: 'nugget' as const,
+    relationshipType: 'SYNTHESIZED_FROM' as const,
+    suppliedEvidenceIds: new Set([nugget1PublicId, nugget2PublicId, nugget3PublicId]),
+    cascadeVariableKey: 'validated_themes',
+    templateId: 'affinity_mapping',
+    templateVersion: 'v7.1',
+    modelName: 'claude-sonnet-4-6',
+    createdBy: 'U_TEST',
+  });
+
+  it('same display_id + same version + same upstream refs → reuse', async () => {
+    const items: SynthesizedConstructInput[] = [{
+      displayId: 'theme-dedup-a',
+      label: 'Dedup Test A',
+      payload: {},
+      proposedEvidenceIds: [nugget1PublicId, nugget2PublicId],
+    }];
+
+    const r1 = await createSynthesizedConstructs(items, baseConfig());
+    const r2 = await createSynthesizedConstructs(items, baseConfig());
+    expect(r1.created[0].publicId).toBe(r2.created[0].publicId);
+  });
+
+  it('same display_id + same version + changed upstream refs → distinct construct', async () => {
+    const itemsV1: SynthesizedConstructInput[] = [{
+      displayId: 'theme-dedup-b',
+      label: 'Dedup Test B',
+      payload: {},
+      proposedEvidenceIds: [nugget1PublicId],
+    }];
+    const itemsV2: SynthesizedConstructInput[] = [{
+      displayId: 'theme-dedup-b',
+      label: 'Dedup Test B',
+      payload: {},
+      proposedEvidenceIds: [nugget2PublicId],
+    }];
+
+    const r1 = await createSynthesizedConstructs(itemsV1, baseConfig());
+    const r2 = await createSynthesizedConstructs(itemsV2, baseConfig());
+    expect(r1.created[0].publicId).not.toBe(r2.created[0].publicId);
+  });
+
+  it('same upstream refs in different order → same identity', async () => {
+    const itemsOrder1: SynthesizedConstructInput[] = [{
+      displayId: 'theme-dedup-c',
+      label: 'Order Test',
+      payload: {},
+      proposedEvidenceIds: [nugget2PublicId, nugget1PublicId], // reversed
+    }];
+    const itemsOrder2: SynthesizedConstructInput[] = [{
+      displayId: 'theme-dedup-c',
+      label: 'Order Test',
+      payload: {},
+      proposedEvidenceIds: [nugget1PublicId, nugget2PublicId], // original
+    }];
+
+    const r1 = await createSynthesizedConstructs(itemsOrder1, baseConfig());
+    const r2 = await createSynthesizedConstructs(itemsOrder2, baseConfig());
+    expect(r1.created[0].publicId).toBe(r2.created[0].publicId);
+  });
+
+  it('duplicate upstream refs → same identity after normalization', async () => {
+    const itemsWithDupes: SynthesizedConstructInput[] = [{
+      displayId: 'theme-dedup-d',
+      label: 'Dupe Test',
+      payload: {},
+      proposedEvidenceIds: [nugget1PublicId, nugget1PublicId, nugget2PublicId],
+    }];
+    const itemsWithoutDupes: SynthesizedConstructInput[] = [{
+      displayId: 'theme-dedup-d',
+      label: 'Dupe Test',
+      payload: {},
+      proposedEvidenceIds: [nugget1PublicId, nugget2PublicId],
+    }];
+
+    const r1 = await createSynthesizedConstructs(itemsWithDupes, baseConfig());
+    const r2 = await createSynthesizedConstructs(itemsWithoutDupes, baseConfig());
+    expect(r1.created[0].publicId).toBe(r2.created[0].publicId);
+  });
+});
+
+describe('PH-5B: computeUpstreamFingerprint', () => {
+  it('produces same hash regardless of order', () => {
+    const h1 = computeUpstreamFingerprint(['aaa', 'bbb', 'ccc']);
+    const h2 = computeUpstreamFingerprint(['ccc', 'aaa', 'bbb']);
+    expect(h1).toBe(h2);
+  });
+
+  it('deduplicates before hashing', () => {
+    const h1 = computeUpstreamFingerprint(['aaa', 'bbb']);
+    const h2 = computeUpstreamFingerprint(['aaa', 'aaa', 'bbb']);
+    expect(h1).toBe(h2);
+  });
+
+  it('different sets produce different hashes', () => {
+    const h1 = computeUpstreamFingerprint(['aaa', 'bbb']);
+    const h2 = computeUpstreamFingerprint(['aaa', 'ccc']);
+    expect(h1).not.toBe(h2);
+  });
+
+  it('returns 12-char hex string', () => {
+    const h = computeUpstreamFingerprint(['test-id']);
+    expect(h).toMatch(/^[0-9a-f]{12}$/);
   });
 });
 
