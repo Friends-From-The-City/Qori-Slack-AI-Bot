@@ -556,7 +556,11 @@ async function handleDiscoverSubmission({ ack, view, body, client }: SlackViewMi
 
     console.log(`✅ Privacy gate: ${privacyResult.policy} — ${privacyResult.reason}`);
 
-    // PH-6B: Artifact identity context for discovery artifacts
+    // PH-6B: Artifact identity context for discovery artifacts.
+    // PH-6C note: No artifact→evidence attachment here. Discovery sources
+    // are not yet in the canonical evidence graph (ADR 0037 limitation).
+    // When discovery evidence constructs are added (future PH-5D), wire
+    // attachEvidenceRefsVerified here.
     const { computeContentHash } = require('../../survey');
     const contentFingerprint = computeContentHash(privacyResult.modelSafeContent!).substring(0, 16);
     (data as unknown as Record<string, unknown>).__artifactContext = {

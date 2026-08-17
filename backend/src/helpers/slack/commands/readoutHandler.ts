@@ -470,6 +470,7 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }: SlackVi
     const { authorizeForModel } = require('../../../services/content-governance.service');
     const { createSynthesizedConstructs } = require('../../../services/synthesis-evidence.service');
     const { enrichProjectionWithEvidenceRefs } = require('../../../services/projection-enrichment.service');
+    const { attachEvidenceRefsVerified } = require('../../../services/artifact.service');
     const { getDefaultModelName } = require('../../modelProvider');
     const sequelizeDb = require('../../../database').default;
     const privacyResult = authorizeForModel(
@@ -690,6 +691,9 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }: SlackVi
         console.log(`✅ Readout variables committed: ${extractResult.variableCount} items (${extractResult.keys?.join(', ')})`);
 
         // PH-5B: Create canonical evidence constructs for findings and recommendations.
+        // PH-6C: Collect created construct IDs for artifact→evidence attachment.
+        const readoutConstructIds: number[] = [];
+
         if (extractResult.keys?.includes('prioritized_findings') || extractResult.keys?.includes('prioritized_recommendations')) {
           try {
             const resolvedStudyId = resolved.studyId;
@@ -743,6 +747,7 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }: SlackVi
 
               if (findingResult.created.length > 0) {
                 console.log(`✅ Evidence lineage: ${findingResult.created.length} finding constructs`);
+                readoutConstructIds.push(...findingResult.created.map((c: { constructId: number }) => c.constructId));
                 // PH-5C: Enrich projection with canonical refs
                 const findingsEnriched = await enrichProjectionWithEvidenceRefs(
                   resolved.projectId, resolvedStudyId, 'prioritized_findings', findingResult.created,
@@ -790,6 +795,7 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }: SlackVi
 
                   if (recResult.created.length > 0) {
                     console.log(`✅ Evidence lineage: ${recResult.created.length} recommendation constructs`);
+                    readoutConstructIds.push(...recResult.created.map((c: { constructId: number }) => c.constructId));
                     const recsEnriched = await enrichProjectionWithEvidenceRefs(
                       resolved.projectId, resolvedStudyId, 'prioritized_recommendations', recResult.created,
                     );
@@ -809,6 +815,23 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }: SlackVi
           } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
             console.warn(`⚠️ Finding/recommendation evidence creation failed (non-blocking): ${message}`);
+          }
+        }
+
+        // PH-6C: Attach canonical finding/recommendation evidence refs to readout artifact
+        if (readoutConstructIds.length > 0) {
+          const attachResult = await attachEvidenceRefsVerified(
+            renderedYaml.artifactPublicId,
+            readoutConstructIds,
+            {
+              projectId: resolved.projectId,
+              studyId: resolved.studyId,
+              templateId: 'research_readout',
+              workflow: 'readout',
+            },
+          );
+          if (attachResult.attached > 0) {
+            console.log(`✅ Artifact→evidence: ${attachResult.attached} finding/recommendation refs attached to artifact ${renderedYaml.artifactPublicId}`);
           }
         }
       }

@@ -110,6 +110,7 @@ Start with `0001` and read forward. The history is itself useful — it shows ho
 - [0035 — Unstructured content privacy gate](./0035-unstructured-content-privacy-gate.md) — Platform-wide invariant: all unstructured content → privacy policy → authorized representation → model access
 - [0036 — External side-effect idempotency](./0036-external-side-effect-idempotency.md) — External actions require stable semantic identity; retries converge on one action
 - [0037 — Canonical evidence lineage](./0037-canonical-evidence-lineage.md) — Evidence graph is lineage authority; study_variables is projection; upstream→downstream edges; candidate vs accepted
+- [0038 — Canonical artifact identity and navigation](./0038-canonical-artifact-identity-and-navigation.md) — Artifact public_id is stable identity; location is mutable; artifact→evidence refs use canonical IDs; no prose/path matching
 
 ### Lessons (informal ADRs from failure modes)
 

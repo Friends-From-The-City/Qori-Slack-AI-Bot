@@ -274,3 +274,108 @@ export async function attachEvidenceRefs(
   }
   return attached;
 }
+
+/**
+ * PH-6C: Attach evidence refs after verifying preconditions.
+ *
+ * Verifies:
+ * - artifactPublicId exists and resolves to a record
+ * - artifact.status === 'written' (GitHub write succeeded)
+ * - constructIds is non-empty
+ *
+ * On failure: emits structured error log with context. Does NOT throw
+ * or corrupt canonical evidence/artifact state.
+ *
+ * Idempotent: safe to call on rerun (same semantic artifact + constructs).
+ */
+export async function attachEvidenceRefsVerified(
+  artifactPublicId: string | undefined,
+  constructIds: number[],
+  context: {
+    projectId: number;
+    studyId: number | null;
+    templateId: string;
+    workflow: string;
+  },
+  refType: string = 'reflects',
+): Promise<{ attached: number; skipped: boolean; reason?: string }> {
+  if (!artifactPublicId) {
+    return { attached: 0, skipped: true, reason: 'no artifact public_id' };
+  }
+
+  if (constructIds.length === 0) {
+    return { attached: 0, skipped: true, reason: 'no construct IDs to attach' };
+  }
+
+  try {
+    const artifact = await getArtifactByPublicId(artifactPublicId);
+    if (!artifact) {
+      const reason = `artifact ${artifactPublicId} not found`;
+      console.error(
+        `[artifact-evidence-ref] Attachment skipped: ${reason}` +
+        ` | project=${context.projectId} study=${context.studyId}` +
+        ` | template=${context.templateId} workflow=${context.workflow}` +
+        ` | intended_refs=${constructIds.length}`,
+      );
+      return { attached: 0, skipped: true, reason };
+    }
+
+    if (artifact.status !== 'written') {
+      const reason = `artifact ${artifactPublicId} status=${artifact.status}, expected written`;
+      console.error(
+        `[artifact-evidence-ref] Attachment skipped: ${reason}` +
+        ` | project=${context.projectId} study=${context.studyId}` +
+        ` | template=${context.templateId} workflow=${context.workflow}` +
+        ` | intended_refs=${constructIds.length}`,
+      );
+      return { attached: 0, skipped: true, reason };
+    }
+
+    const attached = await attachEvidenceRefs(artifact.id, constructIds, refType);
+    return { attached, skipped: false };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(
+      `[artifact-evidence-ref] Attachment failed: ${message}` +
+      ` | artifact=${artifactPublicId}` +
+      ` | project=${context.projectId} study=${context.studyId}` +
+      ` | template=${context.templateId} workflow=${context.workflow}` +
+      ` | intended_refs=${constructIds.length}`,
+    );
+    return { attached: 0, skipped: true, reason: message };
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Evidence Ref Queries (PH-6C)
+// ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Get all evidence construct refs attached to an artifact.
+ */
+export async function getEvidenceRefsForArtifact(
+  artifactId: number,
+): Promise<Array<{ construct_id: number; ref_type: string }>> {
+  const RefModel = getRefModel();
+  if (!RefModel) return [];
+  const refs = await RefModel.findAll({ where: { artifact_id: artifactId } });
+  return refs.map(r => ({
+    construct_id: (r as unknown as { construct_id: number }).construct_id,
+    ref_type: (r as unknown as { ref_type: string }).ref_type,
+  }));
+}
+
+/**
+ * Get all artifacts that reflect a given evidence construct.
+ */
+export async function getArtifactsForConstruct(
+  constructId: number,
+): Promise<ResearchArtifact[]> {
+  const RefModel = getRefModel();
+  if (!RefModel) return [];
+  const refs = await RefModel.findAll({ where: { construct_id: constructId } });
+  const artifactIds = refs.map(r => (r as unknown as { artifact_id: number }).artifact_id);
+  if (artifactIds.length === 0) return [];
+  const Model = getArtifactModel();
+  return Model.findAll({ where: { id: artifactIds } });
+}

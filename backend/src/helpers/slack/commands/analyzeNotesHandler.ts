@@ -22,6 +22,7 @@ import { readStudyVariablesByContext, type VariableContext } from '../../studyVa
 import { assertStudyAccess, AuthorizationError } from '../../../services/authorization.service';
 import { redactTranscript } from '../../../helpers/piiRedaction';
 import { resolveSessionSource, createNuggetConstructs, type NuggetInput } from '../../../services/session-evidence.service';
+import { attachEvidenceRefsVerified } from '../../../services/artifact.service';
 import { getDefaultModelName } from '../../modelProvider';
 
 // ─── Cascade context ─────────────────────────────────────────────
@@ -532,6 +533,24 @@ const handleAnalyzeNotesSubmission = async ({ ack, body, view, client }: SlackVi
               body.user.id,
             );
             console.log(`✅ Evidence lineage: ${createdNuggets.length} nugget constructs linked to source ${evidenceSourcePublicId}`);
+
+            // PH-6C: Attach canonical nugget evidence refs to session summary artifact
+            if (createdNuggets.length > 0) {
+              const nuggetConstructIds = createdNuggets.map(c => c.constructId);
+              const attachResult = await attachEvidenceRefsVerified(
+                renderedYaml.artifactPublicId,
+                nuggetConstructIds,
+                {
+                  projectId,
+                  studyId: resolvedStudyId,
+                  templateId: 'session_summary',
+                  workflow: 'analyze',
+                },
+              );
+              if (attachResult.attached > 0) {
+                console.log(`✅ Artifact→evidence: ${attachResult.attached} nugget refs attached to artifact ${renderedYaml.artifactPublicId}`);
+              }
+            }
           }
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
