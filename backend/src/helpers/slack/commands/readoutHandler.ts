@@ -469,6 +469,7 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }: SlackVi
     // uses TRUSTED_CURATED_ARTIFACT policy (auto-authorized with known provenance).
     const { authorizeForModel } = require('../../../services/content-governance.service');
     const { createSynthesizedConstructs } = require('../../../services/synthesis-evidence.service');
+    const { enrichProjectionWithEvidenceRefs } = require('../../../services/projection-enrichment.service');
     const { getDefaultModelName } = require('../../modelProvider');
     const sequelizeDb = require('../../../database').default;
     const privacyResult = authorizeForModel(
@@ -721,6 +722,11 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }: SlackVi
 
               if (findingResult.created.length > 0) {
                 console.log(`✅ Evidence lineage: ${findingResult.created.length} finding constructs`);
+                // PH-5C: Enrich projection with canonical refs
+                const findingsEnriched = await enrichProjectionWithEvidenceRefs(
+                  resolved.projectId, resolvedStudyId, 'prioritized_findings', findingResult.created,
+                );
+                if (findingsEnriched > 0) console.log(`✅ Projection enriched: ${findingsEnriched} findings`);
 
                 // Create recommendation constructs (depend on finding constructs)
                 const recommendations = vars.variables?.prioritized_recommendations;
@@ -763,6 +769,10 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }: SlackVi
 
                   if (recResult.created.length > 0) {
                     console.log(`✅ Evidence lineage: ${recResult.created.length} recommendation constructs`);
+                    const recsEnriched = await enrichProjectionWithEvidenceRefs(
+                      resolved.projectId, resolvedStudyId, 'prioritized_recommendations', recResult.created,
+                    );
+                    if (recsEnriched > 0) console.log(`✅ Projection enriched: ${recsEnriched} recommendations`);
                   }
                   if (recResult.rejected.length > 0) {
                     console.warn(`⚠️ ${recResult.rejected.length} recommendations rejected (invalid refs)`);
