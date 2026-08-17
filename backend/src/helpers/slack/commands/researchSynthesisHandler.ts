@@ -487,10 +487,20 @@ const handleResearchSynthesisSubmission = async ({ ack, body, view, client }: Sl
     // ─── BUILD RAW CONTENT AS CONTEXT ────────────────────────────────
     // Keep raw content alongside structured vars (ADR 0018)
 
-    const { content: combinedFileContent, files } = await buildCombinedFileContent(parseInt(selectedStudyId));
+    const { content: rawCombinedContent, files } = await buildCombinedFileContent(parseInt(selectedStudyId));
     const detectedFiles = await buildDetectedFilesList(parseInt(selectedStudyId));
 
-    console.log(`✅ Loaded ${files.length} session files as raw context`);
+    // Privacy gate: authorize fetched content before model access (PH-3 / ADR 0035).
+    // Session files are Qori-generated artifacts — TRUSTED_CURATED_ARTIFACT policy.
+    const { authorizeForModel } = require('../../../services/content-governance.service');
+    const privacyResult = authorizeForModel(
+      rawCombinedContent,
+      'TRUSTED_CURATED_ARTIFACT',
+      { isQoriArtifact: true, upstreamPrivacyComplete: true, sourceId: `synthesis:${selectedStudyName}` },
+    );
+    const combinedFileContent = privacyResult.modelSafeContent ?? rawCombinedContent;
+
+    console.log(`✅ Loaded ${files.length} session files as raw context (privacy: ${privacyResult.policy})`);
 
     // ─── BUILD TEMPLATE INPUT ────────────────────────────────────────
 

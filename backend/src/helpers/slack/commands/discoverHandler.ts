@@ -25,6 +25,7 @@ import { parseDocuments, validateDocuments } from '../../documentParser';
 import { getProjectByChannelId, getProjectById } from '../../../services/project.service';
 import type { VariableContext } from '../../studyVariables';
 import { postEphemeralOrDM } from '../slackHelpers';
+import { authorizeForModel, scanForPii } from '../../../services/content-governance.service';
 import { handleSurveyUploadPhase } from './surveySubmissionHandler';
 
 // ─── Types ──────────────────────────────────────────────────────
@@ -518,6 +519,42 @@ async function handleDiscoverSubmission({ ack, view, body, client }: SlackViewMi
       data.detected_files = documents.map(d => d.name).join('\n- ');
       (data as any).file_list = documents.map(d => d.name);
     }
+
+    // Privacy gate: authorize uploaded content before model access (PH-3 / ADR 0035).
+    // Discovery uploads are researcher-authored documents (not participant transcripts),
+    // so they use the DISCOVERY_UPLOAD policy: deterministic PII scan → auto-authorize
+    // if clean, or block + notify researcher if PII detected.
+    const privacyResult = authorizeForModel(
+      formattedDocumentContent,
+      'DISCOVERY_UPLOAD',
+      { projectId, sourceId: `discovery:${discoveryType}:${topicSlug}` },
+    );
+
+    if (privacyResult.status === 'pending_review') {
+      const piiFindings = scanForPii(formattedDocumentContent);
+      const findingsList = piiFindings.map(f => `• ${f.label}: \`${f.snippet}\``).join('\n');
+      await client.chat.postMessage({
+        channel: userId,
+        text: `⚠️ *Privacy scan detected potential PII in your uploaded file(s)*\n\n${findingsList}\n\n` +
+          'Please review and re-upload with PII removed, or contact the research lead. ' +
+          'Qori cannot process files containing personal identifiers.',
+      });
+      return;
+    }
+
+    if (privacyResult.status === 'denied') {
+      await client.chat.postMessage({
+        channel: userId,
+        text: `❌ Content authorization failed: ${privacyResult.reason}`,
+      });
+      return;
+    }
+
+    // Use the authorized model-safe content
+    data.document_content = privacyResult.modelSafeContent!;
+    data.combined_file_content = privacyResult.modelSafeContent!;
+
+    console.log(`✅ Privacy gate: ${privacyResult.policy} — ${privacyResult.reason}`);
 
     const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, typeConfig.yaml);
 
