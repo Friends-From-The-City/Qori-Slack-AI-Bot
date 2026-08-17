@@ -31,8 +31,22 @@ import {
 } from 'sequelize';
 import { randomUUID } from 'crypto';
 
+/**
+ * Directed lineage edge types. All edges flow UPSTREAM → DOWNSTREAM:
+ *
+ * DERIVED_FROM      source → construct  "This construct was derived from this source"
+ * SYNTHESIZED_FROM  construct → construct  "This construct was synthesized from these upstream constructs"
+ * SUPPORTS          construct → construct  "This construct provides supporting evidence for that construct"
+ * ADDRESSES         construct → construct  "This construct addresses the question/barrier"
+ * TESTED_BY         construct → construct  "This construct was tested by"
+ * CONTRADICTS       construct → construct  "These constructs present conflicting evidence"
+ * REFINES           construct → construct  "This construct refines/specializes the upstream"
+ * IMPLEMENTED_BY    construct → construct  "This recommendation is implemented by this ticket"
+ * VALIDATES         construct → construct  "This construct validates the upstream"
+ */
 export type RelationshipType =
   | 'DERIVED_FROM'
+  | 'SYNTHESIZED_FROM'
   | 'SUPPORTS'
   | 'ADDRESSES'
   | 'TESTED_BY'
