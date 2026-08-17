@@ -105,6 +105,7 @@ Start with `0001` and read forward. The history is itself useful — it shows ho
 - [0030 — Stable database IDs and typed relational lineage are authoritative evidence identity](./0030-evidence-lineage-identity.md) — DB IDs are identity; document anchors are presentation
 - [0031 — Progressive modal contracts](./0031-progressive-modal-contracts.md) — CONSUMES/ASKS/COMMITS/CONTROL/UPLOADS/DERIVES vocabulary applied progressively
 - [0032 — Versioned researcher-adjudicated qualitative coding](./0032-versioned-qualitative-coding.md) — Governed qualitative evidence; privacy-gated model access; immutable versioned codebooks
+- [0033 — State classification and GitHub projection removal](./0033-state-classification-and-github-projection-removal.md) — Six-class state taxonomy; GitHub .variables writes removed; Postgres sole cascade authority
 
 ### Lessons (informal ADRs from failure modes)
 

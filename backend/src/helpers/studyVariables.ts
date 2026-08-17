@@ -1,14 +1,12 @@
-// studyVariables.ts — Authoritative variable store backed by Postgres
+// studyVariables.ts — Authoritative cascade variable store backed by Postgres.
 // Phase 2B refactor: Uses project_id + study_id FKs instead of study_name string.
-// Fallback: reads from GitHub study-variables.json if Postgres has no data (migration period)
+// PH-1: GitHub .variables reads/writes removed. Postgres is sole runtime authority.
 
 import { Op, literal } from 'sequelize';
 import type { Model, ModelStatic, Sequelize } from 'sequelize';
-import { fetchFileFromRepoByPath, createOrUpdateFileOnGitHub, getContentRepo } from './github';
+// GitHub imports removed (PH-1 / ADR 0033) — no runtime variable reads/writes to GitHub.
 
-const VARIABLES_DIR = '.variables';
-const VARIABLES_FILE = 'study-variables.json';
-const DISCOVERY_VARIABLES_FILE = 'discovery-variables.json';
+// GitHub path constants removed (PH-1) — no longer written.
 
 /**
  * Maps YAML template IDs (used in consumes.source) to Postgres discovery_type values.
@@ -303,35 +301,19 @@ export async function readStudyVariables(_studyBasePath: string): Promise<StudyV
 }
 
 /**
- * Write study variables GitHub artifact (debugging only).
+ * Write study variables — GitHub artifact write REMOVED (PH-1 / ADR 0033).
  *
- * NOTE: This function no longer writes to Postgres. The Postgres write
- * is handled by mergeVariablesByContext(), which correctly implements
- * per-participant isolation for pool variables. Calling writeVariablesToPostgresByContext()
- * here was causing a double-write that nuked per-participant scoping.
- * See L005: Per-participant pool schemas must include participant field.
+ * Postgres write handled by mergeVariablesByContext(). This function existed
+ * only for the GitHub debugging artifact, which is no longer written.
+ * Retained as no-op for callers that still reference it during migration.
  */
 export async function writeStudyVariablesByContext(
-  ctx: VariableContext,
-  variablesData: StudyVariablesStructure,
-  studyBasePath?: string
+  _ctx: VariableContext,
+  _variablesData: StudyVariablesStructure,
+  _studyBasePath?: string
 ): Promise<void> {
-  // NOTE: Postgres write removed — mergeVariablesByContext() already wrote to Postgres
-  // with correct per-participant isolation. Writing again here would overwrite
-  // without participant scoping, breaking pool isolation.
-
-  // Write GitHub JSON (debugging artifact, not authoritative)
-  if (studyBasePath) {
-    try {
-      const filePath = `${studyBasePath}/${VARIABLES_DIR}/${VARIABLES_FILE}`;
-      variablesData.last_updated = new Date().toISOString();
-      const content = JSON.stringify(variablesData, null, 2);
-      await createOrUpdateFileOnGitHub(filePath, content);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      console.warn(`⚠️ GitHub variables artifact write failed (non-blocking): ${message}`);
-    }
-  }
+  // No-op: GitHub .variables write removed (PH-1 / ADR 0033).
+  // Postgres is sole authority, written by mergeVariablesByContext().
 }
 
 /**
@@ -639,20 +621,10 @@ export async function writeDiscoveryVariablesByProject(
   await writeDiscoveryToPostgresByProject(StudyVariable, projectId, variablesData);
   console.log(`✅ Discovery variables written to Postgres for project:${projectId}`);
 
-  // GitHub artifact — only write if Postgres succeeded (soft warning on failure)
-  // Note: discoveryType is used for Postgres queries but NOT for file paths
-  // All discovery variables go to a single flat .variables/ folder
-  if (projectPath) {
-    try {
-      const filePath = `${projectPath}/00-discovery/${VARIABLES_DIR}/${DISCOVERY_VARIABLES_FILE}`;
-      variablesData.last_updated = new Date().toISOString();
-      const content = JSON.stringify(variablesData, null, 2);
-      await createOrUpdateFileOnGitHub(filePath, content);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      console.warn(`⚠️ GitHub discovery artifact write failed (non-blocking): ${message}`);
-    }
-  }
+  // GitHub .variables write REMOVED (PH-1 / ADR 0033).
+  // Postgres study_variables is the sole runtime authority.
+  // GitHub .variables files were debug/export projections never read at runtime.
+  // The Contents API 422 on large files confirmed the write was obsolete.
 }
 
 /**
@@ -1307,25 +1279,11 @@ async function writeDiscoveryToPostgresByProject(
 // Use writeDiscoveryToPostgresByProject(projectId) instead.
 
 // ═══════════════════════════════════════════════════════════
-// GITHUB FALLBACK (migration period)
+// GITHUB FALLBACK — REMOVED (PH-1 / ADR 0033)
 // ═══════════════════════════════════════════════════════════
-
-async function readStudyVariablesFromGitHub(studyBasePath: string): Promise<StudyVariablesStructure> {
-  const filePath = `${studyBasePath}/${VARIABLES_DIR}/${VARIABLES_FILE}`;
-  try {
-    const file = await fetchFileFromRepoByPath(getContentRepo(), filePath);
-    return JSON.parse(file.content) as StudyVariablesStructure;
-  } catch (error: unknown) {
-    const err = error as { status?: number; message?: string };
-    if (err.status === 404 || err.message?.includes('Not Found') || err.message?.includes('Could not fetch file')) {
-      return createEmptyVariablesFile(studyBasePath);
-    }
-    throw error;
-  }
-}
-
-// readDiscoveryVariablesFromGitHub DELETED in Phase 2D — dead code using old _discovery path pattern.
-// Discovery variables are now read via readDiscoveryVariablesByProject (Postgres-backed).
+// readStudyVariablesFromGitHub removed — was dead code (never called).
+// readDiscoveryVariablesFromGitHub removed in Phase 2D.
+// Postgres study_variables is the sole runtime authority for all variable reads.
 
 // ═══════════════════════════════════════════════════════════
 // IN-MEMORY MERGE (fallback when Postgres unavailable)
