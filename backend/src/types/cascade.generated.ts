@@ -523,6 +523,8 @@ export interface PrioritizedFinding {
   evidence_strength: 'Strong' | 'Moderate' | 'Limited';
   /** REQUIRED: Validated theme IDs (theme-XX) that ground this finding. Every finding must trace to themes. */
   supporting_themes: string[];
+  /** Canonical evidence_construct public_ids (UUIDs) of themes supporting this finding. Required for canonical lineage. */
+  supporting_theme_evidence_ids: string[] | null;
   /** REQUIRED: Nugget IDs that provide evidence. Every finding must trace to raw observations. */
   supporting_nuggets: string[];
   /** X of Y participants format */
@@ -595,6 +597,8 @@ export interface PrioritizedRecommendation {
   rationale: string | null;
   /** REQUIRED: Finding IDs (finding-XX) this addresses. Every recommendation must trace to findings. */
   addresses_findings: string[];
+  /** Canonical evidence_construct public_ids (UUIDs) of findings this addresses. Required for canonical lineage. */
+  supporting_finding_evidence_ids: string[] | null;
   priority: 'P0' | 'P1' | 'P2' | 'P3';
   effort_estimate: 'High' | 'Medium' | 'Low' | null;
   /** What changes if this is implemented */
@@ -940,6 +944,8 @@ export interface ValidatedTheme {
   pattern_description: string | null;
   /** References to atomic_nugget_core.id values that support this theme */
   supporting_nuggets: string[];
+  /** Canonical evidence_construct public_ids (UUIDs) of nuggets supporting this theme. Required for canonical lineage. */
+  supporting_evidence_ids: string[] | null;
   /** Number of nugget instances supporting this theme */
   evidence_count: number | null;
   /** PT-XXX IDs where this theme was observed */
