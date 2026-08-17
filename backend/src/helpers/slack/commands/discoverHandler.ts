@@ -23,6 +23,7 @@ import { processYamlTemplate } from '../../yamlProcessor';
 import { processSlackFiles } from '../../pdfProcessor';
 import { parseDocuments, validateDocuments } from '../../documentParser';
 import { getProjectByChannelId, getProjectById } from '../../../services/project.service';
+import { assertProjectAccess, AuthorizationError } from '../../../services/authorization.service';
 import type { VariableContext } from '../../studyVariables';
 import { postEphemeralOrDM } from '../slackHelpers';
 import { authorizeForModel, scanForPii } from '../../../services/content-governance.service';
@@ -235,6 +236,18 @@ async function discoverHandler({ ack, body, client, command }: SlackCommandMiddl
     return;
   }
 
+  // ── GOV-1: Authorization check ──
+  try {
+    await assertProjectAccess(userId, project.id, client);
+  } catch (err) {
+    if (err instanceof AuthorizationError) {
+      console.warn(`[AUTH] Discover command denied: user=${userId} project=${project.id}`);
+      await postEphemeralOrDM(client, channelId, userId, 'Access denied: you are not a member of this project.');
+      return;
+    }
+    throw err;
+  }
+
   try {
     // Load existing discovery artifacts for this project
     let artifacts: DiscoveryArtifact[] = [];
@@ -292,6 +305,7 @@ async function discoverHandler({ ack, body, client, command }: SlackCommandMiddl
 }
 
 // ─── Action handler: hub → type-specific modal ─────────────────
+// GOV-1: UI transition only (hub → type modal). Auth enforced at discoverHandler (entry) and handleDiscoverSubmission (mutation).
 
 async function openDiscoverTypeModal({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs): Promise<void> {
   await ack();
@@ -352,6 +366,18 @@ async function handleDiscoverSubmission({ ack, view, body, client }: SlackViewMi
       text: '❌ Project context missing. Please run `/qori-discover` from a project-linked channel.',
     });
     return;
+  }
+
+  // ── GOV-1: Re-authorize at submission boundary ──
+  try {
+    await assertProjectAccess(userId, projectId, client);
+  } catch (err) {
+    if (err instanceof AuthorizationError) {
+      console.warn(`[AUTH] Discover submission denied: user=${userId} project=${projectId}`);
+      await client.chat.postMessage({ channel: userId, text: 'Access denied: you are not a member of this project.' });
+      return;
+    }
+    throw err;
   }
 
   // Read discovery type from private_metadata (set by action handler)

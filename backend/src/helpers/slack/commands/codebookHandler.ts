@@ -25,6 +25,11 @@ import {
 import { findActiveUnacceptedRun, findAcceptedCodingRun } from '../../../services/survey-coding-run.service';
 import { generateDraftCodes, CodebookGenerationError } from '../../survey/codebookGenerator';
 import { getProjectById } from '../../../services/project.service';
+import { assertProjectAccess, AuthorizationError } from '../../../services/authorization.service';
+import sequelize from '../../../database';
+import type { EvidenceSource } from '../../../database/models/evidence_source';
+
+const EvidenceSourceModel = sequelize.models.EvidenceSource as typeof EvidenceSource;
 
 const CODES_PER_PAGE = 5;
 
@@ -119,8 +124,31 @@ export async function handleGenerateCodebook(
 
   try {
     const evidenceSourceId = rawMeta.evidenceSourceId;
-    const projectId = rawMeta.projectId;
     const surveyName = rawMeta.surveyName ?? 'Survey';
+
+    // ── GOV-1: Resolve canonical project from persisted evidence source ──
+    const evidenceSource = await EvidenceSourceModel.findByPk(evidenceSourceId);
+    if (!evidenceSource) {
+      await client.chat.postMessage({ channel: userId, text: 'Error: evidence source not found.' });
+      return;
+    }
+    const projectId = evidenceSource.project_id;
+    // Verify against metadata — tampered/stale transport context → fail closed
+    if (rawMeta.projectId && rawMeta.projectId !== projectId) {
+      console.warn(`[AUTH] Codebook generate: metadata projectId=${rawMeta.projectId} != canonical ${projectId}`);
+      await client.chat.postMessage({ channel: userId, text: 'Access denied: project context mismatch.' });
+      return;
+    }
+    try {
+      await assertProjectAccess(userId, projectId, client);
+    } catch (err) {
+      if (err instanceof AuthorizationError) {
+        console.warn(`[AUTH] Codebook generate denied: user=${userId} project=${projectId}`);
+        await client.chat.postMessage({ channel: userId, text: 'Access denied: you are not a member of this project.' });
+        return;
+      }
+      throw err;
+    }
 
     // Resume: check for already-accepted codebook first
     const acceptedCodebook = await findAcceptedCodebook(evidenceSourceId);
@@ -239,6 +267,23 @@ export async function handleOpenGroupingReview(
     return;
   }
 
+  // ── GOV-1: Resolve canonical project from persisted evidence source ──
+  const reviewSource = await EvidenceSourceModel.findByPk(rawMeta.evidenceSourceId);
+  if (!reviewSource) {
+    await client.chat.postMessage({ channel: userId, text: 'Error: evidence source not found.' });
+    return;
+  }
+  try {
+    await assertProjectAccess(userId, reviewSource.project_id, client);
+  } catch (err) {
+    if (err instanceof AuthorizationError) {
+      console.warn(`[AUTH] Grouping review denied: user=${userId} project=${reviewSource.project_id}`);
+      await client.chat.postMessage({ channel: userId, text: 'Access denied: you are not a member of this project.' });
+      return;
+    }
+    throw err;
+  }
+
   const result = await getCodebookWithCodes(rawMeta.codebookId);
   if (!result) {
     await client.chat.postMessage({
@@ -295,6 +340,28 @@ export async function handleCodebookReviewSubmission(
 
   const meta: CodebookMeta = JSON.parse(view.private_metadata || '{}');
   const userId = body.user.id;
+
+  // ── GOV-1: Resolve canonical project from persisted evidence source ──
+  const submissionSource = await EvidenceSourceModel.findByPk(meta.evidenceSourceId);
+  if (!submissionSource) {
+    await client.chat.postMessage({ channel: userId, text: 'Error: evidence source not found.' });
+    return;
+  }
+  if (meta.projectId && meta.projectId !== submissionSource.project_id) {
+    console.warn(`[AUTH] Codebook review: metadata projectId=${meta.projectId} != canonical ${submissionSource.project_id}`);
+    await client.chat.postMessage({ channel: userId, text: 'Access denied: project context mismatch.' });
+    return;
+  }
+  try {
+    await assertProjectAccess(userId, submissionSource.project_id, client);
+  } catch (err) {
+    if (err instanceof AuthorizationError) {
+      console.warn(`[AUTH] Codebook review submission denied: user=${userId} project=${submissionSource.project_id}`);
+      await client.chat.postMessage({ channel: userId, text: 'Access denied: you are not a member of this project.' });
+      return;
+    }
+    throw err;
+  }
 
   if (!meta.codebookId) {
     await client.chat.postMessage({ channel: userId, text: "Groupings not found." });

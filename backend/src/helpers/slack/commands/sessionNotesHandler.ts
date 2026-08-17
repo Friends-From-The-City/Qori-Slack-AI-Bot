@@ -27,6 +27,7 @@ import { logDispositionAction } from "../../../services/audit.service";
 import sessionObserverService from "../../../services/session_observer.service";
 import sessionParticipantService from "../../../services/study_participant.service";
 import { resolveStudyFromName } from "../../../services/research_study.service";
+import { assertStudyAccess, AuthorizationError } from "../../../services/authorization.service";
 import type { VariableContext } from "../../studyVariables";
 import { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo, createOrUpdateFileOnGitHub } from "../../github";
 import { processYamlTemplate, type DryRunResult } from "../../yamlProcessor";
@@ -438,6 +439,35 @@ const handleSessionNotesSubmission = async ({ ack, body, view, client }: SlackVi
         }
       });
       return;
+    }
+
+    // ── GOV-1: Authorization check ──
+    // Resolve canonical study from persisted session state, not metadata.
+    const sessionStudyId = selectedSession.study?.id;
+    if (!sessionStudyId) {
+      // Unresolved study scope → fail closed (correction #1)
+      await (ack as Function)({
+        response_action: "errors",
+        errors: {
+          session_select: "Cannot determine study scope for this session. Contact your research coordinator."
+        }
+      });
+      return;
+    }
+    try {
+      await assertStudyAccess(body.user.id, sessionStudyId, client);
+    } catch (err) {
+      if (err instanceof AuthorizationError) {
+        console.warn(`[AUTH] Session notes submission denied: user=${body.user.id} study=${sessionStudyId}`);
+        await (ack as Function)({
+          response_action: "errors",
+          errors: {
+            session_select: "Access denied: you are not a member of this study's project."
+          }
+        });
+        return;
+      }
+      throw err;
     }
 
     let templateData: SessionNotesTemplateInput = {
@@ -912,7 +942,8 @@ ${scrubResult.content}`;
 // Each button opens a sub-modal via views.open (fresh trigger_id from the click).
 // Sub-modal submit does the work + updates the DM to terminal state.
 
-/** Open the rescrub modal from DM button click. */
+/** Open the rescrub modal from DM button click.
+ * GOV-1: UI-only (opens sub-modal, no state mutation). Auth enforced at sub-modal submission. */
 const handleTranscriptRescrubButton = async ({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs): Promise<void> => {
   await ack();
   try {
@@ -924,7 +955,8 @@ const handleTranscriptRescrubButton = async ({ ack, body, client }: SlackActionM
   }
 };
 
-/** Open the approve modal from DM button click. */
+/** Open the approve modal from DM button click.
+ * GOV-1: UI-only (opens sub-modal, no state mutation). Auth enforced at sub-modal submission. */
 const handleTranscriptApproveButton = async ({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs): Promise<void> => {
   await ack();
   try {
@@ -936,7 +968,8 @@ const handleTranscriptApproveButton = async ({ ack, body, client }: SlackActionM
   }
 };
 
-/** Open the reject modal from DM button click. */
+/** Open the reject modal from DM button click.
+ * GOV-1: UI-only (opens sub-modal, no state mutation). Auth enforced at sub-modal submission. */
 const handleTranscriptRejectButton = async ({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs): Promise<void> => {
   await ack();
   try {
@@ -981,6 +1014,32 @@ const handleTranscriptReviewApprove = async ({ ack, body, view, client }: SlackV
         text: 'Error: Missing transcript paths. Please try uploading again.',
       });
       return;
+    }
+
+    // ── GOV-1: Authorization check ──
+    if (!studyId) {
+      // Unresolved study scope → fail closed
+      await ack();
+      console.warn(`[AUTH] Transcript approve denied: unresolved study scope, user=${body.user.id}`);
+      await client.chat.postMessage({
+        channel: body.user.id,
+        text: 'Access denied: cannot determine study scope for this transcript.',
+      });
+      return;
+    }
+    try {
+      await assertStudyAccess(body.user.id, studyId, client);
+    } catch (err) {
+      if (err instanceof AuthorizationError) {
+        await ack();
+        console.warn(`[AUTH] Transcript approve denied: user=${body.user.id} study=${studyId}`);
+        await client.chat.postMessage({
+          channel: body.user.id,
+          text: 'Access denied: you are not a member of this study\'s project.',
+        });
+        return;
+      }
+      throw err;
     }
 
     // ── Attestation validation (PII redesign item c) ──
@@ -1059,7 +1118,6 @@ const handleTranscriptReviewApprove = async ({ ack, body, view, client }: SlackV
       pii_reviewed_by: body.user.id,
     };
 
-    // @ts-expect-error — pre-existing type mismatch from require() → import migration
     const createdNote = await studyNotesService.createStudyNote(studyNoteData);
 
     // Disposition audit row (replaces console.log — per M3 ruling)
@@ -1135,11 +1193,30 @@ const handleTranscriptRescrubSubmit = async ({ ack, body, view, client }: SlackV
     }
 
     const metadata: TranscriptReviewMetadata = JSON.parse(view.private_metadata || '{}');
-    const { quarantinePath, participantCode, studyName, fileUrl, dmChannelId, messageTs } = metadata;
+    const { quarantinePath, participantCode, studyName, fileUrl, dmChannelId, messageTs, studyId: rescrubStudyId } = metadata;
 
     if (!quarantinePath) {
       await ack({ response_action: 'clear' } as any);
       return;
+    }
+
+    // ── GOV-1: Authorization check ──
+    if (!rescrubStudyId) {
+      await ack({ response_action: 'clear' } as any);
+      console.warn(`[AUTH] Rescrub denied: unresolved study scope, user=${body.user.id}`);
+      await client.chat.postMessage({ channel: body.user.id, text: 'Access denied: cannot determine study scope for this transcript.' });
+      return;
+    }
+    try {
+      await assertStudyAccess(body.user.id, rescrubStudyId, client);
+    } catch (err) {
+      if (err instanceof AuthorizationError) {
+        await ack({ response_action: 'clear' } as any);
+        console.warn(`[AUTH] Rescrub denied: user=${body.user.id} study=${rescrubStudyId}`);
+        await client.chat.postMessage({ channel: body.user.id, text: 'Access denied: you are not a member of this study\'s project.' });
+        return;
+      }
+      throw err;
     }
 
     await ack({ response_action: 'clear' } as any);
@@ -1260,7 +1337,26 @@ const handleTranscriptRejectSubmit = async ({ ack, body, view, client }: SlackVi
     }
 
     const metadata: TranscriptReviewMetadata = JSON.parse(view.private_metadata || '{}');
-    const { quarantinePath, participantCode, studyName, userId, dmChannelId, messageTs, filename } = metadata;
+    const { quarantinePath, participantCode, studyName, userId, dmChannelId, messageTs, filename, studyId: rejectStudyId } = metadata;
+
+    // ── GOV-1: Authorization check ──
+    if (!rejectStudyId) {
+      await ack({ response_action: 'clear' } as any);
+      console.warn(`[AUTH] Transcript reject denied: unresolved study scope, user=${body.user.id}`);
+      await client.chat.postMessage({ channel: body.user.id, text: 'Access denied: cannot determine study scope for this transcript.' });
+      return;
+    }
+    try {
+      await assertStudyAccess(body.user.id, rejectStudyId, client);
+    } catch (err) {
+      if (err instanceof AuthorizationError) {
+        await ack({ response_action: 'clear' } as any);
+        console.warn(`[AUTH] Transcript reject denied: user=${body.user.id} study=${rejectStudyId}`);
+        await client.chat.postMessage({ channel: body.user.id, text: 'Access denied: you are not a member of this study\'s project.' });
+        return;
+      }
+      throw err;
+    }
 
     await ack({ response_action: 'clear' } as any);
 
@@ -1387,6 +1483,26 @@ const handleManualNotesApprove = async ({ ack, body, client }: SlackActionMiddle
 
     // ── Read pending_content from DB ──
     const note = await studyNotesService.getStudyNoteById(noteId);
+
+    // ── GOV-1: Authorization check ──
+    // Derive scope from persisted note record, not button metadata.
+    const noteStudyId = note.study_id;
+    if (!noteStudyId) {
+      console.warn(`[AUTH] Manual notes approve denied: unresolved study scope, noteId=${noteId}, user=${body.user.id}`);
+      await client.chat.postMessage({ channel: body.user.id, text: 'Access denied: cannot determine study scope for this note.' });
+      return;
+    }
+    try {
+      await assertStudyAccess(body.user.id, noteStudyId, client);
+    } catch (err) {
+      if (err instanceof AuthorizationError) {
+        console.warn(`[AUTH] Manual notes approve denied: user=${body.user.id} study=${noteStudyId}`);
+        await client.chat.postMessage({ channel: body.user.id, text: 'Access denied: you are not a member of this study\'s project.' });
+        return;
+      }
+      throw err;
+    }
+
     const pendingContent: string | null = note.pending_content;
 
     if (!pendingContent) {
@@ -1482,6 +1598,26 @@ const handleManualNotesReject = async ({ ack, body, client }: SlackActionMiddlew
         text: '❌ Error: Missing note information.',
       });
       return;
+    }
+
+    // ── GOV-1: Authorization check ──
+    // Derive scope from persisted note record, not button metadata.
+    const rejectNote = await studyNotesService.getStudyNoteById(noteId);
+    const rejectNoteStudyId = rejectNote?.study_id;
+    if (!rejectNoteStudyId) {
+      console.warn(`[AUTH] Manual notes reject denied: unresolved study scope, noteId=${noteId}, user=${body.user.id}`);
+      await client.chat.postMessage({ channel: body.user.id, text: 'Access denied: cannot determine study scope for this note.' });
+      return;
+    }
+    try {
+      await assertStudyAccess(body.user.id, rejectNoteStudyId, client);
+    } catch (err) {
+      if (err instanceof AuthorizationError) {
+        console.warn(`[AUTH] Manual notes reject denied: user=${body.user.id} study=${rejectNoteStudyId}`);
+        await client.chat.postMessage({ channel: body.user.id, text: 'Access denied: you are not a member of this study\'s project.' });
+        return;
+      }
+      throw err;
     }
 
     // ── Delete pending note from DB ──

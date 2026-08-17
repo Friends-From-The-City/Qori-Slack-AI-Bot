@@ -9,7 +9,12 @@
  */
 
 import { getTestDb, truncateAll } from './setup/testDb';
-import { isProjectMember, assertStudyAccess, assertProjectAccess, AuthorizationError, addProjectMember } from '../../services/authorization.service';
+import {
+  isProjectMember, isProjectOwner,
+  assertStudyAccess, assertProjectAccess, assertProjectOwner,
+  AuthorizationError, addProjectMember, getProjectApprover,
+  setProjectStakeholder,
+} from '../../services/authorization.service';
 import type { Project } from '../../database/models/project';
 import type { ProjectMember } from '../../database/models/project_member';
 import type { ResearchStudy } from '../../database/models/research_study';
@@ -215,6 +220,197 @@ describe('Authorization Bypass Prevention (ADR 0024)', () => {
       // Add twice — should not throw
       await addProjectMember(project.id, 'U_MEMBER', 'explicit');
       await expect(addProjectMember(project.id, 'U_MEMBER', 'explicit')).resolves.not.toThrow();
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // GOV-1: Extended authorization boundary tests
+  // ═══════════════════════════════════════════════════════════════════════
+
+  describe('assertProjectOwner (GOV-1)', () => {
+    it('allows access for project owner', async () => {
+      const project = await ProjectModel.create({
+        name: 'Owner Project',
+        slug: 'owner-project',
+        created_by: 'U_OWNER',
+        status: 'active',
+      });
+
+      await ProjectMemberModel.create({
+        project_id: project.id,
+        user_id: 'U_OWNER',
+        role: 'owner',
+        source: 'creator',
+      });
+
+      await expect(assertProjectOwner('U_OWNER', project.id)).resolves.not.toThrow();
+    });
+
+    it('DENIES access for member who is not owner', async () => {
+      const project = await ProjectModel.create({
+        name: 'Owned Project',
+        slug: 'owned-project',
+        created_by: 'U_OWNER',
+        status: 'active',
+      });
+
+      await ProjectMemberModel.create({
+        project_id: project.id,
+        user_id: 'U_OWNER',
+        role: 'owner',
+        source: 'creator',
+      });
+
+      await ProjectMemberModel.create({
+        project_id: project.id,
+        user_id: 'U_MEMBER',
+        role: 'member',
+        source: 'explicit',
+      });
+
+      // Member has access but is NOT owner — assertProjectOwner must deny
+      expect(await isProjectMember('U_MEMBER', project.id)).toBe(true);
+      await expect(assertProjectOwner('U_MEMBER', project.id)).rejects.toThrow(AuthorizationError);
+    });
+  });
+
+  describe('Cross-project study access (GOV-1)', () => {
+    it('DENIES study access when user is member of project A but study belongs to project B', async () => {
+      // Create project A — user is member
+      const projectA = await ProjectModel.create({
+        name: 'Project A',
+        slug: 'project-a',
+        created_by: 'U_OWNER_A',
+        status: 'active',
+      });
+      await ProjectMemberModel.create({
+        project_id: projectA.id,
+        user_id: 'U_MEMBER_A',
+        role: 'member',
+        source: 'explicit',
+      });
+
+      // Create project B — different owner, user is NOT member
+      const projectB = await ProjectModel.create({
+        name: 'Project B',
+        slug: 'project-b',
+        created_by: 'U_OWNER_B',
+        status: 'active',
+      });
+      await ProjectMemberModel.create({
+        project_id: projectB.id,
+        user_id: 'U_OWNER_B',
+        role: 'owner',
+        source: 'creator',
+      });
+
+      // Create study in project B
+      const studyInB = await ResearchStudyModel.create({
+        project_id: projectB.id,
+        name: 'Cross Study',
+        channel_name: 'cross-channel',
+        created_by: 'U_OWNER_B',
+        researcher_name: 'Owner B',
+        researcher_email: 'ownerb@example.com',
+      });
+
+      // User of project A tries to access study in project B — MUST DENY
+      await expect(assertStudyAccess('U_MEMBER_A', studyInB.id)).rejects.toThrow(AuthorizationError);
+    });
+  });
+
+  describe('Approver identity check (GOV-1)', () => {
+    it('getProjectApprover returns canonical approver userId', async () => {
+      const project = await ProjectModel.create({
+        name: 'Approver Project',
+        slug: 'approver-project',
+        created_by: 'U_OWNER',
+        status: 'active',
+      });
+
+      await ProjectMemberModel.create({
+        project_id: project.id,
+        user_id: 'U_OWNER',
+        role: 'owner',
+        source: 'creator',
+      });
+
+      // Set stakeholder as designated approver
+      await ProjectMemberModel.create({
+        project_id: project.id,
+        user_id: 'U_STAKEHOLDER',
+        role: 'member',
+        source: 'explicit',
+        is_stakeholder: true,
+      });
+
+      const approver = await getProjectApprover(project.id);
+      expect(approver).not.toBeNull();
+      expect(approver!.userId).toBe('U_STAKEHOLDER');
+      expect(approver!.source).toBe('stakeholder');
+
+      // Non-approver member has access but is NOT the designated approver
+      const isNotApprover = approver!.userId !== 'U_OWNER';
+      expect(isNotApprover).toBe(true);
+    });
+
+    it('getProjectApprover falls back to owner when no stakeholder', async () => {
+      const project = await ProjectModel.create({
+        name: 'No Stakeholder Project',
+        slug: 'no-stakeholder',
+        created_by: 'U_OWNER',
+        status: 'active',
+      });
+
+      await ProjectMemberModel.create({
+        project_id: project.id,
+        user_id: 'U_OWNER',
+        role: 'owner',
+        source: 'creator',
+      });
+
+      const approver = await getProjectApprover(project.id);
+      expect(approver).not.toBeNull();
+      expect(approver!.userId).toBe('U_OWNER');
+      expect(approver!.source).toBe('owner_fallback');
+    });
+  });
+
+  describe('Unresolved study scope (GOV-1)', () => {
+    it('assertStudyAccess DENIES for non-existent study (unresolved scope)', async () => {
+      // Attempting to authorize against a study that does not exist
+      // This simulates an orphan/unresolved scope — MUST fail closed
+      await expect(assertStudyAccess('U_ANYONE', 0)).rejects.toThrow(AuthorizationError);
+      await expect(assertStudyAccess('U_ANYONE', -1)).rejects.toThrow(AuthorizationError);
+    });
+  });
+
+  describe('isProjectOwner (GOV-1)', () => {
+    it('returns false for non-owner member', async () => {
+      const project = await ProjectModel.create({
+        name: 'Owner Test',
+        slug: 'owner-test',
+        created_by: 'U_OWNER',
+        status: 'active',
+      });
+
+      await ProjectMemberModel.create({
+        project_id: project.id,
+        user_id: 'U_OWNER',
+        role: 'owner',
+        source: 'creator',
+      });
+
+      await ProjectMemberModel.create({
+        project_id: project.id,
+        user_id: 'U_MEMBER',
+        role: 'member',
+        source: 'explicit',
+      });
+
+      expect(await isProjectOwner('U_OWNER', project.id)).toBe(true);
+      expect(await isProjectOwner('U_MEMBER', project.id)).toBe(false);
+      expect(await isProjectOwner('U_STRANGER', project.id)).toBe(false);
     });
   });
 });

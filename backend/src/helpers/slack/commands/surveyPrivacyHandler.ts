@@ -14,9 +14,13 @@ import type {
 import type { View } from '@slack/types';
 import sequelize from '../../../database';
 import type { SurveyQualitativeEntry, PiiStatus } from '../../../database/models/survey_qualitative_entry';
+import type { EvidenceSource } from '../../../database/models/evidence_source';
 import {
   getRawContentForReview, buildDispositionUpdate, countByStatus,
 } from '../../../services/content-governance.service';
+import { assertProjectAccess, AuthorizationError } from '../../../services/authorization.service';
+
+const EvidenceSourceModelRef = sequelize.models.EvidenceSource as typeof EvidenceSource;
 
 const EntryModel = sequelize.models.SurveyQualitativeEntry as typeof SurveyQualitativeEntry;
 const ENTRIES_PER_PAGE = 10;
@@ -43,6 +47,28 @@ export async function handlePrivacyReviewAction(
   const { ack, action, client, body } = args;
   await ack();
   const raw = JSON.parse(action.value || '{}');
+
+  // ── GOV-1: Resolve canonical project from persisted evidence source ──
+  const privacySource = await EvidenceSourceModelRef.findByPk(raw.evidenceSourceId);
+  if (!privacySource) {
+    await client.chat.postMessage({ channel: body.user.id, text: 'Error: evidence source not found.' });
+    return;
+  }
+  if (raw.projectId && raw.projectId !== privacySource.project_id) {
+    console.warn(`[AUTH] Privacy review: metadata projectId=${raw.projectId} != canonical ${privacySource.project_id}`);
+    await client.chat.postMessage({ channel: body.user.id, text: 'Access denied: project context mismatch.' });
+    return;
+  }
+  try {
+    await assertProjectAccess(body.user.id, privacySource.project_id, client);
+  } catch (err) {
+    if (err instanceof AuthorizationError) {
+      console.warn(`[AUTH] Privacy review denied: user=${body.user.id} project=${privacySource.project_id}`);
+      await client.chat.postMessage({ channel: body.user.id, text: 'Access denied: you are not a member of this project.' });
+      return;
+    }
+    throw err;
+  }
 
   const entries = await EntryModel.findAll({
     where: { evidence_source_id: raw.evidenceSourceId, pii_status: 'pending' },
@@ -84,6 +110,29 @@ export async function handlePrivacyReviewSubmission(
   await ack();
   const meta: PrivacyMeta = JSON.parse(view.private_metadata || '{}');
   const userId = body.user.id;
+
+  // ── GOV-1: Resolve canonical project from persisted evidence source ──
+  const submissionPrivacySource = await EvidenceSourceModelRef.findByPk(meta.evidenceSourceId);
+  if (!submissionPrivacySource) {
+    await client.chat.postMessage({ channel: userId, text: 'Error: evidence source not found.' });
+    return;
+  }
+  if (meta.projectId && meta.projectId !== submissionPrivacySource.project_id) {
+    console.warn(`[AUTH] Privacy review submission: metadata projectId=${meta.projectId} != canonical ${submissionPrivacySource.project_id}`);
+    await client.chat.postMessage({ channel: userId, text: 'Access denied: project context mismatch.' });
+    return;
+  }
+  try {
+    await assertProjectAccess(userId, submissionPrivacySource.project_id, client);
+  } catch (err) {
+    if (err instanceof AuthorizationError) {
+      console.warn(`[AUTH] Privacy review submission denied: user=${userId} project=${submissionPrivacySource.project_id}`);
+      await client.chat.postMessage({ channel: userId, text: 'Access denied: you are not a member of this project.' });
+      return;
+    }
+    throw err;
+  }
+
   const vals = view.state.values as unknown as Record<string, Record<string, Record<string, unknown>>>;
 
   const entries = await EntryModel.findAll({ where: { id: meta.entryIds ?? [] }, order: [['id', 'ASC']] });

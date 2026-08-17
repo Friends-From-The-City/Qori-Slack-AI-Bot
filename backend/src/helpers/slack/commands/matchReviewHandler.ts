@@ -31,7 +31,12 @@ import {
 import { getEligibleEntries, getCodebookWithCodes } from '../../../services/survey-codebook.service';
 import { generateDraftAssignments, AssignmentGenerationError } from '../../survey/assignmentGenerator';
 import { getProjectById } from '../../../services/project.service';
+import { assertProjectAccess, assertStudyAccess, AuthorizationError } from '../../../services/authorization.service';
+import sequelize from '../../../database';
+import type { EvidenceSource } from '../../../database/models/evidence_source';
 import type { EntryReviewStatus } from '../../../database/models/survey_coding_entry_review';
+
+const EvidenceSourceModel = sequelize.models.EvidenceSource as typeof EvidenceSource;
 
 const ENTRIES_PER_PAGE = 5;
 
@@ -62,6 +67,18 @@ export async function handleGenerateAssignments(
   try {
     const codebookId = rawMeta.codebookId;
     const evidenceSourceId = rawMeta.evidenceSourceId;
+
+    // ── GOV-1: Resolve canonical project from persisted evidence source ──
+    const assignSource = await EvidenceSourceModel.findByPk(evidenceSourceId);
+    if (!assignSource) {
+      await client.chat.postMessage({ channel: userId, text: 'Error: evidence source not found.' });
+      return;
+    }
+    if (assignSource.study_id) {
+      await assertStudyAccess(userId, assignSource.study_id, client);
+    } else {
+      await assertProjectAccess(userId, assignSource.project_id, client);
+    }
 
     // Idempotency: check for existing active unaccepted run for this codebook
     const existingRun = await findActiveUnacceptedRun(evidenceSourceId, codebookId);
@@ -180,13 +197,35 @@ export async function handleOpenMatchReview(
   await ack();
 
   const rawMeta = JSON.parse(action.value || '{}');
+  const openUserId = body.user.id;
 
   if (!rawMeta.codingRunId) {
     await client.chat.postMessage({
-      channel: body.user.id,
+      channel: openUserId,
       text: 'Qori couldn\'t find the matches. Try generating them again.',
     });
     return;
+  }
+
+  // ── GOV-1: Resolve canonical project from persisted evidence source ──
+  const openSource = await EvidenceSourceModel.findByPk(rawMeta.evidenceSourceId);
+  if (!openSource) {
+    await client.chat.postMessage({ channel: openUserId, text: 'Error: evidence source not found.' });
+    return;
+  }
+  try {
+    if (openSource.study_id) {
+      await assertStudyAccess(openUserId, openSource.study_id, client);
+    } else {
+      await assertProjectAccess(openUserId, openSource.project_id, client);
+    }
+  } catch (err) {
+    if (err instanceof AuthorizationError) {
+      console.warn(`[AUTH] Match review open denied: user=${openUserId} project=${openSource.project_id}`);
+      await client.chat.postMessage({ channel: openUserId, text: 'Access denied: you are not a member of this project.' });
+      return;
+    }
+    throw err;
   }
 
   const details = await getCodingRunWithDetails(rawMeta.codingRunId);
@@ -248,6 +287,27 @@ export async function handleMatchReviewSubmission(
 
   const meta: MatchReviewMeta = JSON.parse(view.private_metadata || '{}');
   const userId = body.user.id;
+
+  // ── GOV-1: Resolve canonical project from persisted evidence source ──
+  const submitSource = await EvidenceSourceModel.findByPk(meta.evidenceSourceId);
+  if (!submitSource) {
+    await client.chat.postMessage({ channel: userId, text: 'Error: evidence source not found.' });
+    return;
+  }
+  try {
+    if (submitSource.study_id) {
+      await assertStudyAccess(userId, submitSource.study_id, client);
+    } else {
+      await assertProjectAccess(userId, submitSource.project_id, client);
+    }
+  } catch (err) {
+    if (err instanceof AuthorizationError) {
+      console.warn(`[AUTH] Match review submission denied: user=${userId} project=${submitSource.project_id}`);
+      await client.chat.postMessage({ channel: userId, text: 'Access denied: you are not a member of this project.' });
+      return;
+    }
+    throw err;
+  }
 
   if (!meta.codingRunId) {
     await client.chat.postMessage({ channel: userId, text: 'Match review context not found.' });

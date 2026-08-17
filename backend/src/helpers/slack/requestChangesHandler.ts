@@ -6,10 +6,52 @@ import { requestStudyChangesModal } from './ui/requestStudyChangesModal';
 // resolveStudyFromName retained for other flows (request changes, non-brief approvals) — migrate in future step
 import { getStudyByProjectAndName, resolveStudyFromName } from '../../services/research_study.service';
 import { getProjectByChannelId } from '../../services/project.service';
+import { assertProjectAccess, getProjectApprover, AuthorizationError } from '../../services/authorization.service';
 import sequelize from '../../database';
 import type { ResearchStudy as ResearchStudyModel } from '../../database/models/research_study';
 
 import { addStudyStatus, getStudyStatusByStudyId } from '../../services/study-status.service';
+
+// ─── GOV-1: Approver authorization helper ─────────────────────────
+// Resolves canonical project, checks membership, then verifies designated approver identity.
+// Used by all 4 entry points (approve, approve-submit, request-changes, request-changes-submit).
+// Does NOT use resolveStudyFromName in the auth path (correction #2).
+
+async function assertApproverAccess(
+  userId: string,
+  channelId: string,
+  studyName: string,
+  type: DocumentType,
+  client: WebClient,
+): Promise<{ projectId: number; studyId: number | null }> {
+  // Resolve canonical project from channel binding (not from study name)
+  const project = await getProjectByChannelId(channelId);
+  if (!project) {
+    throw new AuthorizationError('Cannot determine project scope from this channel.');
+  }
+
+  // Base membership check
+  await assertProjectAccess(userId, project.id, client);
+
+  // Approver identity check — canonical designated approver
+  const approver = await getProjectApprover(project.id);
+  if (!approver || approver.userId !== userId) {
+    throw new AuthorizationError('You are not the designated approver for this project.');
+  }
+
+  // Resolve study via canonical FK-based lookup (not global name search)
+  let studyId: number | null = null;
+  if (type === 'brief') {
+    const study = await getStudyByProjectAndName(project.id, studyName);
+    studyId = study?.id ?? null;
+  } else {
+    // For plan/discussion: resolve within the project scope
+    const study = await getStudyByProjectAndName(project.id, studyName);
+    studyId = study?.id ?? null;
+  }
+
+  return { projectId: project.id, studyId };
+}
 
 const ResearchStudyModelClass = sequelize.models.ResearchStudy as typeof ResearchStudyModel;
 
@@ -62,6 +104,22 @@ export async function handleApprove(
   const { studyName, channelId, url, briefData } = JSON.parse(
     (body.actions[0] as { value: string }).value,
   ) as ActionValue;
+
+  // ── GOV-1: Authorization check ──
+  try {
+    await assertApproverAccess(body.user.id, channelId, studyName, type, client);
+  } catch (err) {
+    if (err instanceof AuthorizationError) {
+      console.warn(`[AUTH] Approve denied: user=${body.user.id} type=${type} study=${studyName}`);
+      await client.chat.postEphemeral({
+        channel: body.channel?.id || body.user.id,
+        user: body.user.id,
+        text: err.message,
+      });
+      return;
+    }
+    throw err;
+  }
 
   // ── Stale button guard for briefs ──
   if (type === 'brief') {
@@ -121,6 +179,18 @@ export async function handleApproveSubmission(
   await ack();
   const { studyName, channelId, url, type, briefData } = JSON.parse(view.private_metadata) as ModalMetadata & { briefData?: Record<string, unknown> };
   const user = body.user.id;
+
+  // ── GOV-1: Re-authorize at submission boundary ──
+  try {
+    await assertApproverAccess(user, channelId, studyName, type, client);
+  } catch (err) {
+    if (err instanceof AuthorizationError) {
+      console.warn(`[AUTH] Approve submission denied: user=${user} type=${type} study=${studyName}`);
+      await client.chat.postMessage({ channel: user, text: err.message });
+      return;
+    }
+    throw err;
+  }
 
   const typeLabelMap: Record<string, string> = {
     plan: 'plan',
@@ -289,6 +359,22 @@ export async function handleRequestChanges(
     (body.actions[0] as { value: string }).value,
   ) as ActionValue;
 
+  // ── GOV-1: Authorization check ──
+  try {
+    await assertApproverAccess(body.user.id, channelId, studyName, type, client);
+  } catch (err) {
+    if (err instanceof AuthorizationError) {
+      console.warn(`[AUTH] Request changes denied: user=${body.user.id} type=${type} study=${studyName}`);
+      await client.chat.postEphemeral({
+        channel: body.channel?.id || body.user.id,
+        user: body.user.id,
+        text: err.message,
+      });
+      return;
+    }
+    throw err;
+  }
+
   // ── Stale button guard for briefs ──
   if (type === 'brief') {
     const project = await getProjectByChannelId(channelId);
@@ -366,6 +452,18 @@ export async function handleRequestChangesSubmission(
   await ack();
   const { studyName, channelId, url, type } = JSON.parse(view.private_metadata) as ModalMetadata;
   const user = body.user.id;
+
+  // ── GOV-1: Re-authorize at submission boundary ──
+  try {
+    await assertApproverAccess(user, channelId, studyName, type, client);
+  } catch (err) {
+    if (err instanceof AuthorizationError) {
+      console.warn(`[AUTH] Request changes submission denied: user=${user} type=${type} study=${studyName}`);
+      await client.chat.postMessage({ channel: user, text: err.message });
+      return;
+    }
+    throw err;
+  }
 
   const { values } = view.state;
 
