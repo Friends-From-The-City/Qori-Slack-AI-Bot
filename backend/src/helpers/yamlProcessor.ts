@@ -90,6 +90,22 @@ export interface ProcessResult {
   outputTemplate: string;
   aiResponses?: Record<string, string>;
   extractionPromise: Promise<ExtractionOutcome> | null;
+  /** Canonical artifact public_id when artifact identity is integrated (PH-6B) */
+  artifactPublicId?: string;
+}
+
+/**
+ * Artifact context for canonical identity integration (PH-6B).
+ * Pass as inputValues.__artifactContext to opt into artifact tracking.
+ */
+export interface ArtifactContext {
+  projectId: number;
+  studyId: number | null;
+  artifactType: string;
+  title?: string;
+  /** Canonical upstream inputs for derivation fingerprint */
+  canonicalUpstreamInputs: string[];
+  createdBy: string;
 }
 
 /** Result when dryRun=true — content returned without GitHub write */
@@ -409,7 +425,78 @@ export async function processYamlTemplate(
     };
   }
 
-  const result = await createOrUpdateFileOnGitHub(fullPath, fullContent);
+  // PH-6B: Reserve canonical artifact identity before GitHub write
+  const artifactCtx = inputValues.__artifactContext as ArtifactContext | undefined;
+  let artifactId: number | null = null;
+  let artifactPublicId: string | undefined;
+
+  if (artifactCtx) {
+    try {
+      const { reserveArtifact, computeDerivationFingerprint, buildSemanticKey, computeCascadeInputFingerprint } =
+        require('../services/artifact.service');
+
+      const fingerprint = artifactCtx.canonicalUpstreamInputs.length > 0
+        ? computeDerivationFingerprint(artifactCtx.canonicalUpstreamInputs, yamlConfig.version || '')
+        : computeCascadeInputFingerprint(inputValues, yamlConfig.version || '');
+
+      const semanticKey = buildSemanticKey(
+        yamlConfig.id, artifactCtx.projectId, artifactCtx.studyId,
+        artifactCtx.artifactType, fingerprint,
+      );
+
+      const repo = `${process.env.GITHUB_OWNER}/${process.env.GITHUB_REPO}`;
+      const reserved = await reserveArtifact({
+        projectId: artifactCtx.projectId,
+        studyId: artifactCtx.studyId,
+        templateId: yamlConfig.id,
+        templateVersion: yamlConfig.version || '',
+        artifactType: artifactCtx.artifactType,
+        title: artifactCtx.title,
+        repo,
+        semanticKey,
+        createdBy: artifactCtx.createdBy,
+      });
+
+      artifactId = reserved.id;
+      artifactPublicId = reserved.publicId;
+      console.log(`✅ Artifact identity ${reserved.isNew ? 'created' : 'reused'}: ${artifactPublicId}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(`⚠️ Artifact identity reservation failed (non-blocking): ${msg}`);
+    }
+  }
+
+  let result: GitHubWriteResult;
+  try {
+    result = await createOrUpdateFileOnGitHub(fullPath, fullContent);
+
+    // PH-6B: Record successful write location
+    if (artifactId) {
+      try {
+        const { recordWriteSuccess } = require('../services/artifact.service');
+        await recordWriteSuccess(artifactId, {
+          path: result.path,
+          commitSha: result.sha,
+          url: result.url,
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.warn(`⚠️ Artifact location persistence failed (non-blocking): ${msg}`);
+      }
+    }
+  } catch (writeErr) {
+    // PH-6B: Record failed write (preserves last successful location)
+    if (artifactId) {
+      try {
+        const { recordWriteFailure } = require('../services/artifact.service');
+        await recordWriteFailure(artifactId, writeErr instanceof Error ? writeErr.message : String(writeErr));
+      } catch (recErr) {
+        // Double failure — log but don't mask the original error
+        console.warn(`⚠️ Artifact failure recording failed: ${recErr instanceof Error ? recErr.message : String(recErr)}`);
+      }
+    }
+    throw writeErr;
+  }
 
   // 8. EXTRACT PHASE: Runs AFTER document is written — non-blocking but trackable.
   let extractionPromise: Promise<ExtractionOutcome> | null = null;
@@ -493,8 +580,8 @@ export async function processYamlTemplate(
   }
 
   if (aiCheck) {
-    return { result, outputTemplate, aiResponses, extractionPromise };
+    return { result, outputTemplate, aiResponses, extractionPromise, artifactPublicId };
   } else {
-    return { result, outputTemplate, extractionPromise };
+    return { result, outputTemplate, extractionPromise, artifactPublicId };
   }
 }

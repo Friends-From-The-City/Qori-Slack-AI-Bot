@@ -556,6 +556,18 @@ async function handleDiscoverSubmission({ ack, view, body, client }: SlackViewMi
 
     console.log(`✅ Privacy gate: ${privacyResult.policy} — ${privacyResult.reason}`);
 
+    // PH-6B: Artifact identity context for discovery artifacts
+    const { computeContentHash } = require('../../survey');
+    const contentFingerprint = computeContentHash(privacyResult.modelSafeContent!).substring(0, 16);
+    (data as unknown as Record<string, unknown>).__artifactContext = {
+      projectId,
+      studyId: null,
+      artifactType: 'discovery',
+      title: `${discoveryType.replace(/_/g, ' ')} — ${topic}`,
+      canonicalUpstreamInputs: [`content:${contentFingerprint}`],
+      createdBy: userId,
+    };
+
     const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, typeConfig.yaml);
 
     // Variable context for discovery: projectId only (no studyId for discovery artifacts)

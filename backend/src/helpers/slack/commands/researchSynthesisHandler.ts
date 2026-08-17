@@ -508,12 +508,36 @@ const handleResearchSynthesisSubmission = async ({ ack, body, view, client }: Sl
 
     // ─── BUILD TEMPLATE INPUT ────────────────────────────────────────
 
-    const analysisData = {
+    // PH-6B: Compute canonical upstream inputs for artifact identity.
+    // For synthesis, upstream inputs are the nugget evidence constructs if available,
+    // otherwise hash of consumed cascade state.
+    const EvidenceConstructModel = sequelize.models.EvidenceConstruct;
+    const resolvedStudyIdForArtifact = parseInt(selectedStudyId);
+    let canonicalUpstreamInputs: string[] = [];
+    try {
+      const nuggetConstructs = await EvidenceConstructModel.findAll({
+        where: { study_id: resolvedStudyIdForArtifact, construct_type: 'nugget' },
+        attributes: ['public_id'],
+      });
+      canonicalUpstreamInputs = nuggetConstructs.map(
+        (c: unknown) => (c as { public_id: string }).public_id,
+      );
+    } catch { /* fallback to empty — cascade fingerprint used */ }
+
+    const analysisData: Record<string, unknown> = {
       selected_study: selectedStudyName!,
       researcher_contact: study?.researcher_name || study?.researcher_email || '',
       detected_files: detectedFiles,
       combined_file_content: combinedFileContent,
       // Structured cascade vars are injected by yamlProcessor via variableContext
+      __artifactContext: {
+        projectId: resolved.projectId,
+        studyId: resolvedStudyIdForArtifact,
+        artifactType: 'synthesis',
+        title: `${analysisMethod.replace(/_/g, ' ')} — ${selectedStudyName}`,
+        canonicalUpstreamInputs,
+        createdBy: body.user.id,
+      },
     };
 
     const yamlFileName = ANALYSIS_YAML_MAPPING[analysisMethod];
