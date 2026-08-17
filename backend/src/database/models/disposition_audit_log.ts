@@ -19,6 +19,7 @@ export type AuditAction =
   | 'delete_participant'
   | 'delete_study'
   | 'export_participant'
+  | 'export_subject'       // GOV-2C: subject-rooted DSAR export
   | 'change_stakeholder'
   | 'deletion_denied'
   | 'deletion_error'
