@@ -21,6 +21,7 @@ import { readStudyVariablesByContext, readUpstreamVariablesByContext, type Varia
 import { TEMPLATE_CONSUMES } from "../ui/cascadeReadinessBlocks";
 import { assertStudyAccess } from '../../../services/authorization.service';
 import { createSynthesizedConstructs, type SynthesizedConstructInput } from '../../../services/synthesis-evidence.service';
+import { enrichProjectionWithEvidenceRefs } from '../../../services/projection-enrichment.service';
 import { getDefaultModelName } from '../../modelProvider';
 import sequelize from '../../../database';
 
@@ -599,6 +600,13 @@ const handleResearchSynthesisSubmission = async ({ ack, body, view, client }: Sl
 
               if (result.created.length > 0) {
                 console.log(`✅ Evidence lineage: ${result.created.length} theme constructs with canonical nugget refs`);
+                // PH-5C: Enrich cascade projection with canonical refs
+                const enriched = await enrichProjectionWithEvidenceRefs(
+                  resolved.projectId, resolvedStudyId, 'validated_themes', result.created,
+                );
+                if (enriched > 0) {
+                  console.log(`✅ Projection enriched: ${enriched} validated_themes items carry evidence_construct_ref`);
+                }
               }
               if (result.rejected.length > 0) {
                 console.warn(`⚠️ Evidence lineage: ${result.rejected.length} themes rejected (invalid refs): ${result.rejected.map(r => r.displayId).join(', ')}`);

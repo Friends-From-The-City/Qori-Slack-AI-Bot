@@ -109,6 +109,7 @@ Start with `0001` and read forward. The history is itself useful — it shows ho
 - [0034 — Model provider boundary](./0034-model-provider-boundary.md) — Workflows select tier (haiku/sonnet/opus); single factory owns provider instantiation
 - [0035 — Unstructured content privacy gate](./0035-unstructured-content-privacy-gate.md) — Platform-wide invariant: all unstructured content → privacy policy → authorized representation → model access
 - [0036 — External side-effect idempotency](./0036-external-side-effect-idempotency.md) — External actions require stable semantic identity; retries converge on one action
+- [0037 — Canonical evidence lineage](./0037-canonical-evidence-lineage.md) — Evidence graph is lineage authority; study_variables is projection; upstream→downstream edges; candidate vs accepted
 
 ### Lessons (informal ADRs from failure modes)
 
