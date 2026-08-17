@@ -534,6 +534,27 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }: SlackVi
       reportData.readout_link = readoutLink;
     }
 
+    // PH-6B: Artifact identity context for research readout
+    let canonicalReadoutInputs: string[] = [];
+    try {
+      const themeConstructs = await sequelizeDb.models.EvidenceConstruct.findAll({
+        where: { study_id: resolved.studyId, construct_type: 'theme' },
+        attributes: ['public_id'],
+      });
+      canonicalReadoutInputs = themeConstructs.map(
+        (c: unknown) => (c as { public_id: string }).public_id,
+      );
+    } catch { /* fallback to empty */ }
+
+    (reportData as unknown as Record<string, unknown>).__artifactContext = {
+      projectId: resolved.projectId,
+      studyId: resolved.studyId,
+      artifactType: 'readout',
+      title: `Research readout — ${selectedStudyName}`,
+      canonicalUpstreamInputs: canonicalReadoutInputs,
+      createdBy: body.user.id,
+    };
+
     console.log('Report data keys:', Object.keys(reportData));
 
     // Route based on report type

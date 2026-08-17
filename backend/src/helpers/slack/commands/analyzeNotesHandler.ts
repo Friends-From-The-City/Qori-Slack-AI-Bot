@@ -463,6 +463,18 @@ const handleAnalyzeNotesSubmission = async ({ ack, body, view, client }: SlackVi
       }
     }
 
+    // PH-6B: Artifact identity context for session summary
+    (templateData as unknown as Record<string, unknown>).__artifactContext = {
+      projectId,
+      studyId: resolvedStudyId,
+      artifactType: 'fieldwork',
+      title: `Session summary — ${participantCode}`,
+      canonicalUpstreamInputs: evidenceSourcePublicId
+        ? [`source:${evidenceSourcePublicId}`]
+        : [],
+      createdBy: body.user.id,
+    };
+
     // H9: Construct PII context for pre-transmission assertion in langchain
     const piiContext: PiiRedactionContext | undefined = participantName
       ? { knownNames: [participantName], participantCode }
