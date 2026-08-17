@@ -19,8 +19,8 @@ import { scrubPII } from '../../config/sentry';
 import type { View } from '@slack/types';
 // ── Extracted handlers (TypeScript) ─────────────────────────────
 
-// Main /qori command
-import { qoriMainCommand, handleStudySelect } from './commands/qoriMainHandler';
+// study_select action (used by /qori-plan modal). /qori command removed in GOV-1B.
+import { handleStudySelect } from './commands/qoriMainHandler';
 
 // Project creation (Phase 2C)
 import { projectStartCommand, handleProjectCreateSubmission } from './commands/projectStartHandler';
@@ -395,7 +395,7 @@ slackExpressRouter.post('/commands', (req: any, res: any) => {
 
 // ─── Slash commands (entry points) ──────────────────────────────
 
-slackApp.command('/qori', qoriMainCommand);
+// /qori command removed in GOV-1B — /qori-learn supersedes. Remove from Slack app manifest separately.
 slackApp.command('/qori-start', projectStartCommand);
 slackApp.command('/qori-brief', async ({ ack, client, command }) => {
   await ack();

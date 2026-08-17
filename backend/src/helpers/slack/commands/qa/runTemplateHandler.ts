@@ -1,107 +1,42 @@
 /**
- * runTemplateHandler.ts — /run-template command + modal
+ * runTemplateHandler.ts — /run-template command (DISABLED)
  *
- * Extracted from events.js. Opens the research shareout modal, handles
- * the type_select action (updates submit button label), and processes
- * the research-shareout-submit view submission.
+ * GOV-1B: Disabled. The /run-template command was an internal QA tool
+ * that could generate documents without authorization. It has no
+ * researcher-facing purpose and no project membership checks.
  *
- * IMPORTANT: views.update does NOT take trigger_id — only view_id and hash.
+ * All entry points now return an ephemeral "not available" message and
+ * perform NO document generation.
+ *
+ * SLACK MANIFEST NOTE: The /run-template slash command should be removed
+ * from the Slack app configuration dashboard.
+ *
+ * To re-enable: restore from git history (pre-GOV-1B), add proper
+ * authorization, and gate behind an admin/QA mechanism.
  */
 
 import type { AllMiddlewareArgs, SlackCommandMiddlewareArgs, SlackActionMiddlewareArgs, SlackViewMiddlewareArgs, BlockAction, ViewSubmitAction } from '@slack/bolt';
-import type { View } from '@slack/types';
 
-import { researchShareoutModal } from '../../ui/researchShareoutModal';
-
-// ─── /run-template command ────────────────────────────────────────
+// ─── Disabled command ────────────────────────────────────────────
 
 async function runTemplateCommandHandler({ ack, command, client }: SlackCommandMiddlewareArgs & AllMiddlewareArgs): Promise<void> {
-  try {
-    await ack();
-
-    await client.views.open({
-      trigger_id: command.trigger_id,
-      view: {
-        ...researchShareoutModal,
-        private_metadata: JSON.stringify({ channelId: command.channel_id }),
-      } as View,
-    });
-  } catch (error) {
-    const detail = (error as Record<string, unknown>)?.data ?? error;
-    console.error('Error opening modal:', detail);
-  }
-}
-
-// ─── type_select action (update submit label) ─────────────────────
-
-async function handleTypeSelect({ ack, body, client, action }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs): Promise<void> {
-  try {
-    await ack();
-    if (!('view' in body) || !body.view) { console.warn('type_select: no view in body'); return; }
-
-    const selectedValue = (action as any).selected_option.value;
-
-    const submitLabels: Record<string, string> = {
-      stakeholder_summary: '\ud83c\udfaf Create Summary',
-      executive_readout: '\ud83d\udcca Create Readout',
-      team_shareout: '\ud83d\udc65 Create Shareout',
-      research_report: '\ud83d\udccb Generate Report',
-      policy_brief: '\ud83c\udfe1\ufe0f Create Brief',
-      design_requirements: '\ud83d\udcc4 Generate Requirements',
-    };
-
-    const submitText = submitLabels[selectedValue] || 'Select Shareout Type';
-
-    const updatedModal = JSON.parse(JSON.stringify(researchShareoutModal));
-    updatedModal.submit = {
-      type: 'plain_text',
-      text: submitText,
-    };
-
-    await client.views.update({
-      view_id: body.view.id,
-      hash: body.view.hash,
-      view: updatedModal,
-    });
-  } catch (error) {
-    const detail = (error as Record<string, unknown>)?.data ?? error;
-    console.error('Error updating view:', detail);
-  }
-}
-
-// ─── research-shareout-submit ─────────────────────────────────────
-
-async function handleResearchShareoutSubmission({ ack, body, view, client }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs): Promise<void> {
   await ack();
-
-  const values = (view as any).state.values;
-  const { channelId } = JSON.parse(view.private_metadata);
-  const extract = (id: string) => values[id]?.input?.value || '';
-  const getSelect = (id: string) => values[id]?.input?.selected_option?.value || '';
-
-  const data = {
-    shareoutType: getSelect('shareout_type'),
-    studyName: extract('study_name'),
-    targetAudience: extract('target_audience'),
-    meetingDeadline: extract('meeting_deadline'),
-    findings: extract('synthesized_findings'),
-    deliveryChannel: extract('delivery_channel'),
-    peopleToNotify: extract('people_to_notify'),
-    channelId,
-  };
-
-  console.log(`\ud83d\udce2 Research Shareout Submitted: study=${data.studyName}, channel=${data.deliveryChannel}`);
-
-  await client.chat.postMessage({
-    channel: body.user.id,
-    text: `\u2705 *Your research shareout has been recorded!*\n\n*Study:* ${data.studyName}\n*To be shared in:* ${data.deliveryChannel}`,
+  await client.chat.postEphemeral({
+    channel: command.channel_id,
+    user: command.user_id,
+    text: 'The `/run-template` command is not currently available.',
   });
 }
+
+// ─── Disabled action/view stubs ──────────────────────────────────
+
+const noopAction = async ({ ack }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs): Promise<void> => { await ack(); };
+const noopView = async ({ ack }: SlackViewMiddlewareArgs<ViewSubmitAction> & AllMiddlewareArgs): Promise<void> => { await ack(); };
 
 export {
   runTemplateCommandHandler,
   runTemplateCommandHandler as runTemplateCommand,
-  handleTypeSelect,
-  handleResearchShareoutSubmission,
-  handleResearchShareoutSubmission as handleShareoutSubmission,
+  noopAction as handleTypeSelect,
+  noopView as handleResearchShareoutSubmission,
+  noopView as handleShareoutSubmission,
 };
