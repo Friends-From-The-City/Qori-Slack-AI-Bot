@@ -112,8 +112,8 @@ export default (sequelize: Sequelize) => {
         allowNull: false,
         validate: {
           isIn: [[
-            'DERIVED_FROM', 'SUPPORTS', 'ADDRESSES', 'TESTED_BY',
-            'CONTRADICTS', 'REFINES', 'IMPLEMENTED_BY', 'VALIDATES',
+            'DERIVED_FROM', 'SYNTHESIZED_FROM', 'SUPPORTS', 'ADDRESSES',
+            'TESTED_BY', 'CONTRADICTS', 'REFINES', 'IMPLEMENTED_BY', 'VALIDATES',
           ]],
         },
       },

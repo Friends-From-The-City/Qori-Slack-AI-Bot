@@ -27,6 +27,12 @@ properties:
     items:
       type: string
     description: "REQUIRED: Finding IDs (finding-XX) this addresses. Every recommendation must trace to findings."
+  supporting_finding_evidence_ids:
+    type: array
+    items:
+      type: string
+      format: uuid
+    description: "Canonical evidence_construct public_ids (UUIDs) of findings this addresses. Required for canonical lineage."
   priority:
     type: string
     enum: [P0, P1, P2, P3]

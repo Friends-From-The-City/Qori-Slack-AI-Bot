@@ -20,6 +20,9 @@ import { processYamlTemplate } from "../../../helpers/yamlProcessor";
 import { readStudyVariablesByContext, readUpstreamVariablesByContext, type VariableContext, type ConsumeSpec, type UpstreamVariables } from '../../studyVariables';
 import { TEMPLATE_CONSUMES } from "../ui/cascadeReadinessBlocks";
 import { assertStudyAccess } from '../../../services/authorization.service';
+import { createSynthesizedConstructs, type SynthesizedConstructInput } from '../../../services/synthesis-evidence.service';
+import { getDefaultModelName } from '../../modelProvider';
+import sequelize from '../../../database';
 
 // ─── Types ──────────────────────────────────────────────────────
 
@@ -536,6 +539,78 @@ const handleResearchSynthesisSubmission = async ({ ack, body, view, client }: Sl
           throw new Error(`Cascade variable extraction failed: ${extractResult.error}. Document was saved but variables were not written.`);
         }
         console.log(`✅ Cascade variables committed: ${extractResult.variableCount} items (${extractResult.keys?.join(', ')})`);
+
+        // PH-5B: Create canonical evidence constructs for synthesized themes.
+        // Only for affinity_mapping — other synthesis types will be added as their
+        // lineage contracts are implemented.
+        if (analysisMethod === 'affinity_mapping' && extractResult.keys?.includes('validated_themes')) {
+          try {
+            const resolvedStudyId = parseInt(selectedStudyId);
+            const vars = await readStudyVariablesByContext({ projectId: resolved.projectId, studyId: resolvedStudyId });
+            const themes = vars.variables?.validated_themes;
+
+            // Load upstream nugget evidence constructs for this study
+            const EvidenceConstructModel = sequelize.models.EvidenceConstruct;
+            const nuggetConstructs = await EvidenceConstructModel.findAll({
+              where: { study_id: resolvedStudyId, construct_type: 'nugget' },
+            });
+            const nuggetPublicIds = new Set(
+              nuggetConstructs.map(c => (c as unknown as { public_id: string }).public_id),
+            );
+            // Build display_id → public_id map for reference resolution
+            const displayToPublicId = new Map(
+              nuggetConstructs.map(c => [(c as unknown as { label: string }).label, (c as unknown as { public_id: string }).public_id]),
+            );
+
+            if (Array.isArray(themes) && themes.length > 0 && nuggetPublicIds.size > 0) {
+              // Resolve evidence IDs: prefer explicit supporting_evidence_ids,
+              // fall back to translating supporting_nuggets display IDs
+              const themeItems: SynthesizedConstructInput[] = themes.map((t: Record<string, unknown>) => {
+                let evidenceIds: string[] = [];
+                if (Array.isArray(t.supporting_evidence_ids) && t.supporting_evidence_ids.length > 0) {
+                  evidenceIds = t.supporting_evidence_ids as string[];
+                } else if (Array.isArray(t.supporting_nuggets)) {
+                  // Translate display IDs to canonical public_ids
+                  evidenceIds = (t.supporting_nuggets as string[])
+                    .map(displayId => displayToPublicId.get(displayId))
+                    .filter((id): id is string => id !== undefined);
+                }
+                return {
+                  displayId: (t.id as string) || 'theme-unknown',
+                  label: (t.theme_name as string) || (t.id as string) || '',
+                  payload: t,
+                  proposedEvidenceIds: evidenceIds,
+                };
+              });
+
+              const result = await createSynthesizedConstructs(themeItems, {
+                projectId: resolved.projectId,
+                studyId: resolvedStudyId,
+                constructType: 'theme',
+                upstreamConstructType: 'nugget',
+                relationshipType: 'SYNTHESIZED_FROM',
+                suppliedEvidenceIds: nuggetPublicIds,
+                cascadeVariableKey: 'validated_themes',
+                templateId: 'affinity_mapping',
+                templateVersion: 'v7.1',
+                modelName: getDefaultModelName(),
+                createdBy: body.user.id,
+              });
+
+              if (result.created.length > 0) {
+                console.log(`✅ Evidence lineage: ${result.created.length} theme constructs with canonical nugget refs`);
+              }
+              if (result.rejected.length > 0) {
+                console.warn(`⚠️ Evidence lineage: ${result.rejected.length} themes rejected (invalid refs): ${result.rejected.map(r => r.displayId).join(', ')}`);
+              }
+            } else if (nuggetPublicIds.size === 0) {
+              console.log('ℹ️ No canonical nugget constructs found — skipping theme evidence lineage (PH-5A not yet run for this study)');
+            }
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            console.warn(`⚠️ Theme evidence construct creation failed (non-blocking): ${message}`);
+          }
+        }
       }
 
       const outputLines: string[] = renderedAnalysis.outputTemplate.split('\n').filter((line: string) => line.trim());
