@@ -145,7 +145,8 @@ A dedicated backup job runs daily as a Railway Cron Service:
 
 - **Code:** `operations/postgres-backup/backup.js`
 - **Schedule:** `0 7 * * *` (07:00 UTC daily)
-- **Storage:** External S3-compatible bucket (outside Railway)
+- **Storage:** Supabase Storage (S3-compatible, outside Railway)
+- **Bucket:** `qori-postgres-backups` (private)
 - **Format:** `pg_dump --format=custom --no-owner --no-privileges`
 
 **Object layout:**
@@ -161,7 +162,16 @@ qori/postgres/YYYY/MM/DD/qori-prod-YYYYMMDDTHHMMSSZ.meta.json
 4. Run `validate-restore.js` against the restored instance
 5. If validated, proceed with cutover (§7)
 
-**Retention:** 30-day lifecycle policy on the S3 bucket.
+**Retention:**
+- Target: 30 days
+- Automated retention: deferred (Supabase S3 does not expose bucket lifecycle configuration)
+- Backups remain until manually deleted or retention automation is added
+- The backup job does NOT delete objects
+
+**Storage limitations (Supabase S3):**
+- No object versioning support — each backup has a unique timestamped key
+- No bucket lifecycle expiration — manual cleanup or future automation required
+- Bucket is private; access keys are server-side secrets
 
 **This is the only backup that survives Railway project/environment deletion.**
 

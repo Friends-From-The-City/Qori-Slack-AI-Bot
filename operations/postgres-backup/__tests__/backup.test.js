@@ -251,10 +251,87 @@ describe('credential safety', () => {
   });
 });
 
+describe('S3 client configuration', () => {
+  const originalEnv = process.env;
+  const { S3Client } = require('@aws-sdk/client-s3');
+
+  beforeEach(() => {
+    process.env = { ...originalEnv };
+    S3Client.mockClear();
+  });
+
+  afterAll(() => {
+    process.env = originalEnv;
+  });
+
+  test('configures custom endpoint from BACKUP_S3_ENDPOINT', () => {
+    process.env.BACKUP_S3_REGION = 'us-east-1';
+    process.env.BACKUP_S3_ENDPOINT = 'https://abc123.storage.supabase.co/storage/v1/s3';
+    process.env.BACKUP_S3_ACCESS_KEY_ID = 'test-key';
+    process.env.BACKUP_S3_SECRET_ACCESS_KEY = 'test-secret';
+
+    backup.createS3Client();
+
+    expect(S3Client).toHaveBeenCalledWith(expect.objectContaining({
+      endpoint: 'https://abc123.storage.supabase.co/storage/v1/s3',
+      forcePathStyle: true,
+      region: 'us-east-1',
+    }));
+  });
+
+  test('always uses forcePathStyle for S3-compatible providers', () => {
+    process.env.BACKUP_S3_REGION = 'us-west-2';
+    process.env.BACKUP_S3_ENDPOINT = 'https://example.com/s3';
+    process.env.BACKUP_S3_ACCESS_KEY_ID = 'key';
+    process.env.BACKUP_S3_SECRET_ACCESS_KEY = 'secret';
+
+    backup.createS3Client();
+
+    const config = S3Client.mock.calls[0][0];
+    expect(config.forcePathStyle).toBe(true);
+  });
+
+  test('does not pass credentials in client config keys', () => {
+    process.env.BACKUP_S3_REGION = 'us-east-1';
+    process.env.BACKUP_S3_ENDPOINT = 'https://example.com/s3';
+    process.env.BACKUP_S3_ACCESS_KEY_ID = 'AKIAIOSFODNN7EXAMPLE';
+    process.env.BACKUP_S3_SECRET_ACCESS_KEY = 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY';
+
+    backup.createS3Client();
+
+    // Credentials are passed inside the credentials object, not at top level
+    const config = S3Client.mock.calls[0][0];
+    expect(config.credentials.accessKeyId).toBe('AKIAIOSFODNN7EXAMPLE');
+    expect(config.credentials.secretAccessKey).toBe('wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY');
+    // Config itself should not have these at top level
+    expect(config.accessKeyId).toBeUndefined();
+    expect(config.secretAccessKey).toBeUndefined();
+  });
+
+  test('BACKUP_S3_ENDPOINT is required', () => {
+    expect(backup.REQUIRED_ENV).toContain('BACKUP_S3_ENDPOINT');
+  });
+});
+
 describe('no DELETE permission required', () => {
   test('backup code does not call DeleteObject', () => {
     const backupSource = fs.readFileSync(path.join(__dirname, '..', 'backup.js'), 'utf8');
     expect(backupSource).not.toContain('DeleteObjectCommand');
     expect(backupSource).not.toContain('deleteObject');
+  });
+});
+
+describe('no provider-specific lifecycle dependency', () => {
+  test('backup code does not reference lifecycle or expiration APIs', () => {
+    const backupSource = fs.readFileSync(path.join(__dirname, '..', 'backup.js'), 'utf8');
+    expect(backupSource).not.toContain('PutBucketLifecycle');
+    expect(backupSource).not.toContain('LifecycleConfiguration');
+    expect(backupSource).not.toContain('Expiration');
+  });
+
+  test('backup code does not reference object versioning', () => {
+    const backupSource = fs.readFileSync(path.join(__dirname, '..', 'backup.js'), 'utf8');
+    expect(backupSource).not.toContain('VersioningConfiguration');
+    expect(backupSource).not.toContain('PutBucketVersioning');
   });
 });
