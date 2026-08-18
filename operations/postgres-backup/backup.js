@@ -17,12 +17,28 @@
  *   DATABASE_URL              — Postgres connection string
  *   BACKUP_S3_BUCKET          — S3 bucket name
  *   BACKUP_S3_REGION          — S3 region
- *   BACKUP_S3_ACCESS_KEY_ID   — IAM access key (scoped to backup bucket)
- *   BACKUP_S3_SECRET_ACCESS_KEY — IAM secret key
+ *   BACKUP_S3_ENDPOINT        — S3-compatible endpoint URL
+ *   BACKUP_S3_ACCESS_KEY_ID   — Storage access key (server-side secret)
+ *   BACKUP_S3_SECRET_ACCESS_KEY — Storage secret key (server-side secret)
  *
  * Optional:
- *   BACKUP_S3_ENDPOINT        — Custom S3-compatible endpoint
  *   BACKUP_ENVIRONMENT        — Environment label (default: "production")
+ *
+ * Storage compatibility:
+ *   Uses S3-compatible API with path-style requests (forcePathStyle=true).
+ *   Works with Supabase Storage S3, AWS S3, MinIO, and other compatible
+ *   providers. No dependency on provider-specific features (lifecycle
+ *   policies, versioning, etc.).
+ *
+ * Retention:
+ *   Target retention is 30 days. Automated retention is deferred to
+ *   operational hardening. Backups remain until manually deleted or
+ *   retention automation is added. The backup job does NOT delete objects.
+ *
+ * Limitations:
+ *   - Object versioning is not assumed (Supabase S3 does not support it)
+ *   - Lifecycle expiration is not assumed (Supabase S3 does not expose it)
+ *   - Each backup produces a unique timestamped key; overwrites do not occur
  */
 
 'use strict';
@@ -39,6 +55,7 @@ const REQUIRED_ENV = [
   'DATABASE_URL',
   'BACKUP_S3_BUCKET',
   'BACKUP_S3_REGION',
+  'BACKUP_S3_ENDPOINT',
   'BACKUP_S3_ACCESS_KEY_ID',
   'BACKUP_S3_SECRET_ACCESS_KEY',
 ];
@@ -120,16 +137,13 @@ function verifyDump(dumpPath) {
 function createS3Client() {
   const config = {
     region: process.env.BACKUP_S3_REGION,
+    endpoint: process.env.BACKUP_S3_ENDPOINT,
+    forcePathStyle: true,
     credentials: {
       accessKeyId: process.env.BACKUP_S3_ACCESS_KEY_ID,
       secretAccessKey: process.env.BACKUP_S3_SECRET_ACCESS_KEY,
     },
   };
-
-  if (process.env.BACKUP_S3_ENDPOINT) {
-    config.endpoint = process.env.BACKUP_S3_ENDPOINT;
-    config.forcePathStyle = true;
-  }
 
   return new S3Client(config);
 }
@@ -281,6 +295,7 @@ module.exports = {
   uploadToS3,
   uploadMetadata,
   cleanup,
+  createS3Client,
   log,
   logError,
   main,

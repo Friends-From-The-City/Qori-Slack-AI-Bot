@@ -47,11 +47,12 @@ Automated daily pg_dump to external S3-compatible storage, implemented in `opera
 
 - **Schedule:** `0 7 * * *` (07:00 UTC daily, Railway Cron Service)
 - **Format:** `pg_dump --format=custom --no-owner --no-privileges`
-- **Storage:** External S3 bucket (outside Railway) with SSE encryption at rest, TLS in transit
-- **Retention:** 30-day bucket lifecycle policy
+- **Storage:** Supabase Storage (S3-compatible, outside Railway), private bucket, TLS in transit
+- **Retention:** Target 30 days; automated retention deferred (Supabase S3 does not expose lifecycle config)
 - **Verification:** Each backup is verified with `pg_restore --list` before upload
 - **Metadata:** JSON sidecar with timestamp, environment, dump size, engine version, git SHA
-- **IAM:** Least-privilege credential scoped to backup bucket (PutObject, GetObject, ListBucket only)
+- **Access:** Least-privilege Supabase S3 credential scoped to backup bucket (PutObject, GetObject only)
+- **Limitations:** Supabase S3 does not support object versioning or bucket lifecycle expiration; each backup uses a unique timestamped key; the backup job never deletes objects
 
 This is the only recovery layer that survives Railway project/volume deletion.
 
@@ -59,11 +60,12 @@ This is the only recovery layer that survives Railway project/volume deletion.
 
 1. PROD logical dump not yet tested (drill was DEV-only)
 2. No automated backup monitoring/alerting
-3. Offsite backup cron service deployment pending S3 bucket provisioning
+3. Offsite backup cron service deployment pending Railway cron service provisioning
+4. Automated retention not yet implemented (Supabase S3 limitation — manual cleanup for now)
 
 ## Consequences
 
 - DR runbook and validation script are now part of the codebase
 - Future deployments can use `validate-restore.js` for post-migration schema confidence
 - Three recovery layers now exist for PROD: volume backups, PITR, and offsite logical dumps
-- Offsite backup code is tested (18 unit tests) and ready for deployment once S3 credentials are provisioned
+- Offsite backup code is tested (24 unit tests) and ready for deployment once Railway cron service is provisioned
