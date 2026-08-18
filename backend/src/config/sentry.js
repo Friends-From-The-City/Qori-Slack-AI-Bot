@@ -33,6 +33,8 @@ const PII_FIELDS = new Set([
   'participant',
   'participant_name',
   'participantName',
+  'participant_code',
+  'respondent_key',
   // Content fields
   'text',
   'quote',
@@ -45,6 +47,9 @@ const PII_FIELDS = new Set([
   'session_notes',
   'session_summary',
   'raw_notes',
+  'survey_response',
+  'free_text',
+  'message_text',
   // Name fields
   'name',
   'real_name',
@@ -52,11 +57,21 @@ const PII_FIELDS = new Set([
   'researcher_name',
   'lead_researcher',
   'observer_name',
+  // Contact fields
+  'email',
+  'phone',
+  'phone_number',
   // Variable store
   'variables',
   'cascade_variables',
   'variable_payload',
   'value', // variable value field
+  // Secrets (should never appear, but fail-closed if they do)
+  'token',
+  'secret',
+  'api_key',
+  'authorization',
+  'password',
 ]);
 
 // Patterns to detect and redact in string values (fallback)
@@ -65,6 +80,11 @@ const PII_PATTERNS = [
   { pattern: /\bP[T]?[-_]?\d{1,4}\b/gi, replacement: '[REDACTED_PARTICIPANT_ID]' },
   // Email addresses
   { pattern: /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, replacement: '[REDACTED_EMAIL]' },
+  // Slack tokens (xoxb-, xoxp-, xapp-, xoxs-) — before phone pattern so numeric
+  // segments inside tokens aren't partially matched as phone numbers
+  { pattern: /\b(?:xox[bpas]|xapp)-[a-zA-Z0-9-]+\b/g, replacement: '[REDACTED_TOKEN]' },
+  // Bearer tokens in strings
+  { pattern: /\bBearer\s+[a-zA-Z0-9._~+/=-]+/gi, replacement: 'Bearer [REDACTED_TOKEN]' },
   // Phone numbers (US format)
   { pattern: /\b\d{3}[-.]?\d{3}[-.]?\d{4}\b/g, replacement: '[REDACTED_PHONE]' },
 ];
@@ -350,9 +370,14 @@ function initSentry() {
     return;
   }
 
+  // Railway provides RAILWAY_GIT_COMMIT_SHA automatically in deploy environments.
+  // This ties every Sentry event to the exact deployed commit.
+  const release = process.env.RAILWAY_GIT_COMMIT_SHA;
+
   Sentry.init({
     dsn: SENTRY_DSN,
     environment: NODE_ENV,
+    ...(release && { release }),
 
     // PII scrubbing via beforeSend hook
     beforeSend,
@@ -382,7 +407,8 @@ function initSentry() {
     ],
   });
 
-  console.log(`Sentry: Initialized for ${NODE_ENV} environment with PII scrubbing`);
+  console.log(`Sentry: Initialized for ${NODE_ENV} environment with PII scrubbing${release ? ` (release: ${release.substring(0, 8)})` : ' (no release tag)'}`);
+
 }
 
 module.exports = {
