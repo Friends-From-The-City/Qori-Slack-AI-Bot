@@ -1,6 +1,6 @@
 # Qori Disaster Recovery Runbook
 
-**Last verified:** 2026-08-18 (GOV-5 restore drill)
+**Last verified:** 2026-08-18 (GOV-5A restore drill + GOV-5B offsite backup implementation)
 **Scope:** PostgreSQL canonical state, Redis transient state, GitHub projections
 
 ---
@@ -24,8 +24,8 @@
 |-------|----------|----------------|
 | **A** | Bad deployment / bad migration / data corruption | Railway volume backup → restore as sibling, or PITR if enabled, or pg_dump logical backup |
 | **B** | Postgres service failure | Railway volume backup → restore, or PITR → sibling service |
-| **C** | Volume deletion | Offsite logical dump (if exists). **Railway volume backups may be lost with the volume.** |
-| **D** | Railway project/environment loss | Offsite logical dump. Volume backups are project-scoped and lost with the project |
+| **C** | Volume deletion | Offsite logical dump from S3 (§5.5). **Railway volume backups may be lost with the volume.** |
+| **D** | Railway project/environment loss | Offsite logical dump from S3 (§5.5). Volume backups are project-scoped and lost with the project |
 | **E** | Credential/config loss | Railway Variables tab (if accessible), or redeploy from env documentation |
 
 **Key limitation:** Railway volume backups are scoped to the same project/environment. If the volume or project is deleted, volume backups may also be lost. A portable logical dump (pg_dump) is the only backup that survives project/volume deletion.
@@ -138,6 +138,32 @@ ls -lh <BACKUP_FILE>.dump  # Should be non-zero size
 - Do NOT store in the application repo
 - Delete local copies after offsite transfer
 - Do NOT expose credentials in shell history (use PGPASSWORD env var or .pgpass)
+
+### 5.5 Automated Offsite Backup (GOV-5B)
+
+A dedicated backup job runs daily as a Railway Cron Service:
+
+- **Code:** `operations/postgres-backup/backup.js`
+- **Schedule:** `0 7 * * *` (07:00 UTC daily)
+- **Storage:** External S3-compatible bucket (outside Railway)
+- **Format:** `pg_dump --format=custom --no-owner --no-privileges`
+
+**Object layout:**
+```
+qori/postgres/YYYY/MM/DD/qori-prod-YYYYMMDDTHHMMSSZ.dump
+qori/postgres/YYYY/MM/DD/qori-prod-YYYYMMDDTHHMMSSZ.meta.json
+```
+
+**Restore from offsite backup:**
+1. Download the `.dump` file from S3
+2. Provision a target Postgres instance
+3. `pg_restore --no-owner --no-privileges -h <HOST> -p <PORT> -U <USER> -d <DB> <FILE>.dump`
+4. Run `validate-restore.js` against the restored instance
+5. If validated, proceed with cutover (§7)
+
+**Retention:** 30-day lifecycle policy on the S3 bucket.
+
+**This is the only backup that survives Railway project/environment deletion.**
 
 ---
 
@@ -391,13 +417,13 @@ PROD has 58 migrations vs DEV's 71. This is expected — GOV features are on the
 |---|-----|----------|--------|
 | 1 | ~~PITR not enabled~~ | ~~High~~ | **RESOLVED** — PROD PITR enabled 2026-08-18, WAL archiving verified, gap_state=clear |
 | 2 | ~~Volume backup schedules not verified~~ | ~~High~~ | **RESOLVED** — Both DEV and PROD scheduled volume backups verified enabled |
-| 3 | **No offsite logical backup** | High | A pg_dump stored outside Railway is the only backup that survives project/volume deletion. No automated offsite dump exists. **Target: GOV-5B** |
+| 3 | ~~No offsite logical backup~~ | ~~High~~ | **RESOLVED (GOV-5B)** — Automated daily pg_dump to external S3, 30-day retention. Code at `operations/postgres-backup/` |
 | 4 | **PROD restore not tested** | Medium | Drill was performed on DEV only. PROD logical dump should be tested (to a non-prod target) |
 | 5 | **No automated backup monitoring** | Medium | No alerting if scheduled backups fail or PITR archive falls behind |
 | 6 | **Document bodies exist only in GitHub** | Info | By design. Not a Postgres DR gap, but total GitHub loss would lose all generated Markdown content. GitHub's own DR applies |
 
 ### Recommended Follow-ups
 
-1. **Offsite logical dump (GOV-5B):** Implement a scheduled pg_dump to a durable store outside Railway (e.g., encrypted S3 bucket). Daily for PROD. Smallest viable design: Railway cron service that runs pg_dump and uploads to S3-compatible object storage.
-2. **PROD logical dump drill:** Run pg_dump against PROD (to a local/temp target), validate, delete. Do not modify PROD data.
-3. **Backup monitoring:** Alert on Railway volume backup or PITR archive failures.
+1. **PROD logical dump drill:** Run pg_dump against PROD (to a local/temp target), validate, delete. Do not modify PROD data.
+2. **Backup monitoring:** Alert on Railway volume backup, PITR archive, or offsite backup failures.
+3. **Offsite backup deployment:** Deploy the `operations/postgres-backup/` cron service to Railway with S3 credentials configured.
