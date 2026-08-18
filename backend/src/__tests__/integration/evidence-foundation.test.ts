@@ -246,6 +246,7 @@ describe('evidence_relationships — FK integrity', () => {
 
   it('valid source → construct works', async () => {
     const rel = await EvidenceRelationshipModel.create({
+      project_id: projectId,
       from_source_id: sourceId,
       from_construct_id: null,
       to_source_id: null,
@@ -264,6 +265,7 @@ describe('evidence_relationships — FK integrity', () => {
 
   it('valid construct → construct works', async () => {
     const rel = await EvidenceRelationshipModel.create({
+      project_id: projectId,
       from_source_id: null,
       from_construct_id: constructAId,
       to_source_id: null,
@@ -278,6 +280,7 @@ describe('evidence_relationships — FK integrity', () => {
   it('nonexistent source endpoint fails at DB level', async () => {
     await expect(
       EvidenceRelationshipModel.create({
+        project_id: projectId,
         from_source_id: 99999,
         from_construct_id: null,
         to_source_id: null,
@@ -290,6 +293,7 @@ describe('evidence_relationships — FK integrity', () => {
   it('nonexistent construct endpoint fails at DB level', async () => {
     await expect(
       EvidenceRelationshipModel.create({
+        project_id: projectId,
         from_source_id: null,
         from_construct_id: 99999,
         to_source_id: null,
@@ -302,6 +306,7 @@ describe('evidence_relationships — FK integrity', () => {
   it('zero FROM endpoints fails (CHECK constraint)', async () => {
     await expect(
       EvidenceRelationshipModel.create({
+        project_id: projectId,
         from_source_id: null,
         from_construct_id: null,
         to_source_id: null,
@@ -314,6 +319,7 @@ describe('evidence_relationships — FK integrity', () => {
   it('two FROM endpoints fails (CHECK constraint)', async () => {
     await expect(
       EvidenceRelationshipModel.create({
+        project_id: projectId,
         from_source_id: sourceId,
         from_construct_id: constructAId,
         to_source_id: null,
@@ -326,6 +332,7 @@ describe('evidence_relationships — FK integrity', () => {
   it('zero TO endpoints fails (CHECK constraint)', async () => {
     await expect(
       EvidenceRelationshipModel.create({
+        project_id: projectId,
         from_source_id: sourceId,
         from_construct_id: null,
         to_source_id: null,
@@ -338,6 +345,7 @@ describe('evidence_relationships — FK integrity', () => {
   it('two TO endpoints fails (CHECK constraint)', async () => {
     await expect(
       EvidenceRelationshipModel.create({
+        project_id: projectId,
         from_source_id: sourceId,
         from_construct_id: null,
         to_source_id: sourceId,
@@ -349,6 +357,7 @@ describe('evidence_relationships — FK integrity', () => {
 
   it('deletion of source cascades to its relationship edges (no orphan lineage)', async () => {
     await EvidenceRelationshipModel.create({
+      project_id: projectId,
       from_source_id: sourceId,
       from_construct_id: null,
       to_source_id: null,
@@ -366,6 +375,7 @@ describe('evidence_relationships — FK integrity', () => {
 
   it('deletion of construct cascades to its relationship edges', async () => {
     await EvidenceRelationshipModel.create({
+      project_id: projectId,
       from_source_id: null,
       from_construct_id: constructAId,
       to_source_id: null,
@@ -382,6 +392,7 @@ describe('evidence_relationships — FK integrity', () => {
 
   it('supports forward query (from source)', async () => {
     await EvidenceRelationshipModel.create({
+      project_id: projectId,
       from_source_id: sourceId, from_construct_id: null,
       to_source_id: null, to_construct_id: constructAId,
       relationship_type: 'DERIVED_FROM',
@@ -396,6 +407,7 @@ describe('evidence_relationships — FK integrity', () => {
 
   it('supports reverse query (to construct)', async () => {
     await EvidenceRelationshipModel.create({
+      project_id: projectId,
       from_source_id: null, from_construct_id: constructAId,
       to_source_id: null, to_construct_id: constructBId,
       relationship_type: 'ADDRESSES',
@@ -432,6 +444,7 @@ describe('transactional derivation', () => {
       }, { transaction: t });
 
       const rel = await EvidenceRelationshipModel.create({
+        project_id: projectId,
         from_source_id: sourceId,
         from_construct_id: null,
         to_source_id: null,
@@ -597,16 +610,19 @@ describe('multi-hop lineage', () => {
     // Create lineage chain with FK columns
     await EvidenceRelationshipModel.bulkCreate([
       {
+        project_id: projectId,
         from_source_id: (source as any).id, from_construct_id: null,
         to_source_id: null, to_construct_id: (gap as any).id,
         relationship_type: 'DERIVED_FROM',
       },
       {
+        project_id: projectId,
         from_source_id: null, from_construct_id: (gap as any).id,
         to_source_id: null, to_construct_id: (question as any).id,
         relationship_type: 'ADDRESSES',
       },
       {
+        project_id: projectId,
         from_source_id: null, from_construct_id: (nugget as any).id,
         to_source_id: null, to_construct_id: (question as any).id,
         relationship_type: 'ADDRESSES',

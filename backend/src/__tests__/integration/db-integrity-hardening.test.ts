@@ -248,8 +248,8 @@ describe('GOV-3A Database Integrity Hardening', () => {
       const srcId = await seedSource(projId);
       const constId = await seedConstruct(projId);
       await expectRejected(
-        `INSERT INTO evidence_relationships (from_source_id, to_construct_id, relationship_type, created_at)
-         VALUES (${srcId}, ${constId}, 'INVENTED', NOW())`,
+        `INSERT INTO evidence_relationships (project_id, from_source_id, to_construct_id, relationship_type, created_at)
+         VALUES (${projId}, ${srcId}, ${constId}, 'INVENTED', NOW())`,
         'chk_relationship_type'
       );
     });
@@ -259,8 +259,8 @@ describe('GOV-3A Database Integrity Hardening', () => {
       const srcId = await seedSource(projId);
       const constId = await seedConstruct(projId);
       await sequelize.query(
-        `INSERT INTO evidence_relationships (from_source_id, to_construct_id, relationship_type, created_at)
-         VALUES (${srcId}, ${constId}, 'CONTRADICTS', NOW())`
+        `INSERT INTO evidence_relationships (project_id, from_source_id, to_construct_id, relationship_type, created_at)
+         VALUES (${projId}, ${srcId}, ${constId}, 'CONTRADICTS', NOW())`
       );
     });
 
@@ -268,8 +268,8 @@ describe('GOV-3A Database Integrity Hardening', () => {
       const projId = await seedProject();
       const constId = await seedConstruct(projId);
       await expectRejected(
-        `INSERT INTO evidence_relationships (from_source_id, from_construct_id, to_construct_id, relationship_type, created_at)
-         VALUES (NULL, NULL, ${constId}, 'SUPPORTS', NOW())`,
+        `INSERT INTO evidence_relationships (project_id, from_source_id, from_construct_id, to_construct_id, relationship_type, created_at)
+         VALUES (${projId}, NULL, NULL, ${constId}, 'SUPPORTS', NOW())`,
         'chk_exactly_one_from'
       );
     });
@@ -280,8 +280,8 @@ describe('GOV-3A Database Integrity Hardening', () => {
       const constId = await seedConstruct(projId);
       const constId2 = await seedConstruct(projId);
       await expectRejected(
-        `INSERT INTO evidence_relationships (from_source_id, from_construct_id, to_construct_id, relationship_type, created_at)
-         VALUES (${srcId}, ${constId}, ${constId2}, 'SUPPORTS', NOW())`,
+        `INSERT INTO evidence_relationships (project_id, from_source_id, from_construct_id, to_construct_id, relationship_type, created_at)
+         VALUES (${projId}, ${srcId}, ${constId}, ${constId2}, 'SUPPORTS', NOW())`,
         'chk_exactly_one_from'
       );
     });
@@ -436,8 +436,8 @@ describe('GOV-3A Database Integrity Hardening', () => {
       const artifactId = await seedArtifact(projId, null, 'sk-ref-1');
       const constId = await seedConstruct(projId);
       await expectRejected(
-        `INSERT INTO artifact_evidence_refs (artifact_id, construct_id, ref_type, created_at)
-         VALUES (${artifactId}, ${constId}, 'cites', NOW())`,
+        `INSERT INTO artifact_evidence_refs (project_id, artifact_id, construct_id, ref_type, created_at)
+         VALUES (${projId}, ${artifactId}, ${constId}, 'cites', NOW())`,
         'chk_ref_type'
       );
     });
@@ -447,8 +447,8 @@ describe('GOV-3A Database Integrity Hardening', () => {
       const artifactId = await seedArtifact(projId, null, 'sk-ref-2');
       const constId = await seedConstruct(projId);
       await sequelize.query(
-        `INSERT INTO artifact_evidence_refs (artifact_id, construct_id, ref_type, created_at)
-         VALUES (${artifactId}, ${constId}, 'reflects', NOW())`
+        `INSERT INTO artifact_evidence_refs (project_id, artifact_id, construct_id, ref_type, created_at)
+         VALUES (${projId}, ${artifactId}, ${constId}, 'reflects', NOW())`
       );
     });
 
@@ -456,8 +456,8 @@ describe('GOV-3A Database Integrity Hardening', () => {
       const projId = await seedProject();
       const constId = await seedConstruct(projId);
       await expectRejected(
-        `INSERT INTO artifact_evidence_refs (artifact_id, construct_id, ref_type, created_at)
-         VALUES (99999, ${constId}, 'reflects', NOW())`
+        `INSERT INTO artifact_evidence_refs (project_id, artifact_id, construct_id, ref_type, created_at)
+         VALUES (${projId}, 99999, ${constId}, 'reflects', NOW())`
       );
     });
 
@@ -465,8 +465,8 @@ describe('GOV-3A Database Integrity Hardening', () => {
       const projId = await seedProject();
       const artifactId = await seedArtifact(projId, null, 'sk-ref-3');
       await expectRejected(
-        `INSERT INTO artifact_evidence_refs (artifact_id, construct_id, ref_type, created_at)
-         VALUES (${artifactId}, 99999, 'reflects', NOW())`
+        `INSERT INTO artifact_evidence_refs (project_id, artifact_id, construct_id, ref_type, created_at)
+         VALUES (${projId}, ${artifactId}, 99999, 'reflects', NOW())`
       );
     });
 
@@ -475,12 +475,12 @@ describe('GOV-3A Database Integrity Hardening', () => {
       const artifactId = await seedArtifact(projId, null, 'sk-ref-4');
       const constId = await seedConstruct(projId);
       await sequelize.query(
-        `INSERT INTO artifact_evidence_refs (artifact_id, construct_id, ref_type, created_at)
-         VALUES (${artifactId}, ${constId}, 'reflects', NOW())`
+        `INSERT INTO artifact_evidence_refs (project_id, artifact_id, construct_id, ref_type, created_at)
+         VALUES (${projId}, ${artifactId}, ${constId}, 'reflects', NOW())`
       );
       await expectRejected(
-        `INSERT INTO artifact_evidence_refs (artifact_id, construct_id, ref_type, created_at)
-         VALUES (${artifactId}, ${constId}, 'reflects', NOW())`,
+        `INSERT INTO artifact_evidence_refs (project_id, artifact_id, construct_id, ref_type, created_at)
+         VALUES (${projId}, ${artifactId}, ${constId}, 'reflects', NOW())`,
         'uq_artifact_evidence_ref'
       );
     });
@@ -994,6 +994,140 @@ describe('GOV-3A Database Integrity Hardening', () => {
          VALUES (${subjId}, 'survey_respondent', NULL, 'R01', 'confirmed', 'U_TEST', NOW())`,
         'chk_survey_respondent_link_shape'
       );
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════
+  // V. CROSS-PROJECT SCOPE INTEGRITY (GOV-3B)
+  // ═══════════════════════════════════════════════════════════════
+
+  describe('cross-project scope integrity (GOV-3B)', () => {
+    describe('evidence_relationships — same-project composite FK', () => {
+      it('accepts same-project source → construct', async () => {
+        const projId = await seedProject('proj-same-1');
+        const srcId = await seedSource(projId);
+        const constId = await seedConstruct(projId);
+        await sequelize.query(
+          `INSERT INTO evidence_relationships (project_id, from_source_id, to_construct_id, relationship_type, created_at)
+           VALUES (${projId}, ${srcId}, ${constId}, 'DERIVED_FROM', NOW())`
+        );
+      });
+
+      it('accepts same-project construct → construct', async () => {
+        const projId = await seedProject('proj-same-2');
+        const c1 = await seedConstruct(projId);
+        const c2 = await seedConstruct(projId);
+        await sequelize.query(
+          `INSERT INTO evidence_relationships (project_id, from_construct_id, to_construct_id, relationship_type, created_at)
+           VALUES (${projId}, ${c1}, ${c2}, 'SYNTHESIZED_FROM', NOW())`
+        );
+      });
+
+      it('rejects cross-project source → construct', async () => {
+        const projA = await seedProject('proj-a');
+        const projB = await seedProject('proj-b');
+        const srcA = await seedSource(projA);
+        const constB = await seedConstruct(projB);
+        // Use projA as relationship project_id — constB belongs to projB
+        await expectRejected(
+          `INSERT INTO evidence_relationships (project_id, from_source_id, to_construct_id, relationship_type, created_at)
+           VALUES (${projA}, ${srcA}, ${constB}, 'DERIVED_FROM', NOW())`,
+          'fk_er_to_construct_project'
+        );
+      });
+
+      it('rejects cross-project construct → construct (from endpoint)', async () => {
+        const projA = await seedProject('proj-c');
+        const projB = await seedProject('proj-d');
+        const constA = await seedConstruct(projA);
+        const constB = await seedConstruct(projB);
+        await expectRejected(
+          `INSERT INTO evidence_relationships (project_id, from_construct_id, to_construct_id, relationship_type, created_at)
+           VALUES (${projA}, ${constA}, ${constB}, 'SUPPORTS', NOW())`,
+          'fk_er_to_construct_project'
+        );
+      });
+
+      it('rejects cross-project construct → source', async () => {
+        const projA = await seedProject('proj-e');
+        const projB = await seedProject('proj-f');
+        const constA = await seedConstruct(projA);
+        const srcB = await seedSource(projB);
+        await expectRejected(
+          `INSERT INTO evidence_relationships (project_id, from_construct_id, to_source_id, relationship_type, created_at)
+           VALUES (${projA}, ${constA}, ${srcB}, 'VALIDATES', NOW())`,
+          'fk_er_to_source_project'
+        );
+      });
+
+      it('rejects mismatched project_id on from endpoint', async () => {
+        const projA = await seedProject('proj-g');
+        const projB = await seedProject('proj-h');
+        const srcB = await seedSource(projB);
+        const constA = await seedConstruct(projA);
+        // project_id is projA but from_source belongs to projB
+        await expectRejected(
+          `INSERT INTO evidence_relationships (project_id, from_source_id, to_construct_id, relationship_type, created_at)
+           VALUES (${projA}, ${srcB}, ${constA}, 'DERIVED_FROM', NOW())`,
+          'fk_er_from_source_project'
+        );
+      });
+
+      it('project_id cannot be NULL', async () => {
+        const projId = await seedProject('proj-nn');
+        const srcId = await seedSource(projId);
+        const constId = await seedConstruct(projId);
+        await expectRejected(
+          `INSERT INTO evidence_relationships (project_id, from_source_id, to_construct_id, relationship_type, created_at)
+           VALUES (NULL, ${srcId}, ${constId}, 'DERIVED_FROM', NOW())`
+        );
+      });
+    });
+
+    describe('artifact_evidence_refs — same-project composite FK', () => {
+      it('accepts same-project artifact → construct', async () => {
+        const projId = await seedProject('proj-art-1');
+        const artifactId = await seedArtifact(projId, null, 'sk-xp-1');
+        const constId = await seedConstruct(projId);
+        await sequelize.query(
+          `INSERT INTO artifact_evidence_refs (project_id, artifact_id, construct_id, ref_type, created_at)
+           VALUES (${projId}, ${artifactId}, ${constId}, 'reflects', NOW())`
+        );
+      });
+
+      it('rejects cross-project artifact → construct', async () => {
+        const projA = await seedProject('proj-art-a');
+        const projB = await seedProject('proj-art-b');
+        const artifactA = await seedArtifact(projA, null, 'sk-xp-2');
+        const constB = await seedConstruct(projB);
+        await expectRejected(
+          `INSERT INTO artifact_evidence_refs (project_id, artifact_id, construct_id, ref_type, created_at)
+           VALUES (${projA}, ${artifactA}, ${constB}, 'reflects', NOW())`,
+          'fk_aer_construct_project'
+        );
+      });
+
+      it('rejects mismatched project_id on artifact endpoint', async () => {
+        const projA = await seedProject('proj-art-c');
+        const projB = await seedProject('proj-art-d');
+        const artifactB = await seedArtifact(projB, null, 'sk-xp-3');
+        const constA = await seedConstruct(projA);
+        await expectRejected(
+          `INSERT INTO artifact_evidence_refs (project_id, artifact_id, construct_id, ref_type, created_at)
+           VALUES (${projA}, ${artifactB}, ${constA}, 'reflects', NOW())`,
+          'fk_aer_artifact_project'
+        );
+      });
+
+      it('project_id cannot be NULL', async () => {
+        const projId = await seedProject('proj-art-nn');
+        const artifactId = await seedArtifact(projId, null, 'sk-xp-4');
+        const constId = await seedConstruct(projId);
+        await expectRejected(
+          `INSERT INTO artifact_evidence_refs (project_id, artifact_id, construct_id, ref_type, created_at)
+           VALUES (NULL, ${artifactId}, ${constId}, 'reflects', NOW())`
+        );
+      });
     });
   });
 });

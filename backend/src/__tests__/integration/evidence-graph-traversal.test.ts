@@ -78,8 +78,8 @@ async function buildFullGraph() {
   nugget2Id = n2.id; nugget2PublicId = n2.public_id;
 
   // Source → Nugget relationships
-  await createSourceToConstruct({ from_source_id: sourceId, to_construct_id: nugget1Id, relationship_type: 'DERIVED_FROM' });
-  await createSourceToConstruct({ from_source_id: sourceId, to_construct_id: nugget2Id, relationship_type: 'DERIVED_FROM' });
+  await createSourceToConstruct({ from_source_id: sourceId, to_construct_id: nugget1Id, relationship_type: 'DERIVED_FROM', project_id: projectId });
+  await createSourceToConstruct({ from_source_id: sourceId, to_construct_id: nugget2Id, relationship_type: 'DERIVED_FROM', project_id: projectId });
 
   // Theme (synthesized from nuggets)
   const t1 = await createConstruct({
@@ -90,8 +90,8 @@ async function buildFullGraph() {
   });
   theme1Id = t1.id; theme1PublicId = t1.public_id;
 
-  await createConstructToConstruct({ from_construct_id: nugget1Id, to_construct_id: theme1Id, relationship_type: 'SYNTHESIZED_FROM' });
-  await createConstructToConstruct({ from_construct_id: nugget2Id, to_construct_id: theme1Id, relationship_type: 'SYNTHESIZED_FROM' });
+  await createConstructToConstruct({ from_construct_id: nugget1Id, to_construct_id: theme1Id, relationship_type: 'SYNTHESIZED_FROM', project_id: projectId });
+  await createConstructToConstruct({ from_construct_id: nugget2Id, to_construct_id: theme1Id, relationship_type: 'SYNTHESIZED_FROM', project_id: projectId });
 
   // Finding (synthesized from theme)
   const f1 = await createConstruct({
@@ -102,7 +102,7 @@ async function buildFullGraph() {
   });
   finding1Id = f1.id; finding1PublicId = f1.public_id;
 
-  await createConstructToConstruct({ from_construct_id: theme1Id, to_construct_id: finding1Id, relationship_type: 'SYNTHESIZED_FROM' });
+  await createConstructToConstruct({ from_construct_id: theme1Id, to_construct_id: finding1Id, relationship_type: 'SYNTHESIZED_FROM', project_id: projectId });
 
   // Recommendation (supports finding)
   const r1 = await createConstruct({
@@ -113,7 +113,7 @@ async function buildFullGraph() {
   });
   rec1Id = r1.id; rec1PublicId = r1.public_id;
 
-  await createConstructToConstruct({ from_construct_id: finding1Id, to_construct_id: rec1Id, relationship_type: 'SUPPORTS' });
+  await createConstructToConstruct({ from_construct_id: finding1Id, to_construct_id: rec1Id, relationship_type: 'SUPPORTS', project_id: projectId });
 }
 
 beforeAll(async () => {

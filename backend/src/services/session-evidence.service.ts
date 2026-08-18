@@ -176,6 +176,7 @@ export async function createNuggetConstructs(
 
     // Create DERIVED_FROM relationship: source → nugget
     await createSourceToConstruct({
+      project_id: projectId,
       from_source_id: sourceId,
       to_construct_id: construct.id,
       relationship_type: 'DERIVED_FROM',

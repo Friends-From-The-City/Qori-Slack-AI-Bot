@@ -64,6 +64,7 @@ export interface CreateConstructInput {
 
 /** Source → Construct relationship. */
 export interface CreateSourceToConstructInput {
+  project_id: number;
   from_source_id: number;
   to_construct_id: number;
   relationship_type: RelationshipType;
@@ -72,6 +73,7 @@ export interface CreateSourceToConstructInput {
 
 /** Construct → Construct relationship. */
 export interface CreateConstructToConstructInput {
+  project_id: number;
   from_construct_id: number;
   to_construct_id: number;
   relationship_type: RelationshipType;
@@ -93,8 +95,8 @@ export interface DerivationInput {
  * meaning "the construct being created in this derivation."
  */
 export type DerivationRelationshipInput =
-  | { from_source_id: number; to_construct_id: number; relationship_type: RelationshipType; provenance?: RelationshipProvenance | null }
-  | { from_construct_id: number; to_construct_id: number; relationship_type: RelationshipType; provenance?: RelationshipProvenance | null };
+  | { project_id: number; from_source_id: number; to_construct_id: number; relationship_type: RelationshipType; provenance?: RelationshipProvenance | null }
+  | { project_id: number; from_construct_id: number; to_construct_id: number; relationship_type: RelationshipType; provenance?: RelationshipProvenance | null };
 
 // ═══════════════════════════════════════════════════════════════════════
 // SOURCES
@@ -243,6 +245,7 @@ export async function createSourceToConstruct(
 ): Promise<EvidenceRelationship> {
   return EvidenceRelationshipModel.create(
     {
+      project_id: input.project_id,
       from_source_id: input.from_source_id,
       from_construct_id: null,
       to_source_id: null,
@@ -256,7 +259,7 @@ export async function createSourceToConstruct(
 
 /**
  * Create a construct → construct relationship.
- * FK integrity enforced at DB level.
+ * FK integrity enforced at DB level — composite FKs ensure same-project scope.
  */
 export async function createConstructToConstruct(
   input: CreateConstructToConstructInput,
@@ -264,6 +267,7 @@ export async function createConstructToConstruct(
 ): Promise<EvidenceRelationship> {
   return EvidenceRelationshipModel.create(
     {
+      project_id: input.project_id,
       from_source_id: null,
       from_construct_id: input.from_construct_id,
       to_source_id: null,

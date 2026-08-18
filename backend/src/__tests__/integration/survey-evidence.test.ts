@@ -292,6 +292,7 @@ describe('deterministic survey constructs', () => {
 
     // Create lineage
     await EvidenceRelationshipModel.create({
+      project_id: projectId,
       from_source_id: (source as any).id,
       from_construct_id: null,
       to_source_id: null,

@@ -811,6 +811,7 @@ export async function promoteAcceptedPatterns(
         created_by: userId,
       },
       relationships: [{
+        project_id: projectId,
         from_source_id: evidenceSourceId,
         to_construct_id: 0, // sentinel: resolves to created construct
         relationship_type: 'DERIVED_FROM' as const,

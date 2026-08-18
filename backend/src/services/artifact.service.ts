@@ -251,6 +251,7 @@ export async function getArtifactsByTemplate(
 export async function attachEvidenceRefs(
   artifactId: number,
   constructIds: number[],
+  projectId: number,
   refType: string = 'reflects',
   modelOverride?: any,
 ): Promise<number> {
@@ -261,6 +262,7 @@ export async function attachEvidenceRefs(
   for (const constructId of constructIds) {
     try {
       await RefModel.create({
+        project_id: projectId,
         artifact_id: artifactId,
         construct_id: constructId,
         ref_type: refType,
@@ -331,7 +333,7 @@ export async function attachEvidenceRefsVerified(
       return { attached: 0, skipped: true, reason };
     }
 
-    const attached = await attachEvidenceRefs(artifact.id, constructIds, refType);
+    const attached = await attachEvidenceRefs(artifact.id, constructIds, context.projectId, refType);
     return { attached, skipped: false };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

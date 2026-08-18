@@ -22,6 +22,7 @@ class ArtifactEvidenceRef extends Model<
   InferCreationAttributes<ArtifactEvidenceRef>
 > {
   declare id: CreationOptional<number>;
+  declare project_id: number;
   declare artifact_id: number;
   declare construct_id: number;
   declare ref_type: CreationOptional<string>;
@@ -32,6 +33,7 @@ export default (sequelize: Sequelize) => {
   ArtifactEvidenceRef.init(
     {
       id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+      project_id: { type: DataTypes.INTEGER, allowNull: false, references: { model: 'projects', key: 'id' } },
       artifact_id: { type: DataTypes.INTEGER, allowNull: false, references: { model: 'research_artifacts', key: 'id' } },
       construct_id: { type: DataTypes.INTEGER, allowNull: false, references: { model: 'evidence_constructs', key: 'id' } },
       ref_type: { type: DataTypes.STRING(30), allowNull: false, defaultValue: 'reflects' },

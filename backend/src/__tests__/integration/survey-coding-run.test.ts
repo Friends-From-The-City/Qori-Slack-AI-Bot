@@ -603,6 +603,7 @@ describe('evidence construct promotion', () => {
     });
 
     const rel = await RelationshipModel.create({
+      project_id: projectId,
       from_source_id: sourceId,
       to_construct_id: (construct as any).id,
       relationship_type: 'DERIVED_FROM',
