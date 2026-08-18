@@ -857,6 +857,50 @@ describe('GOV-3A Database Integrity Hardening', () => {
   });
 
   // ═══════════════════════════════════════════════════════════════
+  // T-pre. PARTICIPANT STATUS DEFAULT CONSISTENCY
+  // ═══════════════════════════════════════════════════════════════
+
+  describe('participant status_select default consistency', () => {
+    it('INSERT using DB default succeeds', async () => {
+      const projId = await seedProject();
+      const studyId = await seedStudy(projId);
+      // Omit status_select entirely — rely on the DB column default
+      const [rows] = await sequelize.query(
+        `INSERT INTO study_participants (study_id, participant_code, added_by, created_at, updated_at)
+         VALUES (${studyId}, 'P_DEFAULT', 'U_TEST', NOW(), NOW())
+         RETURNING status_select`
+      );
+      expect((rows as any[])[0].status_select).toBe('contacted');
+    });
+
+    it('persisted default is the canonical lowercase value', async () => {
+      const projId = await seedProject();
+      const studyId = await seedStudy(projId);
+      await sequelize.query(
+        `INSERT INTO study_participants (study_id, participant_code, added_by, created_at, updated_at)
+         VALUES (${studyId}, 'P_VERIFY', 'U_TEST', NOW(), NOW())`
+      );
+      const [rows] = await sequelize.query(
+        `SELECT status_select FROM study_participants WHERE participant_code = 'P_VERIFY'`
+      );
+      const value = (rows as any[])[0].status_select;
+      // Must be lowercase, must be in the CHECK constraint's allowed set
+      expect(value).toBe('contacted');
+      expect(value).toMatch(/^[a-z_]+$/);
+    });
+
+    it('rejects uppercase/invalid status on insert', async () => {
+      const projId = await seedProject();
+      const studyId = await seedStudy(projId);
+      await expectRejected(
+        `INSERT INTO study_participants (study_id, participant_code, status_select, added_by, created_at, updated_at)
+         VALUES (${studyId}, 'P_BAD', 'Pending', 'U_TEST', NOW(), NOW())`,
+        'chk_participant_status'
+      );
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════
   // T. REFERENTIAL INTEGRITY (FK rejection tests)
   // ═══════════════════════════════════════════════════════════════
 
