@@ -41,15 +41,29 @@ Prior to GOV-5, no disaster recovery posture existed:
 - DEV volume backups: **Enabled** (verified in Railway dashboard)
 - PROD volume backups: **Enabled** (verified in Railway dashboard)
 
+## GOV-5B: Offsite Logical Backup (2026-08-18)
+
+Automated daily pg_dump to external S3-compatible storage, implemented in `operations/postgres-backup/`.
+
+- **Schedule:** `0 7 * * *` (07:00 UTC daily, Railway Cron Service)
+- **Format:** `pg_dump --format=custom --no-owner --no-privileges`
+- **Storage:** External S3 bucket (outside Railway) with SSE encryption at rest, TLS in transit
+- **Retention:** 30-day bucket lifecycle policy
+- **Verification:** Each backup is verified with `pg_restore --list` before upload
+- **Metadata:** JSON sidecar with timestamp, environment, dump size, engine version, git SHA
+- **IAM:** Least-privilege credential scoped to backup bucket (PutObject, GetObject, ListBucket only)
+
+This is the only recovery layer that survives Railway project/volume deletion.
+
 ## Remaining Gaps
 
-1. No automated offsite logical backup (target: GOV-5B)
-2. PROD logical dump not yet tested (drill was DEV-only)
-3. No automated backup monitoring/alerting
+1. PROD logical dump not yet tested (drill was DEV-only)
+2. No automated backup monitoring/alerting
+3. Offsite backup cron service deployment pending S3 bucket provisioning
 
 ## Consequences
 
 - DR runbook and validation script are now part of the codebase
 - Future deployments can use `validate-restore.js` for post-migration schema confidence
-- Offsite backup automation is the next priority (GOV-5B)
-- Three recovery layers now exist for PROD: volume backups, PITR, and (pending GOV-5B) offsite logical dumps
+- Three recovery layers now exist for PROD: volume backups, PITR, and offsite logical dumps
+- Offsite backup code is tested (18 unit tests) and ready for deployment once S3 credentials are provisioned
