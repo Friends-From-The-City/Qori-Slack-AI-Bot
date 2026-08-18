@@ -726,6 +726,7 @@ async function persistSurveyFoundation(
         }, { transaction: t });
 
         await createSourceToConstruct({
+          project_id: ctx.projectId,
           from_source_id: evidenceSourceId,
           to_construct_id: (summaryConstruct as unknown as { id: number }).id,
           relationship_type: 'DERIVED_FROM',
@@ -752,6 +753,7 @@ async function persistSurveyFoundation(
         }, { transaction: t });
 
         await createSourceToConstruct({
+          project_id: ctx.projectId,
           from_source_id: evidenceSourceId,
           to_construct_id: (distConstruct as unknown as { id: number }).id,
           relationship_type: 'DERIVED_FROM',
@@ -775,6 +777,7 @@ async function persistSurveyFoundation(
         }, { transaction: t });
 
         await createSourceToConstruct({
+          project_id: ctx.projectId,
           from_source_id: evidenceSourceId,
           to_construct_id: (ctConstruct as unknown as { id: number }).id,
           relationship_type: 'DERIVED_FROM',

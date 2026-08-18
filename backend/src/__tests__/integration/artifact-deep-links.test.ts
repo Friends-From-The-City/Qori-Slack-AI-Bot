@@ -262,8 +262,8 @@ describe('PH-6D2: Deep-link resolver', () => {
     });
 
     // Attach evidence refs
-    await attachEvidenceRefs(affinity.id, [themeConstructId]);
-    await attachEvidenceRefs(readout.id, [findingConstructId, recConstructId]);
+    await attachEvidenceRefs(affinity.id, [themeConstructId], projectId);
+    await attachEvidenceRefs(readout.id, [findingConstructId, recConstructId], projectId);
   });
 
   it('theme resolves to affinity/synthesis artifact', async () => {
@@ -318,7 +318,7 @@ describe('PH-6D2: Deep-link resolver', () => {
 
   it('suppliedArtifactPublicId takes precedence', async () => {
     // Attach theme to BOTH artifacts
-    await attachEvidenceRefs(readoutArtifactId, [themeConstructId]);
+    await attachEvidenceRefs(readoutArtifactId, [themeConstructId], projectId);
 
     // Without supplied: should prefer affinity (template precedence)
     const natural = await resolveConstructDeepLink(themePublicId, studyId);
@@ -366,8 +366,8 @@ describe('PH-6D2: Deep-link resolver', () => {
     });
 
     // Attach to both
-    await attachEvidenceRefs(older.id, [precedenceTheme.id]);
-    await attachEvidenceRefs(newer.id, [precedenceTheme.id]);
+    await attachEvidenceRefs(older.id, [precedenceTheme.id], projectId);
+    await attachEvidenceRefs(newer.id, [precedenceTheme.id], projectId);
 
     // Now update the OLDER artifact's updated_at to be more recent
     await sequelize.models.ResearchArtifact.update(

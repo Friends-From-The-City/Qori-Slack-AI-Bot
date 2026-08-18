@@ -134,8 +134,10 @@ async function makeConstruct(
 
 async function makeRelationship(
   fromConstructId: number, toConstructId: number, type: string,
+  projectId: number,
 ) {
   return RelationshipModel.create({
+    project_id: projectId,
     from_construct_id: fromConstructId, to_construct_id: toConstructId,
     relationship_type: type as any,
   });
@@ -181,8 +183,9 @@ async function makeArtifact(projectId: number, studyId: number, templateId: stri
   });
 }
 
-async function makeArtifactRef(artifactId: number, constructId: number) {
+async function makeArtifactRef(artifactId: number, constructId: number, projectId: number) {
   return ArtifactRefModel.create({
+    project_id: projectId,
     artifact_id: artifactId, construct_id: constructId,
   });
 }
@@ -532,7 +535,7 @@ describe('DSAR Delete (GOV-2D)', () => {
       const theme = await makeConstruct((project as any).id, (study as any).id, 'theme', {
         theme_name: 'Navigation',
       });
-      await makeRelationship(nugget.id, theme.id, 'SYNTHESIZED_FROM');
+      await makeRelationship(nugget.id, theme.id, 'SYNTHESIZED_FROM', (project as any).id);
 
       await attributeConstructToSubject({
         constructId: nugget.id, dataSubjectId: subject.id,
@@ -575,9 +578,9 @@ describe('DSAR Delete (GOV-2D)', () => {
         recommendation: 'Simplify nav structure',
       });
 
-      await makeRelationship(nugget.id, theme.id, 'SYNTHESIZED_FROM');
-      await makeRelationship(theme.id, finding.id, 'SUPPORTS');
-      await makeRelationship(finding.id, recommendation.id, 'ADDRESSES');
+      await makeRelationship(nugget.id, theme.id, 'SYNTHESIZED_FROM', (project as any).id);
+      await makeRelationship(theme.id, finding.id, 'SUPPORTS', (project as any).id);
+      await makeRelationship(finding.id, recommendation.id, 'ADDRESSES', (project as any).id);
 
       await attributeConstructToSubject({
         constructId: nugget.id, dataSubjectId: subject.id,
@@ -622,7 +625,7 @@ describe('DSAR Delete (GOV-2D)', () => {
         { finding: 'Key finding' },
         { status: 'accepted' },
       );
-      await makeRelationship(nugget.id, finding.id, 'SUPPORTS');
+      await makeRelationship(nugget.id, finding.id, 'SUPPORTS', (project as any).id);
 
       await attributeConstructToSubject({
         constructId: nugget.id, dataSubjectId: subject.id,
@@ -851,8 +854,8 @@ describe('DSAR Delete (GOV-2D)', () => {
         finding: 'Finding',
       });
 
-      await makeRelationship(nugget.id, theme.id, 'SYNTHESIZED_FROM');
-      await makeRelationship(theme.id, finding.id, 'SUPPORTS');
+      await makeRelationship(nugget.id, theme.id, 'SYNTHESIZED_FROM', (project as any).id);
+      await makeRelationship(theme.id, finding.id, 'SUPPORTS', (project as any).id);
 
       await attributeConstructToSubject({
         constructId: nugget.id, dataSubjectId: subject.id,
@@ -862,8 +865,8 @@ describe('DSAR Delete (GOV-2D)', () => {
       // Create artifacts and refs
       const artifact1 = await makeArtifact((project as any).id, (study as any).id, 'readout');
       const artifact2 = await makeArtifact((project as any).id, (study as any).id, 'synthesis');
-      await makeArtifactRef((artifact1 as any).id, finding.id);
-      await makeArtifactRef((artifact2 as any).id, theme.id);
+      await makeArtifactRef((artifact1 as any).id, finding.id, (project as any).id);
+      await makeArtifactRef((artifact2 as any).id, theme.id, (project as any).id);
 
       const result = await deleteSubjectData(
         subject.public_id, (project as any).id, 'U_OWNER', sequelize,
@@ -982,7 +985,7 @@ describe('DSAR Delete (GOV-2D)', () => {
         derivation_type: 'model', status: 'candidate', created_by: 'U_OWNER',
         stale_due_to_disposition: true,
       });
-      await makeRelationship(nugget.id, theme.id, 'SYNTHESIZED_FROM');
+      await makeRelationship(nugget.id, theme.id, 'SYNTHESIZED_FROM', (project as any).id);
 
       await attributeConstructToSubject({
         constructId: nugget.id, dataSubjectId: subject.id,
@@ -1070,7 +1073,7 @@ describe('DSAR Delete (GOV-2D)', () => {
       const theme = await makeConstruct((project as any).id, (study as any).id, 'theme', {
         theme_name: 'Test',
       });
-      await makeRelationship(nugget.id, theme.id, 'SYNTHESIZED_FROM');
+      await makeRelationship(nugget.id, theme.id, 'SYNTHESIZED_FROM', (project as any).id);
 
       await attributeConstructToSubject({
         constructId: nugget.id, dataSubjectId: subject.id,
@@ -1102,6 +1105,7 @@ describe('DSAR Delete (GOV-2D)', () => {
         from_source_id: (source as any).id,
         to_construct_id: nugget.id,
         relationship_type: 'DERIVED_FROM',
+        project_id: (project as any).id,
       });
 
       await attributeConstructToSubject({

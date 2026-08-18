@@ -68,6 +68,7 @@ class EvidenceRelationship extends Model<
 > {
   declare id: CreationOptional<number>;
   declare public_id: CreationOptional<string>;
+  declare project_id: number;
   declare from_source_id: number | null;
   declare from_construct_id: number | null;
   declare to_source_id: number | null;
@@ -90,6 +91,11 @@ export default (sequelize: Sequelize) => {
         allowNull: false,
         unique: true,
         defaultValue: () => randomUUID(),
+      },
+      project_id: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        references: { model: 'projects', key: 'id' },
       },
       from_source_id: {
         type: DataTypes.INTEGER,

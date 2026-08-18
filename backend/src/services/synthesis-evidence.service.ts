@@ -268,6 +268,7 @@ export async function createSynthesizedConstructs(
       const fromId = upstreamIdMap.get(refPublicId);
       if (fromId) {
         await createConstructToConstruct({
+          project_id: config.projectId,
           from_construct_id: fromId,
           to_construct_id: construct.id,
           relationship_type: config.relationshipType,

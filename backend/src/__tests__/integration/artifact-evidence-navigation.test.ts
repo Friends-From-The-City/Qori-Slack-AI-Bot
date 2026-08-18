@@ -112,10 +112,12 @@ describe('PH-6C: Affinity artifact attaches theme construct refs', () => {
     await createConstructToConstruct({
       from_construct_id: nugget1.id, to_construct_id: theme1.id,
       relationship_type: 'SYNTHESIZED_FROM', provenance: { method: 'theme_synthesis' },
+      project_id: projectId,
     });
     await createConstructToConstruct({
       from_construct_id: nugget2.id, to_construct_id: theme2.id,
       relationship_type: 'SYNTHESIZED_FROM', provenance: { method: 'theme_synthesis' },
+      project_id: projectId,
     });
 
     // Reserve and write artifact
@@ -210,10 +212,12 @@ describe('PH-6C: Readout artifact attaches finding + recommendation refs', () =>
     await createConstructToConstruct({
       from_construct_id: theme.id, to_construct_id: finding1.id,
       relationship_type: 'SYNTHESIZED_FROM', provenance: { method: 'finding_synthesis' },
+      project_id: projectId,
     });
     await createConstructToConstruct({
       from_construct_id: theme.id, to_construct_id: finding2.id,
       relationship_type: 'SYNTHESIZED_FROM', provenance: { method: 'finding_synthesis' },
+      project_id: projectId,
     });
 
     const rec = await createConstruct({
@@ -226,6 +230,7 @@ describe('PH-6C: Readout artifact attaches finding + recommendation refs', () =>
     await createConstructToConstruct({
       from_construct_id: finding1.id, to_construct_id: rec.id,
       relationship_type: 'SUPPORTS', provenance: { method: 'recommendation_synthesis' },
+      project_id: projectId,
     });
 
     // Reserve and write readout artifact
@@ -289,6 +294,7 @@ describe('PH-6C: Session summary artifact attaches nugget construct refs', () =>
       from_source_id: source.id, to_construct_id: nugget.id,
       relationship_type: 'DERIVED_FROM',
       provenance: { method: 'session_analysis' },
+      project_id: projectId,
     });
 
     const fingerprint = computeDerivationFingerprint([`source:${source.public_id}`], 'v7.2');
@@ -639,6 +645,7 @@ describe('PH-6C: Canonical evidence traversal independent of artifacts', () => {
     await createSourceToConstruct({
       from_source_id: source.id, to_construct_id: nugget.id,
       relationship_type: 'DERIVED_FROM', provenance: { method: 'test' },
+      project_id: projectId,
     });
 
     const theme = await createConstruct({
@@ -649,6 +656,7 @@ describe('PH-6C: Canonical evidence traversal independent of artifacts', () => {
     await createConstructToConstruct({
       from_construct_id: nugget.id, to_construct_id: theme.id,
       relationship_type: 'SYNTHESIZED_FROM', provenance: { method: 'test' },
+      project_id: projectId,
     });
 
     const finding = await createConstruct({
@@ -659,6 +667,7 @@ describe('PH-6C: Canonical evidence traversal independent of artifacts', () => {
     await createConstructToConstruct({
       from_construct_id: theme.id, to_construct_id: finding.id,
       relationship_type: 'SYNTHESIZED_FROM', provenance: { method: 'test' },
+      project_id: projectId,
     });
 
     // No artifact exists for this chain
