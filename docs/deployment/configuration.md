@@ -63,6 +63,8 @@ Redis is currently non-authoritative. All Redis-backed features (RAG embedding q
 | `GITHUB_REPO` | Content repository name | Yes | No | String | None | GitHub operations fail | Application |
 | `GITHUB_CONFIG_REPO` | Config repository name | No | No | String | Falls back to `GITHUB_REPO` | Single-repo mode | Application |
 
+| `GITHUB_CONFIG_BRANCH` | Config repo branch for reads | No | No | Repository default branch | Uses default (main) | Application |
+
 The deploying organization provides its own GitHub organization and repositories. No dependency on any specific GitHub organization.
 
 ## MODEL PROVIDER
@@ -90,7 +92,19 @@ Qori does not require Sentry for correct operation. Any Sentry-compatible error 
 
 ## BACKUP
 
-Backup infrastructure is external to Qori. No backup-specific environment variables are consumed by the application. See [backup-dr.md](./backup-dr.md) for the DR contract.
+The backup job (`operations/postgres-backup/backup.js`) is a separate run-to-completion process, not part of the main application. It uses these variables:
+
+| Variable | Purpose | Required (for backup) | Secret | Format | Default |
+|----------|---------|----------------------|--------|--------|---------|
+| `DATABASE_URL` | Postgres connection for pg_dump | Yes | Yes | PostgreSQL URI | None |
+| `BACKUP_S3_BUCKET` | S3-compatible storage bucket | Yes | No | Bucket name | None |
+| `BACKUP_S3_REGION` | S3 region | Yes | No | Region string | None |
+| `BACKUP_S3_ENDPOINT` | S3-compatible endpoint URL | Yes | No | URL | None |
+| `BACKUP_S3_ACCESS_KEY_ID` | Storage access key | Yes | Yes | String | None |
+| `BACKUP_S3_SECRET_ACCESS_KEY` | Storage secret key | Yes | Yes | String | None |
+| `BACKUP_ENVIRONMENT` | Environment label for metadata | No | No | String | `production` |
+
+These are only required when running the backup job. The main application does not consume backup variables. See [backup-dr.md](./backup-dr.md) for the DR contract.
 
 ## ENVIRONMENT / RELEASE
 
