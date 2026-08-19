@@ -115,6 +115,8 @@ Start with `0001` and read forward. The history is itself useful — it shows ho
 - [0040 — Records lifecycle and disposition authority](./0040-records-lifecycle-and-disposition-authority.md) — Qori enforces assigned records authority but does not invent schedules; fail-closed disposition gate; holds override disposition
 - [0041 — Deployable government environment boundary](./0041-deployable-government-environment-boundary.md) — Qori is deployable in agency-controlled infrastructure; all providers are adapters; formal deployment contracts
 - [0042 — Canonical organization and actor boundary](./0042-canonical-organization-and-actor-boundary.md) — Interface identities map to canonical actors; organizations/teams/projects define authority; Slack is adapter not authority
+- [0043 — Adapter-neutral authentication and actor resolution](./0043-adapter-neutral-authentication-and-actor-resolution.md) — AuthAdapter interface extracts IdentityEvidence per provider; OIDC production contract; identity uniqueness is (provider, issuer, subject); no authorization from token claims
+- [0044 — Channel-independent application boundary](./0044-channel-independent-application-boundary.md) — Application service layer between adapters and domain services; Slack handlers become thin adapters; artifact canonical state separated from projection state
 
 ### Lessons (informal ADRs from failure modes)
 

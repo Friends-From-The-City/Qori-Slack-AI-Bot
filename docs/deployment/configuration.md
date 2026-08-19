@@ -18,6 +18,18 @@ Every required and optional environment variable for a Qori deployment, organize
 | `PORT` | HTTP listen port | No | No | Integer | `3000` | Listens on 3000 | Infrastructure |
 | `CORS_ALLOWED_ORIGIN` | Allowed CORS origin | No | No | URL | None | CORS disabled | Application |
 | `JWT_SECRET_KEY` | JWT signing key | Yes (if JWT used) | Yes | Random hex string (32+ bytes) | None | JWT operations fail | Application |
+| `TRUSTED_PROXY` | Express trust-proxy setting | No | No | `false` \| `true` \| hop count \| IP/CIDR | `false` (disabled) | Proxy headers not trusted — agency must explicitly configure | Infrastructure |
+| `CORS_ALLOWED_ORIGINS` | Multiple CORS origins (comma-separated) | No | No | Comma-separated URLs | None | Falls back to `CORS_ALLOWED_ORIGIN` | Application |
+| `API_RATE_LIMIT_WINDOW_MS` | Rate limit window in milliseconds | No | No | Integer | `60000` | 1-minute window | Application |
+| `API_RATE_LIMIT_MAX` | Max requests per rate limit window | No | No | Integer | `100` | 100 requests per window | Application |
+
+## IDENTITY PROVIDER (OIDC)
+
+| Variable | Purpose | Required | Secret | Format | Default | Missing behavior | Owner |
+|----------|---------|----------|--------|--------|---------|------------------|-------|
+| `OIDC_ISSUER` | OIDC issuer URL | Yes (if OIDC) | No | URL | None | OIDC adapter disabled | Application |
+| `OIDC_CLIENT_ID` | OIDC client/audience ID | Yes (if OIDC) | No | String | None | OIDC adapter disabled | Application |
+| `OIDC_JWKS_URI` | OIDC JWKS endpoint URL | Yes (if OIDC) | No | URL | None | OIDC signature verification fails | Application |
 
 ## DATABASE
 

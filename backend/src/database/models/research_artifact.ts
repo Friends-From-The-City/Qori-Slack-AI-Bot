@@ -23,6 +23,9 @@ import {
 
 export type ArtifactStatus = 'pending' | 'written' | 'failed';
 
+/** Projection/publication status — distinct from workflow status (PLAT-3, ADR 0044) */
+export type PublicationStatus = 'not_published' | 'publishing' | 'published' | 'projection_failed';
+
 export type ArtifactType =
   | 'discovery'
   | 'brief'
@@ -50,6 +53,7 @@ class ResearchArtifact extends Model<
   declare commit_sha: string | null;
   declare url: string | null;
   declare status: CreationOptional<ArtifactStatus>;
+  declare publication_status: CreationOptional<PublicationStatus>;
   declare last_write_error: string | null;
   declare last_write_attempted_at: Date | null;
   declare semantic_key: string;
@@ -84,6 +88,7 @@ export default (sequelize: Sequelize) => {
       commit_sha: { type: DataTypes.STRING(64), allowNull: true },
       url: { type: DataTypes.STRING, allowNull: true },
       status: { type: DataTypes.STRING(20), allowNull: false, defaultValue: 'pending' },
+      publication_status: { type: DataTypes.STRING(30), allowNull: false, defaultValue: 'not_published' },
       last_write_error: { type: DataTypes.STRING, allowNull: true },
       last_write_attempted_at: { type: DataTypes.DATE, allowNull: true },
       semantic_key: { type: DataTypes.STRING(300), allowNull: false, unique: true },

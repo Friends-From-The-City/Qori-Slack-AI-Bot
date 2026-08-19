@@ -397,6 +397,117 @@ export async function assertStudyOwner(
   }
 }
 
+// ─── Actor-Based Authorization (PLAT-3) ─────────────────────────────
+// These functions use canonical actor IDs and ProjectMembership,
+// not legacy Slack user IDs and ProjectMember.
+
+const ProjectMembershipModel = sequelize.models.ProjectMembership;
+
+/**
+ * Check if an actor is a member of a project via ProjectMembership.
+ * Returns false on any error (fail-closed).
+ *
+ * @param actorId - Canonical actor database ID
+ * @param projectId - Project database ID
+ */
+export async function isProjectMemberByActor(
+  actorId: number,
+  projectId: number,
+): Promise<boolean> {
+  try {
+    const membership = await ProjectMembershipModel.findOne({
+      where: { project_id: projectId, actor_id: actorId },
+    });
+    return !!membership;
+  } catch (error) {
+    console.error(
+      `[AUTH] isProjectMemberByActor failed for actor=${actorId} project=${projectId}, DENYING:`,
+      error instanceof Error ? error.message : error,
+    );
+    return false;
+  }
+}
+
+/**
+ * Assert that an actor has access to a project, verifying organization scope.
+ * Throws AuthorizationError if not.
+ *
+ * FAIL-CLOSED: Database errors → DENY
+ *
+ * @param actorId - Canonical actor database ID
+ * @param projectId - Project database ID
+ * @param organizationId - Expected organization ID (from actor's context)
+ */
+export async function assertProjectAccessByActor(
+  actorId: number,
+  projectId: number,
+  organizationId: number,
+): Promise<void> {
+  try {
+    // Verify project belongs to the actor's organization
+    const project = await ProjectModel.findByPk(projectId, {
+      attributes: ['id', 'organization_id'],
+    });
+
+    if (!project) {
+      throw new AuthorizationError('Project not found');
+    }
+
+    if (project.organization_id !== organizationId) {
+      throw new AuthorizationError('Access denied: organization scope mismatch');
+    }
+
+    const hasAccess = await isProjectMemberByActor(actorId, projectId);
+    if (!hasAccess) {
+      throw new AuthorizationError('Access denied: not a project member');
+    }
+  } catch (error) {
+    if (error instanceof AuthorizationError) throw error;
+    console.error(
+      `[AUTH] assertProjectAccessByActor failed for actor=${actorId} project=${projectId}:`,
+      error instanceof Error ? error.message : error,
+    );
+    throw new AuthorizationError('Access denied: authorization check failed');
+  }
+}
+
+/**
+ * Assert that an actor has access to a study, verifying organization scope.
+ * Throws AuthorizationError if not.
+ *
+ * @param actorId - Canonical actor database ID
+ * @param studyId - Study database ID
+ * @param organizationId - Expected organization ID
+ */
+export async function assertStudyAccessByActor(
+  actorId: number,
+  studyId: number,
+  organizationId: number,
+): Promise<void> {
+  try {
+    const study = await ResearchStudyModel.findByPk(studyId, {
+      attributes: ['id', 'project_id'],
+    });
+
+    if (!study) {
+      throw new AuthorizationError('Study not found');
+    }
+
+    if (!study.project_id) {
+      throw new AuthorizationError('Study has no project — cannot verify access');
+    }
+
+    await assertProjectAccessByActor(actorId, study.project_id, organizationId);
+  } catch (error) {
+    if (error instanceof AuthorizationError) throw error;
+    console.error(
+      `[AUTH] assertStudyAccessByActor failed for actor=${actorId} study=${studyId}:`,
+      error instanceof Error ? error.message : error,
+    );
+    throw new AuthorizationError('Access denied: authorization check failed');
+  }
+}
+
 // ─── Utility Functions ───────────────────────────────────────────────
 
 /**

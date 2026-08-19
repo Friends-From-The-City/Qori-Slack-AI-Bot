@@ -200,6 +200,71 @@ export function generateSlug(name: string): string {
     .replace(/^-|-$/g, ''); // Trim leading/trailing hyphens
 }
 
+// ─── Organization-Scoped Queries (PLAT-3) ──────────────────────────
+
+/**
+ * List projects scoped to an organization.
+ * PLAT-3: All API queries must be org-scoped.
+ */
+export async function listProjectsByOrg(
+  organizationId: number,
+  options: { status?: ProjectStatus } = {},
+): Promise<Project[]> {
+  const where: Record<string, unknown> = { organization_id: organizationId };
+  if (options.status) where.status = options.status;
+  return ProjectModel.findAll({
+    where,
+    order: [['created_at', 'DESC']],
+  });
+}
+
+/**
+ * Get a project by slug, scoped to organization.
+ * Returns null if project doesn't exist or belongs to different org.
+ */
+export async function getProjectBySlugAndOrg(
+  slug: string,
+  organizationId: number,
+): Promise<Project | null> {
+  return ProjectModel.findOne({
+    where: { slug, organization_id: organizationId },
+  });
+}
+
+/**
+ * Get a project by ID, verifying organization scope.
+ * Returns null if project doesn't belong to the specified org.
+ */
+export async function getProjectByIdAndOrg(
+  id: number,
+  organizationId: number,
+): Promise<Project | null> {
+  return ProjectModel.findOne({
+    where: { id, organization_id: organizationId },
+  });
+}
+
+/**
+ * Get studies for a project, verifying the project belongs to the org.
+ * Returns empty array if project doesn't belong to org.
+ */
+export async function getProjectStudiesByOrg(
+  projectId: number,
+  organizationId: number,
+): Promise<ResearchStudy[]> {
+  // Verify project belongs to org
+  const project = await ProjectModel.findOne({
+    where: { id: projectId, organization_id: organizationId },
+    attributes: ['id'],
+  });
+  if (!project) return [];
+
+  return ResearchStudyModel.findAll({
+    where: { project_id: projectId },
+    order: [['created_at', 'DESC']],
+  });
+}
+
 /**
  * Check if a slug is available (not already used by another project).
  */
