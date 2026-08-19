@@ -58,10 +58,12 @@ Items that must be resolved before release. Updated as the RR-1 audit progresses
 
 | Blocker | Description | Status |
 |---------|-------------|--------|
-| research_plan OUTPUT BOUNDARIES | v7.0 conformance gap — missing OUTPUT BOUNDARIES instruction | OPEN |
-| Disabled RAG commands | `/civicmind ask-study`, `/ask-study`, `/civicmind ask`, `/civicmind create-template-study` return "not available" — confirm these should remain disabled or be removed from event registration | OPEN |
-| usability_issues → research_readout emit contract | research_readout expects `prioritized_issues` from usability_issues but emit may not exist in all flows | OPEN |
-| GitHub cascade size | `discovery-variables.json` can exceed GitHub Contents API limit | OPEN |
+| research_plan OUTPUT BOUNDARIES | v7.0 conformance gap — missing OUTPUT BOUNDARIES instruction | **RESOLVED** — Added in v7.2 (2026-08-04). All 9 AI tasks have OUTPUT BOUNDARIES. Regression test added. |
+| Disabled RAG commands | `/civicmind ask-study`, `/ask-study`, `/civicmind ask`, `/civicmind create-template-study` return "not available" — confirm these should remain disabled or be removed from event registration | **RESOLVED** — None are registered in events.ts. Regression test added. |
+| usability_issues → research_readout emit contract | research_readout expects `prioritized_issues` from usability_issues but emit may not exist in all flows | **RESOLVED** — Emit exists (schema: `prioritized_issue.yaml`), consume is `required: false`. Contract valid. Regression test added. |
+| GitHub cascade size | `discovery-variables.json` can exceed GitHub Contents API limit | **RESOLVED** — GitHub write removed in PH-1/ADR 0033. Postgres is sole runtime authority. Regression test added. |
+
+**All 4 RR-1 blockers resolved.** Regression tests in `rr1-contract-verification.test.ts` (36 tests).
 
 **Business-logic leakage:** 0 RELEASE_BLOCKERs found (see `docs/operations/business-logic-leakage.md`). All 7 BEFORE_WORKSPACE items are acceptable for Slack-only release — extraction deferred to PLAT-3.
 
