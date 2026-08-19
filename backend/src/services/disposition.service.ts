@@ -19,9 +19,11 @@
  */
 
 import type { Sequelize, Transaction } from 'sequelize';
-import type { RecordsManagementAssignment } from '../database/models/records_management_assignment';
+import type { RecordsManagementAssignment, AssignableRecordType } from '../database/models/records_management_assignment';
 import type { RecordsSchedule } from '../database/models/records_schedule';
 import type { RecordsDispositionEvent, DispositionEventAction, DispositionEventOutcome } from '../database/models/records_disposition_event';
+import type { EvidenceConstruct } from '../database/models/evidence_construct';
+import type { ResearchArtifact } from '../database/models/research_artifact';
 import { computeEffectiveHold } from './records-hold.service';
 import { isScheduleActive, findScheduleById } from './records-schedule.service';
 import defaultSequelize from '../database';
@@ -282,8 +284,34 @@ export async function executeDisposition(
     };
   }
 
-  // Destroy action — tombstone the assignment
+  // Destroy action — route through record-type adapter
+  const adapter = DISPOSITION_ADAPTERS[assignment.record_type];
+
+  if (!adapter) {
+    // No safe adapter exists for this record type
+    const event = await createEvent(assignmentId, {
+      action: 'destroy',
+      authority_code: schedule.authority_code,
+      schedule_item: assignment.schedule_item,
+      outcome: 'manual_review_required',
+      actor,
+      details: {
+        reason: `No automated disposition adapter for record type '${assignment.record_type}'`,
+        record_type: assignment.record_type,
+        record_public_id: assignment.record_public_id,
+      },
+    });
+    return {
+      outcome: 'manual_review_required',
+      event_public_id: event.public_id,
+      reasons: [`No automated disposition adapter for record type '${assignment.record_type}' — manual review required`],
+    };
+  }
+
   return db().transaction(async (t: Transaction) => {
+    // Execute content suppression via adapter
+    const suppression = await adapter(assignment.record_public_id, t);
+
     const event = await createEvent(
       assignmentId,
       {
@@ -296,6 +324,7 @@ export async function executeDisposition(
           record_type: assignment.record_type,
           record_public_id: assignment.record_public_id,
           schedule_title: schedule.title,
+          suppressed_fields: suppression.suppressed_fields,
         },
       },
       t,
@@ -313,6 +342,80 @@ export async function executeDisposition(
     };
   });
 }
+
+// ═══════════════════════════════════════════════════════════
+// RECORD-TYPE DISPOSITION ADAPTERS
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * Suppression result returned by each adapter.
+ */
+interface SuppressionResult {
+  suppressed_fields: string[];
+}
+
+/**
+ * Adapter signature: receives the record's public_id and a transaction,
+ * NULLs/clears the destroyable content columns, returns which fields
+ * were suppressed. Preserves structural/identity/audit metadata.
+ */
+type DispositionAdapter = (
+  recordPublicId: string,
+  transaction: Transaction,
+) => Promise<SuppressionResult>;
+
+/**
+ * evidence_construct adapter:
+ * Suppresses `label` and `payload` (the governed research content).
+ * Preserves: public_id, project_id, study_id, construct_type, derivation_type,
+ * derivation_context, status, cascade_variable_key, created_by, timestamps.
+ */
+async function suppressEvidenceConstruct(
+  recordPublicId: string,
+  transaction: Transaction,
+): Promise<SuppressionResult> {
+  const Model = db().models.EvidenceConstruct as typeof EvidenceConstruct;
+  await Model.update(
+    { label: null, payload: null },
+    { where: { public_id: recordPublicId }, transaction },
+  );
+  return { suppressed_fields: ['label', 'payload'] };
+}
+
+/**
+ * research_artifact adapter:
+ * Suppresses `title`, `path`, and `url` (display title and mutable location).
+ * Preserves: public_id, project_id, study_id, template_id, template_version,
+ * artifact_type, repo, ref, commit_sha, semantic_key, status, created_by, timestamps.
+ */
+async function suppressResearchArtifact(
+  recordPublicId: string,
+  transaction: Transaction,
+): Promise<SuppressionResult> {
+  const Model = db().models.ResearchArtifact as typeof ResearchArtifact;
+  await Model.update(
+    { title: null, path: null, url: null },
+    { where: { public_id: recordPublicId }, transaction },
+  );
+  return { suppressed_fields: ['title', 'path', 'url'] };
+}
+
+/**
+ * Registry of record types with safe automated content suppression.
+ *
+ * Supported (safe to suppress content without breaking FK/semantic integrity):
+ * - evidence_construct: NULL label + payload; FK children reference IDs only
+ * - research_artifact: NULL title + path + url; FK children reference IDs only
+ *
+ * NOT supported (→ manual_review_required):
+ * - project: name/slug are routing keys; destroying content orphans child studies
+ * - study: name used in display paths; destroying content orphans participants/evidence
+ * - evidence_source: NOT NULL FK children in survey tables would break on content suppression
+ */
+const DISPOSITION_ADAPTERS: Partial<Record<AssignableRecordType, DispositionAdapter>> = {
+  evidence_construct: suppressEvidenceConstruct,
+  research_artifact: suppressResearchArtifact,
+};
 
 // ═══════════════════════════════════════════════════════════
 // EVENT CREATION (append-only)

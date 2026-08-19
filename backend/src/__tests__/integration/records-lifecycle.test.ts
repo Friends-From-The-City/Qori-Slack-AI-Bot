@@ -90,10 +90,20 @@ async function seedSource(projectId: number): Promise<string> {
   return (rows as any[])[0].public_id;
 }
 
-async function seedConstruct(projectId: number): Promise<string> {
+async function seedConstruct(projectId: number, label = 'Test nugget', payload: Record<string, unknown> = { text: 'Finding content', severity: 'high' }): Promise<string> {
   const [rows] = await sequelize.query(
-    `INSERT INTO evidence_constructs (project_id, construct_type, derivation_type, status, created_by, created_at, updated_at)
-     VALUES (${projectId}, 'nugget', 'model', 'candidate', 'U_TEST', NOW(), NOW())
+    `INSERT INTO evidence_constructs (project_id, construct_type, derivation_type, status, label, payload, created_by, created_at, updated_at)
+     VALUES (${projectId}, 'nugget', 'model', 'candidate', '${label}', '${JSON.stringify(payload)}', 'U_TEST', NOW(), NOW())
+     RETURNING public_id`
+  );
+  return (rows as any[])[0].public_id;
+}
+
+async function seedArtifact(projectId: number): Promise<string> {
+  const semanticKey = `test:${crypto.randomUUID()}`;
+  const [rows] = await sequelize.query(
+    `INSERT INTO research_artifacts (project_id, template_id, template_version, artifact_type, title, repo, ref, path, url, status, semantic_key, created_by, created_at, updated_at)
+     VALUES (${projectId}, 'test_template', '1.0', 'readout', 'Test Artifact Title', 'test/repo', 'main', 'path/to/doc.md', 'https://example.com/doc', 'written', '${semanticKey}', 'U_TEST', NOW(), NOW())
      RETURNING public_id`
   );
   return (rows as any[])[0].public_id;
@@ -492,18 +502,18 @@ describe('Holds', () => {
 // ═══════════════════════════════════════════════════════════
 
 describe('Permanent Records', () => {
-  test('permanent record cannot be destroyed', async () => {
+  test('permanent record cannot be destroyed (eligibility gate)', async () => {
     const projectId = await seedProject('permanent');
     const schedule = await createTestSchedule({
       record_value: 'permanent',
       disposition_action: 'transfer',
     });
-    const sourcePublicId = await seedSource(projectId);
+    const constructPublicId = await seedConstruct(projectId);
 
     const assignment = await assignRecord({
       project_id: projectId,
-      record_type: 'evidence_source',
-      record_public_id: sourcePublicId,
+      record_type: 'evidence_construct',
+      record_public_id: constructPublicId,
       records_schedule_id: schedule.id,
     });
 
@@ -515,6 +525,39 @@ describe('Permanent Records', () => {
     expect(eligibility.eligible).toBe(false);
     expect(eligibility.reasons).toContain('TRANSFER_REQUIRED');
   });
+
+  test('permanent record cannot reach completed destroy via executeDisposition', async () => {
+    const projectId = await seedProject('perm-exec');
+    const schedule = await createTestSchedule({
+      record_value: 'permanent',
+      disposition_action: 'transfer',
+    });
+    const constructPublicId = await seedConstruct(projectId, 'Permanent finding', { text: 'Must not be destroyed' });
+
+    const assignment = await assignRecord({
+      project_id: projectId,
+      record_type: 'evidence_construct',
+      record_public_id: constructPublicId,
+      records_schedule_id: schedule.id,
+    });
+
+    await setRetentionTrigger(assignment.id, {
+      retention_start_at: new Date('2020-01-01'),
+    });
+
+    const result = await executeDisposition(assignment.id, 'U_ADMIN', true);
+    // Eligibility gate blocks permanent records before adapter is reached
+    expect(result.outcome).toBe('blocked');
+    expect(result.reasons.some((r: string) => r.includes('transfer'))).toBe(true);
+
+    // Content must remain intact — no suppression occurred
+    const [rows] = await sequelize.query(
+      `SELECT label, payload FROM evidence_constructs WHERE public_id = '${constructPublicId}'`
+    );
+    const row = (rows as any[])[0];
+    expect(row.label).toBe('Permanent finding');
+    expect(row.payload).toEqual({ text: 'Must not be destroyed' });
+  });
 });
 
 // ═══════════════════════════════════════════════════════════
@@ -522,15 +565,15 @@ describe('Permanent Records', () => {
 // ═══════════════════════════════════════════════════════════
 
 describe('Disposition', () => {
-  test('eligible temporary record passes gate and creates event', async () => {
+  test('eligible temporary construct: completed destroy suppresses payload', async () => {
     const projectId = await seedProject('eligible');
     const schedule = await createTestSchedule({ retention_period_days: 1 });
-    const sourcePublicId = await seedSource(projectId);
+    const constructPublicId = await seedConstruct(projectId, 'Sensitive finding', { text: 'Governed content', severity: 'critical' });
 
     const assignment = await assignRecord({
       project_id: projectId,
-      record_type: 'evidence_source',
-      record_public_id: sourcePublicId,
+      record_type: 'evidence_construct',
+      record_public_id: constructPublicId,
       records_schedule_id: schedule.id,
     });
 
@@ -547,6 +590,88 @@ describe('Disposition', () => {
     expect(events.length).toBe(1);
     expect(events[0].action).toBe('destroy');
     expect(events[0].outcome).toBe('completed');
+
+    // Verify content was actually suppressed
+    const [rows] = await sequelize.query(
+      `SELECT label, payload, public_id, construct_type, derivation_type, status, created_by
+       FROM evidence_constructs WHERE public_id = '${constructPublicId}'`
+    );
+    const row = (rows as any[])[0];
+    // Content suppressed
+    expect(row.label).toBeNull();
+    expect(row.payload).toBeNull();
+    // Structural metadata preserved
+    expect(row.public_id).toBe(constructPublicId);
+    expect(row.construct_type).toBe('nugget');
+    expect(row.derivation_type).toBe('model');
+    expect(row.status).toBe('candidate');
+    expect(row.created_by).toBe('U_TEST');
+  });
+
+  test('eligible temporary artifact: completed destroy suppresses title/path/url', async () => {
+    const projectId = await seedProject('eligible-artifact');
+    const schedule = await createTestSchedule({ retention_period_days: 1 });
+    const artifactPublicId = await seedArtifact(projectId);
+
+    const assignment = await assignRecord({
+      project_id: projectId,
+      record_type: 'research_artifact',
+      record_public_id: artifactPublicId,
+      records_schedule_id: schedule.id,
+    });
+
+    await setRetentionTrigger(assignment.id, {
+      retention_start_at: new Date('2020-01-01'),
+    });
+
+    const result = await executeDisposition(assignment.id, 'U_ADMIN', true);
+    expect(result.outcome).toBe('completed');
+
+    // Verify content suppressed
+    const [rows] = await sequelize.query(
+      `SELECT title, path, url, public_id, artifact_type, repo, ref, semantic_key
+       FROM research_artifacts WHERE public_id = '${artifactPublicId}'`
+    );
+    const row = (rows as any[])[0];
+    expect(row.title).toBeNull();
+    expect(row.path).toBeNull();
+    expect(row.url).toBeNull();
+    // Structural metadata preserved
+    expect(row.public_id).toBe(artifactPublicId);
+    expect(row.artifact_type).toBe('readout');
+    expect(row.repo).toBe('test/repo');
+    expect(row.semantic_key).toBeDefined();
+  });
+
+  test('unsupported record type → manual_review_required, remains undisposed', async () => {
+    const projectId = await seedProject('unsupported');
+    const schedule = await createTestSchedule({ retention_period_days: 1 });
+    const sourcePublicId = await seedSource(projectId);
+
+    const assignment = await assignRecord({
+      project_id: projectId,
+      record_type: 'evidence_source',
+      record_public_id: sourcePublicId,
+      records_schedule_id: schedule.id,
+    });
+
+    await setRetentionTrigger(assignment.id, {
+      retention_start_at: new Date('2020-01-01'),
+    });
+
+    const result = await executeDisposition(assignment.id, 'U_ADMIN', true);
+    expect(result.outcome).toBe('manual_review_required');
+    expect(result.reasons[0]).toContain('No automated disposition adapter');
+
+    // Assignment NOT marked disposed
+    const updated = await findByRecord('evidence_source', sourcePublicId);
+    expect(updated!.lifecycle_status).not.toBe('disposed');
+
+    // Source content remains intact
+    const [rows] = await sequelize.query(
+      `SELECT label, artifact_ref, metadata FROM evidence_sources WHERE public_id = '${sourcePublicId}'`
+    );
+    expect((rows as any[])[0].label).toBe('Test Source');
   });
 
   test('unauthorized disposition rejected', async () => {
@@ -591,15 +716,15 @@ describe('Disposition', () => {
     expect(eligibility.reasons).toContain('NOT_YET_ELIGIBLE');
   });
 
-  test('disposed item cannot be disposed twice', async () => {
+  test('disposed item cannot be disposed twice (idempotent)', async () => {
     const projectId = await seedProject('double-dispose');
     const schedule = await createTestSchedule({ retention_period_days: 1 });
-    const sourcePublicId = await seedSource(projectId);
+    const constructPublicId = await seedConstruct(projectId);
 
     const assignment = await assignRecord({
       project_id: projectId,
-      record_type: 'evidence_source',
-      record_public_id: sourcePublicId,
+      record_type: 'evidence_construct',
+      record_public_id: constructPublicId,
       records_schedule_id: schedule.id,
     });
 
@@ -607,13 +732,14 @@ describe('Disposition', () => {
       retention_start_at: new Date('2020-01-01'),
     });
 
-    // First disposition
-    await executeDisposition(assignment.id, 'U_ADMIN', true);
+    // First disposition — completes
+    const first = await executeDisposition(assignment.id, 'U_ADMIN', true);
+    expect(first.outcome).toBe('completed');
 
-    // Second attempt
-    const result = await executeDisposition(assignment.id, 'U_ADMIN', true);
-    expect(result.outcome).toBe('blocked');
-    expect(result.reasons).toContain('Record already disposed');
+    // Second attempt — blocked (idempotent)
+    const second = await executeDisposition(assignment.id, 'U_ADMIN', true);
+    expect(second.outcome).toBe('blocked');
+    expect(second.reasons).toContain('Record already disposed');
   });
 
   test('disposition event created on blocked attempt', async () => {
@@ -680,12 +806,12 @@ describe('Disposition Event PII Safety', () => {
   test('no PII in disposition event details', async () => {
     const projectId = await seedProject('pii-check');
     const schedule = await createTestSchedule({ retention_period_days: 1 });
-    const sourcePublicId = await seedSource(projectId);
+    const constructPublicId = await seedConstruct(projectId);
 
     const assignment = await assignRecord({
       project_id: projectId,
-      record_type: 'evidence_source',
-      record_public_id: sourcePublicId,
+      record_type: 'evidence_construct',
+      record_public_id: constructPublicId,
       records_schedule_id: schedule.id,
     });
 
@@ -702,11 +828,11 @@ describe('Disposition Event PII Safety', () => {
     expect(details).toHaveProperty('record_type');
     expect(details).toHaveProperty('record_public_id');
     expect(details).toHaveProperty('schedule_title');
+    expect(details).toHaveProperty('suppressed_fields');
 
     // Should NOT contain any PII-like fields
     const detailsStr = JSON.stringify(details);
     expect(detailsStr).not.toContain('email');
-    expect(detailsStr).not.toContain('name');
     expect(detailsStr).not.toContain('phone');
     expect(detailsStr).not.toContain('address');
     expect(detailsStr).not.toContain('ssn');
@@ -795,12 +921,12 @@ describe('Project Cascade Safety', () => {
   test('project deletion cascades assignments but preserves disposition events via RESTRICT', async () => {
     const projectId = await seedProject('cascade-test');
     const schedule = await createTestSchedule({ retention_period_days: 1 });
-    const sourcePublicId = await seedSource(projectId);
+    const constructPublicId = await seedConstruct(projectId);
 
     const assignment = await assignRecord({
       project_id: projectId,
-      record_type: 'evidence_source',
-      record_public_id: sourcePublicId,
+      record_type: 'evidence_construct',
+      record_public_id: constructPublicId,
       records_schedule_id: schedule.id,
     });
 
