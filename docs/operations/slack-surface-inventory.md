@@ -24,8 +24,8 @@ Complete inventory of all Slack interaction surfaces, classified for release rea
 | Command | Handler File | Status | Classification | Notes |
 |---------|-------------|--------|---------------|-------|
 | `/qori-start` | `commands/projectStartHandler.ts` | Active | **A** | Project + study creation. Opens modal → creates project, channel, study. Logic delegates to `project.service`, `scaffolding.service`. |
-| `/qori-brief` | Inline in `events.ts:400-463` | Active | **B** | Research brief entry. Inline handler does project lookup + Slack profile fetch before opening modal. Brief submission delegates to `briefHandler.ts`. **Cleanup:** Inline handler should be extracted to a modal opener file. |
-| `/qori-plan` | Inline in `events.ts:464-469` | Active | **B** | Research plan entry. Inline handler fetches studies then opens modal. Submission delegates to `planHandler.ts`. **Cleanup:** Inline handler should be extracted. |
+| `/qori-brief` | `commands/modal-openers/briefCommandOpener.ts` | Active | **A** | Research brief entry. Extracted from events.ts in RR-1. Does project lookup + Slack profile fetch before opening modal. Brief submission delegates to `briefHandler.ts`. |
+| `/qori-plan` | `commands/modal-openers/planCommandOpener.ts` | Active | **A** | Research plan entry. Extracted from events.ts in RR-1. Fetches studies then opens modal. Submission delegates to `planHandler.ts`. |
 | `/qori-discover` | `commands/discoverHandler.ts` | Active | **A** | Discovery workflows (desk research, stakeholder synthesis, survey synthesis). |
 | `/qori-fieldwork` | `commands/fieldworkHandler.ts` | Active | **A** | Fieldwork hub (participants, observers, outreach, session notes). |
 | `/qori-analyze` | `commands/analyzeNotesHandler.ts` | Active | **A** | Session analysis (per-session coding). |

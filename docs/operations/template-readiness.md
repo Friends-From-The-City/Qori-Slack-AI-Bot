@@ -37,10 +37,10 @@ All have: interleaved Handlebars output_template, bounded AI tasks, cascade summ
 
 ### Tier 1 Cleanup Required Before Release
 
-| Item | Template | Priority | Description |
-|------|----------|----------|-------------|
-| 1 | research_plan | **RR-1** | Add OUTPUT BOUNDARIES instruction (only v7.0 template missing it) |
-| 2 | usability_issues → research_readout | **RR-1** | Verify `prioritized_issues` emit contract is complete and reachable |
+| Item | Template | Priority | Description | Status |
+|------|----------|----------|-------------|--------|
+| 1 | research_plan | **RR-1** | Add OUTPUT BOUNDARIES instruction (only v7.0 template missing it) | **RESOLVED** — v7.2 has OUTPUT BOUNDARIES on all 9 AI tasks |
+| 2 | usability_issues → research_readout | **RR-1** | Verify `prioritized_issues` emit contract is complete and reachable | **RESOLVED** — Emit exists, schema valid, consume is `required: false` |
 
 ---
 
@@ -93,7 +93,7 @@ None blocking. `targeted_readouts` fragility is a maintenance concern, not a rel
 
 ### Minimum Template Cleanup for Release
 
-1. **research_plan** — Add OUTPUT BOUNDARIES instruction to prompt
-2. **usability_issues → research_readout** — Verify `prioritized_issues` emit exists and is reachable by research_readout consumes
+1. **research_plan** — ~~Add OUTPUT BOUNDARIES instruction to prompt~~ **RESOLVED** (v7.2)
+2. **usability_issues → research_readout** — ~~Verify `prioritized_issues` emit exists~~ **RESOLVED** (contract valid, `required: false`)
 
-Both are small, targeted fixes.
+**All template release blockers resolved.** Regression tests added in `rr1-contract-verification.test.ts`.
