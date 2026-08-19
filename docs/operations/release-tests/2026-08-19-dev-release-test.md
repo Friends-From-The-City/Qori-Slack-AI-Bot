@@ -351,11 +351,39 @@ backup_completed (object_key, dump_size_bytes, total_duration_ms logged)
  → process.exit(0)
 ```
 
-**Operator should verify after first cron execution:**
-1. Railway logs show all 6 lifecycle events
-2. Supabase bucket contains `.dump` object with size > 0
-3. Supabase bucket contains `.meta.json` sidecar
-4. No error events in logs
+### Post-Switch Backup Execution — 2026-08-19T18:31:00Z
+
+Backup executed using production environment variables and main-sourced `backup.js`.
+
+**Lifecycle events (all PASS):**
+
+| Event | Timestamp | Details |
+|-------|-----------|---------|
+| backup_started | 18:31:00.705Z | environment=production |
+| dump_completed | 18:31:11.458Z | duration_ms=10748 |
+| dump_verified | 18:31:11.483Z | dump_size_bytes=249324 |
+| upload_completed | 18:31:12.105Z | object_key=qori/postgres/2026/08/19/qori-prod-20260819T183100Z.dump, duration_ms=618 |
+| metadata_uploaded | 18:31:12.317Z | metadata_key=qori/postgres/2026/08/19/qori-prod-20260819T183100Z.meta.json |
+| backup_completed | 18:31:12.317Z | total_duration_ms=11618 |
+
+**Verification results:**
+
+| Check | Result |
+|-------|--------|
+| Exit status | 0 (success) |
+| Dump object exists in Supabase | YES |
+| Dump object size | 249,324 bytes (> 0) |
+| Dump ContentType | application/octet-stream |
+| Metadata sidecar exists | YES |
+| Metadata sidecar size | 383 bytes |
+| Metadata sidecar ContentType | application/json |
+| Metadata schema_version | 1 |
+| Metadata environment | production |
+| Metadata git SHA | eb6b48a5 (dev HEAD at execution) |
+| Temp file cleanup | PASS (dump file deleted, empty temp dir remains — expected) |
+| No credentials in log output | PASS (grep for password/secret/token/key — none found) |
+| No PII in log output | PASS (only event names, durations, sizes, keys logged) |
+| No credentials in metadata sidecar | PASS (timestamp, engine, format, size, key, sha, version only) |
 
 ### Known LOW Debt
 
