@@ -44,6 +44,11 @@ import ArtifactEvidenceRef from '../../../database/models/artifact_evidence_ref'
 import DataSubject from '../../../database/models/data_subject';
 import DataSubjectLink from '../../../database/models/data_subject_link';
 import EvidenceSubjectAttribution from '../../../database/models/evidence_subject_attribution';
+import RecordsSchedule from '../../../database/models/records_schedule';
+import RecordsManagementAssignment from '../../../database/models/records_management_assignment';
+import RecordsHold from '../../../database/models/records_hold';
+import RecordsHoldTarget from '../../../database/models/records_hold_target';
+import RecordsDispositionEvent from '../../../database/models/records_disposition_event';
 
 let instance: Sequelize | null = null;
 
@@ -74,6 +79,8 @@ export function getTestDb(): Sequelize {
     SurveyCodingRun, SurveyCodingAssignment, SurveyCodingEntryReview,
     ResearchArtifact, ArtifactEvidenceRef,
     DataSubject, DataSubjectLink, EvidenceSubjectAttribution,
+    RecordsSchedule, RecordsManagementAssignment,
+    RecordsHold, RecordsHoldTarget, RecordsDispositionEvent,
   ];
 
   for (const defineModel of modelDefiners) {

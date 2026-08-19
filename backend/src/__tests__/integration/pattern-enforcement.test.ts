@@ -163,7 +163,9 @@ describe('pattern: as-any budget enforcement', () => {
     // use `as any` for Sequelize model attribute access in test assertions).
     // Budget raised 225 → 229 by GOV-1 (authorization guards add EvidenceSource model refs
     // with `as typeof EvidenceSource` casts in codebookHandler, matchReviewHandler, surveyPrivacyHandler).
-    expect(total).toBeLessThanOrEqual(229);
+    // Budget raised 229 → 235 by GOV-6 (records lifecycle services use `as typeof Model` casts
+    // for test-injectable Sequelize model access and polymorphic retrieval mapping).
+    expect(total).toBeLessThanOrEqual(235);
   });
 
   it('events.ts has no more than 1 as-any cast (excluding comments)', () => {
