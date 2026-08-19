@@ -113,6 +113,7 @@ Start with `0001` and read forward. The history is itself useful — it shows ho
 - [0038 — Canonical artifact identity and navigation](./0038-canonical-artifact-identity-and-navigation.md) — Artifact public_id is stable identity; location is mutable; artifact→evidence refs use canonical IDs; no prose/path matching
 - [0039 — Disaster recovery posture](./0039-disaster-recovery-posture.md) — Logical backup as primary portable recovery; PITR gap; validated restore drill; recovery runbook
 - [0040 — Records lifecycle and disposition authority](./0040-records-lifecycle-and-disposition-authority.md) — Qori enforces assigned records authority but does not invent schedules; fail-closed disposition gate; holds override disposition
+- [0041 — Deployable government environment boundary](./0041-deployable-government-environment-boundary.md) — Qori is deployable in agency-controlled infrastructure; all providers are adapters; formal deployment contracts
 
 ### Lessons (informal ADRs from failure modes)
 

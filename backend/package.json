@@ -27,7 +27,8 @@
     "db:validate": "node scripts/validate-schema.js",
     "adr": "../scripts/new-adr.sh",
     "adr:lesson": "../scripts/new-adr-lesson.sh",
-    "build:cascade": "npx ts-node scripts/build-cascade-registry.ts"
+    "build:cascade": "npx ts-node scripts/build-cascade-registry.ts",
+    "validate:deployment": "node scripts/validate-deployment.js"
   },
   "dependencies": {
     "@chroma-core/default-embed": "^0.1.8",
