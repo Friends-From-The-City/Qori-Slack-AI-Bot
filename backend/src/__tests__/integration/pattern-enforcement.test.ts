@@ -415,6 +415,8 @@ describe('pattern: channel context threading', () => {
   //   project object to modal builder (pattern check doesn't recognize project.id)
   // - study/studyLifecycleHandler: handleUserSelectOptions fetches channel members
   //   for team-member typeahead — channel-only by design (no study/project scope)
+  // - modal-openers/planCommandOpener: /qori-plan command entry — opens study picker
+  //   modal, so study/project context doesn't exist yet (user hasn't selected one)
   const CHANNEL_ONLY_ALLOWED = [
     'learn/learnHandler.ts',
     'repo/repoConfigHandler.ts',
@@ -423,6 +425,7 @@ describe('pattern: channel context threading', () => {
     'qa/runTemplateHandler.ts',     // GOV-1B: disabled, returns ephemeral only
     'admin/adminCenterHandler.ts',
     'study/studyLifecycleHandler.ts',
+    'modal-openers/planCommandOpener.ts', // RR-1: study picker entry, no study context yet
   ];
 
   it('handler files that use channel_id also reference study or project context', () => {
