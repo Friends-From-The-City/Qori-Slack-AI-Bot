@@ -112,6 +112,7 @@ Start with `0001` and read forward. The history is itself useful — it shows ho
 - [0037 — Canonical evidence lineage](./0037-canonical-evidence-lineage.md) — Evidence graph is lineage authority; study_variables is projection; upstream→downstream edges; candidate vs accepted
 - [0038 — Canonical artifact identity and navigation](./0038-canonical-artifact-identity-and-navigation.md) — Artifact public_id is stable identity; location is mutable; artifact→evidence refs use canonical IDs; no prose/path matching
 - [0039 — Disaster recovery posture](./0039-disaster-recovery-posture.md) — Logical backup as primary portable recovery; PITR gap; validated restore drill; recovery runbook
+- [0040 — Records lifecycle and disposition authority](./0040-records-lifecycle-and-disposition-authority.md) — Qori enforces assigned records authority but does not invent schedules; fail-closed disposition gate; holds override disposition
 
 ### Lessons (informal ADRs from failure modes)
 

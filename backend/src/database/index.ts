@@ -33,6 +33,11 @@ import ArtifactEvidenceRef from './models/artifact_evidence_ref';
 import DataSubject from './models/data_subject';
 import DataSubjectLink from './models/data_subject_link';
 import EvidenceSubjectAttribution from './models/evidence_subject_attribution';
+import RecordsSchedule from './models/records_schedule';
+import RecordsManagementAssignment from './models/records_management_assignment';
+import RecordsHold from './models/records_hold';
+import RecordsHoldTarget from './models/records_hold_target';
+import RecordsDispositionEvent from './models/records_disposition_event';
 
 
 // Set environment and configuration
@@ -76,6 +81,11 @@ const modelDefiners = [
   DataSubject,
   DataSubjectLink,
   EvidenceSubjectAttribution,
+  RecordsSchedule,
+  RecordsManagementAssignment,
+  RecordsHold,
+  RecordsHoldTarget,
+  RecordsDispositionEvent,
 ];
 
 // Register all models with Sequelize
