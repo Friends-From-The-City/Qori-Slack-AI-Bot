@@ -235,13 +235,25 @@ One systematic manual/system test gate for current dev before promotion to main.
 
 ## Test Execution Record
 
+### RR-2 Automated Verification — 2026-08-19
+
 | Section | Tester | Date | Result | Notes |
 |---------|--------|------|--------|-------|
-| Authorization | | | | |
-| Core Research | | | | |
-| Governance | | | | |
-| Operations | | | | |
+| Authorization | Claude Code (automated) | 2026-08-19 | PASS (6/6) | authorization-bypass.test.ts, pattern-enforcement.test.ts, rr1-contract-verification.test.ts |
+| Core Research | Claude Code (automated) | 2026-08-19 | PASS (9/9) | cascade-flow, evidence-foundation, survey-evidence, full-workflow, synthesis-cascade-contract |
+| Template/Artifact | Claude Code (automated) | 2026-08-19 | PASS (9/9) | rr1-contract-verification, cascade-referential-integrity, research-plan tests |
+| DSAR | Claude Code (automated) | 2026-08-19 | PASS (6/6) | dsar-export-v2, dsar-delete, dsar-delete-completeness, subject-linkage |
+| Records Lifecycle | Claude Code (automated) | 2026-08-19 | PASS (8/8) | records-lifecycle.test.ts |
+| Operations | Claude Code (automated) | 2026-08-19 | PASS (7/7) | db-integrity, sentry-scrubbing, piiRedaction, modelProviderBoundary |
 
-**Overall result:** PASS / FAIL / BLOCKED
+**Automated totals:** 1376 tests (724 unit + 652 integration), 0 failures
+
+**Dev SHA:** `667afff3`
+
+**Overall automated result:** PASS
+
+**Manual workspace verification:** Pending — requires human operator in QD workspace
+
+Full evidence: `docs/operations/release-tests/2026-08-19-dev-release-test.md`
 
 **Sign-off:** _______________  Date: _______________
