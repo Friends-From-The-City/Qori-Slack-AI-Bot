@@ -15,6 +15,8 @@
  */
 
 import type { AllMiddlewareArgs, SlackViewMiddlewareArgs, ViewSubmitAction } from '@slack/bolt';
+import { buildSlackApplicationContext } from '../../../middleware/auth/slackContextBridge';
+import { executePlan, type PlanInput } from '../../../application/plan.app-service';
 import { TemplateContractError } from '../../../types/handlers';
 import type { ResearchQuestion, TargetBarrier } from '../../../types/cascade';
 
@@ -171,6 +173,31 @@ async function handlePlanSubmission({ ack, body, view, client }: SlackViewMiddle
     }
   }
   const operationalRisks = (extract('operational_risks_block', 'operational_risks_input') as string) || '';
+
+  // ── PLAT-3: Application service delegation ──
+  const appCtx = await buildSlackApplicationContext(body.user.id, (body as any).team?.id || '', leadResearcher);
+  if (appCtx) {
+    try {
+      console.log(`[PLAT-3] Plan: using application service path for user=${body.user.id}`);
+      const result = await executePlan(appCtx, {
+        studyId,
+        studyName,
+        projectId,
+        leadResearcher,
+        createdByActorId: String(appCtx.actor.id),
+        operationalRisks,
+      });
+
+      await client.chat.postMessage({
+        channel: body.user.id,
+        text: `✅ Research plan created for *${studyName}*!\n📄 <${result.url}|View on GitHub>\n\nNext: Run \`/qori-fieldwork\` to add sessions.`,
+      });
+      return;
+    } catch (appErr) {
+      console.warn(`[PLAT-3] Plan app service failed, falling back to legacy:`, appErr instanceof Error ? appErr.message : appErr);
+      // Fall through to legacy path
+    }
+  }
 
   // ── Compensation (mechanical) ──
   const perParticipantComp: number | null = calculatePerPersonCompensation(study);

@@ -9,6 +9,8 @@
  */
 
 import type { AllMiddlewareArgs, SlackCommandMiddlewareArgs, SlackActionMiddlewareArgs, SlackViewMiddlewareArgs, BlockAction, ViewSubmitAction } from '@slack/bolt';
+import { buildSlackApplicationContext } from '../../../middleware/auth/slackContextBridge';
+import { executeSynthesis, type SynthesisInput } from '../../../application/synthesis.app-service';
 import { TemplateContractError } from '../../../types/handlers';
 
 import { researchSynthesisModal, type SynthesisCascadeData, type SessionDataStats, type AvailableEnrichment, type SynthesisModalMetadata } from "../ui/researchSynthesisModal";
@@ -451,6 +453,73 @@ const handleResearchSynthesisSubmission = async ({ ack, body, view, client }: Sl
     const study = resolved.study;
     const variableContext: VariableContext = { projectId: resolved.projectId, studyId: resolved.studyId };
 
+    // ── PLAT-3: Dual-path — application service vs legacy ──
+    const ctx = await buildSlackApplicationContext(body.user.id, (body as any).team?.id || '');
+
+    if (ctx) {
+      // ── New path: delegate to application service ──
+      const synthesisInput: SynthesisInput = {
+        studyId: resolved.studyId,
+        projectId: resolved.projectId,
+        studyName: selectedStudyName!,
+        studyPath: study?.path ?? '',
+        analysisMethod,
+        createdByActorId: String(ctx.actor.id),
+      };
+
+      await client.chat.postEphemeral({
+        channel: body.user.id,
+        user: body.user.id,
+        text: `Generating ${analysisMethod.replace(/_/g, ' ')} for *${selectedStudyName}*...\n\n_This may take 1-2 minutes._`,
+      });
+
+      try {
+        const result = await executeSynthesis(ctx, synthesisInput);
+
+        await client.chat.postEphemeral({
+          channel: body.user.id,
+          user: body.user.id,
+          text: `*Research Synthesis Complete!*`,
+          blocks: [
+            {
+              type: 'section',
+              text: {
+                type: 'mrkdwn',
+                text: `*Research Synthesis Complete!*\n\n*Study:* ${selectedStudyName}\n*Method:* ${analysisMethod.replace(/_/g, ' ')}\n*Cascade variables:* ${result.cascadeVariableCount}\n*Session files:* ${result.sessionFileCount}`,
+              },
+            },
+            {
+              type: 'section',
+              text: {
+                type: 'mrkdwn',
+                text: `<${result.url}|View on GitHub>`,
+              },
+            },
+            { type: 'divider' },
+            {
+              type: 'section',
+              text: {
+                type: 'mrkdwn',
+                text: `*Next:* Run \`/qori-report\` to generate the research readout.`,
+              },
+            },
+          ],
+        });
+
+        console.log(`✅ Synthesis created via app service for study: ${selectedStudyName}`);
+      } catch (error) {
+        const errObj = error instanceof Error ? error : new Error(String(error));
+        console.error(`❌ Synthesis app service failed: ${errObj.message}`);
+
+        await client.chat.postEphemeral({
+          channel: body.user.id,
+          user: body.user.id,
+          text: `*Synthesis failed*\n\n*Study:* ${selectedStudyName}\n*Method:* ${analysisMethod}\n*Error:* ${errObj.message}\n\nPlease try again or contact support.`,
+        });
+      }
+    } else {
+      // ── Legacy path: existing handler logic ──
+
     // ─── CASCADE CONTRACT VALIDATION ─────────────────────────────────
     // ADR 0018: Cascade-aware synthesis requires atomic_nugget_core/detail
 
@@ -745,6 +814,8 @@ const handleResearchSynthesisSubmission = async ({ ack, body, view, client }: Sl
         text: `*Synthesis failed*\n\n*Study:* ${selectedStudyName}\n*Method:* ${analysisMethod}\n*Error:* ${errObj.message}\n\nPlease try again or contact support.`,
       });
     }
+
+    } // end legacy path
 
   } catch (error) {
     console.error("Error handling research synthesis submission:", error);

@@ -8,6 +8,8 @@
 
 import type { AllMiddlewareArgs, SlackCommandMiddlewareArgs, SlackActionMiddlewareArgs, SlackViewMiddlewareArgs, BlockAction, ViewSubmitAction } from '@slack/bolt';
 
+import { buildSlackApplicationContext } from '../../../middleware/auth/slackContextBridge';
+import { executeReadout, type ReadoutInput } from '../../../application/readout.app-service';
 import { buildReadoutModal } from '../ui/readoutModal';
 import { resolveStudyFromName, getStudiesByUser } from '../../../services/research_study.service';
 import type { VariableContext } from '../../studyVariables';
@@ -281,6 +283,147 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }: SlackVi
     const folderPath: string = selectedStudy.path ?? '';
     const reportType: string = state.reportType;
 
+    // Extract team members from form (needed by both paths)
+    const selectedRoles = values.team_members?.team_members_input?.selected_options || [];
+    const roleToUserMap: Record<string, string> = {};
+    if (selectedStudy?.userRoles) {
+      selectedStudy.userRoles.forEach((userRole) => {
+        roleToUserMap[userRole.role] = userRole.user_id;
+      });
+    }
+    const teamMemberNames: string[] = [];
+    selectedRoles.forEach((roleOption: { value: string }) => {
+      const role = roleOption.value;
+      const userId = roleToUserMap[role];
+      if (userId) {
+        teamMemberNames.push(`<@${userId}>`);
+      }
+    });
+    const teamMembers: string = teamMemberNames.join(', ') || '@team-lead';
+
+    // ── PLAT-3: Try application service path ──
+    const displayName = body.user?.name || body.user?.id;
+    const appCtx = await buildSlackApplicationContext(body.user.id, (body as any).team?.id || '', displayName);
+
+    if (appCtx) {
+      console.log(`[PLAT-3] Readout: using application service path for user=${body.user.id}`);
+
+      // Extract audiences for targeted readouts
+      const selectedAudiences: string[] = reportType === 'targeted_readouts'
+        ? (values.audience_selection?.audience_checkboxes?.selected_options?.map((o: any) => o.value) || [])
+        : [];
+
+      if (reportType === 'targeted_readouts' && selectedAudiences.length === 0) {
+        await client.chat.postMessage({
+          channel: body.user.id,
+          text: '❌ Please select at least one audience for targeted readouts.',
+        });
+        return;
+      }
+
+      const readoutInput: ReadoutInput = {
+        studyId: resolved.studyId,
+        projectId: resolved.projectId,
+        studyName: selectedStudyName,
+        studyPath: folderPath,
+        reportType: reportType as ReadoutInput['reportType'],
+        targetAudiences: selectedAudiences.length > 0 ? selectedAudiences : undefined,
+        teamMembers,
+        createdByActorId: appCtx.actor.publicId,
+      };
+
+      if (reportType === 'targeted_readouts') {
+        await client.chat.postMessage({
+          channel: body.user.id,
+          text: `Generating ${selectedAudiences.length} targeted readout(s) for *${selectedStudyName}*... You'll receive a notification as each completes.`,
+        });
+      } else {
+        await client.chat.postMessage({
+          channel: body.user.id,
+          text: `Generating research readout for *${selectedStudyName}*... This may take a few minutes.`,
+        });
+      }
+
+      try {
+        const result = await executeReadout(appCtx, readoutInput);
+
+        if (reportType === 'targeted_readouts') {
+          // Send per-audience notifications
+          for (const entry of result.urls) {
+            if (entry.success) {
+              await client.chat.postMessage({
+                channel: body.user.id,
+                text: `✅ *${entry.audience}* readout complete for ${selectedStudyName}`,
+                blocks: [
+                  {
+                    type: 'section',
+                    text: {
+                      type: 'mrkdwn',
+                      text: `✅ *${entry.audience}* readout complete — tickets ready\n\n<${entry.url}|View on GitHub>`,
+                    },
+                  },
+                ],
+              });
+            } else {
+              await client.chat.postMessage({
+                channel: body.user.id,
+                text: `❌ Error generating *${entry.audience}* readout: ${entry.error}`,
+              });
+            }
+          }
+
+          // Summary message
+          const succeeded = result.urls.filter(r => r.success);
+          const failed = result.urls.filter(r => !r.success);
+          if (succeeded.length > 0) {
+            const links = succeeded.map(r => `• <${r.url}|${r.audience}>`).join('\n');
+            await client.chat.postMessage({
+              channel: body.user.id,
+              text: `*All targeted readouts complete* (${succeeded.length}/${result.urls.length})`,
+              blocks: [
+                {
+                  type: 'section',
+                  text: {
+                    type: 'mrkdwn',
+                    text: `*All targeted readouts complete* (${succeeded.length}/${result.urls.length})\n\n${links}${failed.length > 0 ? `\n\n❌ ${failed.length} failed: ${failed.map(r => r.audience).join(', ')}` : ''}`,
+                  },
+                },
+              ],
+            });
+          }
+        } else {
+          // Research readout — single result
+          const mainUrl = result.urls[0]?.url;
+          await client.chat.postMessage({
+            channel: body.user.id,
+            text: `✅ Report generated successfully!`,
+            blocks: [
+              {
+                type: 'section',
+                text: { type: 'mrkdwn', text: `*Report ready:*\n<${mainUrl}|View Full Report on GitHub>` },
+              },
+              { type: 'divider' },
+              {
+                type: 'section',
+                text: { type: 'mrkdwn', text: `*Next:* Run \`/qori-report\` again and select *Targeted Readouts* to generate audience-specific reports, or \`/qori-tickets\` to create engineering issues.` },
+              },
+            ],
+          });
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error('Error handling readout (app service):', error);
+        await client.chat.postMessage({
+          channel: body.user.id,
+          text: `❌ Error generating report: ${message}`,
+        });
+      }
+      return;
+    }
+
+    // Legacy path: existing handler logic (no workspace binding)
+    console.log(`[PLAT-3] Readout: falling back to legacy path for user=${body.user.id}`);
+
     let contentArray: ContentItem[] = [];
     let researchPlans: Array<{ file_path: string | null; filename: string }> = [];
     let sessionSummaries: Array<{ file_path: string | null; filename: string }> = [];
@@ -488,30 +631,9 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }: SlackVi
     console.log('Combined content length:', combinedContent.length);
 
     const targetAudience: string = values.target_audience?.target_audience_change?.selected_option?.value || state.targetAudience || '';
-    const selectedRoles = values.team_members?.team_members_input?.selected_options || [];
     const timeline: string = values.timeline?.timeline_change?.selected_option?.value || state.timeline || '';
 
-    // Get actual user names from selected roles
-    const roleToUserMap: Record<string, string> = {};
-    if (selectedStudy?.userRoles) {
-      selectedStudy.userRoles.forEach((userRole) => {
-        roleToUserMap[userRole.role] = userRole.user_id;
-      });
-    }
-
-    const teamMemberUserIds: string[] = [];
-    const teamMemberNames: string[] = [];
-
-    selectedRoles.forEach((roleOption: { value: string }) => {
-      const role = roleOption.value;
-      const userId = roleToUserMap[role];
-      if (userId) {
-        teamMemberUserIds.push(userId);
-        teamMemberNames.push(`<@${userId}>`);
-      }
-    });
-
-    const teamMembers: string = teamMemberNames.join(', ') || '@team-lead';
+    // teamMembers already computed above (shared with app service path)
 
     const detectedFilesList: string = detectedFiles.length > 0
       ? detectedFiles.map((f: string) => `- ${f}`).join('\n')

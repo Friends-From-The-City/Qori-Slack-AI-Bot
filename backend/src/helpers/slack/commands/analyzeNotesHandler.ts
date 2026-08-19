@@ -24,6 +24,8 @@ import { redactTranscript } from '../../../helpers/piiRedaction';
 import { resolveSessionSource, createNuggetConstructs, type NuggetInput } from '../../../services/session-evidence.service';
 import { attachEvidenceRefsVerified } from '../../../services/artifact.service';
 import { getDefaultModelName } from '../../modelProvider';
+import { buildSlackApplicationContext } from '../../../middleware/auth/slackContextBridge';
+import { analyzeSession as analyzeSessionAppService, type AnalyzeSessionInput } from '../../../application/transcript.app-service';
 
 // ─── Cascade context ─────────────────────────────────────────────
 
@@ -302,6 +304,70 @@ const handleAnalyzeNotesSubmission = async ({ ack, body, view, client }: SlackVi
 
     const studyName: string = values.study_select_block?.study_select_test?.selected_option?.text?.text || "Unknown Study";
     const sessionName: string | null = sessionSelection?.text || null;
+
+    // Extract observer note IDs (needed by both app-service and legacy paths)
+    const observerNoteIds: number[] = selectedNotes.map((note: any) => parseInt(note.value));
+
+    // ── PLAT-3: Dual-path — app service or legacy ──
+    const analyzeCtx = await buildSlackApplicationContext(body.user.id, body.team?.id || '');
+
+    if (analyzeCtx) {
+      // ── APP SERVICE PATH: delegate analysis orchestration ──
+      const resolved = await resolveStudyFromName(studyName);
+      if (!resolved) throw new Error(`Study "${studyName}" not found`);
+      const { study, projectId, studyId: resolvedStudyId } = resolved;
+      const studyPath = study?.path;
+      if (!studyPath) throw new Error('Unexpected: study.path missing after resolution');
+
+      const analyzeInput: AnalyzeSessionInput = {
+        studyId: resolvedStudyId,
+        projectId,
+        studyName,
+        studyPath,
+        participantCode,
+        participantName,
+        sessionName,
+        transcriptNoteId: parseInt(selectedTranscriptId),
+        observerNoteIds,
+        analyzerActorId: String(analyzeCtx.actor.id),
+      };
+
+      const analyzeResult = await analyzeSessionAppService(analyzeCtx, analyzeInput);
+
+      // Post success message (Slack-specific)
+      await client.chat.postEphemeral({
+        channel: body.user.id,
+        user: body.user.id,
+        text: `✅ *Note Analysis Completed!*`,
+        blocks: [
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: `✅ *Note Analysis Completed!*\n\n*Study:* ${studyName}\n${sessionName ? `*Session:* ${sessionName}\n` : ''}*Notes Processed:* ${analyzeResult.noteCount} files`,
+            },
+          },
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: `<${analyzeResult.url}|View Session Summary on GitHub>`,
+            },
+          },
+          { type: 'divider' },
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: `*Next:* Run \`/qori-synthesis\` to identify themes across sessions.`,
+            },
+          },
+        ],
+      });
+      return;
+    }
+
+    // ── LEGACY PATH: no PLAT-2 workspace binding ──
 
     // Fetch the transcript (required)
     const noteDetails: NoteDetail[] = [];

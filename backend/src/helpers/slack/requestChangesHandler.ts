@@ -1,6 +1,8 @@
 import type { WebClient } from '@slack/web-api';
 import type { BlockAction, ViewSubmitAction, ViewResponseAction, AckFn } from '@slack/bolt';
 import type { View } from '@slack/types';
+import { buildSlackApplicationContext } from '../../middleware/auth/slackContextBridge';
+import { executeDocumentApproval, type ApprovalInput, type DocumentType as AppDocumentType, type ApprovalAction } from '../../application/approval.app-service';
 import { requestStudyChangesModal } from './ui/requestStudyChangesModal';
 // Phase B Step 3: getStudyByProjectAndName for FK-based study lookup in brief approval
 // resolveStudyFromName retained for other flows (request changes, non-brief approvals) — migrate in future step
@@ -180,6 +182,126 @@ export async function handleApproveSubmission(
   const { studyName, channelId, url, type, briefData } = JSON.parse(view.private_metadata) as ModalMetadata & { briefData?: Record<string, unknown> };
   const user = body.user.id;
 
+  const typeLabelMap: Record<string, string> = {
+    plan: 'plan',
+    brief: 'brief',
+    discussion: 'discussion guide',
+  };
+
+  // ── PLAT-3: Try application service path ──
+  const displayName = body.user?.name || body.user?.id;
+  const appCtx = await buildSlackApplicationContext(user, (body as any).team?.id || '', displayName);
+
+  if (appCtx) {
+    console.log(`[PLAT-3] Approval: using application service path for user=${user}, type=${type}`);
+
+    // Resolve study/project IDs for the app service (needed for input)
+    let resolvedStudyId: number | null = null;
+    let resolvedProjectId: number | null = null;
+    let notifyUserId: string | null = null;
+
+    if (type === 'brief') {
+      const project = await getProjectByChannelId(channelId);
+      resolvedProjectId = project?.id ?? null;
+      if (project) {
+        const study = await getStudyByProjectAndName(project.id, studyName);
+        resolvedStudyId = study?.id ?? null;
+        notifyUserId = study?.created_by ?? null;
+      }
+    } else {
+      const resolved = await resolveStudyFromName(studyName);
+      if (resolved) {
+        resolvedStudyId = resolved.studyId;
+        resolvedProjectId = resolved.projectId;
+        notifyUserId = (resolved.study as unknown as ResearchStudy)?.created_by ?? null;
+      }
+    }
+
+    if (!resolvedStudyId || !resolvedProjectId) {
+      console.warn(`[PLAT-3] Approval: could not resolve study/project, falling back to legacy`);
+    } else {
+      try {
+        const approvalInput: ApprovalInput = {
+          documentType: type as AppDocumentType,
+          studyId: resolvedStudyId,
+          projectId: resolvedProjectId,
+          studyName,
+          action: 'approve' as ApprovalAction,
+          documentUrl: url,
+        };
+
+        const result = await executeDocumentApproval(appCtx, approvalInput);
+
+        // Slack-specific notifications (same as legacy)
+        if (type === 'brief') {
+          if (result.notifyUserId) {
+            const ctaButton = {
+              type: 'button',
+              text: { type: 'plain_text', text: 'Create Research Plan', emoji: true },
+              style: 'primary',
+              action_id: 'create_research_plan_from_brief',
+              value: JSON.stringify({ studyName, studyId: resolvedStudyId, projectId: resolvedProjectId, briefUrl: url, channelId }),
+            };
+
+            try {
+              const im = await client.conversations.open({ users: result.notifyUserId });
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const blocks: any[] = [
+                {
+                  type: 'header',
+                  text: { type: 'plain_text', text: `Research Brief Approved — ${studyName}`, emoji: true },
+                },
+                {
+                  type: 'section',
+                  text: { type: 'mrkdwn', text: `*Approved by:* <@${user}>\n*Brief:* <${url}|View on GitHub>` },
+                },
+                {
+                  type: 'section',
+                  text: { type: 'mrkdwn', text: 'The research brief has been approved. Next step: create the research plan.' },
+                },
+                { type: 'actions', elements: [ctaButton] },
+              ];
+              await client.chat.postMessage({
+                channel: (im.channel as { id: string }).id,
+                text: `*${studyName}* research brief approved by <@${user}>! You can now create the research plan.`,
+                blocks,
+              });
+            } catch (err: unknown) {
+              console.error('Failed to send DM to study creator:', err);
+            }
+          }
+        } else {
+          if (result.notifyUserId) {
+            try {
+              const im = await client.conversations.open({ users: result.notifyUserId });
+              await client.chat.postMessage({
+                channel: (im.channel as { id: string }).id,
+                text: `*${studyName}* ${typeLabelMap[type]} approved by <@${user}>!`,
+              });
+            } catch (err: unknown) {
+              console.error('Failed to send DM to study creator:', err);
+            }
+          }
+        }
+        return;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        // If it's a known invalid state (stale button), surface to user
+        if (message.includes('already been approved') || message.includes('Changes were requested')) {
+          try {
+            await client.chat.postMessage({ channel: user, text: message });
+          } catch { /* DM failed */ }
+          return;
+        }
+        console.error(`[PLAT-3] Approval app service error, falling back to legacy: ${message}`);
+        // Fall through to legacy path
+      }
+    }
+  }
+
+  // Legacy path: existing handler logic (no workspace binding)
+  console.log(`[PLAT-3] Approval: falling back to legacy path for user=${user}`);
+
   // ── GOV-1: Re-authorize at submission boundary ──
   try {
     await assertApproverAccess(user, channelId, studyName, type, client);
@@ -191,12 +313,6 @@ export async function handleApproveSubmission(
     }
     throw err;
   }
-
-  const typeLabelMap: Record<string, string> = {
-    plan: 'plan',
-    brief: 'brief',
-    discussion: 'discussion guide',
-  };
 
   // Look up study first to get study_id for addStudyStatus (required by NOT NULL constraint)
   let studyId: number | null = null;
@@ -453,18 +569,6 @@ export async function handleRequestChangesSubmission(
   const { studyName, channelId, url, type } = JSON.parse(view.private_metadata) as ModalMetadata;
   const user = body.user.id;
 
-  // ── GOV-1: Re-authorize at submission boundary ──
-  try {
-    await assertApproverAccess(user, channelId, studyName, type, client);
-  } catch (err) {
-    if (err instanceof AuthorizationError) {
-      console.warn(`[AUTH] Request changes submission denied: user=${user} type=${type} study=${studyName}`);
-      await client.chat.postMessage({ channel: user, text: err.message });
-      return;
-    }
-    throw err;
-  }
-
   const { values } = view.state;
 
   const extract = (
@@ -506,6 +610,146 @@ export async function handleRequestChangesSubmission(
   console.log('Priority Level:', priorityLevel);
   console.log('Deadline:', deadline);
   console.log('Raw view.state.values:', Object.keys(values).length, 'blocks');
+
+  // ── PLAT-3: Try application service path ──
+  const displayName = body.user?.name || body.user?.id;
+  const appCtx = await buildSlackApplicationContext(user, (body as any).team?.id || '', displayName);
+
+  if (appCtx) {
+    console.log(`[PLAT-3] Request changes: using application service path for user=${user}, type=${type}`);
+
+    // Resolve study/project IDs for the app service
+    let resolvedStudyId: number | null = null;
+    let resolvedProjectId: number | null = null;
+    let notifyUserId: string | null = null;
+
+    if (type === 'brief') {
+      const project = await getProjectByChannelId(channelId);
+      resolvedProjectId = project?.id ?? null;
+      if (project) {
+        const study = await getStudyByProjectAndName(project.id, studyName);
+        resolvedStudyId = study?.id ?? null;
+        notifyUserId = study?.created_by ?? null;
+      }
+    } else {
+      const resolved = await resolveStudyFromName(studyName);
+      if (resolved) {
+        resolvedStudyId = resolved.studyId;
+        resolvedProjectId = resolved.projectId;
+        notifyUserId = (resolved.study as unknown as ResearchStudy)?.created_by ?? null;
+      }
+    }
+
+    if (!resolvedStudyId || !resolvedProjectId) {
+      console.warn(`[PLAT-3] Request changes: could not resolve study/project, falling back to legacy`);
+    } else {
+      try {
+        const approvalInput: ApprovalInput = {
+          documentType: type as AppDocumentType,
+          studyId: resolvedStudyId,
+          projectId: resolvedProjectId,
+          studyName,
+          action: 'request_changes' as ApprovalAction,
+          comment: changeFeedback || undefined,
+          documentUrl: url,
+        };
+
+        const result = await executeDocumentApproval(appCtx, approvalInput);
+
+        // Slack-specific notifications
+        if (result.notifyUserId) {
+          try {
+            const im = await client.conversations.open({ users: result.notifyUserId });
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const dmBlocks: any[] = [
+              {
+                type: 'section',
+                text: { type: 'mrkdwn', text: `*Changes requested* for *${studyName}* ${type} by <@${user}>` },
+              },
+              {
+                type: 'section',
+                fields: [
+                  { type: 'mrkdwn', text: `*Feedback:*\n>${changeFeedback}` },
+                  { type: 'mrkdwn', text: `*Priority:* ${priorityLevel}` },
+                ],
+              },
+              ...(filesToUpdate.length > 0
+                ? [{
+                    type: 'section',
+                    fields: [{ type: 'mrkdwn', text: `*Files to Update:*\n${filesToUpdate.join(', ')}` }],
+                  }]
+                : []),
+              ...(deadline
+                ? [{
+                    type: 'section',
+                    fields: [{ type: 'mrkdwn', text: `*Deadline:* ${deadline}` }],
+                  }]
+                : []),
+              {
+                type: 'section',
+                text: { type: 'mrkdwn', text: `<${url}|View on GitHub>` },
+              },
+            ];
+
+            // For briefs, add Resubmit CTA button
+            if (type === 'brief' && resolvedStudyId) {
+              dmBlocks.push(
+                {
+                  type: 'context',
+                  elements: [{ type: 'mrkdwn', text: '_Edit the brief directly in GitHub, then click Resubmit when ready for re-review._' }],
+                },
+                {
+                  type: 'actions',
+                  elements: [{
+                    type: 'button',
+                    text: { type: 'plain_text', text: 'Resubmit for Approval', emoji: true },
+                    style: 'primary',
+                    action_id: 'brief_resubmit',
+                    value: JSON.stringify({ studyId: resolvedStudyId, studyName, channelId, url, documentType: 'brief' }),
+                  }],
+                },
+              );
+            }
+
+            await client.chat.postMessage({
+              channel: (im.channel as { id: string }).id,
+              text: `Changes requested for *${studyName}* ${type} by <@${user}>`,
+              blocks: dmBlocks,
+            });
+          } catch (err: unknown) {
+            console.error('Failed to send DM to study creator:', err);
+          }
+        }
+        return;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        // If it's a known invalid state, surface to user
+        if (message.includes('already been') || message.includes('Comment is required')) {
+          try {
+            await client.chat.postMessage({ channel: user, text: message });
+          } catch { /* DM failed */ }
+          return;
+        }
+        console.error(`[PLAT-3] Request changes app service error, falling back to legacy: ${message}`);
+        // Fall through to legacy path
+      }
+    }
+  }
+
+  // Legacy path: existing handler logic (no workspace binding)
+  console.log(`[PLAT-3] Request changes: falling back to legacy path for user=${user}`);
+
+  // ── GOV-1: Re-authorize at submission boundary ──
+  try {
+    await assertApproverAccess(user, channelId, studyName, type, client);
+  } catch (err) {
+    if (err instanceof AuthorizationError) {
+      console.warn(`[AUTH] Request changes submission denied: user=${user} type=${type} study=${studyName}`);
+      await client.chat.postMessage({ channel: user, text: err.message });
+      return;
+    }
+    throw err;
+  }
 
   // Resolve study first to get study_id for addStudyStatus (required by NOT NULL constraint)
   let studyId: number | undefined;

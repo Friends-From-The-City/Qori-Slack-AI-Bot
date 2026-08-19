@@ -16,6 +16,8 @@
 
 import type { AllMiddlewareArgs, SlackViewMiddlewareArgs, ViewSubmitAction } from '@slack/bolt';
 
+import { buildSlackApplicationContext } from '../../../middleware/auth/slackContextBridge';
+import { executeBrief, type BriefInput } from '../../../application/brief.app-service';
 import { format, parseISO, differenceInCalendarDays, isValid } from 'date-fns';
 import sequelize from '../../../database';
 import { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo } from '../../github';
@@ -273,6 +275,158 @@ async function handleBriefSubmission({ ack, body, view, client }: SlackViewMiddl
     console.warn('Could not post brief progress message:', progressErr);
   }
 
+  // ── Extract form values (Slack-specific, needed by both paths) ──
+
+  // Methodology (unchanged from v6.0)
+  const methodologyLabels: Record<string, string> = {
+    usability_testing: 'Moderated usability testing',
+    user_interviews: 'User interviews',
+    contextual_inquiry: 'Contextual inquiry',
+    concept_testing: 'Concept testing',
+    survey: 'Survey research',
+    card_sorting: 'Card sorting',
+    tree_testing: 'Tree testing',
+    mixed_methods: 'Mixed methods',
+  };
+
+  const methodOverride = extract('method_override_block', 'method_override_input') as string | null;
+  const methodRadio = extract('research_method_block', 'research_method_select') as { value: string } | null;
+  const methodValue: string = methodOverride ? 'custom' : (methodRadio?.value || 'usability_testing');
+  const methodLabel: string = methodOverride || methodologyLabels[methodRadio?.value || 'usability_testing'] || (methodRadio?.value || 'usability_testing');
+  // Lead researcher comes from form input (pre-filled by modal builder)
+  const leadResearcherInput = (extract('lead_researcher_block', 'lead_researcher_input') as string | null)
+    || (extract('lead_researcher', 'lead_researcher_input') as string | null);
+  const leadResearcher: string = leadResearcherInput || body.user.name || '';
+
+  // Form values
+  const problemStatement = (extract('problem_statement_block', 'problem_statement_input') as string) || '';
+  const learningObjectives = (extract('learning_objectives_block', 'learning_objectives_input') as string) || '';
+  const outOfScope = (extract('out_of_scope_block', 'out_of_scope_input') as string) || '';
+  const participantApproach = (extract('participant_approach_block', 'participant_approach_input') as string) || '';
+  const recruitmentSources = (extract('recruitment_sources_block', 'recruitment_sources_input') as string) || '';
+  const startDate = (extract('start_date_block', 'start_date_picker') as string) || '';
+  const decisionDeadline = (extract('decision_deadline_block', 'decision_deadline_picker') as string) || '';
+  const budgetStr = (extract('budget_block', 'budget_input') as string) || '';
+  const discoverySelections = (extract('discovery_selection_block', 'discovery_selection') as string[] | null) || [];
+
+  // Resolve stakeholder display name from users_select
+  const stakeholderUserId: string | null =
+    values.stakeholder_block?.stakeholder_select?.selected_user || null;
+  let requestorName = '';
+  if (stakeholderUserId) {
+    try {
+      const stakeholderInfo = await client.users.info({ user: stakeholderUserId });
+      const stakeholderUser = stakeholderInfo.user as Record<string, any> | undefined;
+      requestorName = stakeholderUser?.real_name || stakeholderUser?.profile?.display_name || stakeholderUser?.name || stakeholderUserId;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn('Could not resolve stakeholder display name:', message);
+      requestorName = stakeholderUserId;
+    }
+  }
+
+  // Resolve researcher email for study creation
+  let researcherEmail = `${body.user.id}@slack.com`;
+  try {
+    const creatorInfo = await client.users.info({ user: body.user.id });
+    researcherEmail = creatorInfo.user?.profile?.email || researcherEmail;
+  } catch {
+    // Fall back to default
+  }
+
+  // ── PLAT-3: Dual-path — application service vs legacy ──
+  const ctx = await buildSlackApplicationContext(body.user.id, (body as any).team?.id || '', leadResearcher);
+
+  if (ctx) {
+    // ── New path: delegate to application service ──
+    try {
+      const briefInput: BriefInput = {
+        projectId,
+        projectSlug,
+        projectName: projectName || projectSlug,
+        leadResearcher,
+        requestorName,
+        createdByActorId: String(ctx.actor.id),
+        researcherEmail,
+        problemStatement,
+        learningObjectives,
+        outOfScope,
+        methodology: methodLabel,
+        methodologyValue: methodValue,
+        participantApproach,
+        recruitmentSources,
+        startDate,
+        decisionDeadline,
+        budget: budgetStr,
+        discoverySelections,
+      };
+
+      const result = await executeBrief(ctx, briefInput);
+
+      // ── Slack-specific result handling ──
+
+      // Send brief approval request to stakeholder (or owner fallback)
+      const study = await getStudyByProjectAndName(projectId, result.studyName);
+      if (study) {
+        const briefBlocks = generateStudyResultBlocks(result.studyName, study, result.url, channelId || '', 'brief');
+        await sendStudyResultMessage(client, channelId || '', result.studyName, briefBlocks, 'brief');
+
+        // Update brief status to pending_approval
+        const approverInfo = await getProjectApprover(projectId);
+        try {
+          await study.update({
+            brief_status: 'pending_approval',
+            brief_reviewer_id: approverInfo?.userId || null,
+          });
+          console.log(`📋 Brief status set to pending_approval, reviewer: ${approverInfo?.userId || 'none'}`);
+        } catch (updateErr) {
+          console.error('Failed to update brief status:', updateErr);
+        }
+
+        // Notify researcher via DM with specific approver info
+        try {
+          let approverDisplay = 'the project owner';
+          let approverRole = 'owner';
+          if (approverInfo) {
+            approverRole = approverInfo.source === 'stakeholder' ? 'stakeholder' : 'owner';
+            try {
+              const approverUserInfo = await client.users.info({ user: approverInfo.userId });
+              const approverUser = approverUserInfo.user as Record<string, unknown> | undefined;
+              const approverProfile = approverUser?.profile as Record<string, unknown> | undefined;
+              approverDisplay = (approverUser?.real_name || approverProfile?.display_name || approverUser?.name || `<@${approverInfo.userId}>`) as string;
+            } catch {
+              approverDisplay = `<@${approverInfo.userId}>`;
+            }
+          }
+
+          const im = await client.conversations.open({ users: body.user.id });
+          if (im.channel?.id) {
+            await client.chat.postMessage({
+              channel: im.channel.id,
+              text: `✅ *Research Brief Created*\n\n*Study:* ${result.studyName}\n*View:* <${result.url}|GitHub>\n\nBrief sent to *${approverDisplay}* (${approverRole}) for approval.\n\n*Next:* Run \`/qori-plan\` to create an execution plan once approved.`,
+            });
+          }
+        } catch (error) {
+          console.error('Failed to send confirmation to researcher:', error);
+        }
+      }
+
+      console.log(`✅ Research brief created via app service for study: ${result.studyName}`);
+    } catch (appServiceErr) {
+      const errMessage = appServiceErr instanceof Error ? appServiceErr.message : String(appServiceErr);
+      console.error('❌ Brief app service failed:', errMessage);
+      const displayErr = errMessage.includes('<!DOCTYPE')
+        ? 'GitHub is temporarily unavailable. Please try again in a moment.'
+        : errMessage;
+      await client.chat.postEphemeral({
+        channel: body.user.id,
+        user: body.user.id,
+        text: `❌ Could not create research brief: ${displayErr}`,
+      });
+    }
+  } else {
+    // ── Legacy path: existing handler logic ──
+
   // ── Study creation (Phase 2D: uses projectId from metadata) ──
   let study = await getStudyByProjectAndName(projectId, studyName);
   let studyId: number;
@@ -345,37 +499,6 @@ async function handleBriefSubmission({ ack, body, view, client }: SlackViewMiddl
     studyId = study.id;
   }
 
-  // ── Methodology (unchanged from v6.0) ──
-  const methodologyLabels: Record<string, string> = {
-    usability_testing: 'Moderated usability testing',
-    user_interviews: 'User interviews',
-    contextual_inquiry: 'Contextual inquiry',
-    concept_testing: 'Concept testing',
-    survey: 'Survey research',
-    card_sorting: 'Card sorting',
-    tree_testing: 'Tree testing',
-    mixed_methods: 'Mixed methods',
-  };
-
-  const methodOverride = extract('method_override_block', 'method_override_input') as string | null;
-  const methodRadio = extract('research_method_block', 'research_method_select') as { value: string } | null;
-  const methodValue: string = methodOverride ? 'custom' : (methodRadio?.value || 'usability_testing');
-  const methodLabel: string = methodOverride || methodologyLabels[methodRadio?.value || 'usability_testing'] || (methodRadio?.value || 'usability_testing');
-  // Lead researcher comes from form input (pre-filled by modal builder)
-  const leadResearcherInput = (extract('lead_researcher_block', 'lead_researcher_input') as string | null)
-    || (extract('lead_researcher', 'lead_researcher_input') as string | null);
-  const leadResearcher: string = leadResearcherInput || body.user.name || '';
-
-  // ── Form values ──
-  const problemStatement = (extract('problem_statement_block', 'problem_statement_input') as string) || '';
-  const learningObjectives = (extract('learning_objectives_block', 'learning_objectives_input') as string) || '';
-  const outOfScope = (extract('out_of_scope_block', 'out_of_scope_input') as string) || '';
-  const participantApproach = (extract('participant_approach_block', 'participant_approach_input') as string) || '';
-  const recruitmentSources = (extract('recruitment_sources_block', 'recruitment_sources_input') as string) || '';
-  const startDate = (extract('start_date_block', 'start_date_picker') as string) || '';
-  const decisionDeadline = (extract('decision_deadline_block', 'decision_deadline_picker') as string) || '';
-  const budgetStr = (extract('budget_block', 'budget_input') as string) || '';
-
   // ── Parse budget and target participants, save to study row ──
   const parsedBudget: number | null = parseBudget(budgetStr);
   const targetParticipants: number | null = parseParticipantTarget(participantApproach);
@@ -393,8 +516,6 @@ async function handleBriefSubmission({ ack, body, view, client }: SlackViewMiddl
   }
 
   // ── Compute timeline_preference from date gap (replaces modal radio) ──
-  // Researchers think in dates, not buckets. Handler infers the preference
-  // from (decision_deadline - start_date): <35 days = accelerated, 35-49 = standard, >49 = extended.
   let timelinePref: TimelinePreference = 'standard';
   if (startDate && decisionDeadline) {
     const start = parseISO(startDate);
@@ -417,7 +538,6 @@ async function handleBriefSubmission({ ack, body, view, client }: SlackViewMiddl
   let discoverySources: string | undefined;
   let citationConvention: string | undefined;
 
-  const discoverySelections = (extract('discovery_selection_block', 'discovery_selection') as string[] | null) || [];
   if (discoverySelections.length > 0) {
     try {
       const allArtifacts: DiscoveryArtifact[] = await loadDiscoveryArtifacts(projectId);
@@ -448,8 +568,6 @@ async function handleBriefSubmission({ ack, body, view, client }: SlackViewMiddl
   }
 
   // ── Pre-render LLM tasks: barriers + questions (Option C) ──
-  // The handler runs these directly so it can assign IDs before yamlProcessor
-  // runs the prose tasks. The prose tasks receive the ID'd data as context.
   const structuredTaskData: Record<string, unknown> = {
     problem_statement: problemStatement,
     learning_objectives: learningObjectives,
@@ -488,22 +606,6 @@ async function handleBriefSubmission({ ack, body, view, client }: SlackViewMiddl
     }));
 
   console.log(`📋 Structured data assembled: ${targetBarriers.length} barriers, ${researchQuestions.length} questions, ${researchObjectives.length} objectives`);
-
-  // ── Resolve stakeholder display name from users_select ──
-  const stakeholderUserId: string | null =
-    values.stakeholder_block?.stakeholder_select?.selected_user || null;
-  let requestorName = '';
-  if (stakeholderUserId) {
-    try {
-      const userInfo = await client.users.info({ user: stakeholderUserId });
-      const user = userInfo.user as Record<string, any> | undefined;
-      requestorName = user?.real_name || user?.profile?.display_name || user?.name || stakeholderUserId;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      console.warn('Could not resolve stakeholder display name:', message);
-      requestorName = stakeholderUserId;
-    }
-  }
 
   // ── Assemble complete data object ──
   const data: BriefTemplateInput = {
@@ -575,7 +677,6 @@ async function handleBriefSubmission({ ack, body, view, client }: SlackViewMiddl
   const url: string = renderedYaml.result.url;
 
   // ── Send brief approval request to stakeholder (or owner fallback) ──
-  // This is the CRITICAL approval routing that was missing
   const briefBlocks = generateStudyResultBlocks(studyName, study, url, channelId || '', 'brief');
   await sendStudyResultMessage(client, channelId || '', studyName, briefBlocks, 'brief');
 
@@ -627,6 +728,8 @@ async function handleBriefSubmission({ ack, body, view, client }: SlackViewMiddl
   });
 
   console.log(`✅ Research brief created for study: ${studyName}`);
+
+  } // end legacy path
 }
 
 export { handleBriefSubmission };

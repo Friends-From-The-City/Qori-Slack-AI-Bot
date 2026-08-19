@@ -36,6 +36,15 @@ import { processSlackFiles } from "../../pdfProcessor";
 import { postEphemeralOrDM } from "../slackHelpers";
 import { scrubTranscript, type ScrubContext } from "../../transcriptScrubber";
 import { STUDY_FOLDERS } from "../../../config/folderStructure";
+import { buildSlackApplicationContext } from '../../../middleware/auth/slackContextBridge';
+import {
+  uploadTranscript as uploadTranscriptAppService,
+  approveTranscript as approveTranscriptAppService,
+  approveManualNotes as approveManualNotesAppService,
+  type TranscriptUploadInput,
+  type TranscriptApprovalInput,
+  type ManualNotesApprovalInput,
+} from '../../../application/transcript.app-service';
 
 // ─── Types ──────────────────────────────────────────────────────
 
@@ -585,6 +594,112 @@ const handleSessionNotesSubmission = async ({ ack, body, view, client }: SlackVi
         return;
       }
 
+      // ── PLAT-3: Dual-path — app service or legacy ──
+      const transcriptAppCtx = await buildSlackApplicationContext(body.user.id, body.team?.id || '');
+
+      if (transcriptAppCtx) {
+        // ── APP SERVICE PATH: delegate scrubbing + quarantine write ──
+        const resolvedForUpload = await resolveStudyFromName(templateData.study_name);
+        if (!resolvedForUpload) throw new Error(`Study "${templateData.study_name}" not found`);
+
+        const uploadInput: TranscriptUploadInput = {
+          studyId: resolvedForUpload.studyId,
+          projectId: resolvedForUpload.projectId,
+          studyName: templateData.study_name,
+          studyPath: resolvedForUpload.study?.path || '',
+          sessionId: templateData.session_id,
+          participantName: templateData.participant_name,
+          participantCode: templateData.participant_id,
+          sessionDate: templateData.session_date,
+          sessionTime: templateData.session_time,
+          researcherName: templateData.researcher,
+          rawContent,
+          isTranscript: true,
+          participantRealName,
+          createdByActorId: String(transcriptAppCtx.actor.id),
+        };
+
+        const uploadResult = await uploadTranscriptAppService(transcriptAppCtx, uploadInput);
+
+        // Close the upload modal
+        if (!ackCalled) { await ack(); ackCalled = true; }
+
+        // Derive review URL from quarantine path
+        const appFileUrl = buildReviewUrl(uploadResult.quarantinePath!);
+
+        // ── Post review DM using app service result ──
+        const appPartialMeta: Omit<TranscriptReviewMetadata, 'dmChannelId' | 'messageTs'> = {
+          quarantinePath: uploadResult.quarantinePath!,
+          finalPath: uploadResult.finalPath,
+          filename: `transcript_${templateData.session_id}.md`,
+          participantCode: templateData.participant_id,
+          studyName: templateData.study_name,
+          fileUrl: appFileUrl,
+          studyId: selectedSession.study?.id || null,
+          participantId: selectedSession.participant?.id || null,
+          sessionDate: templateData.session_date,
+          sessionTime: templateData.session_time,
+          userId: body.user.id,
+        };
+
+        let appDmResult: { channel: string; ts: string };
+        try {
+          const placeholderMeta = JSON.stringify({ ...appPartialMeta, dmChannelId: '', messageTs: '' });
+          const dmBlocks = buildTranscriptReviewDmBlocks({
+            stats: uploadResult.scrubStats,
+            participantCode: templateData.participant_id,
+            studyName: templateData.study_name,
+            fileUrl: appFileUrl,
+            nameProvided: Boolean(participantRealName),
+            buttonMetadata: placeholderMeta,
+          });
+
+          const postResult = await client.chat.postMessage({
+            channel: body.user.id,
+            text: `PII Review: ${templateData.study_name} - ${templateData.participant_id}`,
+            blocks: dmBlocks,
+          });
+
+          if (!postResult.ok || !postResult.ts || !postResult.channel) {
+            throw new Error('DM post returned no ts/channel');
+          }
+          appDmResult = { channel: postResult.channel, ts: postResult.ts };
+          console.log(`[PII-SEQ] 1/2 DM posted (app-service path): channel=${appDmResult.channel} ts=${appDmResult.ts}`);
+        } catch (dmErr) {
+          const dmMessage = dmErr instanceof Error ? dmErr.message : String(dmErr);
+          console.error('[PII] Review DM failed (app-service path):', dmMessage);
+          await postEphemeralOrDM(client, body.user.id, metadata.channelId || body.user.id,
+            'Could not deliver the review message. Transcript was saved to quarantine but review DM failed. Please try again.');
+          return;
+        }
+
+        // Update DM with real button metadata
+        const appFullMeta: TranscriptReviewMetadata = {
+          ...appPartialMeta as any,
+          dmChannelId: appDmResult.channel,
+          messageTs: appDmResult.ts,
+        };
+        const appButtonMeta = JSON.stringify(appFullMeta);
+
+        const appFinalDmBlocks = buildTranscriptReviewDmBlocks({
+          stats: uploadResult.scrubStats,
+          participantCode: templateData.participant_id,
+          studyName: templateData.study_name,
+          fileUrl: appFileUrl,
+          nameProvided: Boolean(participantRealName),
+          buttonMetadata: appButtonMeta,
+        });
+        await client.chat.update({
+          channel: appDmResult.channel,
+          ts: appDmResult.ts,
+          text: `PII Review: ${templateData.study_name} - ${templateData.participant_id}`,
+          blocks: appFinalDmBlocks,
+        });
+        console.log(`[PII-SEQ] 2/2 DM button metadata attached (app-service path)`);
+        return;
+      }
+
+      // ── LEGACY PATH: no PLAT-2 workspace binding ──
       // ── Run PII scrubbing ──
       const scrubCtx: ScrubContext = {
         participantRealName: participantRealName,
@@ -750,6 +865,85 @@ ${scrubResult.content}`;
     // Git history only contains approved/reviewed content (no quarantine commits).
     // On approval: read from DB, write to git for FIRST time, clear pending_content.
 
+    // ── PLAT-3: Dual-path — app service or legacy ──
+    const manualAppCtx = await buildSlackApplicationContext(body.user.id, body.team?.id || '');
+
+    if (manualAppCtx) {
+      // ── APP SERVICE PATH: delegate manual notes processing ──
+      const manualResolved = await resolveStudyFromName(templateData.study_name);
+      if (!manualResolved) throw new Error(`Study "${templateData.study_name}" not found`);
+
+      const manualUploadInput: TranscriptUploadInput = {
+        studyId: manualResolved.studyId,
+        projectId: manualResolved.projectId,
+        studyName: templateData.study_name,
+        studyPath: manualResolved.study?.path || '',
+        sessionId: templateData.session_id,
+        participantName: templateData.participant_name,
+        participantCode: templateData.participant_id,
+        sessionDate: templateData.session_date,
+        sessionTime: templateData.session_time,
+        researcherName: templateData.researcher,
+        rawContent: templateData.structured_notes || '',
+        isTranscript: false,
+        participantRealName: '',
+        createdByActorId: String(manualAppCtx.actor.id),
+      };
+
+      const manualUploadResult = await uploadTranscriptAppService(manualAppCtx, manualUploadInput);
+
+      // Build honest status text from app service result
+      const manualPhoneCount = manualUploadResult.scrubStats.phoneNumbers;
+      const manualEmailCount = manualUploadResult.scrubStats.emailAddresses;
+      const manualScrubParts: string[] = [];
+      if (manualPhoneCount > 0) manualScrubParts.push(`${manualPhoneCount} phone number${manualPhoneCount !== 1 ? 's' : ''} → [PHONE]`);
+      if (manualEmailCount > 0) manualScrubParts.push(`${manualEmailCount} email${manualEmailCount !== 1 ? 's' : ''} → [EMAIL]`);
+      const manualStatsText = manualScrubParts.length > 0
+        ? `Auto-scrub applied: ${manualScrubParts.join(' · ')}`
+        : 'Auto-scrub applied: no phone/email patterns found';
+
+      // Read pending content from DB for inline display
+      const manualPendingNote = await studyNotesService.getStudyNoteById(manualUploadResult.noteId!);
+      const manualScrubbedContent: string = manualPendingNote.pending_content || '';
+      const manualDisplayContent = manualScrubbedContent.length > 2800
+        ? manualScrubbedContent.slice(0, 2800) + '\n\n... (truncated for display)'
+        : manualScrubbedContent;
+
+      const manualApprovalMeta = {
+        noteId: manualUploadResult.noteId!,
+        finalPath: manualUploadResult.finalPath,
+        filename: `notes_${templateData.session_id}.md`,
+        participantCode: templateData.participant_id,
+        studyName: templateData.study_name,
+      };
+
+      await client.chat.postMessage({
+        channel: body.user.id,
+        text: `PII Review Required: ${templateData.study_name} - ${templateData.participant_id}`,
+        blocks: [
+          { type: 'header', text: { type: 'plain_text', text: 'PII Review Required' } },
+          { type: 'context', elements: [{ type: 'mrkdwn', text: `*Study:* ${templateData.study_name} · *Participant:* ${templateData.participant_id}` }] },
+          { type: 'divider' },
+          { type: 'section', text: { type: 'mrkdwn', text: manualStatsText } },
+          { type: 'divider' },
+          { type: 'context', elements: [{ type: 'mrkdwn', text: 'Not covered by auto-scrub: names of other people, places, dates, or details mentioned in conversation. Finding these is your review.' }] },
+          { type: 'divider' },
+          { type: 'section', text: { type: 'mrkdwn', text: '```\n' + manualDisplayContent + '\n```' } },
+          { type: 'divider' },
+          {
+            type: 'actions',
+            elements: [
+              { type: 'button', text: { type: 'plain_text', text: 'Approve & Commit to Git' }, style: 'primary', action_id: 'manual_notes_approve', value: JSON.stringify(manualApprovalMeta) },
+              { type: 'button', text: { type: 'plain_text', text: 'Reject — needs source fix' }, style: 'danger', action_id: 'manual_notes_reject', value: JSON.stringify({ noteId: manualUploadResult.noteId }) },
+            ]
+          },
+          { type: 'context', elements: [{ type: 'mrkdwn', text: '*Approve* — commits to GitHub, eligible for `/qori-analyze`.\n*Reject* — deletes from DB, nothing committed to git.' }] },
+        ],
+      });
+      return;
+    }
+
+    // ── LEGACY PATH: manual notes without PLAT-2 workspace binding ──
     const resolved = await resolveStudyFromName(templateData.study_name);
     if (!resolved) throw new Error(`Study "${templateData.study_name}" not found`);
     const study = resolved.study;
@@ -1057,6 +1251,40 @@ const handleTranscriptReviewApprove = async ({ ack, body, view, client }: SlackV
     // re-scrub → regenerate quarantine → reopen modal, fully automated.
     await ack({ response_action: 'clear' });
 
+    // ── PLAT-3: Dual-path — app service or legacy ──
+    const approveCtx = await buildSlackApplicationContext(body.user.id, body.team?.id || '');
+
+    if (approveCtx) {
+      // ── APP SERVICE PATH: delegate approval orchestration ──
+      const approvalInput: TranscriptApprovalInput = {
+        quarantinePath,
+        finalPath,
+        filename,
+        studyId: studyId,
+        studyName,
+        participantCode,
+        participantId: participantId,
+        sessionDate,
+        sessionTime,
+        originalUploaderId: userId,
+        reviewerActorId: String(approveCtx.actor.id),
+      };
+
+      const approvalResult = await approveTranscriptAppService(approveCtx, approvalInput);
+
+      // Update the review DM to approved terminal state (buttons removed)
+      if (metadata.dmChannelId && metadata.messageTs) {
+        const appApprovedBlocks = buildApprovedDmBlocks(studyName, participantCode, approvalResult.finalUrl, body.user.id);
+        await client.chat.update({
+          channel: metadata.dmChannelId,
+          ts: metadata.messageTs,
+          text: `Transcript approved: ${studyName} - ${participantCode}`,
+          blocks: appApprovedBlocks,
+        });
+      }
+    } else {
+    // ── LEGACY PATH: no PLAT-2 workspace binding ──
+
     // ── MOVE from quarantine to final location ──
     // 1. Read content from quarantine
     const { Octokit } = await import('@octokit/rest');
@@ -1144,6 +1372,7 @@ const handleTranscriptReviewApprove = async ({ ack, body, view, client }: SlackV
         blocks: approvedBlocks,
       });
     }
+    } // end legacy transcript approval path
 
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -1503,6 +1732,32 @@ const handleManualNotesApprove = async ({ ack, body, client }: SlackActionMiddle
       throw err;
     }
 
+    // ── PLAT-3: Dual-path — app service or legacy ──
+    const manualApproveCtx = await buildSlackApplicationContext(body.user.id, body.team?.id || '');
+
+    if (manualApproveCtx) {
+      // ── APP SERVICE PATH: delegate manual notes approval ──
+      const manualApprovalInput: ManualNotesApprovalInput = {
+        noteId,
+        finalPath,
+        reviewerActorId: String(manualApproveCtx.actor.id),
+      };
+
+      const manualApprovalResult = await approveManualNotesAppService(manualApproveCtx, manualApprovalInput);
+
+      // Notify user (Slack-specific)
+      await client.chat.postMessage({
+        channel: body.user.id,
+        text: `✅ Notes approved and saved`,
+        blocks: [
+          { type: 'section', text: { type: 'mrkdwn', text: `✅ *Notes approved and committed to GitHub*\n\n*Study:* ${studyName}\n*Participant:* ${participantCode}` } },
+          { type: 'section', text: { type: 'mrkdwn', text: `<${manualApprovalResult.finalUrl}|View on GitHub>` } },
+          { type: 'context', elements: [{ type: 'mrkdwn', text: '✅ These notes are now eligible for `/qori-analyze`.' }] },
+        ],
+      });
+    } else {
+    // ── LEGACY PATH: manual notes approval without PLAT-2 workspace binding ──
+
     const pendingContent: string | null = note.pending_content;
 
     if (!pendingContent) {
@@ -1561,6 +1816,7 @@ const handleManualNotesApprove = async ({ ack, body, client }: SlackActionMiddle
         },
       ],
     });
+    } // end legacy manual notes approval path
 
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
