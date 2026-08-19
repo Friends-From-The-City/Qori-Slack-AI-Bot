@@ -1,201 +1,289 @@
 # Business Logic Leakage Audit
 
-Last updated: 2026-08-19 (RR-1 pre-release)
+Last updated: 2026-08-19 (reconciled classification)
 
 ---
 
 ## Purpose
 
-Identify behavior implemented directly in Slack handlers that would prevent a web/Teams adapter from invoking the same capability. Each finding includes the capability, current Slack entry point, what logic is adapter-specific (acceptable), what logic should move into Core, and severity.
+Identify behavior implemented directly in Slack handlers that would prevent a web/Teams adapter from invoking the same capability.
 
 ---
 
-## Severity Key
+## Classification Key
 
-- **BLOCKER** — Must fix before any release
-- **BEFORE_WORKSPACE** — Must fix before Workspace adapter (PLAT-3 / UX-3)
-- **LATER** — Can be addressed incrementally
-
----
-
-## Findings
-
-### 1. Template Orchestration Pipeline
-
-**Capability:** Resolving a YAML template, assembling inputs, running LLM generation, extracting variables, writing artifacts to GitHub, and returning results.
-
-**Current Slack entry point:** Each handler (briefHandler, planHandler, researchSynthesisHandler, readoutHandler, etc.) individually orchestrates: modal input parsing → `processTemplate()` → variable extraction → GitHub write → Slack DM.
-
-**Adapter-specific (OK):** Modal input parsing, Slack DM delivery, ephemeral messages.
-
-**Should move into Core:** The orchestration sequence itself — template resolution, input assembly, LLM generation, variable extraction, GitHub artifact write. This is the core pipeline that every adapter needs.
-
-**Current state:** `processTemplate()` in `langchain.ts` handles LLM orchestration. `variableExtractor.ts` handles extraction. `github.js` handles artifact write. These are already factored out — but the *sequencing* is duplicated across ~15 handlers.
-
-**Severity:** **BEFORE_WORKSPACE** — No adapter can work without this pipeline as a service. Not a blocker for dev→main since only Slack exists today.
+- **RELEASE_BLOCKER** — The existing Slack release cannot operate correctly or safely without extraction. Must fix before dev→main.
+- **BEFORE_WORKSPACE** — Slack is currently correct, but a second adapter could not safely invoke the same behavior without moving orchestration into Core. Fix required before PLAT-3 / UX-3.
+- **LATER** — Can be addressed incrementally. Logic is either already well-factored or low-frequency.
 
 ---
 
-### 2. Approval State Transitions
+## Reconciled Findings
 
-**Capability:** Brief approval, change requests, resubmission, mark-changes-complete flow.
+### 1. Brief Generation Orchestration
 
-**Current Slack entry point:** `approvalFlowHandler.ts`, `markChangesCompleteHandler.ts`, `resubmitBriefHandler.ts`
+**Capability:** Research brief creation with discovery artifact injection, pre-rendered stable IDs (TB-001, RQ-001, OBJ-001), LLM task execution, cascade variable commitment, approval routing.
 
-**Adapter-specific (OK):** Slack message updates (replacing buttons with status text), ephemeral confirmations.
+**Slack handler:** `commands/briefHandler.ts` (632 lines)
 
-**Should move into Core:** State transition logic (pending→approved, pending→changes_requested, etc.), notification triggers, permission checks for who can approve.
+**Business logic in adapter:**
+- Discovery artifact loading + variable injection (~35 lines)
+- Structured LLM tasks for barriers/questions via `executeAiGenerationTasks()` (~40 lines)
+- Mechanical ID assignment (TB-001, RQ-001, OBJ-001) (~10 lines)
+- Cascade variable extraction and commitment (~25 lines)
+- Approval routing to stakeholder/project owner (~35 lines)
+- Form value parsing: budget, participant target, date, timeline preference inference (~150 lines)
 
-**Current state:** Approval logic is partially in handlers, partially in service layer. The state machine is implicit.
+**Existing Core/service dependency:** `processTemplate()` (langchain.ts), `variableExtractor.ts`, `github.js`, `studyVariables` service, `authorization.service`. LLM and artifact write are factored out. The orchestration sequence is not.
 
-**Severity:** **BEFORE_WORKSPACE** — Any adapter needs approval capabilities. The state machine should be explicit in a service.
+**Extraction required for PLAT-3:** `BriefGenerationService` encapsulating: input normalization → discovery injection → LLM tasks → ID assignment → template render → variable extraction → artifact write → approval trigger.
 
----
-
-### 3. Survey Ingestion + Review Pipeline
-
-**Capability:** Survey CSV upload, schema review, privacy review, codebook generation, grouping review, match review, synthesis execution.
-
-**Current Slack entry point:** `surveySubmissionHandler.ts`, `surveyPrivacyHandler.ts`, `codebookHandler.ts`, `matchReviewHandler.ts`, `surveySynthesisAction.ts`
-
-**Adapter-specific (OK):** File upload via Slack, interactive schema/privacy/codebook review modals.
-
-**Should move into Core:** CSV parsing, schema inference, privacy classification, codebook generation, coding run execution, match assignment. These already live in services (`survey-aggregation.service`, `survey-codebook.service`, `survey-coding-run.service`).
-
-**Current state:** Well-factored. Services do the heavy lifting. Handlers coordinate the multi-step review flow via Slack modals.
-
-**Severity:** **LATER** — Services are already clean. The multi-step review UX will need a Workspace equivalent but the logic is portable.
+**Classification:** **BEFORE_WORKSPACE** — Brief generation works correctly through Slack today. The 632-line handler is large but stable. A second adapter cannot invoke this without extracting the orchestration, but the Slack release is safe.
 
 ---
 
-### 4. Participant Management + Outreach
+### 2. Research Plan Generation
 
-**Capability:** Add participants, update status, generate outreach emails, assign observers.
+**Capability:** Research plan creation with compensation calculation, timeline phase computation, cascade variable consumption from brief.
 
-**Current Slack entry point:** `participantHandler.ts`, `participantOutreachHandler.ts`, `addObserverHandler.ts`, `fieldworkHandler.ts`
+**Slack handler:** `commands/planHandler.ts` (316 lines)
 
-**Adapter-specific (OK):** Modal-based participant entry, Slack profile lookups for observers.
+**Business logic in adapter:**
+- Compensation calculation via `calculatePerPersonCompensation()` (~15 lines)
+- Timeline phases and summary computation (~10 lines)
+- Cascade variable consumption from brief (~7 lines)
+- Data assembly for YAML template (~25 lines)
+- Approval workflow routing (~20 lines)
 
-**Should move into Core:** Participant CRUD and outreach email generation already delegate to `study_participant.service` and `participant_outreach` template.
+**Existing Core/service dependency:** `processTemplate()`, `studyVariables`, `authorization.service`. Compensation calculator is a standalone utility.
 
-**Current state:** Mostly clean. Slack profile lookup for observer names is adapter-specific but acceptable.
+**Extraction required for PLAT-3:** Merge into `BriefGenerationService` or create `PlanGenerationService`. Smaller and cleaner than briefHandler.
 
-**Severity:** **LATER** — Services exist and are well-factored.
-
----
-
-### 5. Session Notes + Transcript Review
-
-**Capability:** Upload session notes/transcripts, PII scrubbing, review/approve/reject flow.
-
-**Current Slack entry point:** `sessionNotesHandler.ts` (extensive — tabs, review actions, DM-based review surface)
-
-**Adapter-specific (OK):** Tab switching UI, DM-based transcript review with action buttons.
-
-**Should move into Core:** PII scrubbing pipeline, transcript storage, review state machine (pending→approved/rejected/rescrub).
-
-**Current state:** PII scrubbing is in `helpers/piiRedaction.ts` (already factored out). Review state is managed through Slack message updates — the state machine is implicit.
-
-**Severity:** **BEFORE_WORKSPACE** — Transcript review is a critical workflow that needs a non-Slack surface.
+**Classification:** **BEFORE_WORKSPACE** — Works correctly through Slack. Simpler than brief handler.
 
 ---
 
-### 6. Project + Study Creation
+### 3. Session Notes + Transcript Review
 
-**Capability:** Create project with GitHub repo scaffolding, create study with folder structure, bind channel.
+**Capability:** Upload session notes/transcripts, PII scrubbing, review/approve/reject flow, evidence construct creation.
 
-**Current Slack entry point:** `projectStartHandler.ts`, `study/studyLifecycleHandler.ts`
+**Slack handler:** `commands/sessionNotesHandler.ts` (1658 lines — largest handler in the codebase)
 
-**Adapter-specific (OK):** Channel creation/binding, Slack-specific project picker.
+**Business logic in adapter:**
+- PII scrubbing orchestration via `scrubTranscript()` (~30 lines, utility already extracted)
+- Review state machine: pending → rescrub → approved / rejected (~200+ lines across 6 action handlers)
+- Evidence construct creation on approval (~50 lines)
+- Tab switching logic (manual vs upload) with form state preservation (~100+ lines)
+- Session selection with participant data loading (~80 lines)
+- Transcript commit to GitHub with metadata (~40 lines)
 
-**Should move into Core:** Project creation, study creation, GitHub scaffolding. These already delegate to `project.service`, `research_study.service`, `scaffolding.service`.
+**Existing Core/service dependency:** `piiRedaction.ts` (scrubbing utility), `session-summary.service.ts`, `session-evidence.service.ts`, `study_participant.service.ts`. PII scrubbing is factored out. The review state machine and evidence creation on approval are not.
 
-**Current state:** Well-factored. Channel binding is the only Slack-specific piece.
+**Extraction required for PLAT-3:** `TranscriptIngestionService` encapsulating: upload → scrub → review state machine → evidence creation. The DM-based review surface is adapter-specific, but the state transitions and evidence creation must be Core.
 
-**Severity:** **LATER** — Services are clean.
+**Classification:** **BEFORE_WORKSPACE** — Works correctly through Slack. The 1658-line handler is the most complex in the codebase, but all paths produce correct results today. The implicit state machine (managed through Slack message updates) would need to become explicit for any non-Slack adapter.
 
 ---
 
-### 7. Readout Generation + Audience Selection
+### 4. Research Synthesis Orchestration
+
+**Capability:** Session nugget aggregation, cascade variable consumption, LLM synthesis (affinity, personas, journey, usability, JTBD, design opportunities), evidence construct creation.
+
+**Slack handler:** `commands/researchSynthesisHandler.ts` (773 lines)
+
+**Business logic in adapter:**
+- Session data stats building (~40 lines)
+- Available enrichment detection from upstream cascade (~35 lines)
+- Cascade variable consumption (~30 lines)
+- YAML template selection per analysis method (~20 lines)
+- Evidence construct creation from synthesis results (~30 lines)
+
+**Existing Core/service dependency:** `processTemplate()`, `studyVariables`, `synthesis-evidence.service.ts`, `evidence.service.ts`. Evidence services exist. Template processing is factored out. Orchestration sequence is not.
+
+**Extraction required for PLAT-3:** `SynthesisOrchestrationService` — input assembly, template selection, cascade consumption, evidence creation.
+
+**Classification:** **BEFORE_WORKSPACE** — Works correctly through Slack. Same orchestration-layer pattern as findings 1–3.
+
+---
+
+### 5. Discovery Artifact Generation
+
+**Capability:** Document upload (PDF/DOCX/TXT/CSV), parsing, PII scanning, YAML template processing, artifact commit to `_discovery/` folder.
+
+**Slack handler:** `commands/discoverHandler.ts` (689 lines)
+
+**Business logic in adapter:**
+- Document type validation and parsing via `parseDocuments()` (~20 lines)
+- PII scanning via `scanForPii()` (~10 lines)
+- YAML template processing (~30 lines)
+- Variable extraction from rendered artifact (~15 lines)
+- File commit to GitHub in `_discovery/` folder (~20 lines)
+- Discovery hub modal with existing artifact display (~100+ lines)
+
+**Existing Core/service dependency:** `processTemplate()`, `github.js`, `studyVariables`, `piiRedaction.ts`. Document parsing and PII scanning are factored out. Orchestration is not.
+
+**Extraction required for PLAT-3:** `DiscoveryProcessingService` — document intake, PII scan, template render, artifact persistence.
+
+**Classification:** **BEFORE_WORKSPACE** — Works correctly through Slack. File upload is tightly coupled to Slack Files API, but the business logic (parse → scan → render → persist) is straightforward to extract.
+
+---
+
+### 6. Readout Generation + Audience Selection
 
 **Capability:** Generate research/designer/engineering/accessibility/leadership readouts.
 
-**Current Slack entry point:** `readoutHandler.ts`
+**Slack handler:** `commands/readoutHandler.ts` (948 lines)
 
-**Adapter-specific (OK):** Modal with audience checkboxes, study selection.
+**Business logic in adapter:**
+- Study file scanning for inputs (~50 lines)
+- Audience type routing to template selection (~30 lines)
+- Input assembly from cascade + scanned files (~40 lines)
 
-**Should move into Core:** Template selection based on audience, study file scanning for inputs. These use `processTemplate()` and `github.js`.
+**Existing Core/service dependency:** `processTemplate()`, `github.js`, `studyVariables`. Same pattern as other template handlers.
 
-**Current state:** Handler does input assembly and audience routing. LLM and artifact write are factored out.
+**Extraction required for PLAT-3:** Covered by the general template orchestration extraction (Finding 1 pattern).
 
-**Severity:** **BEFORE_WORKSPACE** — Same pipeline orchestration issue as Finding 1.
+**Classification:** **BEFORE_WORKSPACE** — Same orchestration-layer pattern. Works correctly through Slack.
 
 ---
 
-### 8. GitHub Issue Generation
+### 7. Survey Ingestion + Review Pipeline
+
+**Capability:** CSV upload, schema review, privacy review, codebook generation, match review, synthesis execution.
+
+**Slack handler:** `commands/surveySubmissionHandler.ts` (~300+ lines) + `surveyPrivacyHandler.ts` + `codebookHandler.ts` + `matchReviewHandler.ts` + `surveySynthesisAction.ts`
+
+**Business logic in adapter:**
+- CSV parsing and field schema inference (handler calls service)
+- Redis staging of raw CSV (~5 lines)
+- Schema confirmation validation (handler coordinates multi-step modal flow)
+- Codebook draft → review → acceptance state machine (modal-driven)
+- Match assignment generation and review (modal-driven)
+
+**Existing Core/service dependency:** `survey-aggregation.service.ts`, `survey-codebook.service.ts`, `survey-coding-run.service.ts`. **Well-factored.** Services do the heavy computation. Handlers coordinate the multi-step interactive review flow.
+
+**Extraction required for PLAT-3:** The multi-step review state machine needs a service equivalent, but computation is already in services.
+
+**Classification:** **LATER** — Services are clean. The multi-step interactive review will need a Workspace-specific UX, but the logic is portable today.
+
+---
+
+### 8. Approval State Transitions
+
+**Capability:** Brief approval, change requests, resubmission, mark-changes-complete flow.
+
+**Slack handler:** `commands/approval/approvalFlowHandler.ts`, `markChangesCompleteHandler.ts`, `resubmitBriefHandler.ts`
+
+**Business logic in adapter:**
+- State transitions (pending → approved, pending → changes_requested, etc.) via `addStudyStatus()` (~10 lines per transition)
+- Stale-button guard (check if already approved) (~25 lines)
+- Notification routing to stakeholder/owner (~30 lines)
+
+**Existing Core/service dependency:** `study-status.service.ts`, `authorization.service.ts`. Status changes go through service. Permission checks go through auth service.
+
+**Extraction required for PLAT-3:** `ApprovalStateMachine` — explicit state transitions with guard conditions. Currently implicit in handler action sequences.
+
+**Classification:** **BEFORE_WORKSPACE** — Works correctly through Slack. The implicit state machine is safe when there's only one adapter driving it.
+
+---
+
+### 9. Project + Study Creation
+
+**Capability:** Create project with GitHub repo scaffolding, create study with folder structure, bind channel.
+
+**Slack handler:** `commands/projectStartHandler.ts` (156+ lines)
+
+**Business logic in adapter:**
+- Project slug generation (~5 lines)
+- Slack channel creation with conflict retry (~30 lines, adapter-specific and acceptable)
+- GitHub scaffolding delegation to `scaffolding.service.ts` (~5 lines)
+
+**Existing Core/service dependency:** `project.service.ts`, `research_study.service.ts`, `scaffolding.service.ts`. **Well-factored.** Channel binding is the only Slack-specific piece.
+
+**Extraction required for PLAT-3:** Minimal — remove channel binding assumption.
+
+**Classification:** **LATER** — Services are clean. Channel binding is appropriately adapter-specific.
+
+---
+
+### 10. Participant Management + Outreach
+
+**Capability:** Add participants, update status, generate outreach emails, assign observers.
+
+**Slack handler:** `commands/participantHandler.ts`, `participantOutreachHandler.ts`, `addObserverHandler.ts`, `fieldworkHandler.ts`
+
+**Business logic in adapter:**
+- Participant code preview (~10 lines, calls service)
+- Outreach email generation delegates to template
+
+**Existing Core/service dependency:** `study_participant.service.ts`, `session_observer.service.ts`. **Well-factored.**
+
+**Extraction required for PLAT-3:** Minimal.
+
+**Classification:** **LATER** — Services exist and are well-factored.
+
+---
+
+### 11. GitHub Issue Generation
 
 **Capability:** Convert readout findings into GitHub issues with deduplication.
 
-**Current Slack entry point:** `ticketHandler.ts`
+**Slack handler:** `commands/ticketHandler.ts`
 
-**Adapter-specific (OK):** Two-step modal flow, Slack confirmation messages.
+**Business logic in adapter:**
+- Issue creation with deduplication check (~30 lines)
+- Two-step modal flow coordination
 
-**Should move into Core:** Issue creation logic, deduplication check. Currently in handler with `github.js` calls.
+**Existing Core/service dependency:** `github.js` for issue creation. No dedicated issue service.
 
-**Current state:** Partially factored. GitHub calls are through helpers but the sequencing logic is in the handler.
+**Extraction required for PLAT-3:** `IssueGenerationService` — straightforward extraction.
 
-**Severity:** **LATER** — Functional, rarely invoked outside of readout context.
+**Classification:** **LATER** — Functional, low-frequency.
 
 ---
 
-### 9. Admin Center Operations
+### 12. Admin Center Operations
 
 **Capability:** DSAR, study deletion, stakeholder management.
 
-**Current Slack entry point:** `admin/adminCenterHandler.ts`, `admin/adminActionsHandler.ts`
+**Slack handler:** `commands/admin/adminCenterHandler.ts`, `commands/admin/adminActionsHandler.ts`
 
-**Adapter-specific (OK):** Modal-based DSAR flow, confirmation dialogs.
+**Business logic in adapter:** Minimal — delegates to services.
 
-**Should move into Core:** DSAR operations already delegate to `dsar.service`, `dsar-export.service`, `dsar-delete.service`. Study deletion uses service layer.
+**Existing Core/service dependency:** `dsar.service.ts`, `dsar-export.service.ts`, `dsar-delete.service.ts`, `authorization.service.ts`. **Well-factored.**
 
-**Current state:** Well-factored. Services handle all data operations.
+**Extraction required for PLAT-3:** None significant.
 
-**Severity:** **LATER** — Services are clean. Admin operations are low-frequency.
+**Classification:** **LATER** — Services are clean.
 
 ---
 
-## Summary
+## Reconciled Summary
 
-| Severity | Count | Key Findings |
-|----------|:-----:|-------------|
-| BLOCKER (for Slack-only release) | 0 | None — all findings are acceptable for a Slack-only dev→main release |
-| BEFORE_WORKSPACE | 4 | Template orchestration pipeline (1), approval state machine (2), transcript review state (5), readout pipeline (7) |
-| LATER | 5 | Survey pipeline (3), participant management (4), project/study creation (6), GitHub issues (8), admin operations (9) |
+| Classification | Count | Findings |
+|---------------|:-----:|----------|
+| **RELEASE_BLOCKER** | **0** | None — all Slack handlers operate correctly and safely for the current release |
+| **BEFORE_WORKSPACE** | **7** | Brief generation (1), plan generation (2), transcript review (3), synthesis orchestration (4), discovery artifacts (5), readout generation (6), approval state machine (8) |
+| **LATER** | **5** | Survey pipeline (7), project/study creation (9), participant management (10), GitHub issues (11), admin operations (12) |
 
-### Detailed Handler Coupling Assessment
+### Handler Coupling Detail
 
-The background audit identified that several handlers contain more embedded business logic than a service-layer summary suggests:
+| Handler | Lines | Coupling Level | Classification |
+|---------|------:|:--------------|:--------------|
+| `sessionNotesHandler.ts` | 1658 | High — implicit review state machine, evidence creation on approval | BEFORE_WORKSPACE |
+| `readoutHandler.ts` | 948 | Medium — orchestration sequence, input assembly from cascade + files | BEFORE_WORKSPACE |
+| `researchSynthesisHandler.ts` | 773 | Medium — cascade consumption, evidence creation, method routing | BEFORE_WORKSPACE |
+| `discoverHandler.ts` | 689 | Medium — document parsing, PII scan, template render, artifact write | BEFORE_WORKSPACE |
+| `briefHandler.ts` | 632 | High — discovery injection, LLM tasks, ID assignment, approval routing | BEFORE_WORKSPACE |
+| `planHandler.ts` | 316 | Low-Medium — compensation calc, cascade consumption, approval routing | BEFORE_WORKSPACE |
 
-| Handler | Lines | Key Business Logic Embedded |
-|---------|:-----:|-----------------------------|
-| `briefHandler.ts` | ~632 | Discovery artifact injection, pre-rendered stable IDs (TB-001, RQ-001, OBJ-001), LLM task execution for barrier/question generation, cascade variable commitment, approval routing to stakeholder |
-| `planHandler.ts` | ~280 | Compensation calculation, timeline phase computation, cascade consumption from brief, approval workflow routing |
-| `sessionNotesHandler.ts` | ~200+ | PII scrubbing state machine (rescrub/approve/reject), evidence construct creation on approval, transcript review via DM-based surface |
-| `researchSynthesisHandler.ts` | ~300+ | Session data stats, available enrichment detection, cascade variable consumption, evidence construct creation |
-| `discoverHandler.ts` | ~400+ | Document parsing, PII scanning, YAML template processing, artifact commit to `_discovery/` folder |
-| `surveySubmissionHandler.ts` | ~300+ | Two-phase pipeline (schema inference → privacy review), deterministic statistics, evidence mapping |
+### PLAT-3 Extraction Priority
 
-**These are NOT release blockers** — Qori operates through Slack only today, and all this logic works correctly. They become blockers when PLAT-3 (Channel-independent Application API) is implemented.
+When PLAT-3 begins, extract in this order:
 
-### Recommended PLAT-3 Extraction Targets (Priority Order)
+1. **Template Orchestration Pipeline** — shared pattern across findings 1–6. A single `TemplateOrchestrationService` (input assembly → template resolve → LLM → extraction → artifact write) eliminates the duplication.
+2. **TranscriptIngestionService** — largest handler, implicit state machine.
+3. **ApprovalStateMachine** — make state transitions explicit in a service.
+4. Individual orchestration services only where the generic pipeline doesn't fit.
 
-1. `BriefGenerationService` — Extract brief orchestration (largest handler, most complex)
-2. `TranscriptIngestionService` — Extract scrubbing + review state machine
-3. `SynthesisOrchestrationService` — Extract cascade consumption + LLM synthesis
-4. `DiscoveryProcessingService` — Extract document parsing + artifact persistence
-5. `SurveyIngestionService` — Extract two-phase pipeline into cohesive service
-6. `ApprovalStateMachine` — Make approval transitions explicit in a service
-
-**Architecture observation:** The codebase is well-factored at the data/service layer (~38 service files). The leakage is at the orchestration layer — handlers chain services together in sequences that any adapter needs. The fix for PLAT-3 is an **Application API layer** between handlers and services that encapsulates the orchestration sequences (template resolve → LLM → extract → write → notify) as callable operations.
-
-No code should be moved in this slice — the findings are spec-only for PLAT-3.
+**Architecture observation:** The codebase has ~38 well-factored service files handling data operations. The leakage is exclusively at the orchestration layer — handlers chain services in sequences that any adapter needs. The fix is an **Application API layer** between adapters and services. No code should be moved in this patch.

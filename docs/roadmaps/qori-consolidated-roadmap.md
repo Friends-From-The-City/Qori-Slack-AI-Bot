@@ -81,6 +81,53 @@ Qori is a deployable, channel-independent research operating system for public-s
 | **PH-8** | Artifact Standard vNext | NOT STARTED |
 | **PH-9** | Qori Ask — canonical graph retrieval | NOT STARTED |
 
+#### PH-9: Qori Ask — Taxonomy and Retrieval Contract (Spec)
+
+**Tags/taxonomy** are structured metadata on canonical research entities. They are a retrieval signal.
+
+Tags are NOT:
+- The source of truth (evidence lineage is)
+- A replacement for evidence lineage
+- Slack-only metadata
+- UI-only metadata
+
+**Three tag categories (future design must distinguish):**
+
+1. **Controlled/system taxonomy** — organization-defined, consistent across studies
+2. **Study-specific researcher tags** — researcher-applied, scoped to a study
+3. **AI-proposed tags** — do not become canonical until accepted or mapped by a researcher
+
+**Taggable entities (at minimum):**
+- Evidence nuggets/constructs
+- Themes/findings
+- Optionally: sources, studies (where useful)
+
+**Planned Qori Ask retrieval order:**
+
+```
+authorization scope
+→ explicit organization/team/project/study scope
+→ canonical entity/status/freshness filters
+→ taxonomy/tags
+→ graph relationships
+→ semantic retrieval
+→ answer with evidence lineage
+```
+
+**Canonical context available to Qori Ask (where authorized):**
+- Organization/team
+- Project
+- Study
+- Researcher/actor
+- Source
+- Participant code
+- Method
+- Dates
+- Accepted/stale/rejected status
+- Provenance
+
+Tags and schema are NOT implemented in this patch — this is the architectural contract for PH-9.
+
 ### EXPERIENCE
 
 | Item | Description | Status |
