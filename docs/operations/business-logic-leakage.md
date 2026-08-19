@@ -168,10 +168,34 @@ Identify behavior implemented directly in Slack handlers that would prevent a we
 
 | Severity | Count | Key Findings |
 |----------|:-----:|-------------|
-| BLOCKER | 0 | None |
+| BLOCKER (for Slack-only release) | 0 | None — all findings are acceptable for a Slack-only dev→main release |
 | BEFORE_WORKSPACE | 4 | Template orchestration pipeline (1), approval state machine (2), transcript review state (5), readout pipeline (7) |
 | LATER | 5 | Survey pipeline (3), participant management (4), project/study creation (6), GitHub issues (8), admin operations (9) |
 
-**Architecture observation:** The codebase is well-factored at the data/service layer. The leakage is at the orchestration layer — handlers chain services together in sequences that any adapter needs. The fix for PLAT-3 is an **Application API layer** between handlers and services that encapsulates the orchestration sequences (template resolve → LLM → extract → write → notify) as callable operations.
+### Detailed Handler Coupling Assessment
+
+The background audit identified that several handlers contain more embedded business logic than a service-layer summary suggests:
+
+| Handler | Lines | Key Business Logic Embedded |
+|---------|:-----:|-----------------------------|
+| `briefHandler.ts` | ~632 | Discovery artifact injection, pre-rendered stable IDs (TB-001, RQ-001, OBJ-001), LLM task execution for barrier/question generation, cascade variable commitment, approval routing to stakeholder |
+| `planHandler.ts` | ~280 | Compensation calculation, timeline phase computation, cascade consumption from brief, approval workflow routing |
+| `sessionNotesHandler.ts` | ~200+ | PII scrubbing state machine (rescrub/approve/reject), evidence construct creation on approval, transcript review via DM-based surface |
+| `researchSynthesisHandler.ts` | ~300+ | Session data stats, available enrichment detection, cascade variable consumption, evidence construct creation |
+| `discoverHandler.ts` | ~400+ | Document parsing, PII scanning, YAML template processing, artifact commit to `_discovery/` folder |
+| `surveySubmissionHandler.ts` | ~300+ | Two-phase pipeline (schema inference → privacy review), deterministic statistics, evidence mapping |
+
+**These are NOT release blockers** — Qori operates through Slack only today, and all this logic works correctly. They become blockers when PLAT-3 (Channel-independent Application API) is implemented.
+
+### Recommended PLAT-3 Extraction Targets (Priority Order)
+
+1. `BriefGenerationService` — Extract brief orchestration (largest handler, most complex)
+2. `TranscriptIngestionService` — Extract scrubbing + review state machine
+3. `SynthesisOrchestrationService` — Extract cascade consumption + LLM synthesis
+4. `DiscoveryProcessingService` — Extract document parsing + artifact persistence
+5. `SurveyIngestionService` — Extract two-phase pipeline into cohesive service
+6. `ApprovalStateMachine` — Make approval transitions explicit in a service
+
+**Architecture observation:** The codebase is well-factored at the data/service layer (~38 service files). The leakage is at the orchestration layer — handlers chain services together in sequences that any adapter needs. The fix for PLAT-3 is an **Application API layer** between handlers and services that encapsulates the orchestration sequences (template resolve → LLM → extract → write → notify) as callable operations.
 
 No code should be moved in this slice — the findings are spec-only for PLAT-3.
