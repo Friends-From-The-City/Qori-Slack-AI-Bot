@@ -51,7 +51,8 @@ app.use('/api', createSecurityMiddleware());
 app.use('/api', createApiRateLimiter());
 
 // ─── API routes (v1) ──
-const apiRouter = require('./routes/api');
+const apiRouterModule = require('./routes/api');
+const apiRouter = apiRouterModule.default || apiRouterModule;
 app.use('/api', apiRouter);
 
 app.use('/slack', slackExpressRouter);
