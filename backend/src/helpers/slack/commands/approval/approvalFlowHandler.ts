@@ -13,13 +13,10 @@ import {
   handleRequestChanges,
   handleRequestChangesSubmission,
 } from '../../requestChangesHandler';
-import { buildSlackApplicationContext } from '../../../../middleware/auth/slackContextBridge';
-import { executeDocumentApproval } from '../../../../application/approval.app-service';
 
-// PLAT-3: Application service delegation wired. The approval app service
-// (executeDocumentApproval) is callable from both Slack and HTTP API.
-// Slack handlers currently delegate to requestChangesHandler (legacy path)
-// with app service as the canonical implementation.
+// PLAT-3: Approval app service (executeDocumentApproval) is the ONLY business
+// path. Slack handlers delegate to requestChangesHandler which calls the app
+// service directly. No legacy fallback.
 
 // ─── Plan approval ─────────────────────────────────────────────────
 

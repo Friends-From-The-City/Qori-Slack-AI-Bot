@@ -9,6 +9,10 @@
  *
  * Discovery is pre-study research. Output lands in _discovery/{type}/
  * in the qori-studies repo (not study-scoped).
+ *
+ * PLAT-3: Application service is the ONLY business path.
+ * Legacy fallback removed — buildSlackApplicationContext failure
+ * is a hard stop (fail closed).
  */
 
 import type { AllMiddlewareArgs, SlackActionMiddlewareArgs, SlackCommandMiddlewareArgs, SlackViewMiddlewareArgs, BlockAction, ViewSubmitAction } from '@slack/bolt';
@@ -19,52 +23,19 @@ import { executeDiscovery, PrivacyError, type DiscoveryInput, type DiscoveryType
 import { discoverHubModal, DISCOVERY_ARTIFACTS_BLOCK_ID } from '../ui/discoverHubModal';
 import { DISCOVER_TYPE_MODALS } from '../ui/discoverTypeModals';
 import { loadDiscoveryArtifacts, type DiscoveryArtifact } from '../../discoveryLoader';
-import { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo, createOrUpdateFileOnGitHub, fetchFileFromRepoByPath } from '../../github';
-import { format } from 'date-fns';
-import { processYamlTemplate } from '../../yamlProcessor';
 import { processSlackFiles } from '../../pdfProcessor';
-import { parseDocuments, validateDocuments } from '../../documentParser';
-import { getProjectByChannelId, getProjectById } from '../../../services/project.service';
+import { getProjectByChannelId } from '../../../services/project.service';
 import { assertProjectAccess, AuthorizationError } from '../../../services/authorization.service';
-import type { VariableContext } from '../../studyVariables';
 import { postEphemeralOrDM } from '../slackHelpers';
-import { authorizeForModel, scanForPii } from '../../../services/content-governance.service';
 import { handleSurveyUploadPhase } from './surveySubmissionHandler';
 
 // ─── Types ──────────────────────────────────────────────────────
-
-type DiscoveryTypeKey = 'desk_research' | 'stakeholder_synthesis' | 'survey_synthesis';
-
-interface DiscoveryTypeConfig {
-  yaml: string;
-  type: string;      // Postgres discovery_type identifier (matches discoveryLoader.ts)
-  fileSlug: string;  // Filename component: {topic}-{fileSlug}-{date}.md
-  label: string;
-  filetypes: string[];
-}
 
 interface ProcessedFile {
   name: string;
   content: string;
   type: string;
   size: number;
-}
-
-interface DocumentInfo {
-  name: string;
-  content: string;
-  type: string;
-  size: number;
-  [key: string]: unknown;
-}
-
-interface ValidationResult {
-  isValid: boolean;
-  message: string;
-}
-
-interface ParsedDocuments {
-  structured_format: string;
 }
 
 interface UploadedFile {
@@ -76,31 +47,6 @@ interface UploadedFile {
   [key: string]: unknown;
 }
 
-/** Data shape passed to discovery YAML templates. */
-interface DiscoveryTemplateInput {
-  topic: string;
-  effective_topic: string;
-  topic_slug: string;
-  project_slug: string;
-  project_problem_statement: string | null;
-  source_intent: string | null;
-  description: string;
-  document_content: string;
-  combined_file_content: string;
-  _discovery_type: string;
-  selected_study: string;
-  study_name: string;
-  document_count: number;
-  document_names: string[];
-  document_types: string[];
-  survey_name?: string;
-  question_focus?: string;
-  survey_files?: UploadedFile[];
-  study_channel?: string;
-  researcher_contact?: string;
-  detected_files?: string;
-}
-
 interface DiscoverMeta {
   channelId?: string;
   projectId?: number;
@@ -110,60 +56,32 @@ interface DiscoverMeta {
 
 // ─── Constants ──────────────────────────────────────────────────
 
-const DEFAULT_TEAM = 'friends-lab';
-function getTeamSlug(): string {
-  return process.env.QORI_TEAM_SLUG || DEFAULT_TEAM;
+interface DiscoveryTypeConfig {
+  label: string;
+  filetypes: string[];
 }
 
-const DISCOVERY_TYPES: Record<DiscoveryTypeKey, DiscoveryTypeConfig> = {
+const DISCOVERY_TYPES: Record<string, DiscoveryTypeConfig> = {
   desk_research: {
-    yaml: 'desk_research.yaml',
-    type: 'desk-research',
-    fileSlug: 'desk-research',
     label: 'Desk research',
     filetypes: ['pdf', 'docx', 'doc', 'txt', 'md'],
   },
   stakeholder_synthesis: {
-    yaml: 'stakeholder_synthesis.yaml',
-    type: 'stakeholder-interviews',
-    fileSlug: 'stakeholder-synthesis',
     label: 'Stakeholder synthesis',
     filetypes: ['pdf', 'docx', 'doc', 'txt', 'md'],
   },
   survey_synthesis: {
-    yaml: 'survey_synthesis.yaml',
-    type: 'survey-synthesis',
-    fileSlug: 'survey-synthesis',
     filetypes: ['csv'],
     label: 'Survey synthesis',
   },
 };
 
 /** Type-aware next-step guidance for success messages (D2). */
-const SUCCESS_GUIDANCE: Record<DiscoveryTypeKey, string> = {
+const SUCCESS_GUIDANCE: Record<string, string> = {
   desk_research: 'Run `/qori-discover` again for stakeholder interviews, or `/qori-brief` to start your study.',
   stakeholder_synthesis: 'Run `/qori-discover` for survey data, or `/qori-brief` to start your study.',
   survey_synthesis: 'Run `/qori-brief` to start your study — all discovery feeds in automatically.',
 };
-
-const DISCOVERY_README = `# Discovery Research
-
-Pre-study discovery research that informs briefs and accumulates as organizational memory.
-
-Discovery answers: _What do we already know? What are the open questions? Who are the stakeholders and what do they need?_
-
-## Contents
-
-Discovery artifacts are stored directly in this folder:
-
-- \`desk-research-{topic}-{date}.md\` — Synthesis of background documents and prior research
-- \`stakeholder-synthesis-{topic}-{date}.md\` — Synthesis of stakeholder interviews
-- \`survey-synthesis-{topic}-{date}.md\` — Synthesis of survey data
-
-Cascade variables are stored in \`.variables/discovery-variables.json\` and feed automatically into downstream briefs and plans.
-
-*Generated by Qori*
-`;
 
 // ─── Helpers ────────────────────────────────────────────────────
 
@@ -174,25 +92,6 @@ function slugifyTopic(topic: string): string {
     .replace(/[^a-z0-9-]/g, '')
     .replace(/-+/g, '-')
     .replace(/^-|-$/g, '');
-}
-
-async function scaffoldDiscoveryFolders(projectSlug: string): Promise<void> {
-  const readmePath = `${projectSlug}/00-discovery/README.md`;
-  try {
-    // @ts-expect-error — pre-existing type mismatch from require() → import migration
-    await fetchFileFromRepoByPath(process.env.GITHUB_REPO, readmePath);
-    return;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    const status = (error as Record<string, unknown>)?.status;
-    if (status === 404 || message?.includes('Not Found') || message?.includes('Could not fetch file')) {
-      console.log(`📁 Scaffolding ${projectSlug}/00-discovery/ in qori-studies...`);
-      await createOrUpdateFileOnGitHub(readmePath, DISCOVERY_README);
-      console.log(`✅ ${readmePath} created`);
-    } else {
-      console.warn(`⚠️ Could not check ${readmePath}, proceeding anyway:`, message);
-    }
-  }
 }
 
 // ─── D1: Discovery visibility helpers ──────────────────────────
@@ -383,7 +282,7 @@ async function handleDiscoverSubmission({ ack, view, body, client }: SlackViewMi
   }
 
   // Read discovery type from private_metadata (set by action handler)
-  if (!discoveryType || !DISCOVERY_TYPES[discoveryType as DiscoveryTypeKey]) {
+  if (!discoveryType || !DISCOVERY_TYPES[discoveryType]) {
     await client.chat.postMessage({
       channel: userId,
       text: '❌ Discovery type missing. Please try again from /qori-discover.',
@@ -429,8 +328,8 @@ async function handleDiscoverSubmission({ ack, view, body, client }: SlackViewMi
     return;
   }
 
-  const typeConfig = DISCOVERY_TYPES[discoveryType as DiscoveryTypeKey];
-  let topicSlug = slugifyTopic(topic);
+  const typeConfig = DISCOVERY_TYPES[discoveryType];
+  const topicSlug = slugifyTopic(topic);
 
   // Survey path forks to structured ingestion handler (Survey Slice 1)
   if (discoveryType === 'survey_synthesis') {
@@ -457,328 +356,113 @@ async function handleDiscoverSubmission({ ack, view, body, client }: SlackViewMi
     return;
   }
 
-  // Process Slack files before branching (Slack-specific: needs SLACK_BOT_TOKEN)
+  // Process Slack files before delegating (Slack-specific: needs SLACK_BOT_TOKEN)
   const processedFiles: ProcessedFile[] = await processSlackFiles(uploadedFiles, process.env.SLACK_BOT_TOKEN!);
-  const documents: DocumentInfo[] = processedFiles.map((file: ProcessedFile) => ({
+  const documents = processedFiles.map((file: ProcessedFile) => ({
     name: file.name,
     content: file.content,
     type: file.type,
     size: file.size,
   }));
 
-  // ── PLAT-3: Try application service path ──
+  // ── PLAT-3: Application service is the ONLY path ──
   const displayName = body.user?.name || body.user?.id || userId;
   const ctx = await buildSlackApplicationContext(userId, (body as any).team?.id || '', displayName);
 
-  if (ctx) {
-    // New path: delegate to application service
-    console.log(`[PLAT-3] Discovery: using application service path for user=${userId}`);
+  if (!ctx) {
+    await client.chat.postMessage({
+      channel: userId,
+      text: '❌ Unable to resolve your identity. Please contact your administrator to ensure your workspace is configured.',
+    });
+    return;
+  }
+
+  console.log(`[PLAT-3] Discovery: using application service path for user=${userId}`);
+
+  await client.chat.postMessage({
+    channel: userId,
+    text: `Running ${typeConfig.label} for "${topic}"... This may take a minute.`,
+  });
+
+  try {
+    const input: DiscoveryInput = {
+      projectId: projectId!,
+      projectSlug: projectSlug!,
+      discoveryType: discoveryType as AppDiscoveryTypeKey,
+      topic: topic!,
+      description,
+      documents,
+      createdByActorId: ctx.actor.publicId,
+      surveyName: surveyName || undefined,
+      questionFocus: questionFocus || undefined,
+    };
+
+    const result = await executeDiscovery(ctx, input);
+
+    // Type-aware next-step guidance (D2)
+    const nextStep = SUCCESS_GUIDANCE[discoveryType]
+      || 'Run `/qori-brief` to start your study.';
 
     await client.chat.postMessage({
       channel: userId,
-      text: `Running ${typeConfig.label} for "${topic}"... This may take a minute.`,
+      blocks: [
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `✅ *${result.typeLabel} complete*\n\n*Topic:* ${topic}\n*Type:* ${result.typeLabel}`,
+          },
+        },
+        {
+          type: 'actions',
+          elements: [
+            {
+              type: 'button',
+              text: { type: 'plain_text', text: 'View on GitHub' },
+              style: 'primary',
+              url: result.url,
+              action_id: 'view_discovery_result',
+            },
+          ],
+        },
+        {
+          type: 'context',
+          elements: [
+            {
+              type: 'mrkdwn',
+              text: `Discovery artifact stored in \`${projectSlug}/00-discovery/\``,
+            },
+          ],
+        },
+        { type: 'divider' },
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `*Next:* ${nextStep}`,
+          },
+        },
+      ],
+      text: `${result.typeLabel} complete for "${topic}". View: ${result.url}`,
     });
 
-    try {
-      const input: DiscoveryInput = {
-        projectId: projectId!,
-        projectSlug: projectSlug!,
-        discoveryType: discoveryType as AppDiscoveryTypeKey,
-        topic: topic!,
-        description,
-        documents,
-        createdByActorId: ctx.actor.publicId,
-        surveyName: surveyName || undefined,
-        questionFocus: questionFocus || undefined,
-      };
-
-      const result = await executeDiscovery(ctx, input);
-
-      // Type-aware next-step guidance (D2)
-      const nextStep = SUCCESS_GUIDANCE[discoveryType as DiscoveryTypeKey]
-        || 'Run `/qori-brief` to start your study.';
-
+  } catch (error) {
+    if (error instanceof PrivacyError) {
+      const findingsList = error.findings.map(f => `• ${f.label}: \`${f.snippet}\``).join('\n');
       await client.chat.postMessage({
         channel: userId,
-        blocks: [
-          {
-            type: 'section',
-            text: {
-              type: 'mrkdwn',
-              text: `✅ *${result.typeLabel} complete*\n\n*Topic:* ${topic}\n*Type:* ${result.typeLabel}`,
-            },
-          },
-          {
-            type: 'actions',
-            elements: [
-              {
-                type: 'button',
-                text: { type: 'plain_text', text: 'View on GitHub' },
-                style: 'primary',
-                url: result.url,
-                action_id: 'view_discovery_result',
-              },
-            ],
-          },
-          {
-            type: 'context',
-            elements: [
-              {
-                type: 'mrkdwn',
-                text: `Discovery artifact stored in \`${projectSlug}/00-discovery/\``,
-              },
-            ],
-          },
-          { type: 'divider' },
-          {
-            type: 'section',
-            text: {
-              type: 'mrkdwn',
-              text: `*Next:* ${nextStep}`,
-            },
-          },
-        ],
-        text: `${result.typeLabel} complete for "${topic}". View: ${result.url}`,
+        text: `⚠️ *Privacy scan detected potential PII in your uploaded file(s)*\n\n${findingsList}\n\n` +
+          'Please review and re-upload with PII removed, or contact the research lead. ' +
+          'Qori cannot process files containing personal identifiers.',
       });
-
-    } catch (error) {
-      if (error instanceof PrivacyError) {
-        const findingsList = error.findings.map(f => `• ${f.label}: \`${f.snippet}\``).join('\n');
-        await client.chat.postMessage({
-          channel: userId,
-          text: `⚠️ *Privacy scan detected potential PII in your uploaded file(s)*\n\n${findingsList}\n\n` +
-            'Please review and re-upload with PII removed, or contact the research lead. ' +
-            'Qori cannot process files containing personal identifiers.',
-        });
-        return;
-      }
-      const message = error instanceof Error ? error.message : String(error);
-      console.error('Error processing discovery (app service):', error);
-      await client.chat.postMessage({
-        channel: userId,
-        text: `❌ Error running ${typeConfig.label}: ${message}\n\nPlease try again or contact support.`,
-      });
+      return;
     }
-  } else {
-    // Legacy path: existing handler logic (no workspace binding)
-    console.log(`[PLAT-3] Discovery: falling back to legacy path for user=${userId}`);
-
-    // Duplicate handling — use project slug for folder path (Phase 2D)
-    const dateIso: string = format(new Date(), 'yyyy-MM-dd');
-    const expectedFilename = `${topicSlug}-${typeConfig.fileSlug}-${dateIso}.md`;
-    const expectedPath = `${projectSlug}/00-discovery/${expectedFilename}`;
-    try {
-      // @ts-expect-error — pre-existing type mismatch from require() → import migration
-      await fetchFileFromRepoByPath(process.env.GITHUB_REPO, expectedPath);
-      const timeSuffix: string = format(new Date(), 'HHmm');
-      topicSlug = `${topicSlug}-${timeSuffix}`;
-      console.log(`⚠️ Discovery file exists at ${expectedPath}, using slug: ${topicSlug}`);
-    } catch {
-      // File doesn't exist — proceed with original slug
-    }
-
-    console.log(`🔍 Discovery: project=${projectSlug}, type=${discoveryType}, topic="${topic}", slug="${topicSlug}", files=${uploadedFiles.length}`);
-
-    // Load project to get problem_statement for grounded gap derivation
-    const project = await getProjectById(projectId);
-    const projectProblemStatement = project?.problem_statement || null;
-
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('Error processing discovery (app service):', error);
     await client.chat.postMessage({
       channel: userId,
-      text: `Running ${typeConfig.label} for "${topic}"... This may take a minute.`,
+      text: `❌ Error running ${typeConfig.label}: ${message}\n\nPlease try again or contact support.`,
     });
-
-    try {
-      await scaffoldDiscoveryFolders(projectSlug);
-
-      const validation: ValidationResult = validateDocuments(documents);
-      if (!validation.isValid) {
-        await client.chat.postMessage({
-          channel: userId,
-          text: `❌ ${validation.message}`,
-        });
-        return;
-      }
-
-      const parsedDocuments: ParsedDocuments = parseDocuments(documents);
-      const formattedDocumentContent: string = parsedDocuments.structured_format;
-
-      const MIME_LABELS: Record<string, string> = {
-        'application/pdf': 'PDF',
-        'text/plain': 'Text',
-        'text/markdown': 'Markdown',
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'Word',
-        'application/msword': 'Word',
-      };
-      const documentNames = processedFiles.map((f: ProcessedFile) => f.name);
-      const documentTypes = processedFiles.map((f: ProcessedFile) => MIME_LABELS[f.type] || f.type);
-
-      const data: DiscoveryTemplateInput = {
-        topic,
-        effective_topic: topic,
-        topic_slug: topicSlug,
-        project_slug: projectSlug,
-        project_problem_statement: projectProblemStatement,
-        source_intent: description,
-        description: description || topic,
-        document_content: formattedDocumentContent,
-        combined_file_content: formattedDocumentContent,
-        _discovery_type: typeConfig.type, // Postgres identifier (matches discoveryLoader.ts)
-        selected_study: `discovery-${topicSlug}`,
-        study_name: topic,
-        document_count: processedFiles.length,
-        document_names: documentNames,
-        document_types: documentTypes,
-      };
-
-      // Survey-specific fields
-      if (discoveryType === 'survey_synthesis') {
-        data.survey_name = surveyName || undefined;
-        data.question_focus = questionFocus || '';
-        data.survey_files = uploadedFiles;
-      }
-
-      // Stakeholder-specific fields
-      if (discoveryType === 'stakeholder_synthesis') {
-        data.study_channel = channelId || userId;
-        data.researcher_contact = `<@${userId}>`;
-        data.detected_files = documents.map(d => d.name).join('\n- ');
-        (data as any).file_list = documents.map(d => d.name);
-      }
-
-      // Privacy gate: authorize uploaded content before model access (PH-3 / ADR 0035).
-      // Discovery uploads are researcher-authored documents (not participant transcripts),
-      // so they use the DISCOVERY_UPLOAD policy: deterministic PII scan → auto-authorize
-      // if clean, or block + notify researcher if PII detected.
-      const privacyResult = authorizeForModel(
-        formattedDocumentContent,
-        'DISCOVERY_UPLOAD',
-        { projectId, sourceId: `discovery:${discoveryType}:${topicSlug}` },
-      );
-
-      if (privacyResult.status === 'pending_review') {
-        const piiFindings = scanForPii(formattedDocumentContent);
-        const findingsList = piiFindings.map(f => `• ${f.label}: \`${f.snippet}\``).join('\n');
-        await client.chat.postMessage({
-          channel: userId,
-          text: `⚠️ *Privacy scan detected potential PII in your uploaded file(s)*\n\n${findingsList}\n\n` +
-            'Please review and re-upload with PII removed, or contact the research lead. ' +
-            'Qori cannot process files containing personal identifiers.',
-        });
-        return;
-      }
-
-      if (privacyResult.status === 'denied') {
-        await client.chat.postMessage({
-          channel: userId,
-          text: `❌ Content authorization failed: ${privacyResult.reason}`,
-        });
-        return;
-      }
-
-      // Use the authorized model-safe content
-      data.document_content = privacyResult.modelSafeContent!;
-      data.combined_file_content = privacyResult.modelSafeContent!;
-
-      console.log(`✅ Privacy gate: ${privacyResult.policy} — ${privacyResult.reason}`);
-
-      // PH-6B: Artifact identity context for discovery artifacts.
-      // PH-6C note: No artifact→evidence attachment here. Discovery sources
-      // are not yet in the canonical evidence graph (ADR 0037 limitation).
-      // When discovery evidence constructs are added (future PH-5D), wire
-      // attachEvidenceRefsVerified here.
-      const { computeContentHash } = require('../../survey');
-      const contentFingerprint = computeContentHash(privacyResult.modelSafeContent!).substring(0, 16);
-      (data as unknown as Record<string, unknown>).__artifactContext = {
-        projectId,
-        studyId: null,
-        artifactType: 'discovery',
-        title: `${discoveryType.replace(/_/g, ' ')} — ${topic}`,
-        canonicalUpstreamInputs: [`content:${contentFingerprint}`],
-        createdBy: userId,
-      };
-
-      const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, typeConfig.yaml);
-
-      // Variable context for discovery: projectId only (no studyId for discovery artifacts)
-      const variableContext: VariableContext = { projectId };
-
-      const renderedYaml = await processYamlTemplate(
-        file.content,
-        data,
-        '',
-        '',
-        false,
-        variableContext,
-      );
-
-      // CRITICAL: Await extraction to ensure cascade variables are committed before returning success.
-      // Without this, downstream modals (brief) may read stale data. See ADR 0019.
-      if (renderedYaml.extractionPromise) {
-        const extractResult = await renderedYaml.extractionPromise;
-        if (!extractResult.success) {
-          throw new Error(`Cascade variable extraction failed: ${extractResult.error}. Document was saved but variables were not written.`);
-        }
-        console.log(`✅ Cascade variables committed: ${extractResult.variableCount} items (${extractResult.keys?.join(', ')})`);
-      }
-
-      const url: string = renderedYaml.result.url;
-
-      // Type-aware next-step guidance (D2)
-      const nextStep = SUCCESS_GUIDANCE[discoveryType as DiscoveryTypeKey]
-        || 'Run `/qori-brief` to start your study.';
-
-      await client.chat.postMessage({
-        channel: userId,
-        blocks: [
-          {
-            type: 'section',
-            text: {
-              type: 'mrkdwn',
-              text: `✅ *${typeConfig.label} complete*\n\n*Topic:* ${topic}\n*Type:* ${typeConfig.label}`,
-            },
-          },
-          {
-            type: 'actions',
-            elements: [
-              {
-                type: 'button',
-                text: { type: 'plain_text', text: 'View on GitHub' },
-                style: 'primary',
-                url,
-                action_id: 'view_discovery_result',
-              },
-            ],
-          },
-          {
-            type: 'context',
-            elements: [
-              {
-                type: 'mrkdwn',
-                text: `Discovery artifact stored in \`${projectSlug}/00-discovery/\``,
-              },
-            ],
-          },
-          { type: 'divider' },
-          {
-            type: 'section',
-            text: {
-              type: 'mrkdwn',
-              text: `*Next:* ${nextStep}`,
-            },
-          },
-        ],
-        text: `${typeConfig.label} complete for "${topic}". View: ${url}`,
-      });
-
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error('Error processing discovery:', error);
-      await client.chat.postMessage({
-        channel: userId,
-        text: `❌ Error running ${typeConfig.label}: ${message}\n\nPlease try again or contact support.`,
-      });
-    }
   }
 }
 

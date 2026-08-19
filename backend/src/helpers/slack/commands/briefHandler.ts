@@ -1,14 +1,12 @@
 /**
  * briefHandler.ts — /qori-brief submission handler
  *
- * DATA ASSEMBLY POINT for the research brief template (ADR 0005).
- * The handler computes all mechanical values (display date, timeline phases,
- * timeline display label, cascade counts). It also runs two structured LLM
- * tasks (target barriers, research questions) directly so it can assign
- * stable IDs before passing the complete data to yamlProcessor for prose
- * tasks + rendering.
+ * Slack adapter for the research brief flow. Extracts form values from the
+ * Slack modal, resolves display names via Slack API, then delegates ALL
+ * business logic to the brief application service (executeBrief).
  *
- * v7.0 restructure: interleaved Handlebars/AI architecture.
+ * PLAT-3: Single business path — no legacy fallback. If the application
+ * context cannot be built, the handler fails closed.
  *
  * Phase 2D: Uses projectId from modal metadata. Study name inherits from
  * project slug. No resolveStudyFromName — uses getStudyByProjectAndName.
@@ -18,183 +16,10 @@ import type { AllMiddlewareArgs, SlackViewMiddlewareArgs, ViewSubmitAction } fro
 
 import { buildSlackApplicationContext } from '../../../middleware/auth/slackContextBridge';
 import { executeBrief, type BriefInput } from '../../../application/brief.app-service';
-import { format, parseISO, differenceInCalendarDays, isValid } from 'date-fns';
-import sequelize from '../../../database';
-import { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo } from '../../github';
-import { addResearchStudyWithRoles, getStudyByProjectAndName } from '../../../services/research_study.service';
-import { getProjectById } from '../../../services/project.service';
-import { scaffoldStudy } from '../../../services/scaffolding.service';
-import type { VariableContext } from '../../studyVariables';
-import { processYamlTemplate } from '../../yamlProcessor';
-import { executeAiGenerationTasks } from '../../langchain';
-import { addStudyStatus } from '../../../services/study-status.service';
+import { getStudyByProjectAndName } from '../../../services/research_study.service';
 import { getProjectApprover, assertProjectAccess, AuthorizationError } from '../../../services/authorization.service';
 import { generateStudyResultBlocks, sendStudyResultMessage } from '../ui/studyResultBlocks';
-import { loadDiscoveryArtifacts, aggregateDiscoveryVariables, type DiscoveryArtifact } from '../../discoveryLoader';
-import { parseBudget, parseParticipantTarget } from '../../../utils/budgetParser';
-import {
-  buildTimelinePhases,
-  TIMELINE_DISPLAY_LABELS,
-  type TimelinePhase,
-  type TimelinePreference,
-} from '../../../utils/timelineComputation';
 import type { BriefEntryModalMetadata } from '../ui/researchBriefEntryModal';
-
-// ─── Discovery type maps ────────────────────────────────────────
-
-type DiscoveryType = 'desk-research' | 'stakeholder-interviews' | 'survey-synthesis';
-
-const typeLabels: Record<DiscoveryType, string> = {
-  'desk-research': 'Desk research',
-  'stakeholder-interviews': 'Stakeholder interviews',
-  'survey-synthesis': 'Survey synthesis',
-};
-
-const markerPrefixes: Record<DiscoveryType, string> = {
-  'desk-research': 'D',
-  'stakeholder-interviews': 'S',
-  'survey-synthesis': 'V',
-};
-
-// ─── Structured LLM output types ────────────────────────────────
-
-interface RawBarrier {
-  barrier: string;
-  source?: string | null;
-}
-
-interface RawQuestion {
-  question: string;
-  priority?: string | null;
-}
-
-interface BriefBarrier {
-  id: string;
-  barrier: string;
-  source: string;
-}
-
-interface BriefQuestion {
-  id: string;
-  question: string;
-  priority: string;
-}
-
-interface BriefObjective {
-  id: string;
-  objective: string;
-}
-
-// ─── Template input contract ────────────────────────────────────
-
-/** Data shape passed to the research_brief YAML template. Co-located with handler. */
-interface BriefTemplateInput {
-  selected_study: string;
-  lead_researcher: string;
-  requestor_name: string;
-  problem_statement: string;
-  learning_objectives: string;
-  out_of_scope: string;
-  methodology: string;
-  methodology_value: string;
-  participant_approach: string;
-  recruitment_sources: string;
-  timeline_preference: string;
-  start_date: string;
-  decision_deadline: string;
-  budget: string;
-  // Mechanical computations (handler-assembled, not LLM-generated)
-  display_date: string;
-  timeline_display: string;
-  timeline_phases: TimelinePhase[];
-  // Handler-assigned structured data (from pre-render LLM JSON tasks + ID assignment)
-  target_barriers: BriefBarrier[];
-  research_questions: BriefQuestion[];
-  research_objectives: BriefObjective[];
-  // Cascade summary counts
-  objectives_count: number;
-  research_questions_count: number;
-  target_barriers_count: number;
-  // Discovery enrichment (optional, injected conditionally)
-  discovery_count?: number;
-  discovery_sources?: string;
-  citation_convention?: string;
-  [key: string]: unknown; // upstream discovery variables merged via Object.assign
-}
-
-// ─── Pre-render LLM tasks ───────────────────────────────────────
-
-/**
- * Build the two structured JSON tasks that the handler runs directly
- * (Option C from the delta document). These produce barrier/question
- * arrays without IDs. The handler assigns IDs mechanically after parsing.
- */
-function buildStructuredTasks(data: Record<string, unknown>) {
-  return [
-    {
-      task_id: 'target_barriers_raw',
-      output_format: 'json',
-      prompt: `Identify the target barriers for validation in this research study.
-
-Problem statement: ${data.problem_statement}
-Learning objectives: ${data.learning_objectives}
-Methodology: ${data.methodology}
-
-${data.upstream_discovered_barriers ? `DISCOVERY BARRIERS: ${data.upstream_discovered_barriers}` : ''}
-${data.upstream_stakeholder_constraints ? `STAKEHOLDER CONSTRAINTS: ${data.upstream_stakeholder_constraints}` : ''}
-${data.upstream_survey_findings ? `SURVEY FINDINGS: ${data.upstream_survey_findings}` : ''}
-
-Rules:
-1. Each barrier is a specific, testable hypothesis about what prevents users from succeeding.
-2. If discovery data exists, ground barriers in that evidence. Include the source.
-3. If no discovery data, derive barriers from the problem statement and learning objectives.
-4. 3-6 barriers. Fewer is better if they are precise.
-5. Do NOT invent statistics, metrics, or numbers. Use ONLY data from the inputs provided.
-
-Output ONLY valid JSON. No prose, no code fences.
-Schema: [{"barrier": "string", "source": "string or null"}]`,
-    },
-    {
-      task_id: 'research_questions_raw',
-      output_format: 'json',
-      prompt: `Generate research questions for this study.
-
-Learning objectives: ${data.learning_objectives}
-Problem statement: ${data.problem_statement}
-Methodology: ${data.methodology}
-
-${data.upstream_stakeholder_questions_for_users ? `STAKEHOLDER QUESTIONS FOR USERS: ${data.upstream_stakeholder_questions_for_users}` : ''}
-
-Rules:
-1. If stakeholder questions exist, use them as research questions (they come pre-prioritized).
-2. Otherwise, transform learning objectives into research questions. Research questions
-   must be answerable through sessions — transform each objective into what a researcher
-   would actually investigate, not a restatement. If a question would be near-identical
-   to its objective, sharpen it toward observable behavior or decision criteria.
-3. Mark priority: Primary (must-answer), Secondary (valuable), or Exploratory (nice-to-have).
-4. 3-7 questions. Primary questions first.
-5. Do NOT invent statistics, metrics, or numbers. Use ONLY data from the inputs provided.
-
-Output ONLY valid JSON. No prose, no code fences.
-Schema: [{"question": "string", "priority": "Primary|Secondary|Exploratory"}]`,
-    },
-  ];
-}
-
-/**
- * Parse a JSON AI response, stripping code fences if present.
- */
-function parseJsonResponse<T>(raw: string, taskId: string): T {
-  let cleaned = raw;
-  const fenceMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (fenceMatch) cleaned = fenceMatch[1];
-  try {
-    return JSON.parse(cleaned.trim()) as T;
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    throw new Error(`Handler pre-render task '${taskId}' returned invalid JSON: ${message}`);
-  }
-}
 
 // ─── Handler ────────────────────────────────────────────────────
 
@@ -263,7 +88,6 @@ async function handleBriefSubmission({ ack, body, view, client }: SlackViewMiddl
   // decision (restore study_name_block, derive distinct slugs).
   const studyName = projectSlug;
 
-
   // Post "working" message to researcher's DM (consistent with completion DM)
   try {
     await client.chat.postMessage({
@@ -275,7 +99,7 @@ async function handleBriefSubmission({ ack, body, view, client }: SlackViewMiddl
     console.warn('Could not post brief progress message:', progressErr);
   }
 
-  // ── Extract form values (Slack-specific, needed by both paths) ──
+  // ── Extract form values (Slack-specific) ──
 
   // Methodology (unchanged from v6.0)
   const methodologyLabels: Record<string, string> = {
@@ -334,402 +158,102 @@ async function handleBriefSubmission({ ack, body, view, client }: SlackViewMiddl
     // Fall back to default
   }
 
-  // ── PLAT-3: Dual-path — application service vs legacy ──
+  // ── PLAT-3: Application service — single business path (fail closed) ──
   const ctx = await buildSlackApplicationContext(body.user.id, (body as any).team?.id || '', leadResearcher);
 
-  if (ctx) {
-    // ── New path: delegate to application service ──
-    try {
-      const briefInput: BriefInput = {
-        projectId,
-        projectSlug,
-        projectName: projectName || projectSlug,
-        leadResearcher,
-        requestorName,
-        createdByActorId: String(ctx.actor.id),
-        researcherEmail,
-        problemStatement,
-        learningObjectives,
-        outOfScope,
-        methodology: methodLabel,
-        methodologyValue: methodValue,
-        participantApproach,
-        recruitmentSources,
-        startDate,
-        decisionDeadline,
-        budget: budgetStr,
-        discoverySelections,
-      };
-
-      const result = await executeBrief(ctx, briefInput);
-
-      // ── Slack-specific result handling ──
-
-      // Send brief approval request to stakeholder (or owner fallback)
-      const study = await getStudyByProjectAndName(projectId, result.studyName);
-      if (study) {
-        const briefBlocks = generateStudyResultBlocks(result.studyName, study, result.url, channelId || '', 'brief');
-        await sendStudyResultMessage(client, channelId || '', result.studyName, briefBlocks, 'brief');
-
-        // Update brief status to pending_approval
-        const approverInfo = await getProjectApprover(projectId);
-        try {
-          await study.update({
-            brief_status: 'pending_approval',
-            brief_reviewer_id: approverInfo?.userId || null,
-          });
-          console.log(`📋 Brief status set to pending_approval, reviewer: ${approverInfo?.userId || 'none'}`);
-        } catch (updateErr) {
-          console.error('Failed to update brief status:', updateErr);
-        }
-
-        // Notify researcher via DM with specific approver info
-        try {
-          let approverDisplay = 'the project owner';
-          let approverRole = 'owner';
-          if (approverInfo) {
-            approverRole = approverInfo.source === 'stakeholder' ? 'stakeholder' : 'owner';
-            try {
-              const approverUserInfo = await client.users.info({ user: approverInfo.userId });
-              const approverUser = approverUserInfo.user as Record<string, unknown> | undefined;
-              const approverProfile = approverUser?.profile as Record<string, unknown> | undefined;
-              approverDisplay = (approverUser?.real_name || approverProfile?.display_name || approverUser?.name || `<@${approverInfo.userId}>`) as string;
-            } catch {
-              approverDisplay = `<@${approverInfo.userId}>`;
-            }
-          }
-
-          const im = await client.conversations.open({ users: body.user.id });
-          if (im.channel?.id) {
-            await client.chat.postMessage({
-              channel: im.channel.id,
-              text: `✅ *Research Brief Created*\n\n*Study:* ${result.studyName}\n*View:* <${result.url}|GitHub>\n\nBrief sent to *${approverDisplay}* (${approverRole}) for approval.\n\n*Next:* Run \`/qori-plan\` to create an execution plan once approved.`,
-            });
-          }
-        } catch (error) {
-          console.error('Failed to send confirmation to researcher:', error);
-        }
-      }
-
-      console.log(`✅ Research brief created via app service for study: ${result.studyName}`);
-    } catch (appServiceErr) {
-      const errMessage = appServiceErr instanceof Error ? appServiceErr.message : String(appServiceErr);
-      console.error('❌ Brief app service failed:', errMessage);
-      const displayErr = errMessage.includes('<!DOCTYPE')
-        ? 'GitHub is temporarily unavailable. Please try again in a moment.'
-        : errMessage;
-      await client.chat.postEphemeral({
-        channel: body.user.id,
-        user: body.user.id,
-        text: `❌ Could not create research brief: ${displayErr}`,
-      });
-    }
-  } else {
-    // ── Legacy path: existing handler logic ──
-
-  // ── Study creation (Phase 2D: uses projectId from metadata) ──
-  let study = await getStudyByProjectAndName(projectId, studyName);
-  let studyId: number;
-
-  if (!study || !study.path) {
-    console.log('📁 Study does not exist yet — creating from brief submission');
-
-    // Start transaction: study creation + brief generation succeed or fail together
-    const t = await sequelize.transaction();
-
-    try {
-      const userInfo = await client.users.info({ user: body.user.id });
-      const userEmail: string = userInfo.user?.profile?.email || `${body.user.id}@slack.com`;
-      const userName: string = userInfo.user?.real_name || userInfo.user?.profile?.display_name || body.user.id;
-
-      // Get project for folder path
-      const project = await getProjectById(projectId);
-      if (!project) {
-        throw new Error('Project not found');
-      }
-
-      // Scaffold study folder in GitHub: {project-slug}/{study-slug}/
-      // Phase B-0.5: Uses scaffolding service instead of folder template copy
-      const scaffoldResult = await scaffoldStudy(
-        project.slug,
-        studyName,
-        studyName, // studyName serves as both name and slug (Phase 2D)
-        project.name,
-        userName,
-      );
-
-      // Log any non-fatal scaffolding errors (e.g., observer guide fetch failures)
-      if (scaffoldResult.errors.length > 0) {
-        console.warn('⚠️ Study scaffolding had non-fatal errors:', scaffoldResult.errors);
-      }
-
-      // Create study with project_id (Phase 2D: no @ts-expect-error)
-      study = await addResearchStudyWithRoles({
-        name: studyName,
-        project_id: projectId,
-        slug: studyName,
-        description: `Created from research brief`,
-        created_by: body.user.id,
-        researcher_name: userName,
-        researcher_email: userEmail,
-        link: scaffoldResult.studyReadmeUrl,
-        path: `${project.slug}/${studyName}`,
-        channel_name: channelId,
-        assignments: [],
-      });
-
-      studyId = study.id;
-      await t.commit();
-      console.log(`✅ Study "${studyName}" created from brief, path: ${study.path}`);
-    } catch (createError) {
-      await t.rollback();
-      const createMessage = createError instanceof Error ? createError.message : String(createError);
-      console.error('❌ Failed to create study from brief:', createError);
-      const errMsg: string = createMessage.includes('<!DOCTYPE')
-        ? 'GitHub is temporarily unavailable. Please try again in a moment.'
-        : createMessage;
-      await client.chat.postEphemeral({
-        channel: body.user.id,
-        user: body.user.id,
-        text: `❌ Could not create study folder: ${errMsg}`,
-      });
-      return;
-    }
-  } else {
-    studyId = study.id;
-  }
-
-  // ── Parse budget and target participants, save to study row ──
-  const parsedBudget: number | null = parseBudget(budgetStr);
-  const targetParticipants: number | null = parseParticipantTarget(participantApproach);
-  const studyUpdates: Record<string, unknown> = {};
-  if (parsedBudget !== null) studyUpdates.parsed_budget_amount = parsedBudget;
-  if (targetParticipants !== null) studyUpdates.target_participants = targetParticipants;
-  if (Object.keys(studyUpdates).length > 0) {
-    try {
-      await study!.update({ ...studyUpdates, updated_at: new Date() });
-      console.log(`💰 Parsed budget: ${parsedBudget}, target: ${targetParticipants} for study ${studyName}`);
-    } catch (budgetErr) {
-      const message = budgetErr instanceof Error ? budgetErr.message : String(budgetErr);
-      console.warn('⚠️ Failed to save parsed budget/target:', message);
-    }
-  }
-
-  // ── Compute timeline_preference from date gap (replaces modal radio) ──
-  let timelinePref: TimelinePreference = 'standard';
-  if (startDate && decisionDeadline) {
-    const start = parseISO(startDate);
-    const deadline = parseISO(decisionDeadline);
-    if (isValid(start) && isValid(deadline)) {
-      const gap = differenceInCalendarDays(deadline, start);
-      if (gap < 35) timelinePref = 'accelerated';
-      else if (gap > 49) timelinePref = 'extended';
-    }
-  }
-
-  // ── Mechanical computations (ADR 0005: handler computes, not LLM) ──
-  const displayDate = format(new Date(), 'MMMM d, yyyy');
-  const timelineDisplay = TIMELINE_DISPLAY_LABELS[timelinePref] || TIMELINE_DISPLAY_LABELS.standard;
-  const timelinePhases = buildTimelinePhases(startDate, timelinePref);
-
-  // ── Discovery injection (Phase 2D: uses projectId from metadata) ──
-  const discoveryContext: Record<string, unknown> = {};
-  let discoveryCount: number | undefined;
-  let discoverySources: string | undefined;
-  let citationConvention: string | undefined;
-
-  if (discoverySelections.length > 0) {
-    try {
-      const allArtifacts: DiscoveryArtifact[] = await loadDiscoveryArtifacts(projectId);
-      const selectedSlugs = new Set(discoverySelections);
-      const selectedArtifacts = allArtifacts.filter((a: DiscoveryArtifact) => selectedSlugs.has(`${a.type}::${a.slug}`));
-
-      if (selectedArtifacts.length > 0) {
-        const upstreamVars: Record<string, unknown> = aggregateDiscoveryVariables(selectedArtifacts);
-        Object.assign(discoveryContext, upstreamVars);
-
-        discoveryCount = selectedArtifacts.length;
-        discoverySources = selectedArtifacts
-          .map((a: DiscoveryArtifact) => {
-            const prefix = markerPrefixes[a.type as DiscoveryType] || '?';
-            return `| **${prefix}** | ${a.slug} | ${typeLabels[a.type as DiscoveryType] || a.type} | ${a.date} | ${a.variableCount} variables |`;
-          })
-          .join('\n');
-        citationConvention = selectedArtifacts
-          .map((a: DiscoveryArtifact) => `[${markerPrefixes[a.type as DiscoveryType] || '?'}N] = ${typeLabels[a.type as DiscoveryType] || a.type} (${a.slug})`)
-          .join('; ');
-
-        console.log(`✅ Injected ${Object.keys(upstreamVars).length} upstream variables from ${selectedArtifacts.length} discovery artifact(s)`);
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.warn('⚠️ Failed to load discovery variables for brief, proceeding without:', message);
-    }
-  }
-
-  // ── Pre-render LLM tasks: barriers + questions (Option C) ──
-  const structuredTaskData: Record<string, unknown> = {
-    problem_statement: problemStatement,
-    learning_objectives: learningObjectives,
-    methodology: methodLabel,
-    ...discoveryContext,
-  };
-  const structuredTasks = buildStructuredTasks(structuredTaskData);
-
-  console.log('📋 Running pre-render structured LLM tasks (barriers + questions)...');
-  const structuredResponses = await executeAiGenerationTasks(structuredTasks, structuredTaskData);
-
-  // Parse and assign IDs
-  const rawBarriers = parseJsonResponse<RawBarrier[]>(structuredResponses.target_barriers_raw, 'target_barriers_raw');
-  const rawQuestions = parseJsonResponse<RawQuestion[]>(structuredResponses.research_questions_raw, 'research_questions_raw');
-
-  const targetBarriers: BriefBarrier[] = rawBarriers.map((b, i) => ({
-    id: `TB-${String(i + 1).padStart(3, '0')}`,
-    barrier: b.barrier,
-    source: b.source || 'Researcher hypothesis',
-  }));
-
-  const researchQuestions: BriefQuestion[] = rawQuestions.map((q, i) => ({
-    id: `RQ-${String(i + 1).padStart(3, '0')}`,
-    question: q.question,
-    priority: q.priority || 'Primary',
-  }));
-
-  // Research objectives: split learning objectives into individual items and assign IDs
-  const researchObjectives: BriefObjective[] = learningObjectives
-    .split(/\n/)
-    .map(line => line.replace(/^[-•*\d.]+\s*/, '').trim())
-    .filter(Boolean)
-    .map((objective, idx) => ({
-      id: `OBJ-${String(idx + 1).padStart(3, '0')}`,
-      objective,
-    }));
-
-  console.log(`📋 Structured data assembled: ${targetBarriers.length} barriers, ${researchQuestions.length} questions, ${researchObjectives.length} objectives`);
-
-  // ── Assemble complete data object ──
-  const data: BriefTemplateInput = {
-    selected_study: studyName,
-    lead_researcher: leadResearcher,
-    requestor_name: requestorName,
-    problem_statement: problemStatement,
-    learning_objectives: learningObjectives,
-    out_of_scope: outOfScope,
-    methodology: methodLabel,
-    methodology_value: methodValue,
-    participant_approach: participantApproach,
-    recruitment_sources: recruitmentSources,
-    timeline_preference: timelinePref,
-    start_date: startDate,
-    decision_deadline: decisionDeadline,
-    budget: budgetStr,
-
-    // Mechanical computations
-    display_date: displayDate,
-    timeline_display: timelineDisplay,
-    timeline_phases: timelinePhases,
-
-    // Handler-assigned structured data
-    target_barriers: targetBarriers,
-    research_questions: researchQuestions,
-    research_objectives: researchObjectives,
-
-    // Cascade summary counts
-    objectives_count: researchObjectives.length,
-    research_questions_count: researchQuestions.length,
-    target_barriers_count: targetBarriers.length,
-
-    // Discovery enrichment
-    ...(discoveryCount !== undefined ? { discovery_count: discoveryCount } : {}),
-    ...(discoverySources !== undefined ? { discovery_sources: discoverySources } : {}),
-    ...(citationConvention !== undefined ? { citation_convention: citationConvention } : {}),
-    ...discoveryContext,
-  };
-
-  console.log(`📋 Assembled brief data: ${Object.keys(data).length} fields, ${data.objectives_count} objectives, ${data.research_questions_count} RQs, ${data.target_barriers_count} TBs, study: ${studyName}`);
-
-  // ── Process YAML template (prose tasks + rendering + extraction) ──
-  const variableContext: VariableContext = { projectId, studyId };
-
-  // PH-6D1: Canonical artifact identity for research brief
-  (data as unknown as Record<string, unknown>).__artifactContext = {
-    projectId,
-    studyId,
-    artifactType: 'brief',
-    title: `Research brief — ${studyName}`,
-    canonicalUpstreamInputs: [], // No canonical evidence constructs; cascade fingerprint used
-    createdBy: body.user.id,
-  };
-
-  const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, "research_brief.yaml");
-  const renderedYaml = await processYamlTemplate(file.content, data, study.path ?? '', '', false, variableContext);
-
-  // CRITICAL: Await extraction to ensure cascade variables are committed before returning success.
-  // Without this, downstream modals (plan) may read stale data. See ADR 0019.
-  if (renderedYaml.extractionPromise) {
-    const extractResult = await renderedYaml.extractionPromise;
-    if (!extractResult.success) {
-      throw new Error(`Cascade variable extraction failed: ${extractResult.error}. Document was saved but variables were not written.`);
-    }
-    console.log(`✅ Cascade variables committed: ${extractResult.variableCount} items (${extractResult.keys?.join(', ')})`);
-  }
-
-  const url: string = renderedYaml.result.url;
-
-  // ── Send brief approval request to stakeholder (or owner fallback) ──
-  const briefBlocks = generateStudyResultBlocks(studyName, study, url, channelId || '', 'brief');
-  await sendStudyResultMessage(client, channelId || '', studyName, briefBlocks, 'brief');
-
-  // ── Update brief status to pending_approval ──
-  const approverInfo = await getProjectApprover(projectId);
-  try {
-    await study.update({
-      brief_status: 'pending_approval',
-      brief_reviewer_id: approverInfo?.userId || null,
+  if (!ctx) {
+    await client.chat.postMessage({
+      channel: body.user.id,
+      text: '❌ Unable to resolve your identity. Please contact your administrator to ensure your workspace is configured.',
     });
-    console.log(`📋 Brief status set to pending_approval, reviewer: ${approverInfo?.userId || 'none'}`);
-  } catch (updateErr) {
-    console.error('Failed to update brief status:', updateErr);
-    // Non-fatal: brief was created, just status tracking failed
+    return;
   }
 
-  // ── Notify researcher via DM with specific approver info ──
   try {
-    let approverDisplay = 'the project owner';
-    let approverRole = 'owner';
-    if (approverInfo) {
-      approverRole = approverInfo.source === 'stakeholder' ? 'stakeholder' : 'owner';
+    const briefInput: BriefInput = {
+      projectId,
+      projectSlug,
+      projectName: projectName || projectSlug,
+      leadResearcher,
+      requestorName,
+      createdByActorId: String(ctx.actor.id),
+      researcherEmail,
+      problemStatement,
+      learningObjectives,
+      outOfScope,
+      methodology: methodLabel,
+      methodologyValue: methodValue,
+      participantApproach,
+      recruitmentSources,
+      startDate,
+      decisionDeadline,
+      budget: budgetStr,
+      discoverySelections,
+    };
+
+    const result = await executeBrief(ctx, briefInput);
+
+    // ── Slack-specific result handling ──
+
+    // Send brief approval request to stakeholder (or owner fallback)
+    const study = await getStudyByProjectAndName(projectId, result.studyName);
+    if (study) {
+      const briefBlocks = generateStudyResultBlocks(result.studyName, study, result.url, channelId || '', 'brief');
+      await sendStudyResultMessage(client, channelId || '', result.studyName, briefBlocks, 'brief');
+
+      // Update brief status to pending_approval
+      const approverInfo = await getProjectApprover(projectId);
       try {
-        const userInfo = await client.users.info({ user: approverInfo.userId });
-        const user = userInfo.user as Record<string, unknown> | undefined;
-        const profile = user?.profile as Record<string, unknown> | undefined;
-        approverDisplay = (user?.real_name || profile?.display_name || user?.name || `<@${approverInfo.userId}>`) as string;
-      } catch {
-        approverDisplay = `<@${approverInfo.userId}>`;
+        await study.update({
+          brief_status: 'pending_approval',
+          brief_reviewer_id: approverInfo?.userId || null,
+        });
+        console.log(`📋 Brief status set to pending_approval, reviewer: ${approverInfo?.userId || 'none'}`);
+      } catch (updateErr) {
+        console.error('Failed to update brief status:', updateErr);
+      }
+
+      // Notify researcher via DM with specific approver info
+      try {
+        let approverDisplay = 'the project owner';
+        let approverRole = 'owner';
+        if (approverInfo) {
+          approverRole = approverInfo.source === 'stakeholder' ? 'stakeholder' : 'owner';
+          try {
+            const approverUserInfo = await client.users.info({ user: approverInfo.userId });
+            const approverUser = approverUserInfo.user as Record<string, unknown> | undefined;
+            const approverProfile = approverUser?.profile as Record<string, unknown> | undefined;
+            approverDisplay = (approverUser?.real_name || approverProfile?.display_name || approverUser?.name || `<@${approverInfo.userId}>`) as string;
+          } catch {
+            approverDisplay = `<@${approverInfo.userId}>`;
+          }
+        }
+
+        const im = await client.conversations.open({ users: body.user.id });
+        if (im.channel?.id) {
+          await client.chat.postMessage({
+            channel: im.channel.id,
+            text: `✅ *Research Brief Created*\n\n*Study:* ${result.studyName}\n*View:* <${result.url}|GitHub>\n\nBrief sent to *${approverDisplay}* (${approverRole}) for approval.\n\n*Next:* Run \`/qori-plan\` to create an execution plan once approved.`,
+          });
+        }
+      } catch (error) {
+        console.error('Failed to send confirmation to researcher:', error);
       }
     }
 
-    const im = await client.conversations.open({ users: body.user.id });
-    if (im.channel?.id) {
-      await client.chat.postMessage({
-        channel: im.channel.id,
-        text: `✅ *Research Brief Created*\n\n*Study:* ${studyName}\n*View:* <${url}|GitHub>\n\nBrief sent to *${approverDisplay}* (${approverRole}) for approval.\n\n*Next:* Run \`/qori-plan\` to create an execution plan once approved.`,
-      });
-    }
-  } catch (error) {
-    console.error('Failed to send confirmation to researcher:', error);
+    console.log(`✅ Research brief created via app service for study: ${result.studyName}`);
+  } catch (appServiceErr) {
+    const errMessage = appServiceErr instanceof Error ? appServiceErr.message : String(appServiceErr);
+    console.error('❌ Brief app service failed:', errMessage);
+    const displayErr = errMessage.includes('<!DOCTYPE')
+      ? 'GitHub is temporarily unavailable. Please try again in a moment.'
+      : errMessage;
+    await client.chat.postEphemeral({
+      channel: body.user.id,
+      user: body.user.id,
+      text: `❌ Could not create research brief: ${displayErr}`,
+    });
   }
-
-  await addStudyStatus({
-    study_id: studyId,
-    path: url,
-    status: 'created',
-    created_by: body.user?.id || null,
-  });
-
-  console.log(`✅ Research brief created for study: ${studyName}`);
-
-  } // end legacy path
 }
 
 export { handleBriefSubmission };

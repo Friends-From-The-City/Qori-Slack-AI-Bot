@@ -6,28 +6,22 @@
  * - File picker removed; session/nugget stats displayed instead
  * - Raw content kept as context alongside structured cascade vars
  * - Service blueprint excluded (stays on legacy flow)
+ *
+ * PLAT-3: Application service is the ONLY business path.
+ * Legacy fallback removed — buildSlackApplicationContext failure
+ * is a hard stop (fail closed).
  */
 
 import type { AllMiddlewareArgs, SlackCommandMiddlewareArgs, SlackActionMiddlewareArgs, SlackViewMiddlewareArgs, BlockAction, ViewSubmitAction } from '@slack/bolt';
 import { buildSlackApplicationContext } from '../../../middleware/auth/slackContextBridge';
 import { executeSynthesis, type SynthesisInput } from '../../../application/synthesis.app-service';
-import { TemplateContractError } from '../../../types/handlers';
 
 import { researchSynthesisModal, type SynthesisCascadeData, type SessionDataStats, type AvailableEnrichment, type SynthesisModalMetadata } from "../ui/researchSynthesisModal";
 import { getStudiesByUser, resolveStudyFromName } from "../../../services/research_study.service";
 import { getActiveStudy, setActiveStudy } from "../../../services/slack-user-state.service";
-import sessionSummaryService from "../../../services/session-summary.service";
-import { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepoByPath, fetchFileFromRepo } from "../../../helpers/github";
-import { processYamlTemplate } from "../../../helpers/yamlProcessor";
-import { readStudyVariablesByContext, readUpstreamVariablesByContext, type VariableContext, type ConsumeSpec, type UpstreamVariables } from '../../studyVariables';
+import { readStudyVariablesByContext, type VariableContext } from '../../studyVariables';
 import { TEMPLATE_CONSUMES } from "../ui/cascadeReadinessBlocks";
 import { assertStudyAccess } from '../../../services/authorization.service';
-import { createSynthesizedConstructs, type SynthesizedConstructInput } from '../../../services/synthesis-evidence.service';
-import { enrichProjectionWithEvidenceRefs } from '../../../services/projection-enrichment.service';
-import { attachEvidenceRefsVerified } from '../../../services/artifact.service';
-import { computeCanonicalAnchor, buildCanonicalReferenceSection, type CanonicalRefItem } from '../../../services/deep-link.service';
-import { getDefaultModelName } from '../../modelProvider';
-import sequelize from '../../../database';
 
 // ─── Types ──────────────────────────────────────────────────────
 
@@ -40,34 +34,7 @@ interface Study {
   researcher_email?: string | null;
 }
 
-interface SessionSummary {
-  id: number;
-  filename: string;
-  file_path: string | null;
-  file_url: string | null;
-  participant_id?: string;
-  created_at?: Date;
-}
-
-interface FileWithContent {
-  filename: string;
-  file_type: string;
-  file_path: string | null;
-  content: string;
-  githubPath: string | null;
-}
-
 // ─── Constants ──────────────────────────────────────────────────
-
-const ANALYSIS_YAML_MAPPING: Record<string, string> = {
-  'affinity_mapping': 'affinity_mapping.yaml',
-  'journey_mapping': 'journey_mapping.yaml',
-  'persona_generation': 'persona_generator.yaml',
-  'jobs_to_be_done': 'jobs_to_be_done.yaml',
-  'usability_issues': 'usability_issues_extractor.yaml',
-  'design_opportunities': 'design_opportunity_generator.yaml',
-  // service_blueprint excluded per ADR 0018
-};
 
 // Enrichment variable labels for display
 const ENRICHMENT_LABELS: Record<string, string> = {
@@ -210,76 +177,6 @@ async function buildSynthesisCascadeData(
   };
 }
 
-// ─── Helper: Build detected files list from DB ───────────────────
-
-async function buildDetectedFilesList(studyId: number): Promise<string> {
-  try {
-    const sessionSummaries = await sessionSummaryService.getSessionSummariesByStudyId(studyId);
-    if (!sessionSummaries || sessionSummaries.length === 0) {
-      return 'No session files detected';
-    }
-
-    return sessionSummaries
-      .filter((s: SessionSummary) => s.file_path)
-      .map((s: SessionSummary) => {
-        const parts = (s.file_path || '').split('/');
-        return `- ${parts.slice(-3).join('/')}`;
-      })
-      .join('\n');
-  } catch (error) {
-    console.error('Failed to build detected files list:', error);
-    return 'Error loading file list';
-  }
-}
-
-// ─── Helper: Build raw content from session summaries ────────────
-
-async function buildCombinedFileContent(studyId: number): Promise<{ content: string; files: FileWithContent[] }> {
-  const files: FileWithContent[] = [];
-
-  try {
-    const sessionSummaries = await sessionSummaryService.getSessionSummariesByStudyId(studyId);
-    if (!sessionSummaries || sessionSummaries.length === 0) {
-      return { content: '', files: [] };
-    }
-
-    // Fetch content for all session summaries in parallel
-    const contentPromises = sessionSummaries
-      .filter((s: SessionSummary) => s.file_path)
-      .map(async (summary: SessionSummary): Promise<FileWithContent> => {
-        try {
-          const githubFile = await fetchFileFromRepoByPath(process.env.GITHUB_REPO!, summary.file_path!);
-          return {
-            filename: summary.filename,
-            file_type: 'session_summary',
-            file_path: summary.file_path,
-            content: githubFile.content || '[Content not available]',
-            githubPath: summary.file_path,
-          };
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          console.error(`Error fetching file ${summary.filename}:`, message);
-          return {
-            filename: summary.filename,
-            file_type: 'session_summary',
-            file_path: summary.file_path,
-            content: `[Error fetching content: ${message}]`,
-            githubPath: summary.file_path,
-          };
-        }
-      });
-
-    const fetchedFiles = await Promise.all(contentPromises);
-    files.push(...fetchedFiles);
-
-    const content = fetchedFiles.map(f => f.content).join('\n\n---\n\n');
-    return { content, files };
-  } catch (error) {
-    console.error('Failed to build combined file content:', error);
-    return { content: '', files: [] };
-  }
-}
-
 // ─── Command handler ────────────────────────────────────────────
 
 const researchSynthesisHandler = async ({ ack, body, client }: SlackCommandMiddlewareArgs & AllMiddlewareArgs): Promise<void> => {
@@ -341,7 +238,6 @@ const handleStudySelectionChange = async ({ ack, body, client }: SlackActionMidd
     }
 
     const studyId: string = selectedStudyOption.value;
-    const studyName: string = selectedStudyOption.text.text;
     const currentAnalysisMethod: string | null = view.state.values.analysis_method_selection?.analysis_method?.selected_option?.value || 'affinity_mapping';
 
 
@@ -451,325 +347,35 @@ const handleResearchSynthesisSubmission = async ({ ack, body, view, client }: Sl
     const resolved = await resolveStudyFromName(selectedStudyName!);
     if (!resolved) throw new Error(`Study "${selectedStudyName}" not found`);
     const study = resolved.study;
-    const variableContext: VariableContext = { projectId: resolved.projectId, studyId: resolved.studyId };
 
-    // ── PLAT-3: Dual-path — application service vs legacy ──
+    // ── PLAT-3: Application service is the ONLY path ──
     const ctx = await buildSlackApplicationContext(body.user.id, (body as any).team?.id || '');
 
-    if (ctx) {
-      // ── New path: delegate to application service ──
-      const synthesisInput: SynthesisInput = {
-        studyId: resolved.studyId,
-        projectId: resolved.projectId,
-        studyName: selectedStudyName!,
-        studyPath: study?.path ?? '',
-        analysisMethod,
-        createdByActorId: String(ctx.actor.id),
-      };
-
-      await client.chat.postEphemeral({
+    if (!ctx) {
+      await client.chat.postMessage({
         channel: body.user.id,
-        user: body.user.id,
-        text: `Generating ${analysisMethod.replace(/_/g, ' ')} for *${selectedStudyName}*...\n\n_This may take 1-2 minutes._`,
+        text: '❌ Unable to resolve your identity. Please contact your administrator to ensure your workspace is configured.',
       });
-
-      try {
-        const result = await executeSynthesis(ctx, synthesisInput);
-
-        await client.chat.postEphemeral({
-          channel: body.user.id,
-          user: body.user.id,
-          text: `*Research Synthesis Complete!*`,
-          blocks: [
-            {
-              type: 'section',
-              text: {
-                type: 'mrkdwn',
-                text: `*Research Synthesis Complete!*\n\n*Study:* ${selectedStudyName}\n*Method:* ${analysisMethod.replace(/_/g, ' ')}\n*Cascade variables:* ${result.cascadeVariableCount}\n*Session files:* ${result.sessionFileCount}`,
-              },
-            },
-            {
-              type: 'section',
-              text: {
-                type: 'mrkdwn',
-                text: `<${result.url}|View on GitHub>`,
-              },
-            },
-            { type: 'divider' },
-            {
-              type: 'section',
-              text: {
-                type: 'mrkdwn',
-                text: `*Next:* Run \`/qori-report\` to generate the research readout.`,
-              },
-            },
-          ],
-        });
-
-        console.log(`✅ Synthesis created via app service for study: ${selectedStudyName}`);
-      } catch (error) {
-        const errObj = error instanceof Error ? error : new Error(String(error));
-        console.error(`❌ Synthesis app service failed: ${errObj.message}`);
-
-        await client.chat.postEphemeral({
-          channel: body.user.id,
-          user: body.user.id,
-          text: `*Synthesis failed*\n\n*Study:* ${selectedStudyName}\n*Method:* ${analysisMethod}\n*Error:* ${errObj.message}\n\nPlease try again or contact support.`,
-        });
-      }
-    } else {
-      // ── Legacy path: existing handler logic ──
-
-    // ─── CASCADE CONTRACT VALIDATION ─────────────────────────────────
-    // ADR 0018: Cascade-aware synthesis requires atomic_nugget_core/detail
-
-    const studyVars = await readStudyVariablesByContext(variableContext);
-    const hasNuggetCore = studyVars?.variables?.atomic_nugget_core?.value &&
-      Array.isArray(studyVars.variables.atomic_nugget_core.value) &&
-      studyVars.variables.atomic_nugget_core.value.length > 0;
-
-    if (!hasNuggetCore) {
-      const methodName = analysisMethod.replace(/_/g, ' ');
-      throw new TemplateContractError(
-        `${methodName} requires atomic_nugget_core from session summaries`,
-        analysisMethod,
-        'atomic_nugget_core',
-        `${methodName} requires session summaries with extracted nuggets. ` +
-        'Run `/qori-analyze` on session transcripts first to build the nugget pool.',
-      );
+      return;
     }
 
-    // ─── BUILD CONSUMES SPEC ─────────────────────────────────────────
-    // ADR 0018 amendment: All enrichments always included when available (no opt-out)
-
-    const templateConsumes = TEMPLATE_CONSUMES[analysisMethod] || [];
-    const consumesSpec: ConsumeSpec[] = templateConsumes.map(spec => ({
-      key: spec.key,
-      required: spec.required,
-      source: spec.source_hint?.includes('brief') ? 'research_brief' :
-              spec.source_hint?.includes('affinity') ? 'affinity_mapping' :
-              spec.source_hint?.includes('persona') ? 'persona_generator' :
-              spec.source_hint?.includes('stakeholder') ? 'stakeholder_synthesis' :
-              'session_summary',
-    }));
-
-    // ─── LOAD STRUCTURED CASCADE VARIABLES ───────────────────────────
-    // ADR 0018: The real wiring — read from variable store
-
-    const upstreamVars: UpstreamVariables = await readUpstreamVariablesByContext(variableContext, consumesSpec);
-    console.log(`✅ Loaded ${Object.keys(upstreamVars).length} cascade variables: ${Object.keys(upstreamVars).join(', ')}`);
-
-    // ─── BUILD RAW CONTENT AS CONTEXT ────────────────────────────────
-    // Keep raw content alongside structured vars (ADR 0018)
-
-    const { content: rawCombinedContent, files } = await buildCombinedFileContent(parseInt(selectedStudyId));
-    const detectedFiles = await buildDetectedFilesList(parseInt(selectedStudyId));
-
-    // Privacy gate: authorize fetched content before model access (PH-3 / ADR 0035).
-    // Session files are Qori-generated artifacts — TRUSTED_CURATED_ARTIFACT policy.
-    const { authorizeForModel } = require('../../../services/content-governance.service');
-    const privacyResult = authorizeForModel(
-      rawCombinedContent,
-      'TRUSTED_CURATED_ARTIFACT',
-      { isQoriArtifact: true, upstreamPrivacyComplete: true, sourceId: `synthesis:${selectedStudyName}` },
-    );
-    const combinedFileContent = privacyResult.modelSafeContent ?? rawCombinedContent;
-
-    console.log(`✅ Loaded ${files.length} session files as raw context (privacy: ${privacyResult.policy})`);
-
-    // ─── BUILD TEMPLATE INPUT ────────────────────────────────────────
-
-    // PH-6B: Compute canonical upstream inputs for artifact identity.
-    // For synthesis, upstream inputs are the nugget evidence constructs if available,
-    // otherwise hash of consumed cascade state.
-    const EvidenceConstructModel = sequelize.models.EvidenceConstruct;
-    const resolvedStudyIdForArtifact = parseInt(selectedStudyId);
-    let canonicalUpstreamInputs: string[] = [];
-    try {
-      const nuggetConstructs = await EvidenceConstructModel.findAll({
-        where: { study_id: resolvedStudyIdForArtifact, construct_type: 'nugget' },
-        attributes: ['public_id'],
-      });
-      canonicalUpstreamInputs = nuggetConstructs.map(
-        (c: unknown) => (c as { public_id: string }).public_id,
-      );
-    } catch { /* fallback to empty — cascade fingerprint used */ }
-
-    const analysisData: Record<string, unknown> = {
-      selected_study: selectedStudyName!,
-      researcher_contact: study?.researcher_name || study?.researcher_email || '',
-      detected_files: detectedFiles,
-      combined_file_content: combinedFileContent,
-      // Structured cascade vars are injected by yamlProcessor via variableContext
-      __artifactContext: {
-        projectId: resolved.projectId,
-        studyId: resolvedStudyIdForArtifact,
-        artifactType: 'synthesis',
-        title: `${analysisMethod.replace(/_/g, ' ')} — ${selectedStudyName}`,
-        canonicalUpstreamInputs,
-        createdBy: body.user.id,
-      },
+    const synthesisInput: SynthesisInput = {
+      studyId: resolved.studyId,
+      projectId: resolved.projectId,
+      studyName: selectedStudyName!,
+      studyPath: study?.path ?? '',
+      analysisMethod,
+      createdByActorId: String(ctx.actor.id),
     };
-
-    const yamlFileName = ANALYSIS_YAML_MAPPING[analysisMethod];
-    if (!yamlFileName) {
-      throw new Error(`Unknown analysis method: ${analysisMethod}`);
-    }
 
     await client.chat.postEphemeral({
       channel: body.user.id,
       user: body.user.id,
-      text: `Generating ${analysisMethod.replace(/_/g, ' ')} for *${selectedStudyName}*...\n• ${Object.keys(upstreamVars).length} cascade variables loaded\n• ${files.length} session files as context\n\n_This may take 1-2 minutes._`,
+      text: `Generating ${analysisMethod.replace(/_/g, ' ')} for *${selectedStudyName}*...\n\n_This may take 1-2 minutes._`,
     });
 
     try {
-      const yamlTemplateFile = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, yamlFileName);
-
-      // PH-6D2: Use prepare/finalize flow for single GitHub write with canonical references.
-      const { prepareYamlTemplate, finalizeArtifactWrite } = require('../../../helpers/yamlProcessor');
-      const prepared = await prepareYamlTemplate(
-        yamlTemplateFile.content, analysisData, study?.path ?? '', '', variableContext,
-      );
-      console.log(`✅ Synthesis prepared: ${prepared.baseOutputTemplate?.length || 0} chars`);
-
-      if (!prepared.extractionOutcome.success) {
-        throw new Error(`Cascade variable extraction failed: ${prepared.extractionOutcome.error}. Generation complete but variables were not written.`);
-      }
-
-      // PH-5B: Create canonical evidence constructs for synthesized themes.
-      let canonicalRefSection = '';
-      if (analysisMethod === 'affinity_mapping' && prepared.extractionKeys.includes('validated_themes')) {
-        try {
-          const resolvedStudyId = parseInt(selectedStudyId);
-          const vars = await readStudyVariablesByContext({ projectId: resolved.projectId, studyId: resolvedStudyId });
-          const themes = vars.variables?.validated_themes;
-
-          const EvidenceConstructModel = sequelize.models.EvidenceConstruct;
-          const nuggetConstructs = await EvidenceConstructModel.findAll({
-            where: { study_id: resolvedStudyId, construct_type: 'nugget' },
-          });
-          const nuggetPublicIds = new Set(
-            nuggetConstructs.map(c => (c as unknown as { public_id: string }).public_id),
-          );
-          const displayToPublicId = new Map(
-            nuggetConstructs.map(c => [(c as unknown as { label: string }).label, (c as unknown as { public_id: string }).public_id]),
-          );
-
-          if (Array.isArray(themes) && themes.length > 0 && nuggetPublicIds.size > 0) {
-            const themeItems: SynthesizedConstructInput[] = themes.map((t: Record<string, unknown>) => {
-              let evidenceIds: string[] = [];
-              if (Array.isArray(t.supporting_evidence_ids) && t.supporting_evidence_ids.length > 0) {
-                evidenceIds = t.supporting_evidence_ids as string[];
-              } else if (Array.isArray(t.supporting_nuggets)) {
-                evidenceIds = (t.supporting_nuggets as string[])
-                  .map(displayId => displayToPublicId.get(displayId))
-                  .filter((id): id is string => id !== undefined);
-              }
-              return {
-                displayId: (t.id as string) || 'theme-unknown',
-                label: (t.theme_name as string) || (t.id as string) || '',
-                payload: t,
-                proposedEvidenceIds: evidenceIds,
-              };
-            });
-
-            const result = await createSynthesizedConstructs(themeItems, {
-              projectId: resolved.projectId,
-              studyId: resolvedStudyId,
-              constructType: 'theme',
-              upstreamConstructType: 'nugget',
-              relationshipType: 'SYNTHESIZED_FROM',
-              suppliedEvidenceIds: nuggetPublicIds,
-              cascadeVariableKey: 'validated_themes',
-              templateId: 'affinity_mapping',
-              templateVersion: 'v7.1',
-              modelName: getDefaultModelName(),
-              createdBy: body.user.id,
-            });
-
-            if (result.created.length > 0) {
-              console.log(`✅ Evidence lineage: ${result.created.length} theme constructs with canonical nugget refs`);
-              const enriched = await enrichProjectionWithEvidenceRefs(
-                resolved.projectId, resolvedStudyId, 'validated_themes', result.created,
-              );
-              if (enriched > 0) {
-                console.log(`✅ Projection enriched: ${enriched} validated_themes items carry evidence_construct_ref`);
-              }
-
-              // PH-6D2: Build canonical theme reference section
-              const refItems: CanonicalRefItem[] = result.created.map(
-                (c: { constructId: number; publicId: string; displayId: string }) => {
-                  const themeData = themes.find((t: Record<string, unknown>) => t.id === c.displayId);
-                  return {
-                    displayId: c.displayId,
-                    label: (themeData?.theme_name as string) || c.displayId,
-                    constructPublicId: c.publicId,
-                    constructType: 'theme',
-                  };
-                },
-              );
-              canonicalRefSection = buildCanonicalReferenceSection(refItems, 'Canonical Theme References');
-            }
-            if (result.rejected.length > 0) {
-              console.warn(`⚠️ Evidence lineage: ${result.rejected.length} themes rejected (invalid refs): ${result.rejected.map(r => r.displayId).join(', ')}`);
-            }
-          } else if (nuggetPublicIds.size === 0) {
-            console.log('ℹ️ No canonical nugget constructs found — skipping theme evidence lineage');
-          }
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          console.warn(`⚠️ Theme evidence construct creation failed (non-blocking): ${message}`);
-        }
-      }
-
-      // PH-6D2: Single GitHub write with canonical reference section
-      const renderedAnalysis = await finalizeArtifactWrite(
-        prepared,
-        canonicalRefSection || undefined,
-      );
-      console.log(`✅ Synthesis finalized: ${renderedAnalysis.result.url}`);
-
-      // PH-6C: Attach canonical theme evidence refs to the artifact (now status=written)
-      if (analysisMethod === 'affinity_mapping') {
-        try {
-          const resolvedStudyId = parseInt(selectedStudyId);
-          const vars = await readStudyVariablesByContext({ projectId: resolved.projectId, studyId: resolvedStudyId });
-          const themes = vars.variables?.validated_themes;
-          if (Array.isArray(themes)) {
-            const themeConstructIds = themes
-              .filter((t: Record<string, unknown>) => t.evidence_construct_ref)
-              .map((t: Record<string, unknown>) => {
-                // Look up internal ID from public_id for attachEvidenceRefs
-                return t.evidence_construct_ref;
-              });
-            if (themeConstructIds.length > 0) {
-              // Need internal IDs — query by public_ids
-              const EvidenceConstructModel = sequelize.models.EvidenceConstruct;
-              const constructs = await EvidenceConstructModel.findAll({
-                where: { public_id: themeConstructIds },
-                attributes: ['id'],
-              });
-              const internalIds = constructs.map((c: unknown) => (c as { id: number }).id);
-              const attachResult = await attachEvidenceRefsVerified(
-                renderedAnalysis.artifactPublicId,
-                internalIds,
-                {
-                  projectId: resolved.projectId,
-                  studyId: resolvedStudyId,
-                  templateId: analysisMethod,
-                  workflow: 'synthesis',
-                },
-              );
-              if (attachResult.attached > 0) {
-                console.log(`✅ Artifact→evidence: ${attachResult.attached} theme refs attached to artifact ${renderedAnalysis.artifactPublicId}`);
-              }
-            }
-          }
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          console.warn(`⚠️ Artifact→evidence attachment failed (non-blocking): ${message}`);
-        }
-      }
+      const result = await executeSynthesis(ctx, synthesisInput);
 
       await client.chat.postEphemeral({
         channel: body.user.id,
@@ -780,14 +386,14 @@ const handleResearchSynthesisSubmission = async ({ ack, body, view, client }: Sl
             type: 'section',
             text: {
               type: 'mrkdwn',
-              text: `*Research Synthesis Complete!*\n\n*Study:* ${selectedStudyName}\n*Method:* ${analysisMethod.replace(/_/g, ' ')}\n*Cascade variables:* ${Object.keys(upstreamVars).length}\n*Session files:* ${files.length}`,
+              text: `*Research Synthesis Complete!*\n\n*Study:* ${selectedStudyName}\n*Method:* ${analysisMethod.replace(/_/g, ' ')}\n*Cascade variables:* ${result.cascadeVariableCount}\n*Session files:* ${result.sessionFileCount}`,
             },
           },
           {
             type: 'section',
             text: {
               type: 'mrkdwn',
-              text: `<${renderedAnalysis.result.url}|View on GitHub>`,
+              text: `<${result.url}|View on GitHub>`,
             },
           },
           { type: 'divider' },
@@ -801,12 +407,10 @@ const handleResearchSynthesisSubmission = async ({ ack, body, view, client }: Sl
         ],
       });
 
-      // Channel notification removed — DM notification above is sufficient
-
+      console.log(`✅ Synthesis created via app service for study: ${selectedStudyName}`);
     } catch (error) {
       const errObj = error instanceof Error ? error : new Error(String(error));
-      console.error(`❌ Synthesis failed [${yamlFileName}]: ${errObj.message}`);
-      if (errObj.stack) console.error(errObj.stack.split('\n').slice(0, 5).join('\n'));
+      console.error(`❌ Synthesis app service failed: ${errObj.message}`);
 
       await client.chat.postEphemeral({
         channel: body.user.id,
@@ -814,8 +418,6 @@ const handleResearchSynthesisSubmission = async ({ ack, body, view, client }: Sl
         text: `*Synthesis failed*\n\n*Study:* ${selectedStudyName}\n*Method:* ${analysisMethod}\n*Error:* ${errObj.message}\n\nPlease try again or contact support.`,
       });
     }
-
-    } // end legacy path
 
   } catch (error) {
     console.error("Error handling research synthesis submission:", error);
