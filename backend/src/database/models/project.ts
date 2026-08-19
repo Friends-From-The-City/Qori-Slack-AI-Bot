@@ -6,6 +6,7 @@ import {
   type InferAttributes,
   type InferCreationAttributes,
   type CreationOptional,
+  type ForeignKey,
   type NonAttribute,
   type HasManyGetAssociationsMixin,
   type HasManyAddAssociationMixin,
@@ -36,6 +37,10 @@ class Project extends Model<
   declare created_by: string;
   declare channel_id: string | null;
   declare team_slug: string | null;
+  /** PLAT-2: Organization scope. Nullable during migration transition. */
+  declare organization_id: ForeignKey<number> | null;
+  /** PLAT-2: Team scope within organization. */
+  declare team_id: ForeignKey<number> | null;
   declare created_at: CreationOptional<Date>;
   declare updated_at: CreationOptional<Date>;
 
@@ -56,6 +61,25 @@ class Project extends Model<
     this.hasMany(models.ProjectMember, {
       foreignKey: 'project_id',
       as: 'members',
+      onDelete: 'CASCADE',
+    });
+
+    // PLAT-2: Organization/team scope
+    this.belongsTo(models.Organization, {
+      foreignKey: 'organization_id',
+      as: 'organization',
+      onDelete: 'SET NULL',
+    });
+
+    this.belongsTo(models.Team, {
+      foreignKey: 'team_id',
+      as: 'team',
+      onDelete: 'SET NULL',
+    });
+
+    this.hasMany(models.ProjectMembership, {
+      foreignKey: 'project_id',
+      as: 'actorMemberships',
       onDelete: 'CASCADE',
     });
   }
@@ -104,6 +128,14 @@ export default (sequelize: Sequelize) => {
       },
       team_slug: {
         type: DataTypes.STRING(100),
+        allowNull: true,
+      },
+      organization_id: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+      },
+      team_id: {
+        type: DataTypes.INTEGER,
         allowNull: true,
       },
       created_at: {

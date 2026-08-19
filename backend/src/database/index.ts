@@ -38,6 +38,14 @@ import RecordsManagementAssignment from './models/records_management_assignment'
 import RecordsHold from './models/records_hold';
 import RecordsHoldTarget from './models/records_hold_target';
 import RecordsDispositionEvent from './models/records_disposition_event';
+// PLAT-2: Organization/tenant isolation
+import Organization from './models/organization';
+import Team from './models/team';
+import Actor from './models/actor';
+import ActorIdentity from './models/actor_identity';
+import AdapterWorkspaceBinding from './models/adapter_workspace_binding';
+import RepositoryBinding from './models/repository_binding';
+import ProjectMembership from './models/project_membership';
 
 
 // Set environment and configuration
@@ -48,9 +56,15 @@ const sequelizeConfig = (config as Record<string, any>)[env];
 const sequelize = new Sequelize(sequelizeConfig);
 
 // List of all model definition functions
-// Note: Project must be defined before ResearchStudy due to FK dependency
+// Note: Organization/Team must be defined before Project due to FK dependency
+// Project must be defined before ResearchStudy due to FK dependency
 const modelDefiners = [
   ChannelConfig,
+  Organization,
+  Team,
+  Actor,
+  ActorIdentity,
+  AdapterWorkspaceBinding,
   Project,
   ProjectMember,
   ResearchStudy,
@@ -86,6 +100,8 @@ const modelDefiners = [
   RecordsHold,
   RecordsHoldTarget,
   RecordsDispositionEvent,
+  RepositoryBinding,
+  ProjectMembership,
 ];
 
 // Register all models with Sequelize

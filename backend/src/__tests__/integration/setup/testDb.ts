@@ -49,6 +49,14 @@ import RecordsManagementAssignment from '../../../database/models/records_manage
 import RecordsHold from '../../../database/models/records_hold';
 import RecordsHoldTarget from '../../../database/models/records_hold_target';
 import RecordsDispositionEvent from '../../../database/models/records_disposition_event';
+// PLAT-2: Organization/tenant isolation
+import Organization from '../../../database/models/organization';
+import Team from '../../../database/models/team';
+import Actor from '../../../database/models/actor';
+import ActorIdentity from '../../../database/models/actor_identity';
+import AdapterWorkspaceBinding from '../../../database/models/adapter_workspace_binding';
+import RepositoryBinding from '../../../database/models/repository_binding';
+import ProjectMembership from '../../../database/models/project_membership';
 
 let instance: Sequelize | null = null;
 
@@ -71,7 +79,9 @@ export function getTestDb(): Sequelize {
 
   // Register all models (Project must be registered before models that depend on it)
   const modelDefiners = [
-    ChannelConfig, Project, ProjectMember, ResearchStudy, ResearchStudyUserRole,
+    ChannelConfig,
+    Organization, Team, Actor, ActorIdentity, AdapterWorkspaceBinding,
+    Project, ProjectMember, ResearchStudy, ResearchStudyUserRole,
     StudyStatus, StudyParticipant, SessionObserver, StudyNotes,
     ResearchPlan, SessionSummary, StudyVariable, CreatedIssue, SlackUserState,
     DispositionAuditLog, EvidenceSource, EvidenceConstruct, EvidenceRelationship,
@@ -81,6 +91,7 @@ export function getTestDb(): Sequelize {
     DataSubject, DataSubjectLink, EvidenceSubjectAttribution,
     RecordsSchedule, RecordsManagementAssignment,
     RecordsHold, RecordsHoldTarget, RecordsDispositionEvent,
+    RepositoryBinding, ProjectMembership,
   ];
 
   for (const defineModel of modelDefiners) {
