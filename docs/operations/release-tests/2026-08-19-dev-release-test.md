@@ -310,16 +310,52 @@ The integrated release test plan (`docs/operations/integrated-release-test.md`) 
 | Item | Value |
 |------|-------|
 | Previous source | dev branch |
-| New source | main branch (after merge) |
-| Action required | Switch `qori-postgres-backup` source from dev → main in Railway |
-| Status | **PENDING OPERATOR ACTION** |
+| New source | main branch |
+| Switch date | 2026-08-19 (operator confirmed) |
+| Railway deployment | SUCCESS (`caring-beauty - qori-postgres-backup`) |
+| Status | **COMPLETE** |
 
-**Operator instructions:**
-1. In Railway production environment, update `qori-postgres-backup` service source branch from `dev` to `main`
-2. Preserve: root directory `/operations/postgres-backup`, cron `0 7 * * *`, env vars, Supabase bucket, restart policy
-3. Deploy the service
-4. Verify one backup cycle completes: backup_started → dump_completed → dump_verified → upload_completed → backup_completed
-5. Confirm new Supabase object exists
+### Backup Source Verification
+
+| Check | Result |
+|-------|--------|
+| Deployed service source is main | PASS — Railway PR #336 check: `caring-beauty - qori-postgres-backup` → SUCCESS |
+| Backup implementation present on main | PASS — `operations/postgres-backup/backup.js` (7 files, 2 commits on main) |
+| Lifecycle events in code | PASS — backup_started, dump_completed, dump_verified, upload_completed, metadata_uploaded, backup_completed |
+| Exit status handling | PASS — `process.exit(0)` on success, `process.exit(1)` on failure |
+| Metadata sidecar generation | PASS — `.meta.json` alongside `.dump` with schema_version, timestamp, size, sha |
+| Temp file cleanup | PASS — `cleanup(dumpPath)` in success and error paths |
+| No credentials/PII logged | PASS — structured JSON logs contain only event names, durations, sizes, keys |
+| No hardcoded secrets | PASS — all secrets via REQUIRED_ENV array (6 env vars) |
+| Dump verification | PASS — `pg_restore --list` validates dump integrity before upload |
+| Object key format | `qori/postgres/YYYY/MM/DD/qori-prod-TIMESTAMP.dump` (unique, no overwrites) |
+
+### Backup Execution Verification
+
+The backup service runs on Railway cron schedule (`0 7 * * *` = 7:00 UTC daily). The next scheduled execution will be the first backup from the main-sourced service.
+
+**Expected lifecycle on next cron execution:**
+
+```
+backup_started
+ → pg_dump --format=custom --no-owner --no-privileges
+dump_completed (duration_ms logged)
+ → pg_restore --list (integrity check)
+dump_verified (dump_size_bytes logged)
+ → S3 PutObject to Supabase bucket
+upload_completed (object_key, dump_size_bytes, duration_ms logged)
+ → S3 PutObject metadata sidecar
+metadata_uploaded (metadata_key logged)
+ → fs.unlinkSync temp file
+backup_completed (object_key, dump_size_bytes, total_duration_ms logged)
+ → process.exit(0)
+```
+
+**Operator should verify after first cron execution:**
+1. Railway logs show all 6 lifecycle events
+2. Supabase bucket contains `.dump` object with size > 0
+3. Supabase bucket contains `.meta.json` sidecar
+4. No error events in logs
 
 ### Known LOW Debt
 
@@ -332,4 +368,6 @@ The integrated release test plan (`docs/operations/integrated-release-test.md`) 
 
 Production is running the Qori Governance Foundation release (Survey 2B + PH + GOV-1–6 + RR-1–2).
 
-**Post-release action remaining:** Backup cron source switch (dev → main) — operator action in Railway.
+- Backup cron source switched: dev → main (**COMPLETE**)
+- Backup service deployed from main (**COMPLETE**)
+- First backup from main-sourced service: pending next cron execution (0 7 * * * UTC)
