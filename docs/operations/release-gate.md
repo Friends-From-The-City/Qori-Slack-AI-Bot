@@ -63,6 +63,8 @@ Items that must be resolved before release. Updated as the RR-1 audit progresses
 | usability_issues → research_readout emit contract | research_readout expects `prioritized_issues` from usability_issues but emit may not exist in all flows | OPEN |
 | GitHub cascade size | `discovery-variables.json` can exceed GitHub Contents API limit | OPEN |
 
+**Business-logic leakage:** 0 RELEASE_BLOCKERs found (see `docs/operations/business-logic-leakage.md`). All 7 BEFORE_WORKSPACE items are acceptable for Slack-only release — extraction deferred to PLAT-3.
+
 ---
 
 ## RR-2 Reference
