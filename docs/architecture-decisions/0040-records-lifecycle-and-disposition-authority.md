@@ -35,7 +35,16 @@ The system can store and enforce a NARA GRS citation, an agency-specific schedul
 
 4. **DSAR/privacy and records-retention conflicts are human-resolved.** When both obligations appear to apply, the system returns `GOVERNANCE_REVIEW_REQUIRED` — it does not invent legal precedence.
 
-5. **Disposition tombstones, does not hard-delete.** Initial disposition marks assignments as `disposed` and creates append-only events. Physical deletion of canonical rows is deferred to per-record-type adapters (not yet implemented) because safe deletion semantics vary by record type and may break evidence lineage.
+5. **Disposition suppresses content via record-type adapters.** A completed destroy must actually remove the governed payload — not just tombstone the assignment. Each supported record type has an explicit adapter that NULLs destroyable content while preserving structural/audit metadata (public_id, type, schedule authority, timestamps, actor, lineage). Unsupported types return `manual_review_required` rather than falsely claiming completion.
+
+   Supported adapters:
+   - `evidence_construct`: suppresses `label` + `payload`; FK children reference IDs only
+   - `research_artifact`: suppresses `title` + `path` + `url`; FK children reference IDs only
+
+   Unsupported (→ manual review):
+   - `project`: name/slug are routing keys; content suppression orphans child studies
+   - `study`: name used in display paths; content suppression orphans participants/evidence
+   - `evidence_source`: NOT NULL FK children in survey tables would break
 
 6. **Permanent records follow a transfer path.** They are never eligible for `destroy` disposition. Transfer preparation creates a `manual_review_required` event and stops.
 
@@ -67,15 +76,15 @@ Archival/retrieval: any authorized project member. Destructive disposition, hold
 
 ### Constraints
 
-- Disposition does not yet physically delete data — it tombstones assignments
-- Per-record-type physical deletion adapters are future work
+- Content suppression NULLs payload columns but does not delete canonical rows (structural metadata survives for lineage/audit)
+- Three record types (project, study, evidence_source) lack safe automated adapters — disposition returns `manual_review_required`
 - No NARA transfer API integration
 - No records-officer RBAC role (uses owner/admin)
 - Schedules must be manually created — no preloaded federal schedules
 
 ### Future Work
 
-- Per-record-type disposition adapters for safe physical deletion
+- Disposition adapters for project/study/evidence_source (requires cascade analysis)
 - Records-officer role with specialized permissions
 - NARA transfer packaging and export
 - GitHub/Slack external artifact reconciliation on disposition

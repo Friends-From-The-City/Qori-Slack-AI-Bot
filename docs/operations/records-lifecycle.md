@@ -147,11 +147,30 @@ If ANY condition fails, the system returns specific ineligibility reasons:
 
 ### Disposition Execution
 
-For eligible temporary records with `disposition_action = 'destroy'`:
+For eligible temporary records with `disposition_action = 'destroy'`, the system routes through a **record-type disposition adapter**:
 
-1. Creates an immutable disposition event
-2. Tombstones the assignment (`lifecycle_status → 'disposed'`)
-3. Does NOT hard-delete canonical database rows
+**Supported types (automated content suppression):**
+
+| Record Type | Suppressed Fields | Preserved Structural Metadata |
+|---|---|---|
+| `evidence_construct` | `label`, `payload` | public_id, construct_type, derivation_type, status, created_by, timestamps |
+| `research_artifact` | `title`, `path`, `url` | public_id, artifact_type, repo, ref, semantic_key, created_by, timestamps |
+
+Completed destroy:
+1. Suppresses destroyable content via adapter (NULLs payload columns)
+2. Creates an immutable disposition event with `outcome='completed'`
+3. Marks assignment `lifecycle_status = 'disposed'`
+4. Preserves structural/audit identity for lineage
+
+**Unsupported types (→ manual review):**
+
+| Record Type | Reason |
+|---|---|
+| `project` | name/slug are routing keys; content suppression orphans child studies |
+| `study` | name used in display paths; content suppression orphans participants/evidence |
+| `evidence_source` | NOT NULL FK children in survey tables would break |
+
+These return `outcome='manual_review_required'` — content remains intact, assignment is NOT marked disposed.
 
 For `disposition_action = 'review'`:
 - Returns `manual_review_required` — records officer must review
