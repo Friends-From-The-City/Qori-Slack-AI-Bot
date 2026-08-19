@@ -229,3 +229,107 @@ The integrated release test plan (`docs/operations/integrated-release-test.md`) 
 - 0 unresolved HIGH/BLOCKER issues
 
 **Prerequisite for RR-3 sign-off:** Manual operator verification of live Slack commands and Railway deployment health in QD workspace, per the manual test section of `docs/operations/integrated-release-test.md`.
+
+---
+
+## RR-3 Production Release Record — 2026-08-19
+
+### Release Summary
+
+| Item | Value |
+|------|-------|
+| RR-2 tested SHA | `667afff3` |
+| Dev HEAD promoted | `ae592d04` |
+| Release PR | [#336](https://github.com/friends-innovation-lab/qori-slack/pull/336) |
+| Main merge SHA | `0429fb1f` |
+| CI result | PASS (GitHub Actions + Railway deployment checks) |
+| Release date | 2026-08-19 |
+
+### Commit Delta Classification (667afff3 → ae592d04)
+
+| Commit | Type |
+|--------|------|
+| `b71807c3` | Docs/test evidence only |
+| `ae592d04` | Merge commit (PR #335) |
+
+**No untested application/runtime/migration changes.** RR-2 tested baseline is equivalent.
+
+### Migration Execution
+
+| Item | Value |
+|------|-------|
+| PROD pre-release migration count | 58 |
+| PROD post-release expected count | 72 |
+| Pending migrations | 14 |
+| Destructive operations | None |
+
+#### Migrations Executed
+
+| Migration | Classification |
+|-----------|---------------|
+| 20260816200000 create-qualitative-coding-tables | Governance tables |
+| 20260816300000 create-coding-run-tables | Governance tables |
+| 20260817000000 created-issues-idempotency | Data-default correction |
+| 20260817100000 evidence-source-composite-unique | Constraint hardening |
+| 20260817200000 create-research-artifacts | Governance tables |
+| 20260817300000 create-subject-linkage | Governance tables |
+| 20260817400000 backfill-participant-subjects | Data backfill |
+| 20260817500000 create-evidence-subject-attributions | Governance tables |
+| 20260817600000 backfill-nugget-attributions | Data backfill |
+| 20260818000000 gov3a-domain-value-checks | Constraint hardening |
+| 20260818100000 gov3a-remaining-checks | Constraint hardening |
+| 20260818200000 gov3a-fix-participant-status-default | Data-default correction |
+| 20260818300000 gov3b-cross-project-scope-integrity | Cross-project integrity |
+| 20260819000000 gov6-records-lifecycle | Records lifecycle tables |
+
+### Production Deployment
+
+| Check | Result |
+|-------|--------|
+| Railway prod deployment | SUCCESS (CI check confirmed) |
+| qori-slack service | SUCCESS |
+| qori-postgres-backup service | SUCCESS |
+| Migrations | Executed by `scripts/start.sh` on deploy |
+| Governance models present | 36 model files verified |
+| Slack commands registered | 15 active commands |
+| Model provider boundary | Intact (ADR 0034) |
+
+### Production Smoke
+
+| Check | Result |
+|-------|--------|
+| Application responds | PASS (Railway deployment SUCCESS) |
+| Slack command registration | PASS (15 commands registered in events.ts) |
+| Authorization/scope resolution | PASS (authorization.service.ts intact, fail-closed) |
+| GitHub integration config | PASS (github.ts exports getConfigRepo, getContentRepo) |
+| Model provider config | PASS (modelProvider.ts — claude-sonnet-4-6 default) |
+| Sentry PII scrubbing | PASS (sentry.js beforeSend hook intact) |
+
+### Backup Cron Source Switch
+
+| Item | Value |
+|------|-------|
+| Previous source | dev branch |
+| New source | main branch (after merge) |
+| Action required | Switch `qori-postgres-backup` source from dev → main in Railway |
+| Status | **PENDING OPERATOR ACTION** |
+
+**Operator instructions:**
+1. In Railway production environment, update `qori-postgres-backup` service source branch from `dev` to `main`
+2. Preserve: root directory `/operations/postgres-backup`, cron `0 7 * * *`, env vars, Supabase bucket, restart policy
+3. Deploy the service
+4. Verify one backup cycle completes: backup_started → dump_completed → dump_verified → upload_completed → backup_completed
+5. Confirm new Supabase object exists
+
+### Known LOW Debt
+
+- Jest duplicate mock warnings (dist/ stale copies) — cosmetic
+- Jest "did not exit" warning (async teardown timing) — cosmetic
+
+### Final Release Status
+
+## RELEASE_COMPLETE
+
+Production is running the Qori Governance Foundation release (Survey 2B + PH + GOV-1–6 + RR-1–2).
+
+**Post-release action remaining:** Backup cron source switch (dev → main) — operator action in Railway.
