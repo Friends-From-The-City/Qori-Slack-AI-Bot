@@ -164,33 +164,34 @@ describe('PH-3: PII scan', () => {
 // ═══════════════════════════════════════════════════════════════════════
 
 describe('PH-3: No unstructured model path bypasses the gate', () => {
-  it('discoverHandler calls authorizeForModel before processYamlTemplate', () => {
+  // PLAT-3: Privacy gating moved from Slack handlers to application services.
+  // Handlers now delegate to app services which own the authorizeForModel call.
+  // Verify the application services enforce the privacy gate.
+
+  it('discovery.app-service calls authorizeForModel before processYamlTemplate', () => {
     const source = readFileSync(
-      join(__dirname, '../../helpers/slack/commands/discoverHandler.ts'),
+      join(__dirname, '../../application/discovery.app-service.ts'),
       'utf-8',
     );
     const authorizeIdx = source.indexOf('authorizeForModel(');
     const templateIdx = source.indexOf("processYamlTemplate(");
-    // Both must exist
     expect(authorizeIdx).toBeGreaterThan(-1);
     expect(templateIdx).toBeGreaterThan(-1);
-    // authorizeForModel must appear before processYamlTemplate
     expect(authorizeIdx).toBeLessThan(templateIdx);
   });
 
-  it('readoutHandler calls authorizeForModel before processYamlTemplate', () => {
+  it('readout.app-service calls authorizeForModel', () => {
     const source = readFileSync(
-      join(__dirname, '../../helpers/slack/commands/readoutHandler.ts'),
+      join(__dirname, '../../application/readout.app-service.ts'),
       'utf-8',
     );
     const authorizeIdx = source.indexOf('authorizeForModel(');
-    // Must exist
     expect(authorizeIdx).toBeGreaterThan(-1);
   });
 
-  it('researchSynthesisHandler calls authorizeForModel before processYamlTemplate', () => {
+  it('synthesis.app-service calls authorizeForModel before processYamlTemplate', () => {
     const source = readFileSync(
-      join(__dirname, '../../helpers/slack/commands/researchSynthesisHandler.ts'),
+      join(__dirname, '../../application/synthesis.app-service.ts'),
       'utf-8',
     );
     const authorizeIdx = source.indexOf('authorizeForModel(');

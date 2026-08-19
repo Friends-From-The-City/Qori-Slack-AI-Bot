@@ -14,11 +14,9 @@ import {
   type TranscriptReviewModalMetadata,
   type ScrubStats,
   buildReviewUrl,
-  buildStatusText,
   buildTranscriptReviewDmBlocks,
   buildApprovedDmBlocks,
   buildRejectedDmBlocks,
-  buildCommitFailureDmBlocks,
   buildRescrubModal,
   buildApproveModal,
   buildRejectModal,
@@ -28,14 +26,18 @@ import sessionObserverService from "../../../services/session_observer.service";
 import sessionParticipantService from "../../../services/study_participant.service";
 import { resolveStudyFromName } from "../../../services/research_study.service";
 import { assertStudyAccess, AuthorizationError } from "../../../services/authorization.service";
-import type { VariableContext } from "../../studyVariables";
-import { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo, createOrUpdateFileOnGitHub } from "../../github";
-import { processYamlTemplate, type DryRunResult } from "../../yamlProcessor";
 import { studyNotesService } from "../../../services";
 import { processSlackFiles } from "../../pdfProcessor";
 import { postEphemeralOrDM } from "../slackHelpers";
-import { scrubTranscript, type ScrubContext } from "../../transcriptScrubber";
-import { STUDY_FOLDERS } from "../../../config/folderStructure";
+import { buildSlackApplicationContext } from '../../../middleware/auth/slackContextBridge';
+import {
+  uploadTranscript as uploadTranscriptAppService,
+  approveTranscript as approveTranscriptAppService,
+  approveManualNotes as approveManualNotesAppService,
+  type TranscriptUploadInput,
+  type TranscriptApprovalInput,
+  type ManualNotesApprovalInput,
+} from '../../../application/transcript.app-service';
 
 // ─── Types ──────────────────────────────────────────────────────
 
@@ -585,70 +587,56 @@ const handleSessionNotesSubmission = async ({ ack, body, view, client }: SlackVi
         return;
       }
 
-      // ── Run PII scrubbing ──
-      const scrubCtx: ScrubContext = {
-        participantRealName: participantRealName,
-        participantCode: templateData.participant_id,
-        moderatorName: templateData.researcher,
-      };
+      // ── PLAT-3: App service is the ONLY business path ──
+      const transcriptAppCtx = await buildSlackApplicationContext(body.user.id, body.team?.id || '');
 
-      const scrubResult = scrubTranscript(rawContent, scrubCtx);
-      console.log(`[PII] Scrub pass: ${scrubResult.stats.participantName + scrubResult.stats.moderatorName + scrubResult.stats.speakerLabels + scrubResult.stats.phoneNumbers + scrubResult.stats.emailAddresses} items replaced`);
-      // NOTE: Do NOT log the actual content or names
-
-      // ── Build scrubbed transcript content with PII marker ──
-      // GREPPABLE MARKER: allows finding unreviewed files with a simple grep
-      // On approval, marker is flipped to REVIEWED-CLEARED
-      const piiMarkerPending = '<!-- PII-STATUS: PENDING-REVIEW -->';
-
-      const scrubbedTranscriptContent = `${piiMarkerPending}
-# Session Transcript: ${templateData.participant_id}
-
-**Study:** ${templateData.study_name}
-**Session date:** ${templateData.session_date}
-**Session time:** ${templateData.session_time}
-**Researcher:** [Moderator]
-**Uploaded:** ${new Date().toISOString()}
-**PII Status:** Auto-scrubbed, pending human review
-
----
-
-${scrubResult.content}`;
-
-      // ── DM-FIRST ORDERING ──────────────────────────────────────────
-      // The DM is the cheap, reversible operation. The git commit is the
-      // expensive, permanent one. Post the DM first. If the DM cannot be
-      // delivered, ABORT — nothing enters git, no orphan to recover.
-      // If the DM succeeds but the commit fails, update the DM to a
-      // failure state (buttons removed, clear instruction).
-
-      const resolved = await resolveStudyFromName(templateData.study_name);
-      if (!resolved) throw new Error(`Study "${templateData.study_name}" not found`);
-
-      // DETERMINISTIC filename: re-uploads of same session REPLACE the pending file
-      const transcriptFileName = `transcript_${templateData.session_id}.md`;
-      const quarantinePath = `${resolved.study?.path}/.pending-review/${transcriptFileName}`;
-      const finalPath = `${resolved.study?.path}/${STUDY_FOLDERS.FIELDWORK_TRANSCRIPTS}/${transcriptFileName}`;
-
-      // Derive review URL BEFORE commit (deterministic from path)
-      const fileUrl = buildReviewUrl(quarantinePath);
-
-      // Close the upload modal
-      if (!ackCalled) {
-        await ack();
-        ackCalled = true;
+      if (!transcriptAppCtx) {
+        // FAIL CLOSED — no identity resolution means no business logic
+        if (!ackCalled) { await ack(); ackCalled = true; }
+        await client.chat.postMessage({
+          channel: body.user.id,
+          text: '❌ Unable to resolve identity. Please contact your workspace administrator.',
+        });
+        return;
       }
 
-      // ── STEP 1: Post the review DM (reversible) ──
-      // Full status block, review link, all three buttons.
-      // If this fails, we abort — nothing enters git.
-      const partialMetadata: Omit<TranscriptReviewMetadata, 'dmChannelId' | 'messageTs'> = {
-        quarantinePath,
-        finalPath,
-        filename: transcriptFileName,
+      // ── APP SERVICE PATH: delegate scrubbing + quarantine write ──
+      const resolvedForUpload = await resolveStudyFromName(templateData.study_name);
+      if (!resolvedForUpload) throw new Error(`Study "${templateData.study_name}" not found`);
+
+      const uploadInput: TranscriptUploadInput = {
+        studyId: resolvedForUpload.studyId,
+        projectId: resolvedForUpload.projectId,
+        studyName: templateData.study_name,
+        studyPath: resolvedForUpload.study?.path || '',
+        sessionId: templateData.session_id,
+        participantName: templateData.participant_name,
+        participantCode: templateData.participant_id,
+        sessionDate: templateData.session_date,
+        sessionTime: templateData.session_time,
+        researcherName: templateData.researcher,
+        rawContent,
+        isTranscript: true,
+        participantRealName,
+        createdByActorId: String(transcriptAppCtx.actor.id),
+      };
+
+      const uploadResult = await uploadTranscriptAppService(transcriptAppCtx, uploadInput);
+
+      // Close the upload modal
+      if (!ackCalled) { await ack(); ackCalled = true; }
+
+      // Derive review URL from quarantine path
+      const appFileUrl = buildReviewUrl(uploadResult.quarantinePath!);
+
+      // ── DM-FIRST ORDERING: Post review DM using app service result ──
+      const appPartialMeta: Omit<TranscriptReviewMetadata, 'dmChannelId' | 'messageTs'> = {
+        quarantinePath: uploadResult.quarantinePath!,
+        finalPath: uploadResult.finalPath,
+        filename: `transcript_${templateData.session_id}.md`,
         participantCode: templateData.participant_id,
         studyName: templateData.study_name,
-        fileUrl,
+        fileUrl: appFileUrl,
         studyId: selectedSession.study?.id || null,
         participantId: selectedSession.participant?.id || null,
         sessionDate: templateData.session_date,
@@ -656,16 +644,14 @@ ${scrubResult.content}`;
         userId: body.user.id,
       };
 
-      // Post DM — this gives us dmChannelId + messageTs
-      let dmResult: { channel: string; ts: string };
+      let appDmResult: { channel: string; ts: string };
       try {
-        // Use a placeholder buttonMetadata (no messageTs yet — filled after post)
-        const placeholderMeta = JSON.stringify({ ...partialMetadata, dmChannelId: '', messageTs: '' });
+        const placeholderMeta = JSON.stringify({ ...appPartialMeta, dmChannelId: '', messageTs: '' });
         const dmBlocks = buildTranscriptReviewDmBlocks({
-          stats: scrubResult.stats,
+          stats: uploadResult.scrubStats,
           participantCode: templateData.participant_id,
           studyName: templateData.study_name,
-          fileUrl,
+          fileUrl: appFileUrl,
           nameProvided: Boolean(participantRealName),
           buttonMetadata: placeholderMeta,
         });
@@ -679,62 +665,39 @@ ${scrubResult.content}`;
         if (!postResult.ok || !postResult.ts || !postResult.channel) {
           throw new Error('DM post returned no ts/channel');
         }
-        dmResult = { channel: postResult.channel, ts: postResult.ts };
-        console.log(`[PII-SEQ] 1/4 DM posted: channel=${dmResult.channel} ts=${dmResult.ts}`);
+        appDmResult = { channel: postResult.channel, ts: postResult.ts };
+        console.log(`[PII-SEQ] 1/2 DM posted: channel=${appDmResult.channel} ts=${appDmResult.ts}`);
       } catch (dmErr) {
-        // DM failed — ABORT. Nothing enters git. No orphan.
         const dmMessage = dmErr instanceof Error ? dmErr.message : String(dmErr);
-        console.error('[PII] Review DM failed — aborting before commit:', dmMessage);
+        console.error('[PII] Review DM failed:', dmMessage);
         await postEphemeralOrDM(client, body.user.id, metadata.channelId || body.user.id,
-          'Could not deliver the review message. No transcript was saved. Please try again.');
+          'Could not deliver the review message. Transcript was saved to quarantine but review DM failed. Please try again.');
         return;
       }
-
-      // Now we have dmChannelId + messageTs — update buttons with real metadata
-      const fullMetadata: TranscriptReviewMetadata = {
-        ...partialMetadata as any,
-        dmChannelId: dmResult.channel,
-        messageTs: dmResult.ts,
-      };
-      const buttonMetadata = JSON.stringify(fullMetadata);
 
       // Update DM with real button metadata
-      const finalDmBlocks = buildTranscriptReviewDmBlocks({
-        stats: scrubResult.stats,
+      const appFullMeta: TranscriptReviewMetadata = {
+        ...appPartialMeta as any,
+        dmChannelId: appDmResult.channel,
+        messageTs: appDmResult.ts,
+      };
+      const appButtonMeta = JSON.stringify(appFullMeta);
+
+      const appFinalDmBlocks = buildTranscriptReviewDmBlocks({
+        stats: uploadResult.scrubStats,
         participantCode: templateData.participant_id,
         studyName: templateData.study_name,
-        fileUrl,
+        fileUrl: appFileUrl,
         nameProvided: Boolean(participantRealName),
-        buttonMetadata,
+        buttonMetadata: appButtonMeta,
       });
       await client.chat.update({
-        channel: dmResult.channel,
-        ts: dmResult.ts,
+        channel: appDmResult.channel,
+        ts: appDmResult.ts,
         text: `PII Review: ${templateData.study_name} - ${templateData.participant_id}`,
-        blocks: finalDmBlocks,
+        blocks: appFinalDmBlocks,
       });
-      console.log(`[PII-SEQ] 2/4 DM button metadata attached`);
-
-      // ── STEP 2: Commit quarantine file (permanent) ──
-      // DM is already posted. If this fails, update DM to failure state.
-      console.log(`[PII-SEQ] 3/4 quarantine commit attempted`);
-      try {
-        await createOrUpdateFileOnGitHub(quarantinePath, scrubbedTranscriptContent);
-        console.log(`[PII] Transcript saved to quarantine: ${quarantinePath}`);
-      } catch (commitErr) {
-        // Commit failed — update DM to failure state (buttons removed)
-        const commitMessage = commitErr instanceof Error ? commitErr.message : String(commitErr);
-        console.error('[PII] Quarantine commit failed:', commitMessage);
-        const failureBlocks = buildCommitFailureDmBlocks(templateData.study_name, templateData.participant_id);
-        await client.chat.update({
-          channel: dmResult.channel,
-          ts: dmResult.ts,
-          text: 'Transcript could not be saved to quarantine.',
-          blocks: failureBlocks,
-        });
-        console.log(`[PII-SEQ] 4/4 DM updated to failure state`);
-        return;
-      }
+      console.log(`[PII-SEQ] 2/2 DM button metadata attached`);
 
       // ── participantRealName is now out of scope — NEVER stored anywhere ──
       // NO database record yet — record is created only on approval
@@ -750,166 +713,87 @@ ${scrubResult.content}`;
     // Git history only contains approved/reviewed content (no quarantine commits).
     // On approval: read from DB, write to git for FIRST time, clear pending_content.
 
-    const resolved = await resolveStudyFromName(templateData.study_name);
-    if (!resolved) throw new Error(`Study "${templateData.study_name}" not found`);
-    const study = resolved.study;
-    const variableContext: VariableContext = { projectId: resolved.projectId, studyId: resolved.studyId };
-    const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, yamlTemplateName!);
+    // ── PLAT-3: App service is the ONLY business path ──
+    const manualAppCtx = await buildSlackApplicationContext(body.user.id, body.team?.id || '');
 
-    // Use dryRun to get rendered content WITHOUT writing to GitHub
-    const dryResult = await processYamlTemplate(
-      file.content,
-      templateData,
-      study!.path ?? '',
-      '',
-      false,
-      variableContext,
-      undefined,
-      true, // dryRun = true
-    ) as DryRunResult;
-
-    // ── Run basic PII scrubbing (phone/email only) ──
-    // Manual notes typically use PT-XXX codes, so name decomposition finds little.
-    // But phone/email regex still applies. Human review is the main gate.
-    const scrubCtx: ScrubContext = {
-      participantRealName: '', // No real name to decompose for manual notes
-      participantCode: templateData.participant_id,
-      moderatorName: templateData.researcher,
-    };
-
-    const scrubResult = scrubTranscript(dryResult.content, scrubCtx);
-    console.log(`[PII] Manual notes scrubbing: ${scrubResult.stats.phoneNumbers + scrubResult.stats.emailAddresses} items scrubbed (phone/email only)`);
-
-    // ── Build scrubbed content (NO git write yet) ──
-    // DB-HELD: Content stays in DB until human approval, then first git commit
-    const scrubbedContent = scrubResult.content;
-
-    // ── Compute final path (where content will go AFTER approval) ──
-    const notesFileName = `notes_${templateData.session_id}.md`;
-    const finalPath = dryResult.path;
-
-    // ── Store in DB with pending_content (NOT git) ──
-    // pii_reviewed=false: NOT eligible for /qori-analyze
-    // pending_content holds scrubbed content until approval
-    // NO git commit happens here — git history stays clean
-    const studyNoteData = {
-      study_id: selectedSession.study?.id,
-      study_name: templateData.study_name,
-      filename: notesFileName,
-      file_path: finalPath,
-      file_url: null, // No git URL yet — created on approval
-      session_date: templateData.session_date,
-      session_time: templateData.session_time,
-      participant_id: selectedSession.participant?.id,
-      created_by: body.user.id,
-      transcript: false, // Manual notes, not transcript
-      pii_reviewed: false, // NOT approved yet
-      pii_reviewed_at: null,
-      pii_reviewed_by: null,
-      pending_content: scrubbedContent, // DB-held until approval
-    };
-
-    const pendingNote = await studyNotesService.createStudyNote(studyNoteData);
-    console.log(`[PII] Manual notes saved to DB (pending_content): ID=${pendingNote.id}`);
-
-    // ── Build review metadata for approval flow ──
-    // Uses note ID to retrieve pending_content on approval
-    interface ManualNotesApprovalMetadata {
-      noteId: number;
-      finalPath: string;
-      filename: string;
-      participantCode: string;
-      studyName: string;
+    if (!manualAppCtx) {
+      // FAIL CLOSED — no identity resolution means no business logic
+      await client.chat.postMessage({
+        channel: body.user.id,
+        text: '❌ Unable to resolve identity. Please contact your workspace administrator.',
+      });
+      return;
     }
-    const approvalMetadata: ManualNotesApprovalMetadata = {
-      noteId: pendingNote.id,
-      finalPath,
-      filename: notesFileName,
+
+    // ── APP SERVICE PATH: delegate manual notes processing ──
+    const manualResolved = await resolveStudyFromName(templateData.study_name);
+    if (!manualResolved) throw new Error(`Study "${templateData.study_name}" not found`);
+
+    const manualUploadInput: TranscriptUploadInput = {
+      studyId: manualResolved.studyId,
+      projectId: manualResolved.projectId,
+      studyName: templateData.study_name,
+      studyPath: manualResolved.study?.path || '',
+      sessionId: templateData.session_id,
+      participantName: templateData.participant_name,
+      participantCode: templateData.participant_id,
+      sessionDate: templateData.session_date,
+      sessionTime: templateData.session_time,
+      researcherName: templateData.researcher,
+      rawContent: templateData.structured_notes || '',
+      isTranscript: false,
+      participantRealName: '',
+      createdByActorId: String(manualAppCtx.actor.id),
+    };
+
+    const manualUploadResult = await uploadTranscriptAppService(manualAppCtx, manualUploadInput);
+
+    // Build honest status text from app service result
+    const manualPhoneCount = manualUploadResult.scrubStats.phoneNumbers;
+    const manualEmailCount = manualUploadResult.scrubStats.emailAddresses;
+    const manualScrubParts: string[] = [];
+    if (manualPhoneCount > 0) manualScrubParts.push(`${manualPhoneCount} phone number${manualPhoneCount !== 1 ? 's' : ''} → [PHONE]`);
+    if (manualEmailCount > 0) manualScrubParts.push(`${manualEmailCount} email${manualEmailCount !== 1 ? 's' : ''} → [EMAIL]`);
+    const manualStatsText = manualScrubParts.length > 0
+      ? `Auto-scrub applied: ${manualScrubParts.join(' · ')}`
+      : 'Auto-scrub applied: no phone/email patterns found';
+
+    // Read pending content from DB for inline display
+    const manualPendingNote = await studyNotesService.getStudyNoteById(manualUploadResult.noteId!);
+    const manualScrubbedContent: string = manualPendingNote.pending_content || '';
+    const manualDisplayContent = manualScrubbedContent.length > 2800
+      ? manualScrubbedContent.slice(0, 2800) + '\n\n... (truncated for display)'
+      : manualScrubbedContent;
+
+    const manualApprovalMeta = {
+      noteId: manualUploadResult.noteId!,
+      finalPath: manualUploadResult.finalPath,
+      filename: `notes_${templateData.session_id}.md`,
       participantCode: templateData.participant_id,
       studyName: templateData.study_name,
     };
 
-    // Build honest status text (PII redesign item a — no success glyph)
-    const phoneCount = scrubResult.stats.phoneNumbers;
-    const emailCount = scrubResult.stats.emailAddresses;
-    const scrubParts: string[] = [];
-    if (phoneCount > 0) scrubParts.push(`${phoneCount} phone number${phoneCount !== 1 ? 's' : ''} → [PHONE]`);
-    if (emailCount > 0) scrubParts.push(`${emailCount} email${emailCount !== 1 ? 's' : ''} → [EMAIL]`);
-    const statsText = scrubParts.length > 0
-      ? `Auto-scrub applied: ${scrubParts.join(' · ')}`
-      : 'Auto-scrub applied: no phone/email patterns found';
-
-    // ── Truncate content for Slack display (Block Kit limit: 3000 chars) ──
-    const displayContent = scrubbedContent.length > 2800
-      ? scrubbedContent.slice(0, 2800) + '\n\n... (truncated for display)'
-      : scrubbedContent;
-
-    // ── Send review message via DM with INLINE content ──
-    // DB-held quarantine: content shown inline, no GitHub link (not committed yet)
     await client.chat.postMessage({
       channel: body.user.id,
       text: `PII Review Required: ${templateData.study_name} - ${templateData.participant_id}`,
       blocks: [
-        {
-          type: 'header',
-          text: { type: 'plain_text', text: 'PII Review Required' }
-        },
-        {
-          type: 'context',
-          elements: [
-            { type: 'mrkdwn', text: `*Study:* ${templateData.study_name} · *Participant:* ${templateData.participant_id}` }
-          ]
-        },
+        { type: 'header', text: { type: 'plain_text', text: 'PII Review Required' } },
+        { type: 'context', elements: [{ type: 'mrkdwn', text: `*Study:* ${templateData.study_name} · *Participant:* ${templateData.participant_id}` }] },
         { type: 'divider' },
-        {
-          type: 'section',
-          text: { type: 'mrkdwn', text: statsText }
-        },
+        { type: 'section', text: { type: 'mrkdwn', text: manualStatsText } },
         { type: 'divider' },
-        {
-          type: 'context',
-          elements: [
-            { type: 'mrkdwn', text: 'Not covered by auto-scrub: names of other people, places, dates, or details mentioned in conversation. Finding these is your review.' }
-          ]
-        },
+        { type: 'context', elements: [{ type: 'mrkdwn', text: 'Not covered by auto-scrub: names of other people, places, dates, or details mentioned in conversation. Finding these is your review.' }] },
         { type: 'divider' },
-        {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: '```\n' + displayContent + '\n```'
-          }
-        },
+        { type: 'section', text: { type: 'mrkdwn', text: '```\n' + manualDisplayContent + '\n```' } },
         { type: 'divider' },
         {
           type: 'actions',
           elements: [
-            {
-              type: 'button',
-              text: { type: 'plain_text', text: 'Approve & Commit to Git' },
-              style: 'primary',
-              action_id: 'manual_notes_approve',
-              value: JSON.stringify(approvalMetadata),
-            },
-            {
-              type: 'button',
-              text: { type: 'plain_text', text: 'Reject — needs source fix' },
-              style: 'danger',
-              action_id: 'manual_notes_reject',
-              value: JSON.stringify({ noteId: pendingNote.id }),
-            }
+            { type: 'button', text: { type: 'plain_text', text: 'Approve & Commit to Git' }, style: 'primary', action_id: 'manual_notes_approve', value: JSON.stringify(manualApprovalMeta) },
+            { type: 'button', text: { type: 'plain_text', text: 'Reject — needs source fix' }, style: 'danger', action_id: 'manual_notes_reject', value: JSON.stringify({ noteId: manualUploadResult.noteId }) },
           ]
         },
-        {
-          type: 'context',
-          elements: [
-            {
-              type: 'mrkdwn',
-              text: '*Approve* — commits to GitHub, eligible for `/qori-analyze`.\n' +
-                '*Reject* — deletes from DB, nothing committed to git.'
-            }
-          ]
-        }
+        { type: 'context', elements: [{ type: 'mrkdwn', text: '*Approve* — commits to GitHub, eligible for `/qori-analyze`.\n*Reject* — deletes from DB, nothing committed to git.' }] },
       ],
     });
 
@@ -1057,91 +941,43 @@ const handleTranscriptReviewApprove = async ({ ack, body, view, client }: SlackV
     // re-scrub → regenerate quarantine → reopen modal, fully automated.
     await ack({ response_action: 'clear' });
 
-    // ── MOVE from quarantine to final location ──
-    // 1. Read content from quarantine
-    const { Octokit } = await import('@octokit/rest');
-    const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
-    const owner = process.env.GITHUB_OWNER!;
-    const repo = process.env.GITHUB_REPO!;
+    // ── PLAT-3: App service is the ONLY business path ──
+    const approveCtx = await buildSlackApplicationContext(body.user.id, body.team?.id || '');
 
-    // Read quarantined file
-    const quarantineFile = await octokit.rest.repos.getContent({
-      owner,
-      repo,
-      path: quarantinePath,
-    });
-
-    if (!('content' in quarantineFile.data)) {
-      throw new Error('Quarantine file not found or is a directory');
+    if (!approveCtx) {
+      // FAIL CLOSED — no identity resolution means no business logic
+      await client.chat.postMessage({
+        channel: body.user.id,
+        text: '❌ Unable to resolve identity. Please contact your workspace administrator.',
+      });
+      return;
     }
 
-    const rawContent = Buffer.from(quarantineFile.data.content, 'base64').toString('utf-8');
-    const quarantineSha = quarantineFile.data.sha;
-
-    // 2. Flip PII marker from PENDING-REVIEW to REVIEWED-CLEARED
-    // First occurrence only — global /g over file body is silent evidence mutation
-    // if a participant ever says the phrase (ADR 0026 §5 over-redaction principle)
-    const reviewedContent = rawContent
-      .replace(/<!--\s*PII-STATUS:\s*PENDING-REVIEW\s*-->/i, '<!-- PII-STATUS: REVIEWED-CLEARED -->')
-      .replace(/\*\*PII Status:\*\*\s*Auto-scrubbed,?\s*pending human review/i, `**PII Status:** Reviewed and cleared by <@${body.user.id}>`);
-
-    // 3. Write to final location with updated marker
-    const finalResult = await createOrUpdateFileOnGitHub(finalPath, reviewedContent);
-    console.log(`✅ File moved to final location: ${finalPath}`);
-
-    // 3. Delete quarantine file
-    await octokit.rest.repos.deleteFile({
-      owner,
-      repo,
-      path: quarantinePath,
-      message: `Remove quarantine file after PII review approval`,
-      sha: quarantineSha,
-    });
-    console.log(`✅ Quarantine file deleted: ${quarantinePath}`);
-
-    // 4. Create DB record NOW (only after approval)
-    // Detect transcript vs manual notes by filename pattern
-    const isTranscript = filename.startsWith('transcript_');
-    const studyNoteData = {
-      study_id: studyId,
-      study_name: studyName,
+    // ── APP SERVICE PATH: delegate approval orchestration ──
+    const approvalInput: TranscriptApprovalInput = {
+      quarantinePath,
+      finalPath,
       filename,
-      file_path: finalPath,
-      file_url: finalResult.url,
-      session_date: sessionDate,
-      session_time: sessionTime,
-      participant_id: participantId,
-      created_by: userId,
-      transcript: isTranscript,
-      pii_reviewed: true,
-      pii_reviewed_at: new Date(),
-      pii_reviewed_by: body.user.id,
+      studyId: studyId,
+      studyName,
+      participantCode,
+      participantId: participantId,
+      sessionDate,
+      sessionTime,
+      originalUploaderId: userId,
+      reviewerActorId: String(approveCtx.actor.id),
     };
 
-    const createdNote = await studyNotesService.createStudyNote(studyNoteData);
-
-    // Disposition audit row (replaces console.log — per M3 ruling)
-    await logDispositionAction({
-      action: 'approve_transcript',
-      record_type: 'transcript',
-      target_identifier: `${participantCode}/${filename}`,
-      study_id: studyId ?? undefined,
-      study_name: studyName,
-      participant_code: participantCode,
-      actor_user_id: body.user.id,
-      authorization_basis: 'PII review attestation — reviewer confirmed full transcript review',
-      outcome: 'success',
-      outcome_detail: `quarantine=${quarantinePath} final=${finalPath} attested=true`,
-    });
+    const approvalResult = await approveTranscriptAppService(approveCtx, approvalInput);
 
     // Update the review DM to approved terminal state (buttons removed)
     if (metadata.dmChannelId && metadata.messageTs) {
-      const approvedBlocks = buildApprovedDmBlocks(studyName, participantCode, finalResult.url, body.user.id);
+      const appApprovedBlocks = buildApprovedDmBlocks(studyName, participantCode, approvalResult.finalUrl, body.user.id);
       await client.chat.update({
         channel: metadata.dmChannelId,
         ts: metadata.messageTs,
         text: `Transcript approved: ${studyName} - ${participantCode}`,
-        blocks: approvedBlocks,
+        blocks: appApprovedBlocks,
       });
     }
 
@@ -1503,62 +1339,35 @@ const handleManualNotesApprove = async ({ ack, body, client }: SlackActionMiddle
       throw err;
     }
 
-    const pendingContent: string | null = note.pending_content;
+    // ── PLAT-3: App service is the ONLY business path ──
+    const manualApproveCtx = await buildSlackApplicationContext(body.user.id, body.team?.id || '');
 
-    if (!pendingContent) {
+    if (!manualApproveCtx) {
+      // FAIL CLOSED — no identity resolution means no business logic
       await client.chat.postMessage({
         channel: body.user.id,
-        text: '❌ Error: Note content not found or already approved.',
+        text: '❌ Unable to resolve identity. Please contact your workspace administrator.',
       });
       return;
     }
 
-    // ── Build final content with REVIEWED-CLEARED marker ──
-    const piiMarkerCleared = '<!-- PII-STATUS: REVIEWED-CLEARED -->';
-    const reviewedContent = `${piiMarkerCleared}\n${pendingContent}`;
+    // ── APP SERVICE PATH: delegate manual notes approval ──
+    const manualApprovalInput: ManualNotesApprovalInput = {
+      noteId,
+      finalPath,
+      reviewerActorId: String(manualApproveCtx.actor.id),
+    };
 
-    // ── FIRST git commit — clean history, no quarantine commits ──
-    const finalResult = await createOrUpdateFileOnGitHub(finalPath, reviewedContent);
-    console.log(`✅ Manual notes committed to git (first commit): ${finalPath}`);
+    const manualApprovalResult = await approveManualNotesAppService(manualApproveCtx, manualApprovalInput);
 
-    // ── Update DB record: pii_reviewed=true, clear pending_content ──
-    await studyNotesService.updateStudyNote(noteId, {
-      file_url: finalResult.url,
-      pii_reviewed: true,
-      pii_reviewed_at: new Date(),
-      pii_reviewed_by: body.user.id,
-      pending_content: null, // Clear pending content
-    });
-    console.log(`✅ Study note updated: pii_reviewed=true, pending_content cleared: ID=${noteId}`);
-
-    // Notify user
+    // Notify user (Slack-specific)
     await client.chat.postMessage({
       channel: body.user.id,
       text: `✅ Notes approved and saved`,
       blocks: [
-        {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: `✅ *Notes approved and committed to GitHub*\n\n*Study:* ${studyName}\n*Participant:* ${participantCode}`,
-          },
-        },
-        {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: `<${finalResult.url}|View on GitHub>`,
-          },
-        },
-        {
-          type: 'context',
-          elements: [
-            {
-              type: 'mrkdwn',
-              text: '✅ These notes are now eligible for `/qori-analyze`.',
-            },
-          ],
-        },
+        { type: 'section', text: { type: 'mrkdwn', text: `✅ *Notes approved and committed to GitHub*\n\n*Study:* ${studyName}\n*Participant:* ${participantCode}` } },
+        { type: 'section', text: { type: 'mrkdwn', text: `<${manualApprovalResult.finalUrl}|View on GitHub>` } },
+        { type: 'context', elements: [{ type: 'mrkdwn', text: '✅ These notes are now eligible for `/qori-analyze`.' }] },
       ],
     });
 

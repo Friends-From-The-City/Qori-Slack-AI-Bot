@@ -30,14 +30,22 @@ const WorkspaceBindingModel = sequelize.models.AdapterWorkspaceBinding as typeof
 /**
  * Resolve a provider identity to a canonical actor.
  * Returns the actor if found, null if not.
+ *
+ * @param providerIssuer - Required for OIDC (two IdPs may issue same sub). Optional for Slack.
  */
 export async function resolveActor(
   provider: IdentityProvider,
   providerSubject: string,
+  providerIssuer?: string,
 ): Promise<Actor | null> {
-  const identity = await ActorIdentityModel.findOne({
-    where: { provider, provider_subject: providerSubject },
-  });
+  const where: Record<string, unknown> = { provider, provider_subject: providerSubject };
+  if (providerIssuer) {
+    where.provider_issuer = providerIssuer;
+  } else {
+    where.provider_issuer = null;
+  }
+
+  const identity = await ActorIdentityModel.findOne({ where });
 
   if (!identity) return null;
 
@@ -130,6 +138,79 @@ export async function resolveOrganizationFromWorkspace(
   if (!binding) return null;
 
   return OrganizationModel.findByPk(binding.organization_id);
+}
+
+/**
+ * Resolve an OIDC subject to a canonical actor, creating one if needed.
+ *
+ * Requires an identity_provider_binding to determine the organization.
+ * If no binding exists for this issuer, returns null (fail-closed).
+ *
+ * @param oidcSubject - OIDC sub claim
+ * @param issuer - OIDC issuer URL
+ * @param displayName - Optional display name from token
+ */
+export async function resolveOrCreateOidcActor(
+  oidcSubject: string,
+  issuer: string,
+  displayName?: string,
+): Promise<Actor | null> {
+  // Fast path: identity already exists
+  const existing = await resolveActor('oidc', oidcSubject, issuer);
+  if (existing) return existing;
+
+  // Resolve organization from identity provider binding
+  const IdpBindingModel = sequelize.models.IdentityProviderBinding;
+  const binding = await IdpBindingModel.findOne({
+    where: { provider: 'oidc', issuer_url: issuer, status: 'active' },
+  });
+
+  if (!binding) {
+    console.warn(
+      `[ACTOR] No identity provider binding for OIDC issuer ${issuer}. ` +
+      `Cannot create actor for subject ${oidcSubject}. ` +
+      `Register the issuer via identity_provider_bindings first.`,
+    );
+    return null;
+  }
+
+  // Create actor and identity in a transaction
+  const transaction = await sequelize.transaction();
+  try {
+    // Double-check within transaction (race condition protection)
+    const raceCheck = await ActorIdentityModel.findOne({
+      where: { provider: 'oidc', provider_issuer: issuer, provider_subject: oidcSubject },
+      transaction,
+    });
+    if (raceCheck) {
+      await transaction.commit();
+      return ActorModel.findByPk(raceCheck.actor_id);
+    }
+
+    const actor = await ActorModel.create({
+      organization_id: binding.get('organization_id') as number,
+      display_name: displayName || null,
+      status: 'active',
+    }, { transaction });
+
+    await ActorIdentityModel.create({
+      actor_id: actor.id,
+      provider: 'oidc',
+      provider_issuer: issuer,
+      provider_subject: oidcSubject,
+      metadata: { issuer },
+    }, { transaction });
+
+    await transaction.commit();
+    return actor;
+  } catch (error) {
+    await transaction.rollback();
+    console.error(
+      `[ACTOR] Failed to create actor for OIDC subject ${oidcSubject}:`,
+      error instanceof Error ? error.message : error,
+    );
+    return null;
+  }
 }
 
 /**

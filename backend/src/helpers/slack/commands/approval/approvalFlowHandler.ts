@@ -14,6 +14,10 @@ import {
   handleRequestChangesSubmission,
 } from '../../requestChangesHandler';
 
+// PLAT-3: Approval app service (executeDocumentApproval) is the ONLY business
+// path. Slack handlers delegate to requestChangesHandler which calls the app
+// service directly. No legacy fallback.
+
 // ─── Plan approval ─────────────────────────────────────────────────
 
 async function handleApprovePlan({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs): Promise<void> {

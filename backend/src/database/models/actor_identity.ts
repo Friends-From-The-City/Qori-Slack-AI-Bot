@@ -23,6 +23,7 @@ class ActorIdentity extends Model<
   declare id: CreationOptional<number>;
   declare actor_id: ForeignKey<number>;
   declare provider: IdentityProvider;
+  declare provider_issuer: CreationOptional<string | null>;
   declare provider_subject: string;
   declare metadata: CreationOptional<Record<string, unknown>>;
   declare created_at: CreationOptional<Date>;
@@ -42,6 +43,7 @@ export default (sequelize: Sequelize) => {
         allowNull: false,
         validate: { isIn: [['slack', 'oidc', 'saml', 'local_test']] },
       },
+      provider_issuer: { type: DataTypes.TEXT, allowNull: true },
       provider_subject: { type: DataTypes.TEXT, allowNull: false },
       metadata: { type: DataTypes.JSONB, allowNull: false, defaultValue: {} },
       created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: sequelize.literal('CURRENT_TIMESTAMP') },

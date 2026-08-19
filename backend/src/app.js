@@ -21,7 +21,15 @@ const { createFolderWithDummyData, readFolderContents, listOrgRepos, listAllTopL
 
 const { NODE_ENV, DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT, PORT, DB_DIALECT } = process.env;
 
+const { parseTrustedProxy } = require('./middleware/trustedProxy');
+const { createSecurityMiddleware } = require('./middleware/security');
+const { createApiRateLimiter } = require('./middleware/rateLimiter');
+const { apiErrorHandler } = require('./middleware/apiErrorHandler');
+
 const app = express();
+
+// ─── Trusted proxy — default disabled, agency must explicitly configure ──
+app.set('trust proxy', parseTrustedProxy(process.env.TRUSTED_PROXY));
 
 // Note: Sentry error handler is set up later, after routes
 
@@ -37,7 +45,19 @@ app.use(express.urlencoded({ extended: false }));
 app.use(cors(configs.corsConfig));
 app.use(compression(configs.compressionConfig));
 app.use(cookieParser());
+
+// ─── Security headers for API routes ──
+app.use('/api', createSecurityMiddleware());
+app.use('/api', createApiRateLimiter());
+
+// ─── API routes (v1) ──
+const apiRouter = require('./routes/api');
+app.use('/api', apiRouter);
+
 app.use('/slack', slackExpressRouter);
+
+// ─── API error handler — after API routes, before generic handler ──
+app.use('/api', apiErrorHandler);
 
 if (NODE_ENV !== "development") {
   app.use(sentryMiddleware);

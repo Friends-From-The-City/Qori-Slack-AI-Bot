@@ -13,17 +13,11 @@ import { analyzeNotesModal, type AnalyzeNotesModalMetadata } from "../ui/analyze
 import { getStudiesByUser, resolveStudyFromName } from "../../../services/research_study.service";
 import { getActiveStudy, setActiveStudy } from "../../../services/slack-user-state.service";
 import { studyNotesService } from "../../../services";
-import sessionSummaryService from "../../../services/session-summary.service";
 import studyParticipantService from "../../../services/study_participant.service";
-import { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepoByPath, fetchFileFromRepo } from "../../../helpers/github";
-import { processYamlTemplate } from "../../../helpers/yamlProcessor";
-import type { PiiRedactionContext } from "../../../helpers/langchain";
 import { readStudyVariablesByContext, type VariableContext } from '../../studyVariables';
 import { assertStudyAccess, AuthorizationError } from '../../../services/authorization.service';
-import { redactTranscript } from '../../../helpers/piiRedaction';
-import { resolveSessionSource, createNuggetConstructs, type NuggetInput } from '../../../services/session-evidence.service';
-import { attachEvidenceRefsVerified } from '../../../services/artifact.service';
-import { getDefaultModelName } from '../../modelProvider';
+import { buildSlackApplicationContext } from '../../../middleware/auth/slackContextBridge';
+import { analyzeSession as analyzeSessionAppService, type AnalyzeSessionInput } from '../../../application/transcript.app-service';
 
 // ─── Cascade context ─────────────────────────────────────────────
 
@@ -63,21 +57,6 @@ const getCascadeContext = async (variableContext: VariableContext): Promise<Casc
 };
 
 // ─── Template input contract ────────────────────────────────────
-
-/** Data shape passed to the session_summary YAML template. */
-interface SessionSummaryTemplateInput {
-  study_folder: string;
-  study_name: string;
-  session_name: string;
-  session_date: string;
-  selected_note_files: string[];
-  coded_transcript_content: string;
-  notes_content: string;
-  note_takers: string;
-  participant_id: string;
-  researcher_contact: string;
-  analyzer: string;
-}
 
 // ─── Note detail types ──────────────────────────────────────────
 
@@ -303,272 +282,45 @@ const handleAnalyzeNotesSubmission = async ({ ack, body, view, client }: SlackVi
     const studyName: string = values.study_select_block?.study_select_test?.selected_option?.text?.text || "Unknown Study";
     const sessionName: string | null = sessionSelection?.text || null;
 
-    // Fetch the transcript (required)
-    const noteDetails: NoteDetail[] = [];
-    try {
-      const transcript = await studyNotesService.getStudyNoteById(parseInt(selectedTranscriptId));
-      if (transcript) {
-        // ── PII REVIEW GATE ──
-        // Transcripts must be PII-reviewed before analysis to prevent PII from
-        // propagating into cascade variables (nuggets, themes, findings).
-        // Manual notes (transcript=false) are exempt (structured observations, not raw transcript).
-        if (transcript.transcript && !transcript.pii_reviewed) {
-          await client.chat.postEphemeral({
-            channel: body.user.id,
-            user: body.user.id,
-            text: `❌ *PII Review Required*\n\nThis transcript has not been PII-reviewed. ` +
-              `To protect participant privacy, transcripts must go through the scrubbing and ` +
-              `review process before analysis.\n\n` +
-              `*To fix:* Re-upload the transcript using \`/qori-notes\` with the "Upload Transcript" tab. ` +
-              `Enter the participant's real name for scrubbing, then review and approve before saving.`,
-          });
-          return;
-        }
-        noteDetails.push(transcript);
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.warn("Warning: Could not fetch transcript:", message);
+    // Extract observer note IDs (needed by both app-service and legacy paths)
+    const observerNoteIds: number[] = selectedNotes.map((note: any) => parseInt(note.value));
+
+    // ── PLAT-3: App service is the ONLY business path ──
+    const analyzeCtx = await buildSlackApplicationContext(body.user.id, body.team?.id || '');
+
+    if (!analyzeCtx) {
+      // FAIL CLOSED — no identity resolution means no business logic
+      await client.chat.postEphemeral({
+        channel: body.user.id,
+        user: body.user.id,
+        text: '❌ Unable to resolve identity. Please contact your workspace administrator.',
+      });
+      return;
     }
 
-    // Fetch optional observer notes
-    const noteIds: string[] = selectedNotes.map((note: any) => note.value);
-    try {
-      for (const noteId of noteIds) {
-        const note = await studyNotesService.getStudyNoteById(parseInt(noteId));
-        if (note) {
-          noteDetails.push(note);
-        }
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.warn("Warning: Could not fetch some observer notes:", message);
-    }
-
+    // ── APP SERVICE PATH: delegate analysis orchestration ──
     const resolved = await resolveStudyFromName(studyName);
-    if (!resolved) {
-      throw new Error(`Study "${studyName}" not found`);
-    }
+    if (!resolved) throw new Error(`Study "${studyName}" not found`);
     const { study, projectId, studyId: resolvedStudyId } = resolved;
-    const variableContext: VariableContext = { projectId, studyId: resolvedStudyId };
-
-    // Fetch GitHub content for each note file in parallel
-    const noteContentPromises = noteDetails.map(async (note: NoteDetail) => {
-      try {
-        const filePath = note.file_path;
-
-        if (filePath) {
-          // @ts-expect-error — pre-existing type mismatch from require() → import migration
-          const githubFile = await fetchFileFromRepoByPath(process.env.GITHUB_REPO, filePath);
-          return {
-            ...note,
-            githubContent: githubFile.content || '[Content not available]'
-          };
-        } else {
-          return {
-            ...note,
-            githubContent: '[File path not available]'
-          };
-        }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        console.warn(`Warning: Could not fetch GitHub content for note ${note.filename}:`, message);
-        return {
-          ...note,
-          githubContent: '[Error fetching content]'
-        };
-      }
-    });
-
-    const notesWithContent = await Promise.all(noteContentPromises);
-
-    const noteTakers: string[] = notesWithContent.map((note: NoteDetail) => note.created_by).filter(Boolean);
-
-    // NOTE: participant_id is now resolved from sessionId (participant DB ID) → participant_code
-    // NOT extracted from note.participant_name (which is freeform and non-unique)
-    // See ADR 0020: System-Assigned Per-Study Participant Codes
-
-    // H9: Pre-transmission PII redaction — replace participant name with code in content
-    // This happens BEFORE content goes to the LLM template
-    const formatNoteContent = (note: NoteDetail): string => {
-      const filename = note.filename || 'Unknown File';
-      // Redact participant name from GitHub content before embedding
-      const rawContent = note.githubContent || '[No content available]';
-      const redactedContent = redactTranscript(rawContent, participantName, participantCode);
-      // Use participant CODE in header, not participant NAME (H9)
-      return `# ${filename}\n\n` +
-        `**Participant:** ${participantCode}\n` +
-        `**Date:** ${note.session_date || 'Unknown Date'}\n` +
-        `**Note Taker:** ${note.created_by || 'Unknown User'}\n\n` +
-        `${redactedContent}`;
-    };
-
-    const transcriptNotes = notesWithContent.filter((note: NoteDetail) => note.transcript === true);
-    const regularNotes = notesWithContent.filter((note: NoteDetail) => note.transcript !== true);
-
-    const coded_transcript_content: string = transcriptNotes.length > 0
-      ? transcriptNotes.map(formatNoteContent).join('\n\n---\n\n')
-      : '';
-
-    const notes_content: string = regularNotes.length > 0
-      ? regularNotes.map(formatNoteContent).join('\n\n---\n\n')
-      : '';
-
-    // Log redaction stats for debugging (H9: do NOT log the actual name)
-    if (participantName) {
-      console.log(`[PII] Pre-transmission redaction applied: [REDACTED] → "${participantCode}"`);
-    }
-
-    const templateData: SessionSummaryTemplateInput = {
-      study_folder: studyName,
-      study_name: studyName,
-      session_name: sessionName || 'No specific session selected',
-      session_date: new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
-      selected_note_files: notesWithContent.map((note: NoteDetail) => note.filename || 'Unknown File'),
-      coded_transcript_content: coded_transcript_content,
-      notes_content: notes_content,
-      note_takers: noteTakers.join(', '),
-      participant_id: participantCode,
-      researcher_contact: study?.researcher_name || study?.researcher_email || '',
-      analyzer: (body.user as Record<string, string>).username || body.user.name || body.user.id
-    };
-
-    const yamlTemplateFile = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, "session_summary.yaml");
-
     const studyPath = study?.path;
     if (!studyPath) throw new Error('Unexpected: study.path missing after resolution');
 
-    // PH-5A: Resolve canonical evidence_source BEFORE model generation.
-    // Source identity must exist before derived evidence is generated.
-    const governedContent = [coded_transcript_content, notes_content].filter(Boolean).join('\n\n---\n\n');
-    let evidenceSourceId: number | null = null;
-    let evidenceSourcePublicId: string | null = null;
-    if (transcriptNotes.length > 0) {
-      try {
-        const primaryTranscript = transcriptNotes[0];
-        const resolvedSource = await resolveSessionSource({
-          projectId,
-          studyId: resolvedStudyId,
-          studyNotesId: primaryTranscript.id,
-          sourceType: primaryTranscript.transcript ? 'session_transcript' : 'session_notes',
-          label: primaryTranscript.filename || 'Session transcript',
-          governedContent,
-          createdBy: body.user.id,
-        });
-        evidenceSourceId = resolvedSource.id;
-        evidenceSourcePublicId = resolvedSource.publicId;
-        console.log(`✅ Evidence source ${resolvedSource.isNew ? 'created' : 'reused'}: ${evidenceSourcePublicId}`);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        console.warn(`⚠️ Evidence source creation failed (non-blocking): ${message}`);
-      }
-    }
-
-    // PH-6B: Artifact identity context for session summary
-    (templateData as unknown as Record<string, unknown>).__artifactContext = {
-      projectId,
+    const analyzeInput: AnalyzeSessionInput = {
       studyId: resolvedStudyId,
-      artifactType: 'fieldwork',
-      title: `Session summary — ${participantCode}`,
-      canonicalUpstreamInputs: evidenceSourcePublicId
-        ? [`source:${evidenceSourcePublicId}`]
-        : [],
-      createdBy: body.user.id,
+      projectId,
+      studyName,
+      studyPath,
+      participantCode,
+      participantName,
+      sessionName,
+      transcriptNoteId: parseInt(selectedTranscriptId),
+      observerNoteIds,
+      analyzerActorId: String(analyzeCtx.actor.id),
     };
 
-    // H9: Construct PII context for pre-transmission assertion in langchain
-    const piiContext: PiiRedactionContext | undefined = participantName
-      ? { knownNames: [participantName], participantCode }
-      : undefined;
+    const analyzeResult = await analyzeSessionAppService(analyzeCtx, analyzeInput);
 
-    // PH-6D2: Use prepare/finalize flow for single GitHub write
-    const { prepareYamlTemplate, finalizeArtifactWrite } = require('../../../helpers/yamlProcessor');
-    const prepared = await prepareYamlTemplate(
-      yamlTemplateFile.content, templateData, studyPath, '', variableContext, piiContext,
-    );
-
-    if (!prepared.extractionOutcome.success) {
-      throw new Error(`Cascade variable extraction failed: ${prepared.extractionOutcome.error}. Generation complete but variables were not written.`);
-    }
-    console.log(`✅ Cascade variables committed: ${prepared.extractionOutcome.variableCount} items (${prepared.extractionKeys.join(', ')})`);
-
-    // PH-5A: Create nugget evidence_constructs from extracted atomic_nugget_core.
-    // Nugget anchoring deferred to PH-7 (nuggets are table-embedded, not individual sections).
-    if (evidenceSourceId && prepared.extractionKeys.includes('atomic_nugget_core')) {
-      try {
-        const vars = await readStudyVariablesByContext({ projectId, studyId: resolvedStudyId });
-        const nuggetCoreItems = vars.variables?.atomic_nugget_core;
-        if (Array.isArray(nuggetCoreItems) && nuggetCoreItems.length > 0) {
-          const thisParticipantNuggets = nuggetCoreItems.filter(
-            (n: Record<string, unknown>) => n.participant === participantCode,
-          );
-          const nuggetInputs: NuggetInput[] = thisParticipantNuggets.map((n: Record<string, unknown>) => ({
-            displayId: (n.id as string) || `nugget-${participantCode}-unknown`,
-            nuggetType: (n.nugget_type as string) || 'unknown',
-            severity: (n.severity as number) ?? 0,
-            text: (n.text as string) || '',
-            participantCode: (n.participant as string) || participantCode,
-            session: (n.session as string) || '',
-          }));
-
-          const createdNuggets = await createNuggetConstructs(
-            evidenceSourceId, projectId, resolvedStudyId, nuggetInputs,
-            { templateId: 'session_summary', templateVersion: 'v7.2', modelName: getDefaultModelName() },
-            body.user.id,
-          );
-          console.log(`✅ Evidence lineage: ${createdNuggets.length} nugget constructs linked to source ${evidenceSourcePublicId}`);
-
-          // Store nugget IDs for post-finalize attachment
-          (templateData as unknown as Record<string, unknown>).__createdNuggetIds = createdNuggets.map(c => c.constructId);
-        }
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        console.warn(`⚠️ Nugget evidence construct creation failed (non-blocking): ${message}`);
-      }
-    }
-
-    // FINALIZE: Single GitHub write (no canonical ref section for session summaries — deferred to PH-7)
-    const renderedYaml = await finalizeArtifactWrite(prepared);
-
-    // PH-6C: Attach nugget evidence refs (artifact now status=written)
-    const nuggetIds = (templateData as unknown as Record<string, unknown>).__createdNuggetIds as number[] | undefined;
-    if (nuggetIds && nuggetIds.length > 0) {
-      const attachResult = await attachEvidenceRefsVerified(
-        renderedYaml.artifactPublicId, nuggetIds,
-        { projectId, studyId: resolvedStudyId, templateId: 'session_summary', workflow: 'analyze' },
-      );
-      if (attachResult.attached > 0) {
-        console.log(`✅ Artifact→evidence: ${attachResult.attached} nugget refs attached to artifact ${renderedYaml.artifactPublicId}`);
-      }
-    }
-
-    const { result } = renderedYaml;
-    const urlParts: string[] = result.path.split('/');
-    const fileName: string = urlParts[urlParts.length - 1];
-
-    // Save the session summary to the database
-    if (renderedYaml && renderedYaml.result) {
-      try {
-        const summaryData = {
-          study_id: parseInt(studyId),
-          study_name: studyName,
-          filename: fileName || 'session_summary.md',
-          file_path: result.path || null,
-          file_url: result.url || null,
-          created_by: body.user.id
-        };
-
-        const savedSummary = await sessionSummaryService.createOrUpdateSessionSummary(summaryData);
-        console.log('✅ Session summary saved to database:', savedSummary.id);
-      } catch (error) {
-        console.error('⚠️ Warning: Could not save session summary to database:', error);
-      }
-    }
-
-    const noteSummary: string = noteDetails.map((note: NoteDetail) =>
-      `• ${note.filename || 'Unknown File'} - Note taker: <@${note.created_by}>`
-    ).join('\n');
-
+    // Post success message (Slack-specific)
     await client.chat.postEphemeral({
       channel: body.user.id,
       user: body.user.id,
@@ -578,14 +330,14 @@ const handleAnalyzeNotesSubmission = async ({ ack, body, view, client }: SlackVi
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: `✅ *Note Analysis Completed!*\n\n*Study:* ${studyName}\n${sessionName ? `*Session:* ${sessionName}\n` : ''}*Notes Processed:* ${noteDetails.length} files\n\n*Selected Notes:*\n${noteSummary}`,
+            text: `✅ *Note Analysis Completed!*\n\n*Study:* ${studyName}\n${sessionName ? `*Session:* ${sessionName}\n` : ''}*Notes Processed:* ${analyzeResult.noteCount} files`,
           },
         },
         {
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: `<${result.url}|View Session Summary on GitHub>`,
+            text: `<${analyzeResult.url}|View Session Summary on GitHub>`,
           },
         },
         { type: 'divider' },

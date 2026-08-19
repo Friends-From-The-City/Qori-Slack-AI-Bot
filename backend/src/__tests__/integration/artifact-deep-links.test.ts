@@ -397,29 +397,33 @@ describe('PH-6D2: Handler structural verification', () => {
     );
   };
 
-  it('researchSynthesisHandler uses prepareYamlTemplate + finalizeArtifactWrite', () => {
-    const source = readHandler('researchSynthesisHandler.ts');
+  // PLAT-3: Template processing moved to application services
+  it('synthesis.app-service uses prepareYamlTemplate + finalizeArtifactWrite', () => {
+    const source = fs.readFileSync(
+      path.resolve(__dirname, '../../application/synthesis.app-service.ts'), 'utf-8',
+    );
     expect(source).toContain('prepareYamlTemplate');
     expect(source).toContain('finalizeArtifactWrite');
     expect(source).toContain('buildCanonicalReferenceSection');
-    // Verify only ONE GitHub write path (no processYamlTemplate in the affinity flow)
-    // The import of processYamlTemplate may still exist for non-affinity methods
   });
 
-  it('readoutHandler uses prepareYamlTemplate + finalizeArtifactWrite for research readout', () => {
-    const source = readHandler('readoutHandler.ts');
+  it('readout.app-service uses prepareYamlTemplate + finalizeArtifactWrite', () => {
+    const source = fs.readFileSync(
+      path.resolve(__dirname, '../../application/readout.app-service.ts'), 'utf-8',
+    );
     expect(source).toContain('prepareYamlTemplate');
     expect(source).toContain('finalizeArtifactWrite');
     expect(source).toContain('buildCanonicalReferenceSection');
     expect(source).toContain('resolveConstructDeepLink');
   });
 
-  it('analyzeNotesHandler uses prepareYamlTemplate + finalizeArtifactWrite', () => {
-    const source = readHandler('analyzeNotesHandler.ts');
+  // PLAT-3: analyzeNotesHandler delegates to transcript.app-service
+  it('transcript.app-service uses prepareYamlTemplate + finalizeArtifactWrite', () => {
+    const source = fs.readFileSync(
+      path.resolve(__dirname, '../../application/transcript.app-service.ts'), 'utf-8',
+    );
     expect(source).toContain('prepareYamlTemplate');
     expect(source).toContain('finalizeArtifactWrite');
-    // Nugget anchoring deferred to PH-7
-    expect(source).toContain('deferred to PH-7');
   });
 
   it('no handler uses prose/regex matching for anchor placement', () => {

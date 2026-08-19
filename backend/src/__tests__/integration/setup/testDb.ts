@@ -57,6 +57,7 @@ import ActorIdentity from '../../../database/models/actor_identity';
 import AdapterWorkspaceBinding from '../../../database/models/adapter_workspace_binding';
 import RepositoryBinding from '../../../database/models/repository_binding';
 import ProjectMembership from '../../../database/models/project_membership';
+import IdentityProviderBinding from '../../../database/models/identity_provider_binding';
 
 let instance: Sequelize | null = null;
 
@@ -91,7 +92,7 @@ export function getTestDb(): Sequelize {
     DataSubject, DataSubjectLink, EvidenceSubjectAttribution,
     RecordsSchedule, RecordsManagementAssignment,
     RecordsHold, RecordsHoldTarget, RecordsDispositionEvent,
-    RepositoryBinding, ProjectMembership,
+    RepositoryBinding, ProjectMembership, IdentityProviderBinding,
   ];
 
   for (const defineModel of modelDefiners) {

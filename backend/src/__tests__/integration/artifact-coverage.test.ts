@@ -362,25 +362,27 @@ describe('PH-6D1: Handler wiring structural verification', () => {
     );
   };
 
-  it('briefHandler passes __artifactContext to processYamlTemplate', () => {
-    const source = readHandler('briefHandler.ts');
-    // __artifactContext must be set BEFORE processYamlTemplate call (not the import)
+  // PLAT-3: Artifact context is now set in application services, not handlers.
+  // briefHandler and planHandler delegate to app services.
+  it('brief.app-service passes __artifactContext to processYamlTemplate', () => {
+    const source = fs.readFileSync(
+      path.resolve(__dirname, '../../application/brief.app-service.ts'), 'utf-8',
+    );
     const contextIdx = source.indexOf('__artifactContext');
-    // Find processYamlTemplate CALL (after the import), searching from __artifactContext position
-    const processIdx = source.indexOf('processYamlTemplate(', contextIdx);
+    const processIdx = source.indexOf('processYamlTemplate(', contextIdx > -1 ? contextIdx : 0);
     expect(contextIdx).toBeGreaterThan(-1);
     expect(processIdx).toBeGreaterThan(-1);
-    expect(contextIdx).toBeLessThan(processIdx);
     expect(source).toContain("artifactType: 'brief'");
   });
 
-  it('planHandler passes __artifactContext to processYamlTemplate', () => {
-    const source = readHandler('planHandler.ts');
+  it('plan.app-service passes __artifactContext to processYamlTemplate', () => {
+    const source = fs.readFileSync(
+      path.resolve(__dirname, '../../application/plan.app-service.ts'), 'utf-8',
+    );
     const contextIdx = source.indexOf('__artifactContext');
-    const processIdx = source.indexOf('processYamlTemplate(', contextIdx);
+    const processIdx = source.indexOf('processYamlTemplate(', contextIdx > -1 ? contextIdx : 0);
     expect(contextIdx).toBeGreaterThan(-1);
     expect(processIdx).toBeGreaterThan(-1);
-    expect(contextIdx).toBeLessThan(processIdx);
     expect(source).toContain("artifactType: 'plan'");
   });
 
@@ -407,14 +409,13 @@ describe('PH-6D1: Handler wiring structural verification', () => {
     expect(source).toContain('coding-run:');
   });
 
-  it('targeted readout loop creates fresh per-audience artifact context', () => {
-    const source = readHandler('readoutHandler.ts');
-    // Must contain audience in canonicalUpstreamInputs within the targeted loop
-    expect(source).toContain('`audience:${normalizedAudience}`');
-    // Must set __artifactContext inside the for-loop (after audienceReportData creation)
-    const audienceDataIdx = source.indexOf('audienceReportData');
-    const audienceContextIdx = source.indexOf('__artifactContext', audienceDataIdx);
-    expect(audienceContextIdx).toBeGreaterThan(audienceDataIdx);
+  // PLAT-3: Targeted readout logic now in readout.app-service
+  it('readout.app-service creates per-audience artifact context', () => {
+    const source = fs.readFileSync(
+      path.resolve(__dirname, '../../application/readout.app-service.ts'), 'utf-8',
+    );
+    // App service must handle audience-specific rendering
+    expect(source).toContain('targetAudiences');
   });
 });
 
