@@ -26,7 +26,7 @@ import type { VariableContext } from '../../studyVariables';
 import { processYamlTemplate } from '../../yamlProcessor';
 import { executeAiGenerationTasks } from '../../langchain';
 import { addStudyStatus } from '../../../services/study-status.service';
-import { getProjectApprover } from '../../../services/authorization.service';
+import { getProjectApprover, assertProjectAccess, AuthorizationError } from '../../../services/authorization.service';
 import { generateStudyResultBlocks, sendStudyResultMessage } from '../ui/studyResultBlocks';
 import { loadDiscoveryArtifacts, aggregateDiscoveryVariables, type DiscoveryArtifact } from '../../discoveryLoader';
 import { parseBudget, parseParticipantTarget } from '../../../utils/budgetParser';
@@ -222,6 +222,23 @@ async function handleBriefSubmission({ ack, body, view, client }: SlackViewMiddl
   if (!projectId || !projectSlug) {
     console.error('Missing project context in brief modal metadata');
     return;
+  }
+
+  // ── GOV-1: Authorization check ──
+  // User must be project member to create a study/brief in this project.
+  try {
+    await assertProjectAccess(body.user.id, projectId, client);
+  } catch (err) {
+    if (err instanceof AuthorizationError) {
+      console.warn(`[AUTH] Brief submission denied: user=${body.user.id} project=${projectId}`);
+      await client.chat.postEphemeral({
+        channel: channelId || body.user.id,
+        user: body.user.id,
+        text: 'Access denied: you are not a member of this project.',
+      });
+      return;
+    }
+    throw err;
   }
 
   // Helper function to extract values from different input types.
@@ -531,6 +548,17 @@ async function handleBriefSubmission({ ack, body, view, client }: SlackViewMiddl
 
   // ── Process YAML template (prose tasks + rendering + extraction) ──
   const variableContext: VariableContext = { projectId, studyId };
+
+  // PH-6D1: Canonical artifact identity for research brief
+  (data as unknown as Record<string, unknown>).__artifactContext = {
+    projectId,
+    studyId,
+    artifactType: 'brief',
+    title: `Research brief — ${studyName}`,
+    canonicalUpstreamInputs: [], // No canonical evidence constructs; cascade fingerprint used
+    createdBy: body.user.id,
+  };
+
   const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, "research_brief.yaml");
   const renderedYaml = await processYamlTemplate(file.content, data, study.path ?? '', '', false, variableContext);
 

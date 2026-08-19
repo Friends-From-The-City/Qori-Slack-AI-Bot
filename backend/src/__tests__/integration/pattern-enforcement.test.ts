@@ -158,12 +158,14 @@ describe('pattern: as-any budget enforcement', () => {
 
     // Baseline after Stream 1: ~193 (measured). Allow 10% margin for natural growth.
     // If this fails, new `any` was introduced — categorize and justify or fix.
-    // Budget raised 215 → 223 by PR #272 (transcript review DM
-    // swap). +8 casts, all in the acknowledged bounded categories:
-    // Bolt action payload typing (body.actions[0]), ack()
-    // response_action, view.state.values, Block Kit builder return
-    // types. No cascade or business-logic casts added.
-    expect(total).toBeLessThanOrEqual(223);
+    // Budget raised 215 → 223 by PR #272 (transcript review DM swap).
+    // Budget raised 223 → 225 by PH-5B (evidence lineage integration tests
+    // use `as any` for Sequelize model attribute access in test assertions).
+    // Budget raised 225 → 229 by GOV-1 (authorization guards add EvidenceSource model refs
+    // with `as typeof EvidenceSource` casts in codebookHandler, matchReviewHandler, surveyPrivacyHandler).
+    // Budget raised 229 → 235 by GOV-6 (records lifecycle services use `as typeof Model` casts
+    // for test-injectable Sequelize model access and polymorphic retrieval mapping).
+    expect(total).toBeLessThanOrEqual(235);
   });
 
   it('events.ts has no more than 1 as-any cast (excluding comments)', () => {
@@ -413,13 +415,17 @@ describe('pattern: channel context threading', () => {
   //   project object to modal builder (pattern check doesn't recognize project.id)
   // - study/studyLifecycleHandler: handleUserSelectOptions fetches channel members
   //   for team-member typeahead — channel-only by design (no study/project scope)
+  // - modal-openers/planCommandOpener: /qori-plan command entry — opens study picker
+  //   modal, so study/project context doesn't exist yet (user hasn't selected one)
   const CHANNEL_ONLY_ALLOWED = [
     'learn/learnHandler.ts',
     'repo/repoConfigHandler.ts',
     'repo/syncHandler.ts',
     'qa/askStudyHandler.ts',
+    'qa/runTemplateHandler.ts',     // GOV-1B: disabled, returns ephemeral only
     'admin/adminCenterHandler.ts',
     'study/studyLifecycleHandler.ts',
+    'modal-openers/planCommandOpener.ts', // RR-1: study picker entry, no study context yet
   ];
 
   it('handler files that use channel_id also reference study or project context', () => {
@@ -927,14 +933,14 @@ describe('pattern: authorization enforcement (ADR 0024)', () => {
   // - Commands that operate at project level only
   // - Commands that are disabled or deprecated
   const AUTH_EXEMPT = [
-    'projectStartHandler.ts',       // Creates new project
-    'qoriMainHandler.ts',           // Hub menu, no study access
-    'learn/learnHandler.ts',        // User onboarding
-    'repo/repoConfigHandler.ts',    // Channel config
-    'repo/syncHandler.ts',          // Folder sync
+    'projectStartHandler.ts',       // Creates new project (bootstrap)
+    'qoriMainHandler.ts',           // GOV-1B: /qori removed, only handleStudySelect remains
+    'learn/learnHandler.ts',        // User onboarding (PUBLIC)
+    'repo/repoConfigHandler.ts',    // GOV-1: assertProjectOwner at command + submission
+    'repo/syncHandler.ts',          // GOV-1B: disabled (returns ephemeral, no study access)
     'qa/askStudyHandler.ts',        // Disabled RAG
-    'qa/runTemplateHandler.ts',     // Legacy template runner
-    'briefHandler.ts',              // Creates new study (auth at project level)
+    'qa/runTemplateHandler.ts',     // GOV-1B: disabled (returns ephemeral, no study access)
+    // briefHandler.ts: removed from AUTH_EXEMPT in GOV-1 — now has assertProjectAccess
   ];
 
   it('handlers accepting studyId from modal input call assertStudyAccess (backstop)', () => {
@@ -974,5 +980,102 @@ describe('pattern: authorization enforcement (ADR 0024)', () => {
     // The authoritative list is the handler catalog in ADR 0023.
     // Regex can false-pass (extraction patterns not matched).
     expect(violations).toEqual([]);
+  });
+
+  // GOV-1: Handlers that parse projectId from JSON metadata must call an auth assert
+  it('handlers parsing projectId from JSON metadata call an authorization assert (GOV-1 backstop)', () => {
+    const files = findTsFiles(commandsDir);
+    const violations: string[] = [];
+
+    // Handlers that legitimately operate without project authorization:
+    const PROJECT_AUTH_EXEMPT = [
+      'projectStartHandler.ts',       // Creates new project
+      'qoriMainHandler.ts',           // Hub menu
+      'learn/learnHandler.ts',        // User onboarding
+      'repo/syncHandler.ts',          // Folder sync — GOV-2 candidate
+      'qa/askStudyHandler.ts',        // Disabled RAG
+      'qa/runTemplateHandler.ts',     // Legacy template runner
+      'surveySubmissionHandler.ts',   // Internal helper called from guarded discoverHandler
+      'surveySynthesisAction.ts',     // Internal action called from guarded survey flow
+    ];
+
+    for (const file of files) {
+      const content = readFile(file);
+      const rel = relative(SRC_ROOT, file);
+
+      if (PROJECT_AUTH_EXEMPT.some(exempt => rel.includes(exempt))) continue;
+
+      // Pattern: handler parses projectId from private_metadata or button value JSON
+      const parsesProjectId =
+        content.includes('projectId') &&
+        (content.includes('JSON.parse(view.private_metadata') ||
+         content.includes('JSON.parse(action.value'));
+
+      if (!parsesProjectId) continue;
+
+      const hasAuthCheck =
+        content.includes('assertStudyAccess') ||
+        content.includes('assertProjectAccess') ||
+        content.includes('assertStudyOwner') ||
+        content.includes('assertProjectOwner') ||
+        content.includes('assertApproverAccess');
+
+      if (!hasAuthCheck) {
+        violations.push(`${rel}: parses projectId from JSON metadata but doesn't call an authorization assert`);
+      }
+    }
+
+    expect(violations).toEqual([]);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════
+// GOV-1B: Command surface containment
+// ═══════════════════════════════════════════════════════════
+
+describe('pattern: command surface containment (GOV-1B)', () => {
+  const eventsPath = join(SRC_ROOT, 'helpers/slack/events.ts');
+  const eventsContent = readFile(eventsPath);
+
+  it('/qori command is no longer registered', () => {
+    // The /qori command should not have a slackApp.command registration
+    // (study_select action registration is still valid)
+    const lines = eventsContent.split('\n');
+    const qoriCommandLine = lines.find(
+      line => line.includes("slackApp.command('/qori'") && !line.includes('/qori-')
+    );
+    expect(qoriCommandLine).toBeUndefined();
+  });
+
+  it('handleStudySelect is still registered for /qori-plan', () => {
+    expect(eventsContent).toContain("slackApp.action('study_select'");
+  });
+
+  it('/qori-sync command handler performs no GitHub reads', () => {
+    const syncPath = join(SRC_ROOT, 'helpers/slack/commands/repo/syncHandler.ts');
+    const syncContent = readFile(syncPath);
+    // Disabled handler should not import GitHub functions
+    expect(syncContent).not.toContain('listAllTopLevelFolders');
+    expect(syncContent).not.toContain('readFolderContents');
+    expect(syncContent).not.toContain('readFolders');
+    // Should contain the disabled message
+    expect(syncContent).toContain('not currently available');
+  });
+
+  it('/run-template command handler performs no document generation', () => {
+    const runTemplatePath = join(SRC_ROOT, 'helpers/slack/commands/qa/runTemplateHandler.ts');
+    const runTemplateContent = readFile(runTemplatePath);
+    // Disabled handler should not import modal or generation functions
+    expect(runTemplateContent).not.toContain('researchShareoutModal');
+    expect(runTemplateContent).not.toContain('views.open');
+    // Should contain the disabled message
+    expect(runTemplateContent).toContain('not currently available');
+  });
+
+  it('/qori-repo remains owner-guarded (GOV-1)', () => {
+    const repoPath = join(SRC_ROOT, 'helpers/slack/commands/repo/repoConfigHandler.ts');
+    const repoContent = readFile(repoPath);
+    expect(repoContent).toContain('assertProjectOwner');
+    expect(repoContent).toContain('AuthorizationError');
   });
 });

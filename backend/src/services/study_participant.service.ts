@@ -10,6 +10,7 @@ import sequelize from '../database';
 import { QueryTypes } from 'sequelize';
 import { processParticipantYamlTemplate } from '../helpers/participantYamlProcessor';
 import { PARTICIPANT_STATUS, ACTIVE_STATUSES } from '../constants/participantStatus';
+import { createSubjectForParticipant } from './subject-linking.service';
 
 // Typed model references — cast once, use everywhere. See Phase 3 notes.
 const StudyParticipantModel = sequelize.models.StudyParticipant as typeof StudyParticipant;
@@ -122,6 +123,10 @@ class StudyParticipantService {
         { ...participantData, participant_code: participantCode, scheduled_date: normalizedDate },
         { transaction },
       );
+
+      // GOV-2A2: Create canonical data_subject + participant link atomically.
+      // If this fails, participant creation rolls back — no participant without subject linkage.
+      await createSubjectForParticipant(participant.id, participantData.added_by, transaction);
 
       // R3: No longer updating denormalized count — computed on read
       await transaction.commit();
@@ -271,6 +276,11 @@ class StudyParticipantService {
 
   /**
    * Delete a participant and update the study count.
+   *
+   * @deprecated Use DSAR path (dsar.service.ts → deleteParticipantDSAR) for participant
+   * deletion. This method bypasses audit logging, authorization, and cascade cleanup of
+   * study_variables/study_notes. Zero handler call sites. Retained for migration tooling only.
+   * Scheduled for removal or access restriction in GOV-2.
    */
   async deleteParticipant(participantId: number): Promise<{ success: boolean; message: string }> {
     try {

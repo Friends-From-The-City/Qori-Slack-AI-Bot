@@ -8,7 +8,7 @@
 import type { AllMiddlewareArgs, SlackCommandMiddlewareArgs, SlackActionMiddlewareArgs, SlackViewMiddlewareArgs, BlockAction, ViewSubmitAction } from '@slack/bolt';
 import type { View } from '@slack/types';
 
-import { ChatAnthropic } from '@langchain/anthropic';
+import { createModel } from '../../modelProvider';
 import { getStudiesByUser } from '../../../services/research_study.service';
 import { getActiveStudy } from '../../../services/slack-user-state.service';
 import { searchVariablesAcrossStudies } from '../../studyVariables';
@@ -51,12 +51,7 @@ interface VariableRow {
 // ─── LLM helpers ────────────────────────────────────────────────────
 
 async function interpretQuery(question: string): Promise<Interpretation> {
-  const haiku = new ChatAnthropic({
-    anthropicApiKey: process.env.ANTHROPIC_API_KEY,
-    modelName: 'claude-haiku-4-5-20251001',
-    temperature: 0,
-    maxTokens: 512,
-  });
+  const haiku = createModel({ tier: 'haiku', temperature: 0, maxTokens: 512, purpose: 'ask-query-interpretation' });
 
   const prompt = `You are a query interpreter for a research database. Given a user's question, extract:
 1. variable_keys: which variable types to search (from this list: ${KNOWN_VARIABLE_KEYS.join(', ')})
@@ -96,12 +91,7 @@ User question: "${question}"`;
 }
 
 async function formatResults(question: string, rows: VariableRow[], total: number, scope: string, studyName: string | undefined): Promise<string | null> {
-  const sonnet = new ChatAnthropic({
-    anthropicApiKey: process.env.ANTHROPIC_API_KEY,
-    modelName: process.env.ANTHROPIC_MODEL_NAME || 'claude-sonnet-4-6',
-    temperature: 0.3,
-    maxTokens: 2048,
-  });
+  const sonnet = createModel({ tier: 'sonnet', temperature: 0.3, maxTokens: 2048, purpose: 'ask-result-formatting' });
 
   const context = rows.slice(0, 20).map(row => {
     const items = Array.isArray(row.value) ? row.value : [row.value];

@@ -18,7 +18,9 @@ import {
 export type AuditAction =
   | 'delete_participant'
   | 'delete_study'
+  | 'delete_subject'       // GOV-2D: subject-rooted DSAR deletion
   | 'export_participant'
+  | 'export_subject'       // GOV-2C: subject-rooted DSAR export
   | 'change_stakeholder'
   | 'deletion_denied'
   | 'deletion_error'

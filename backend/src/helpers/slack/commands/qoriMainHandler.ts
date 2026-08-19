@@ -1,134 +1,16 @@
 /**
- * qoriMainHandler.ts — /qori command handler
+ * qoriMainHandler.ts — study_select action handler
  *
- * Extracted from events.js. Posts the commands reference message listing
- * all available /qori-* commands. Also handles the study_select action
- * for the study dropdown in the plan modal.
+ * GOV-1B: /qori command removed (deprecated — /qori-learn supersedes).
+ * handleStudySelect remains — used by /qori-plan study picker modal.
+ *
+ * SLACK MANIFEST NOTE: The /qori slash command must also be removed from
+ * the Slack app configuration dashboard (api.slack.com → App → Slash Commands).
+ * Until removed there, Slack will still show the command autocomplete but
+ * the bot will not respond.
  */
 
-import type { AllMiddlewareArgs, SlackCommandMiddlewareArgs, SlackActionMiddlewareArgs, BlockAction } from '@slack/bolt';
-
-// ─── /qori command ─────────────────────────────────────────────────
-
-async function qoriMainHandler({ ack, command, client }: SlackCommandMiddlewareArgs & AllMiddlewareArgs): Promise<void> {
-  await ack();
-  const channelId = command.channel_id;
-
-  const commandBlocks = [
-    {
-      type: 'header',
-      text: {
-        type: 'plain_text',
-        text: 'Qori Commands Reference'
-      }
-    },
-    {
-      type: 'divider'
-    },
-    {
-      type: 'section',
-      text: {
-        type: 'mrkdwn',
-        text: '*`/qori`* → Show all commands'
-      }
-    },
-    {
-      type: 'section',
-      text: {
-        type: 'mrkdwn',
-        text: '*`/qori-brief`* → Create research brief (starts a new study)'
-      }
-    },
-    {
-      type: 'section',
-      text: {
-        type: 'mrkdwn',
-        text: '*`/qori-plan`* → Create plan, guide, or upload files for an existing study'
-      }
-    },
-    {
-      type: 'section',
-      text: {
-        type: 'mrkdwn',
-        text: '*`/qori-discover`* → Pre-study research (desk research, stakeholder synthesis, surveys)'
-      }
-    },
-    {
-      type: 'section',
-      text: {
-        type: 'mrkdwn',
-        text: '*`/qori-fieldwork`* → Participants, outreach, observers, session notes'
-      }
-    },
-    {
-      type: 'section',
-      text: {
-        type: 'mrkdwn',
-        text: '*`/qori-analyze`* → Analyze session data'
-      }
-    },
-    {
-      type: 'section',
-      text: {
-        type: 'mrkdwn',
-        text: '*`/qori-synthesis`* → Cross-session synthesis'
-      }
-    },
-    {
-      type: 'section',
-      text: {
-        type: 'mrkdwn',
-        text: '*`/qori-report`* → Generate stakeholder report'
-      }
-    },
-    {
-      type: 'section',
-      text: {
-        type: 'mrkdwn',
-        text: '*`/qori-tickets`* → Generate GitHub issues from readout findings'
-      }
-    },
-    {
-      type: 'section',
-      text: {
-        type: 'mrkdwn',
-        text: '*`/qori-ask`* → Search across studies'
-      }
-    },
-    {
-      type: 'section',
-      text: {
-        type: 'mrkdwn',
-        text: '*`/qori-admin`* → Admin center (stakeholders, data, study management)'
-      }
-    },
-    {
-      type: 'section',
-      text: {
-        type: 'mrkdwn',
-        text: '*`/qori-learn`* → Interactive tutorial'
-      }
-    },
-    {
-      type: 'divider'
-    },
-    {
-      type: 'context',
-      elements: [
-        {
-          type: 'mrkdwn',
-          text: 'Need more details? Use `/qori-learn` for an interactive tutorial.'
-        }
-      ]
-    }
-  ];
-
-  await client.chat.postMessage({
-    channel: channelId,
-    text: 'Qori Commands Reference',
-    blocks: commandBlocks
-  });
-}
+import type { AllMiddlewareArgs, SlackActionMiddlewareArgs, BlockAction } from '@slack/bolt';
 
 // ─── study_select action ───────────────────────────────────────────
 
@@ -169,7 +51,5 @@ async function handleStudySelect({ ack, body, client }: SlackActionMiddlewareArg
 }
 
 export {
-  qoriMainHandler,
-  qoriMainHandler as qoriMainCommand,
   handleStudySelect,
 };

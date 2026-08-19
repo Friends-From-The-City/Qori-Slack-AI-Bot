@@ -42,7 +42,9 @@ export type ConstructType =
   | 'finding'
   | 'theme'
   | 'persona'
-  | 'ticket_candidate';
+  | 'ticket_candidate'
+  | 'survey_qualitative_pattern'
+  | 'survey_individual_observation';
 
 export type DerivationType = 'deterministic' | 'model' | 'human' | 'hybrid';
 
@@ -75,6 +77,9 @@ class EvidenceConstruct extends Model<
   declare reviewed_at: Date | null;
   declare cascade_variable_key: string | null;
   declare created_by: string;
+  /** GOV-2B: Underlying evidence was affected by a governed disposition event.
+   * Orthogonal to review status (candidate/accepted/rejected/overridden). */
+  declare stale_due_to_disposition: CreationOptional<boolean>;
   declare created_at: CreationOptional<Date>;
   declare updated_at: CreationOptional<Date>;
 
@@ -125,6 +130,7 @@ export default (sequelize: Sequelize) => {
             'survey_dataset_summary', 'field_distribution', 'cross_tab',
             'usability_finding', 'journey_stage', 'recommendation',
             'finding', 'theme', 'persona', 'ticket_candidate',
+            'survey_qualitative_pattern', 'survey_individual_observation',
           ]],
         },
       },
@@ -171,6 +177,11 @@ export default (sequelize: Sequelize) => {
       created_by: {
         type: DataTypes.STRING(50),
         allowNull: false,
+      },
+      stale_due_to_disposition: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
       },
       created_at: {
         type: DataTypes.DATE,

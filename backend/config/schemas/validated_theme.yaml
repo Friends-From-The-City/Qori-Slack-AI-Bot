@@ -30,6 +30,12 @@ properties:
     description: "References to atomic_nugget_core.id values that support this theme"
     items:
       type: string
+  supporting_evidence_ids:
+    type: array
+    description: "Canonical evidence_construct public_ids (UUIDs) of nuggets supporting this theme. Required for canonical lineage."
+    items:
+      type: string
+      format: uuid
   evidence_count:
     type: integer
     description: "Number of nugget instances supporting this theme"

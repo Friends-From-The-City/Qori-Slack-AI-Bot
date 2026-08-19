@@ -21,6 +21,23 @@ import EvidenceSource from './models/evidence_source';
 import EvidenceConstruct from './models/evidence_construct';
 import EvidenceRelationship from './models/evidence_relationship';
 import SurveyFieldSchema from './models/survey_field_schema';
+import SurveyQualitativeEntry from './models/survey_qualitative_entry';
+import SurveyCodebook from './models/survey_codebook';
+import SurveyCode from './models/survey_code';
+import SurveyCodeExample from './models/survey_code_example';
+import SurveyCodingRun from './models/survey_coding_run';
+import SurveyCodingAssignment from './models/survey_coding_assignment';
+import SurveyCodingEntryReview from './models/survey_coding_entry_review';
+import ResearchArtifact from './models/research_artifact';
+import ArtifactEvidenceRef from './models/artifact_evidence_ref';
+import DataSubject from './models/data_subject';
+import DataSubjectLink from './models/data_subject_link';
+import EvidenceSubjectAttribution from './models/evidence_subject_attribution';
+import RecordsSchedule from './models/records_schedule';
+import RecordsManagementAssignment from './models/records_management_assignment';
+import RecordsHold from './models/records_hold';
+import RecordsHoldTarget from './models/records_hold_target';
+import RecordsDispositionEvent from './models/records_disposition_event';
 
 
 // Set environment and configuration
@@ -52,6 +69,23 @@ const modelDefiners = [
   EvidenceConstruct,
   EvidenceRelationship,
   SurveyFieldSchema,
+  SurveyQualitativeEntry,
+  SurveyCodebook,
+  SurveyCode,
+  SurveyCodeExample,
+  SurveyCodingRun,
+  SurveyCodingAssignment,
+  SurveyCodingEntryReview,
+  ResearchArtifact,
+  ArtifactEvidenceRef,
+  DataSubject,
+  DataSubjectLink,
+  EvidenceSubjectAttribution,
+  RecordsSchedule,
+  RecordsManagementAssignment,
+  RecordsHold,
+  RecordsHoldTarget,
+  RecordsDispositionEvent,
 ];
 
 // Register all models with Sequelize

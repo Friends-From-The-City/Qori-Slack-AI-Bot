@@ -7,3 +7,5 @@ export { stagePendingCsv, getPendingCsv, deletePendingCsv, STAGING_TTL_SECONDS }
 export { formatComputedFacts } from './factsFormatter';
 export { toDisplayLabel } from './displayLabels';
 export { suggestOrdinalOrder } from './ordinalSuggestions';
+export { generateDraftAssignments, AssignmentGenerationError } from './assignmentGenerator';
+export type { GeneratedAssignment, AcceptedCodeInput } from './assignmentGenerator';

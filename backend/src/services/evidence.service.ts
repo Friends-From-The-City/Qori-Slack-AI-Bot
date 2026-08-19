@@ -64,6 +64,7 @@ export interface CreateConstructInput {
 
 /** Source → Construct relationship. */
 export interface CreateSourceToConstructInput {
+  project_id: number;
   from_source_id: number;
   to_construct_id: number;
   relationship_type: RelationshipType;
@@ -72,6 +73,7 @@ export interface CreateSourceToConstructInput {
 
 /** Construct → Construct relationship. */
 export interface CreateConstructToConstructInput {
+  project_id: number;
   from_construct_id: number;
   to_construct_id: number;
   relationship_type: RelationshipType;
@@ -93,8 +95,8 @@ export interface DerivationInput {
  * meaning "the construct being created in this derivation."
  */
 export type DerivationRelationshipInput =
-  | { from_source_id: number; to_construct_id: number; relationship_type: RelationshipType; provenance?: RelationshipProvenance | null }
-  | { from_construct_id: number; to_construct_id: number; relationship_type: RelationshipType; provenance?: RelationshipProvenance | null };
+  | { project_id: number; from_source_id: number; to_construct_id: number; relationship_type: RelationshipType; provenance?: RelationshipProvenance | null }
+  | { project_id: number; from_construct_id: number; to_construct_id: number; relationship_type: RelationshipType; provenance?: RelationshipProvenance | null };
 
 // ═══════════════════════════════════════════════════════════════════════
 // SOURCES
@@ -243,6 +245,7 @@ export async function createSourceToConstruct(
 ): Promise<EvidenceRelationship> {
   return EvidenceRelationshipModel.create(
     {
+      project_id: input.project_id,
       from_source_id: input.from_source_id,
       from_construct_id: null,
       to_source_id: null,
@@ -256,7 +259,7 @@ export async function createSourceToConstruct(
 
 /**
  * Create a construct → construct relationship.
- * FK integrity enforced at DB level.
+ * FK integrity enforced at DB level — composite FKs ensure same-project scope.
  */
 export async function createConstructToConstruct(
   input: CreateConstructToConstructInput,
@@ -264,6 +267,7 @@ export async function createConstructToConstruct(
 ): Promise<EvidenceRelationship> {
   return EvidenceRelationshipModel.create(
     {
+      project_id: input.project_id,
       from_source_id: null,
       from_construct_id: input.from_construct_id,
       to_source_id: null,
@@ -347,6 +351,53 @@ export async function createDerivation(input: DerivationInput): Promise<{
     }
 
     return { construct, relationships };
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// SOURCE-SCOPED CONSTRUCT RETRIEVAL
+// ═══════════════════════════════════════════════════════════════════════
+
+/**
+ * Load all constructs derived from a specific evidence source.
+ * Uses source→construct lineage (evidence_relationships) as the authority,
+ * NOT project_id scoping.
+ *
+ * One synthesis request → one evidence_source → one coherent fact set.
+ */
+export async function getConstructsForSource(
+  sourceId: number,
+  filters?: {
+    construct_type?: ConstructType;
+    status?: ConstructStatus;
+    derivation_type?: string;
+  },
+): Promise<EvidenceConstruct[]> {
+  // Find all construct IDs linked from this source via DERIVED_FROM
+  const relationships = await EvidenceRelationshipModel.findAll({
+    where: {
+      from_source_id: sourceId,
+      relationship_type: 'DERIVED_FROM',
+    },
+    attributes: ['to_construct_id'],
+  });
+
+  const constructIds = relationships
+    .map(r => (r as unknown as { to_construct_id: number | null }).to_construct_id)
+    .filter((id): id is number => id !== null);
+
+  if (constructIds.length === 0) return [];
+
+  const where: Record<string, unknown> = {
+    id: { [Op.in]: constructIds },
+  };
+  if (filters?.construct_type) where.construct_type = filters.construct_type;
+  if (filters?.status) where.status = filters.status;
+  if (filters?.derivation_type) where.derivation_type = filters.derivation_type;
+
+  return EvidenceConstructModel.findAll({
+    where,
+    order: [['created_at', 'ASC']],
   });
 }
 

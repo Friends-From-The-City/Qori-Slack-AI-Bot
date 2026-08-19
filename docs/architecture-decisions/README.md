@@ -104,6 +104,15 @@ Start with `0001` and read forward. The history is itself useful — it shows ho
 - [0029 — Canonical evidence state is distinct from cascade projection](./0029-canonical-evidence-state-and-cascade-projection.md) — Authoritative evidence persists independently of study_variables consumer shapes
 - [0030 — Stable database IDs and typed relational lineage are authoritative evidence identity](./0030-evidence-lineage-identity.md) — DB IDs are identity; document anchors are presentation
 - [0031 — Progressive modal contracts](./0031-progressive-modal-contracts.md) — CONSUMES/ASKS/COMMITS/CONTROL/UPLOADS/DERIVES vocabulary applied progressively
+- [0032 — Versioned researcher-adjudicated qualitative coding](./0032-versioned-qualitative-coding.md) — Governed qualitative evidence; privacy-gated model access; immutable versioned codebooks
+- [0033 — State classification and GitHub projection removal](./0033-state-classification-and-github-projection-removal.md) — Six-class state taxonomy; GitHub .variables writes removed; Postgres sole cascade authority
+- [0034 — Model provider boundary](./0034-model-provider-boundary.md) — Workflows select tier (haiku/sonnet/opus); single factory owns provider instantiation
+- [0035 — Unstructured content privacy gate](./0035-unstructured-content-privacy-gate.md) — Platform-wide invariant: all unstructured content → privacy policy → authorized representation → model access
+- [0036 — External side-effect idempotency](./0036-external-side-effect-idempotency.md) — External actions require stable semantic identity; retries converge on one action
+- [0037 — Canonical evidence lineage](./0037-canonical-evidence-lineage.md) — Evidence graph is lineage authority; study_variables is projection; upstream→downstream edges; candidate vs accepted
+- [0038 — Canonical artifact identity and navigation](./0038-canonical-artifact-identity-and-navigation.md) — Artifact public_id is stable identity; location is mutable; artifact→evidence refs use canonical IDs; no prose/path matching
+- [0039 — Disaster recovery posture](./0039-disaster-recovery-posture.md) — Logical backup as primary portable recovery; PITR gap; validated restore drill; recovery runbook
+- [0040 — Records lifecycle and disposition authority](./0040-records-lifecycle-and-disposition-authority.md) — Qori enforces assigned records authority but does not invent schedules; fail-closed disposition gate; holds override disposition
 
 ### Lessons (informal ADRs from failure modes)
 

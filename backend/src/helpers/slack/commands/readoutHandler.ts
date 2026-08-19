@@ -464,8 +464,26 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }: SlackVi
       combinedContent = '[No research plans or session summaries found for this study]';
     }
 
-    const inputText = combinedContent;
-    const researchReadoutData = combinedContent;
+    // Privacy gate: authorize fetched content before model access (PH-3 / ADR 0035).
+    // Content is from Qori-managed artifacts (research plans, session summaries) —
+    // uses TRUSTED_CURATED_ARTIFACT policy (auto-authorized with known provenance).
+    const { authorizeForModel } = require('../../../services/content-governance.service');
+    const { createSynthesizedConstructs } = require('../../../services/synthesis-evidence.service');
+    const { enrichProjectionWithEvidenceRefs } = require('../../../services/projection-enrichment.service');
+    const { attachEvidenceRefsVerified } = require('../../../services/artifact.service');
+    const { computeCanonicalAnchor, resolveConstructDeepLink, buildCanonicalReferenceSection } = require('../../../services/deep-link.service');
+    const { prepareYamlTemplate, finalizeArtifactWrite } = require('../../yamlProcessor');
+    const { getDefaultModelName } = require('../../modelProvider');
+    const sequelizeDb = require('../../../database').default;
+    const privacyResult = authorizeForModel(
+      combinedContent,
+      'TRUSTED_CURATED_ARTIFACT',
+      { isQoriArtifact: true, upstreamPrivacyComplete: true, sourceId: `readout:${selectedStudyName}` },
+    );
+    const authorizedContent = privacyResult.modelSafeContent ?? combinedContent;
+
+    const inputText = authorizedContent;
+    const researchReadoutData = authorizedContent;
 
     console.log('Combined content length:', combinedContent.length);
 
@@ -519,6 +537,27 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }: SlackVi
       reportData.readout_link = readoutLink;
     }
 
+    // PH-6B: Artifact identity context for research readout
+    let canonicalReadoutInputs: string[] = [];
+    try {
+      const themeConstructs = await sequelizeDb.models.EvidenceConstruct.findAll({
+        where: { study_id: resolved.studyId, construct_type: 'theme' },
+        attributes: ['public_id'],
+      });
+      canonicalReadoutInputs = themeConstructs.map(
+        (c: unknown) => (c as { public_id: string }).public_id,
+      );
+    } catch { /* fallback to empty */ }
+
+    (reportData as unknown as Record<string, unknown>).__artifactContext = {
+      projectId: resolved.projectId,
+      studyId: resolved.studyId,
+      artifactType: 'readout',
+      title: `Research readout — ${selectedStudyName}`,
+      canonicalUpstreamInputs: canonicalReadoutInputs,
+      createdBy: body.user.id,
+    };
+
     console.log('Report data keys:', Object.keys(reportData));
 
     // Route based on report type
@@ -567,6 +606,21 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }: SlackVi
           try {
             const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, templateName);
             const audienceReportData: ReadoutTemplateInput = { ...reportData, target_audience: audience };
+            // PH-6D1: Each targeted audience gets its own artifact identity.
+            // Audience is explicit in canonicalUpstreamInputs so different audiences
+            // always produce distinct artifact identities, even with the same template.
+            const normalizedAudience = audience.toLowerCase().replace(/\s+/g, '-');
+            (audienceReportData as unknown as Record<string, unknown>).__artifactContext = {
+              projectId: resolved.projectId,
+              studyId: resolved.studyId,
+              artifactType: 'readout',
+              title: `${audience} readout — ${selectedStudyName}`,
+              canonicalUpstreamInputs: [
+                ...canonicalReadoutInputs,
+                `audience:${normalizedAudience}`,
+              ],
+              createdBy: body.user.id,
+            };
             const rendered = await processYamlTemplate(file.content, audienceReportData, selectedStudy.path ?? '', '', false, variableContext);
 
             // CRITICAL: Await extraction to ensure ticket_candidates are committed before notifying user.
@@ -629,7 +683,7 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }: SlackVi
       })();
 
     } else {
-      // Research readout (existing flow)
+      // Research readout — PH-6D2: prepare/finalize flow with canonical references
       await client.chat.postMessage({
         channel: body.user.id,
         text: `Generating research readout for *${selectedStudyName}*... This may take a few minutes.`,
@@ -637,21 +691,226 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }: SlackVi
 
       const yamlTemplateName = 'research_readout.yaml';
       const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, yamlTemplateName);
-      const renderedYaml = await processYamlTemplate(file.content, reportData, selectedStudy.path ?? '', '', false, variableContext);
 
-      // CRITICAL: Await extraction to ensure cascade variables (prioritized_findings) are committed.
-      // Without this, targeted readouts won't see the findings. See ADR 0019.
-      if (renderedYaml.extractionPromise) {
-        const extractResult = await renderedYaml.extractionPromise;
-        if (!extractResult.success) {
-          console.error(`❌ Readout extraction failed: ${extractResult.error}`);
-          await client.chat.postMessage({
-            channel: body.user.id,
-            text: `⚠️ Report generated but variable extraction failed: ${extractResult.error}\n\nTargeted readouts may not work until you regenerate.`,
+      // PREPARE: Generate + extract — no GitHub write yet
+      const prepared = await prepareYamlTemplate(
+        file.content, reportData, selectedStudy.path ?? '', '', variableContext,
+      );
+
+      if (!prepared.extractionOutcome.success) {
+        console.error(`❌ Readout extraction failed: ${prepared.extractionOutcome.error}`);
+        await client.chat.postMessage({
+          channel: body.user.id,
+          text: `⚠️ Report generation failed: ${prepared.extractionOutcome.error}\n\nPlease try again.`,
+        });
+        return;
+      }
+      console.log(`✅ Readout variables committed: ${prepared.extractionOutcome.variableCount} items (${prepared.extractionKeys.join(', ')})`);
+
+      // PH-5B: Create canonical evidence constructs for findings and recommendations.
+      const readoutConstructIds: number[] = [];
+      const findingRefItems: Array<{ displayId: string; label: string; publicId: string; upstreamThemeLinks: Array<{ displayId: string; label: string; deepLink: string | null }> }> = [];
+      const recRefItems: Array<{ displayId: string; label: string; publicId: string; findingLinks: Array<{ displayId: string; label: string; deepLink: string | null }> }> = [];
+
+      if (prepared.extractionKeys.includes('prioritized_findings') || prepared.extractionKeys.includes('prioritized_recommendations')) {
+        try {
+          const resolvedStudyId = resolved.studyId;
+          const { readStudyVariablesByContext: readVars } = require('../../studyVariables');
+          const vars = await readVars({ projectId: resolved.projectId, studyId: resolvedStudyId });
+
+          const EvidenceConstructModel = sequelizeDb.models.EvidenceConstruct;
+          const themeConstructs = await EvidenceConstructModel.findAll({
+            where: { study_id: resolvedStudyId, construct_type: 'theme' },
           });
-          return;
+          type ConstructRecord = { public_id: string; label: string };
+          const themePublicIds = new Set(themeConstructs.map((c: unknown) => (c as ConstructRecord).public_id));
+          const themeDisplayToPublicId = new Map(
+            themeConstructs.map((c: unknown) => [(c as ConstructRecord).label, (c as ConstructRecord).public_id]),
+          );
+
+          // Create finding constructs
+          const findings = vars.variables?.prioritized_findings;
+          if (Array.isArray(findings) && findings.length > 0 && themePublicIds.size > 0) {
+            const findingItems = findings.map((f: Record<string, unknown>) => {
+              let evidenceIds: string[] = [];
+              if (Array.isArray(f.supporting_theme_evidence_ids) && f.supporting_theme_evidence_ids.length > 0) {
+                evidenceIds = f.supporting_theme_evidence_ids as string[];
+              } else if (Array.isArray(f.supporting_themes)) {
+                evidenceIds = (f.supporting_themes as string[])
+                  .map(displayId => themeDisplayToPublicId.get(displayId))
+                  .filter((id): id is string => id !== undefined);
+              }
+              return {
+                displayId: (f.id as string) || 'finding-unknown',
+                label: (f.finding as string)?.substring(0, 100) || (f.id as string) || '',
+                payload: f,
+                proposedEvidenceIds: evidenceIds,
+              };
+            });
+
+            const findingResult = await createSynthesizedConstructs(findingItems, {
+              projectId: resolved.projectId, studyId: resolvedStudyId,
+              constructType: 'finding', upstreamConstructType: 'theme',
+              relationshipType: 'SYNTHESIZED_FROM', suppliedEvidenceIds: themePublicIds,
+              cascadeVariableKey: 'prioritized_findings', templateId: 'research_readout',
+              templateVersion: 'v7.0', modelName: getDefaultModelName(), createdBy: body.user.id,
+            });
+
+            if (findingResult.created.length > 0) {
+              console.log(`✅ Evidence lineage: ${findingResult.created.length} finding constructs`);
+              readoutConstructIds.push(...findingResult.created.map((c: { constructId: number }) => c.constructId));
+              const findingsEnriched = await enrichProjectionWithEvidenceRefs(
+                resolved.projectId, resolvedStudyId, 'prioritized_findings', findingResult.created,
+              );
+              if (findingsEnriched > 0) console.log(`✅ Projection enriched: ${findingsEnriched} findings`);
+
+              // PH-6D2: Resolve upstream theme deep links for each finding
+              for (const created of findingResult.created) {
+                const findingData = findings.find((f: Record<string, unknown>) => f.id === created.displayId);
+                const themeLinks: Array<{ displayId: string; label: string; deepLink: string | null }> = [];
+                const upstreamThemes = (findingData?.supporting_themes as string[]) || [];
+                for (const themeLabel of upstreamThemes) {
+                  const themePubId = themeDisplayToPublicId.get(themeLabel);
+                  if (themePubId) {
+                    const linkResult = await resolveConstructDeepLink(themePubId, resolvedStudyId);
+                    themeLinks.push({
+                      displayId: themeLabel,
+                      label: themeLabel,
+                      deepLink: linkResult.resolved ? linkResult.deepLink : null,
+                    });
+                  }
+                }
+                findingRefItems.push({
+                  displayId: created.displayId,
+                  label: (findingData?.finding as string)?.substring(0, 100) || created.displayId,
+                  publicId: created.publicId,
+                  upstreamThemeLinks: themeLinks,
+                });
+              }
+
+              // Create recommendation constructs
+              const recommendations = vars.variables?.prioritized_recommendations;
+              if (Array.isArray(recommendations) && recommendations.length > 0) {
+                const findingPublicIds = new Set(findingResult.created.map((c: { publicId: string }) => c.publicId));
+                const findingDisplayToPublicId = new Map(
+                  findingResult.created.map((c: { displayId: string; publicId: string }) => [c.displayId, c.publicId]),
+                );
+
+                const recItems = recommendations.map((r: Record<string, unknown>) => {
+                  let evidenceIds: string[] = [];
+                  if (Array.isArray(r.supporting_finding_evidence_ids) && r.supporting_finding_evidence_ids.length > 0) {
+                    evidenceIds = r.supporting_finding_evidence_ids as string[];
+                  } else if (Array.isArray(r.addresses_findings)) {
+                    evidenceIds = (r.addresses_findings as string[])
+                      .map(displayId => findingDisplayToPublicId.get(displayId))
+                      .filter((id): id is string => id !== undefined);
+                  }
+                  return {
+                    displayId: (r.id as string) || 'rec-unknown',
+                    label: (r.recommendation as string)?.substring(0, 100) || (r.id as string) || '',
+                    payload: r,
+                    proposedEvidenceIds: evidenceIds,
+                  };
+                });
+
+                const recResult = await createSynthesizedConstructs(recItems, {
+                  projectId: resolved.projectId, studyId: resolvedStudyId,
+                  constructType: 'recommendation', upstreamConstructType: 'finding',
+                  relationshipType: 'SUPPORTS', suppliedEvidenceIds: findingPublicIds,
+                  cascadeVariableKey: 'prioritized_recommendations', templateId: 'research_readout',
+                  templateVersion: 'v7.0', modelName: getDefaultModelName(), createdBy: body.user.id,
+                });
+
+                if (recResult.created.length > 0) {
+                  console.log(`✅ Evidence lineage: ${recResult.created.length} recommendation constructs`);
+                  readoutConstructIds.push(...recResult.created.map((c: { constructId: number }) => c.constructId));
+                  const recsEnriched = await enrichProjectionWithEvidenceRefs(
+                    resolved.projectId, resolvedStudyId, 'prioritized_recommendations', recResult.created,
+                  );
+                  if (recsEnriched > 0) console.log(`✅ Projection enriched: ${recsEnriched} recommendations`);
+
+                  // PH-6D2: Build recommendation refs with same-document finding links
+                  for (const created of recResult.created) {
+                    const recData = recommendations.find((r: Record<string, unknown>) => r.id === created.displayId);
+                    const findingLinks: Array<{ displayId: string; label: string; deepLink: string | null }> = [];
+                    const addressedFindings = (recData?.addresses_findings as string[]) || [];
+                    for (const findingDisplayId of addressedFindings) {
+                      const findingPubId = findingDisplayToPublicId.get(findingDisplayId);
+                      if (findingPubId) {
+                        // Same-document link — use local anchor
+                        const anchor = computeCanonicalAnchor(findingPubId);
+                        findingLinks.push({
+                          displayId: findingDisplayId,
+                          label: findingDisplayId,
+                          deepLink: `#${anchor}`,
+                        });
+                      }
+                    }
+                    recRefItems.push({
+                      displayId: created.displayId,
+                      label: (recData?.recommendation as string)?.substring(0, 100) || created.displayId,
+                      publicId: created.publicId,
+                      findingLinks,
+                    });
+                  }
+                }
+                if (recResult.rejected.length > 0) {
+                  console.warn(`⚠️ ${recResult.rejected.length} recommendations rejected (invalid refs)`);
+                }
+              }
+            }
+            if (findingResult.rejected.length > 0) {
+              console.warn(`⚠️ ${findingResult.rejected.length} findings rejected (invalid refs)`);
+            }
+          } else if (themePublicIds.size === 0) {
+            console.log('ℹ️ No canonical theme constructs found — skipping finding evidence lineage');
+          }
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          console.warn(`⚠️ Finding/recommendation evidence creation failed (non-blocking): ${message}`);
         }
-        console.log(`✅ Readout variables committed: ${extractResult.variableCount} items (${extractResult.keys?.join(', ')})`);
+      }
+
+      // PH-6D2: Build canonical reference sections
+      let canonicalRefSection = '';
+      if (findingRefItems.length > 0) {
+        const findingRefs = findingRefItems.map(f => ({
+          displayId: f.displayId,
+          label: f.label,
+          constructPublicId: f.publicId,
+          constructType: 'finding',
+          upstreamLinks: f.upstreamThemeLinks,
+        }));
+        canonicalRefSection += buildCanonicalReferenceSection(findingRefs, 'Canonical Finding References');
+      }
+      if (recRefItems.length > 0) {
+        const recRefs = recRefItems.map(r => ({
+          displayId: r.displayId,
+          label: r.label,
+          constructPublicId: r.publicId,
+          constructType: 'recommendation',
+          upstreamLinks: r.findingLinks,
+        }));
+        canonicalRefSection += buildCanonicalReferenceSection(recRefs, 'Canonical Recommendation References');
+      }
+
+      // FINALIZE: Single GitHub write with canonical references
+      const renderedYaml = await finalizeArtifactWrite(
+        prepared,
+        canonicalRefSection || undefined,
+      );
+      console.log(`✅ Readout finalized: ${renderedYaml.result.url}`);
+
+      // PH-6C: Attach evidence refs (artifact now status=written)
+      if (readoutConstructIds.length > 0) {
+        const attachResult = await attachEvidenceRefsVerified(
+          renderedYaml.artifactPublicId,
+          readoutConstructIds,
+          { projectId: resolved.projectId, studyId: resolved.studyId, templateId: 'research_readout', workflow: 'readout' },
+        );
+        if (attachResult.attached > 0) {
+          console.log(`✅ Artifact→evidence: ${attachResult.attached} refs attached to readout ${renderedYaml.artifactPublicId}`);
+        }
       }
 
       await client.chat.postMessage({
@@ -660,18 +919,12 @@ const handleReadoutModalSubmission = async ({ ack, body, view, client }: SlackVi
         blocks: [
           {
             type: 'section',
-            text: {
-              type: 'mrkdwn',
-              text: `*Report ready:*\n<${renderedYaml.result.url}|View Full Report on GitHub>`,
-            },
+            text: { type: 'mrkdwn', text: `*Report ready:*\n<${renderedYaml.result.url}|View Full Report on GitHub>` },
           },
           { type: 'divider' },
           {
             type: 'section',
-            text: {
-              type: 'mrkdwn',
-              text: `*Next:* Run \`/qori-report\` again and select *Targeted Readouts* to generate audience-specific reports, or \`/qori-tickets\` to create engineering issues.`,
-            },
+            text: { type: 'mrkdwn', text: `*Next:* Run \`/qori-report\` again and select *Targeted Readouts* to generate audience-specific reports, or \`/qori-tickets\` to create engineering issues.` },
           },
         ],
       });

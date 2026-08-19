@@ -20,6 +20,7 @@ import type { ResearchQuestion, TargetBarrier } from '../../../types/cascade';
 
 import { getConfigRepo, YAML_TEMPLATE_PATH, fetchFileFromRepo } from '../../github';
 import { getStudyById } from '../../../services/research_study.service';
+import { assertStudyAccess, AuthorizationError } from '../../../services/authorization.service';
 import { processYamlTemplate } from '../../yamlProcessor';
 import { addStudyStatus } from '../../../services/study-status.service';
 import { calculatePerPersonCompensation } from '../../../utils/compensationCalculator';
@@ -82,6 +83,22 @@ async function handlePlanSubmission({ ack, body, view, client }: SlackViewMiddle
     return;
   }
 
+  // ── GOV-1: Authorization check ──
+  // Re-authorize at submission boundary. Do not trust modal opener's check.
+  try {
+    await assertStudyAccess(body.user.id, studyId, client);
+  } catch (err) {
+    if (err instanceof AuthorizationError) {
+      console.warn(`[AUTH] Plan submission denied: user=${body.user.id} study=${studyId}`);
+      await client.chat.postEphemeral({
+        channel: channelId || body.user.id,
+        user: body.user.id,
+        text: 'Access denied: you are not a member of this study\'s project.',
+      });
+      return;
+    }
+    throw err;
+  }
 
   // Post "working" message to researcher's DM (consistent with completion DM)
   try {
@@ -228,6 +245,16 @@ async function handlePlanSubmission({ ack, body, view, client }: SlackViewMiddle
   };
 
   console.log(`📋 Assembled plan data: ${Object.keys(data).length} fields, ${data.objectives_count} objectives, ${data.research_questions_count} RQs, study: ${studyName}`);
+
+  // PH-6D1: Canonical artifact identity for research plan
+  (data as unknown as Record<string, unknown>).__artifactContext = {
+    projectId,
+    studyId,
+    artifactType: 'plan',
+    title: `Research plan — ${studyName}`,
+    canonicalUpstreamInputs: [], // No canonical evidence constructs; cascade fingerprint used
+    createdBy: userId,
+  };
 
   // TemplateContractError propagates to global error middleware in events.ts
   const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, 'research_plan.yaml');

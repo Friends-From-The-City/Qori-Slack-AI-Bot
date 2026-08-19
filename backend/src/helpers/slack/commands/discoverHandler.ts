@@ -23,8 +23,10 @@ import { processYamlTemplate } from '../../yamlProcessor';
 import { processSlackFiles } from '../../pdfProcessor';
 import { parseDocuments, validateDocuments } from '../../documentParser';
 import { getProjectByChannelId, getProjectById } from '../../../services/project.service';
+import { assertProjectAccess, AuthorizationError } from '../../../services/authorization.service';
 import type { VariableContext } from '../../studyVariables';
 import { postEphemeralOrDM } from '../slackHelpers';
+import { authorizeForModel, scanForPii } from '../../../services/content-governance.service';
 import { handleSurveyUploadPhase } from './surveySubmissionHandler';
 
 // ─── Types ──────────────────────────────────────────────────────
@@ -234,6 +236,18 @@ async function discoverHandler({ ack, body, client, command }: SlackCommandMiddl
     return;
   }
 
+  // ── GOV-1: Authorization check ──
+  try {
+    await assertProjectAccess(userId, project.id, client);
+  } catch (err) {
+    if (err instanceof AuthorizationError) {
+      console.warn(`[AUTH] Discover command denied: user=${userId} project=${project.id}`);
+      await postEphemeralOrDM(client, channelId, userId, 'Access denied: you are not a member of this project.');
+      return;
+    }
+    throw err;
+  }
+
   try {
     // Load existing discovery artifacts for this project
     let artifacts: DiscoveryArtifact[] = [];
@@ -291,6 +305,7 @@ async function discoverHandler({ ack, body, client, command }: SlackCommandMiddl
 }
 
 // ─── Action handler: hub → type-specific modal ─────────────────
+// GOV-1: UI transition only (hub → type modal). Auth enforced at discoverHandler (entry) and handleDiscoverSubmission (mutation).
 
 async function openDiscoverTypeModal({ ack, body, client }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs): Promise<void> {
   await ack();
@@ -351,6 +366,18 @@ async function handleDiscoverSubmission({ ack, view, body, client }: SlackViewMi
       text: '❌ Project context missing. Please run `/qori-discover` from a project-linked channel.',
     });
     return;
+  }
+
+  // ── GOV-1: Re-authorize at submission boundary ──
+  try {
+    await assertProjectAccess(userId, projectId, client);
+  } catch (err) {
+    if (err instanceof AuthorizationError) {
+      console.warn(`[AUTH] Discover submission denied: user=${userId} project=${projectId}`);
+      await client.chat.postMessage({ channel: userId, text: 'Access denied: you are not a member of this project.' });
+      return;
+    }
+    throw err;
   }
 
   // Read discovery type from private_metadata (set by action handler)
@@ -518,6 +545,58 @@ async function handleDiscoverSubmission({ ack, view, body, client }: SlackViewMi
       data.detected_files = documents.map(d => d.name).join('\n- ');
       (data as any).file_list = documents.map(d => d.name);
     }
+
+    // Privacy gate: authorize uploaded content before model access (PH-3 / ADR 0035).
+    // Discovery uploads are researcher-authored documents (not participant transcripts),
+    // so they use the DISCOVERY_UPLOAD policy: deterministic PII scan → auto-authorize
+    // if clean, or block + notify researcher if PII detected.
+    const privacyResult = authorizeForModel(
+      formattedDocumentContent,
+      'DISCOVERY_UPLOAD',
+      { projectId, sourceId: `discovery:${discoveryType}:${topicSlug}` },
+    );
+
+    if (privacyResult.status === 'pending_review') {
+      const piiFindings = scanForPii(formattedDocumentContent);
+      const findingsList = piiFindings.map(f => `• ${f.label}: \`${f.snippet}\``).join('\n');
+      await client.chat.postMessage({
+        channel: userId,
+        text: `⚠️ *Privacy scan detected potential PII in your uploaded file(s)*\n\n${findingsList}\n\n` +
+          'Please review and re-upload with PII removed, or contact the research lead. ' +
+          'Qori cannot process files containing personal identifiers.',
+      });
+      return;
+    }
+
+    if (privacyResult.status === 'denied') {
+      await client.chat.postMessage({
+        channel: userId,
+        text: `❌ Content authorization failed: ${privacyResult.reason}`,
+      });
+      return;
+    }
+
+    // Use the authorized model-safe content
+    data.document_content = privacyResult.modelSafeContent!;
+    data.combined_file_content = privacyResult.modelSafeContent!;
+
+    console.log(`✅ Privacy gate: ${privacyResult.policy} — ${privacyResult.reason}`);
+
+    // PH-6B: Artifact identity context for discovery artifacts.
+    // PH-6C note: No artifact→evidence attachment here. Discovery sources
+    // are not yet in the canonical evidence graph (ADR 0037 limitation).
+    // When discovery evidence constructs are added (future PH-5D), wire
+    // attachEvidenceRefsVerified here.
+    const { computeContentHash } = require('../../survey');
+    const contentFingerprint = computeContentHash(privacyResult.modelSafeContent!).substring(0, 16);
+    (data as unknown as Record<string, unknown>).__artifactContext = {
+      projectId,
+      studyId: null,
+      artifactType: 'discovery',
+      title: `${discoveryType.replace(/_/g, ' ')} — ${topic}`,
+      canonicalUpstreamInputs: [`content:${contentFingerprint}`],
+      createdBy: userId,
+    };
 
     const file = await fetchFileFromRepo(getConfigRepo(), YAML_TEMPLATE_PATH, typeConfig.yaml);
 

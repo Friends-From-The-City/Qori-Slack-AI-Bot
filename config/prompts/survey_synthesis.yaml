@@ -4,19 +4,21 @@
 id: survey_synthesis
 name: survey_response_synthesizer
 label: "Survey Synthesis"
-version: "v9.2"
+version: "v10.2.1"
 
 description: |
   Analyze survey data with deterministic structured evidence and bounded
-  qualitative interpretation.
-  v9.1: Ordinal rendering in confirmed order. De-duplicated output.
-  No soft qualitative prevalence language. Declared respondent IDs
-  preserved. Emit contract aligned with evidence authority model.
-  Per ADR 0005/0016/0028.
+  qualitative interpretation. When accepted qualitative coding exists,
+  renders deterministic "What Respondents Described" section with
+  researcher-reviewed groupings, governed quotes, and code-computed counts.
+  v10.2: Evidence envelope — all reader-facing tasks share one accepted
+  evidence boundary. Raw open-text withheld when accepted coding exists.
+  Post-generation claim guard validates narrative against evidence envelope.
+  Per ADR 0005/0016/0028/0032.
 
 author: Qori R&D
 created: 2025-08-11
-last_updated: 2026-08-15
+last_updated: 2026-08-16
 
 # ═══════════════════════════════════════════════════════════
 # CONFIGURATION
@@ -25,7 +27,7 @@ input_type: slack_modal_form
 input_processing: form_based
 discovery_scope: true
 
-# Survey v9.2 renders generation/model/provenance inside its own
+# Survey v10.0 renders generation/model/provenance inside its own
 # Method & Provenance details block. The shared footer is suppressed
 # to avoid duplication and document-hierarchy disruption.
 document:
@@ -69,16 +71,32 @@ input_variables:
   - name: open_text_content
     type: textarea
     required: false
-    description: "Open-text survey responses extracted from CSV, formatted with respondent labels for qualitative analysis."
+    description: "Open-text survey responses extracted from CSV. NULL when accepted coding exists — evidence envelope withholds raw text from reader-facing tasks."
+  - name: accepted_qualitative_summary
+    type: textarea
+    required: false
+    description: "Accepted qualitative groupings formatted for evidence_gaps task. Present only when accepted coding exists. Replaces open_text_content in evidence boundary."
+  - name: structured_evidence_capabilities
+    type: object
+    required: false
+    description: "Deterministic capability flags: which cross-tabs exist, sample size, population representativeness, process-sequence data availability."
+  - name: qualitative_coding
+    type: object
+    required: false
+    description: "Accepted qualitative coding data from Slice 2B: recurring patterns, individual observations, review metadata, privacy counts. When present, replaces Preliminary Qualitative Observations with deterministic What Respondents Described."
+  - name: has_accepted_coding
+    type: boolean
+    required: false
+    description: "Top-level boolean for task skip_when evaluation. True when an accepted coding run exists for the current evidence source. Derived from Postgres, not from artifact text or Slack state."
 
 # ═══════════════════════════════════════════════════════════
 # CASCADE CONTRACT — aligned with v9 authority model
 # ═══════════════════════════════════════════════════════════
 #
-# AUDIT (v9.2):
-# survey_themes:       NOT EMITTED — returns in Slice 2 after formal coding
+# AUDIT (v10.0):
+# survey_themes:       NOT EMITTED — "themes" terminology retired (Slice 2B decision)
 # survey_findings:     KEPT — model-derived interpretation (no new numbers)
-# discovered_barriers: NOT EMITTED — returns in Slice 2 after accepted coding
+# discovered_barriers: NOT EMITTED — not auto-emitted from qualitative patterns
 # discovered_metrics:  NOT EMITTED — deterministic metrics in evidence layer
 # sample_demographics: NOT EMITTED — no confirmed demographic fields
 # knowledge_gaps:      KEPT — identifying evidence gaps is approved interpretive work
@@ -91,7 +109,7 @@ emits:
       type: array
       items:
         $ref: schemas/survey_finding.yaml
-    extract_from: "Integrated Interpretation or Structured Evidence sections. Assign sequential IDs (finding-001). metric_name and sample_size must come from Structured Evidence values only — do not invent or re-count. Include source_question where applicable."
+    extract_from: "What This Means or Structured Evidence sections. Assign sequential IDs (finding-001). metric_name and sample_size must come from Structured Evidence values only — do not invent or re-count. Include source_question where applicable."
 
   - key: knowledge_gaps
     pool: true
@@ -121,9 +139,14 @@ emits:
 ai_generation_tasks:
 
   # Task 1: Qualitative observations on open-text responses.
+  # SKIPPED when accepted qualitative coding exists (Slice 2B).
+  # When coding is accepted, the "What Respondents Described" section
+  # renders deterministic counts and governed quotes from the template.
   # NO counting, NO frequencies, NO themes, NO sentiment distributions.
   # NO soft prevalence language.
   - task_id: "qualitative_observations"
+    skip_when: "has_accepted_coding"
+    skip_output: ""
     prompt: |
       You are interpreting open-text survey responses. Your output is
       PRELIMINARY qualitative observation — not formal thematic analysis,
@@ -239,7 +262,283 @@ ai_generation_tasks:
       evidence, methodology, footer, or any other structural element.
       Output observation groups only.
 
-  # Task 2: Evidence gaps — what the survey cannot answer
+  # Task 2: Executive Summary — bounded research narrative
+  - task_id: "executive_summary"
+    prompt: |
+      Write a research narrative summarizing the key findings from this survey.
+
+      ============================================================
+      RULES
+      ============================================================
+
+      RULE 1 — NARRATIVE SYNTHESIS, NOT FACT RECITAL
+      Synthesize the evidence into a concise story. Do NOT:
+      - List medians/distributions as bullet points
+      - Repeat the same statistic multiple times
+      - Produce a "key metric: value" format
+
+      RULE 2 — NUMERIC AUTHORITY
+      Every number in the summary must come from the structured evidence
+      below. Do not calculate, re-count, or modify any supplied value.
+      You may cite numbers to support narrative claims.
+
+      RULE 3 — STRUCTURE
+      Write 2–4 short paragraphs (120–220 words total):
+      - Paragraph 1: main outcome pattern from the structured evidence
+      - Paragraph 2: what qualitative evidence helps explain
+      - Paragraph 3: uncertainty, limitation, or research implication
+
+      RULE 4 — NO PREVALENCE LANGUAGE
+      Do not use "most respondents," "some participants," "frequently,"
+      or other soft prevalence terms. State facts with their actual
+      counts/percentages from the structured evidence.
+
+      RULE 5 — NO COMPLEMENT-BY-SUBTRACTION
+      Do NOT derive qualitative claims by subtracting a grouping frequency
+      from 100% or from the total respondent count.
+
+      Example of PROHIBITED reasoning:
+        "3 of 10 had no difficulty, so the remaining 70% had friction."
+
+      This is invalid because:
+      - qualitative groupings are NOT mutually exclusive
+      - some respondents may have no accepted grouping
+      - absence from one grouping does not imply presence in another
+
+      Instead, describe what each accepted grouping found, using its own
+      accepted frequency. Let the reader draw their own complement if the
+      evidence supports it.
+
+      RULE 6 — QUALITATIVE EVIDENCE BOUNDARY
+      When accepted qualitative groupings are provided below, they are
+      the ONLY qualitative authority. Reference only the grouping labels,
+      definitions, and frequencies supplied. Do not introduce respondent
+      details, quotes, or observations not present in the supplied
+      groupings.
+
+      RULE 7 — NO UNSUPPORTED ASSOCIATIONS
+      Do not claim respondent-level correspondence, alignment,
+      explanation, or co-occurrence between qualitative groupings and
+      structured measures unless a deterministic cross-tab for that
+      specific pair is supplied. Descriptive comparison is allowed;
+      causal or explanatory linkage is not.
+
+      RULE 8 — NO UNMEASURED PSYCHOLOGICAL EXPLANATIONS
+      Do not introduce latent motivations, expectations, emotions,
+      or psychological explanations unless respondents explicitly
+      stated them in accepted evidence. If the evidence does not
+      explain a pattern, say so.
+
+      RULE 9 — NO SKEW FROM MEDIAN
+      A neutral median does not establish absence of skew, balanced
+      distribution, or symmetric spread. Do not use: "no skew,"
+      "balanced distribution," "evenly distributed," "symmetric,"
+      or "weighted positive/negative" based only on the median.
+      Instead, state the median value and describe distributions
+      using supplied deterministic counts only.
+
+      RULE 10 — NO FALSE ABSENCE CLAIMS
+      Do not claim that a supplied cross-tabulation, distribution,
+      or deterministic value is missing, unavailable, or unreported.
+      The cross-tabulations listed below ARE available with full
+      cell-level values. Refer to them accurately.
+
+      ============================================================
+      AVAILABLE EVIDENCE
+      ============================================================
+
+      **Respondents:** {{computed_facts.totalRespondents}}
+      **Fields:** {{computed_facts.schemaSummary}}
+
+      **Field distributions:**
+      {% for field in computed_facts.fieldStats %}
+      {{field.displayName}} ({{field.role}}): Present {{field.nPresent}}/{{computed_facts.totalRespondents}}{% if field.median %}, Median: {{field.median}}{% endif %}
+      {% endfor %}
+
+      {% if computed_facts.crossTabs %}
+      **Cross-tabulations (AVAILABLE with cell-level values):**
+      {% for ct in computed_facts.crossTabs %}
+      {{ct.rowDisplayName}} × {{ct.colDisplayName}} (n={{ct.totalN}})
+      {% endfor %}
+      {% endif %}
+
+      {% if structured_evidence_capabilities %}
+      **Evidence capability flags:**
+      Cross-tabs with cell-level values: {{structured_evidence_capabilities.has_cell_level_cross_tabs}}
+      Cross-tabs between qualitative groupings and structured measures: {{structured_evidence_capabilities.has_qualitative_structured_cross_tabs}}
+      {% endif %}
+
+      {% if qualitative_coding and qualitative_coding.hasAcceptedCoding %}
+      **Accepted qualitative groupings (ONLY qualitative evidence for this summary):**
+      {% for p in qualitative_coding.recurringPatterns %}
+      {{p.label}} — {{p.displayFrequency}}
+      {% endfor %}
+      {% for p in qualitative_coding.individualObservations %}
+      {{p.label}} — {{p.displayFrequency}}
+      {% endfor %}
+      {% endif %}
+
+      **Research problem:** {{project_problem_statement}}
+      **Source intent:** {{source_intent}}
+
+      ============================================================
+      OUTPUT
+      ============================================================
+
+      Write the narrative paragraphs directly. No heading, no markdown
+      formatting beyond basic bold/italic. No bullet lists. Just prose.
+
+  # Task 3: Integrated interpretation — bounded synthesis across evidence types
+  - task_id: "integrated_interpretation"
+    prompt: |
+      Synthesize the structured and qualitative evidence from this survey into
+      an interpretation that tells researchers what the evidence means together.
+
+      ============================================================
+      RULES
+      ============================================================
+
+      RULE 1 — YOU PERFORM THE SYNTHESIS
+      State where evidence converges, complements, or conflicts.
+      Do NOT instruct readers to look for convergence or dissonance.
+      Do NOT write methodology instructions.
+
+      RULE 2 — NUMERIC AUTHORITY
+      Every number must come from the structured evidence below.
+      Do not calculate, re-count, or modify any supplied value.
+
+      RULE 3 — NO PREVALENCE LANGUAGE
+      Do not use "most respondents," "some participants," "frequently,"
+      or other soft prevalence language.
+
+      RULE 4 — STRUCTURE
+      Write 2–4 concise paragraphs covering:
+      - Strongest convergence between structured and qualitative evidence
+      - What qualitative evidence explains about structured patterns
+      - Any dissonance or exceptions worth noting
+      - What CANNOT be concluded from this evidence
+
+      RULE 5 — NO CAUSAL CLAIMS
+      This survey is descriptive. Do not assert that one variable causes
+      another. Associations and co-occurrence are acceptable.
+
+      RULE 6 — NO COMPLEMENT-BY-SUBTRACTION
+      Do NOT derive qualitative claims by subtracting a grouping frequency
+      from 100% or from the total respondent count. Groupings are not
+      mutually exclusive or exhaustive.
+
+      RULE 7 — QUALITATIVE EVIDENCE BOUNDARY
+      When accepted qualitative groupings are provided below, they are
+      the ONLY qualitative authority for this section. Do not reference
+      respondent IDs, quotes, details, or observations not present in
+      the accepted groupings supplied. Do not introduce information from
+      raw open-text entries, governance-only groupings, or unaccepted
+      assignments.
+
+      RULE 8 — CROSS-TAB LIMITATION
+      The structured cross-tabs show how specific field pairs co-vary
+      (e.g., completion × satisfaction, completion × difficulty). There
+      is NO cross-tab between completion status and the accepted
+      qualitative friction groupings. Do not claim or imply an
+      association between completion outcome and specific qualitative
+      groupings unless a deterministic cross-tab for that pair is
+      supplied.
+
+      RULE 9 — NO UNSUPPORTED ASSOCIATIONS
+      You may compare two bodies of evidence descriptively, but you must
+      NOT claim respondent-level correspondence, alignment, explanation,
+      association, or co-occurrence between qualitative groupings and
+      structured measures unless a deterministic linkage/cross-tab for
+      that specific pair is supplied.
+
+      Allowed:
+        "The structured results show neutral median satisfaction and
+        difficulty. Separately, accepted qualitative responses describe
+        both smooth experiences and several types of friction."
+
+      Not allowed:
+        "The smooth-experience respondents anchor the neutral median."
+        "Staff assistance may explain why difficulty ratings did not
+        skew more negative."
+        "The 30% straightforward group corresponds to the
+        satisfaction/difficulty distribution."
+
+      RULE 10 — NO UNMEASURED PSYCHOLOGICAL EXPLANATIONS
+      Do not introduce latent motivations, expectations, emotions, or
+      psychological explanations unless directly supported by accepted
+      participant evidence (i.e., respondents explicitly stated them).
+
+      Not allowed:
+        "Neutral ratings may reflect resignation or low expectation."
+        "Respondents may have normalized the friction."
+
+      Instead:
+        "The available evidence does not explain why respondents selected
+        the neutral rating."
+
+      RULE 11 — NO SKEW FROM MEDIAN
+      A neutral median does not establish absence of skew, balanced
+      distribution, or symmetric spread. Do not use: "no skew,"
+      "balanced distribution," "evenly distributed," or "symmetric"
+      based only on the median. State the median value and describe
+      distributions using supplied deterministic counts only.
+
+      RULE 12 — NO FALSE ABSENCE CLAIMS
+      Do not claim that a supplied cross-tabulation, distribution,
+      or value is missing or unavailable. The cross-tabulations listed
+      below ARE available with full cell-level values.
+
+      ============================================================
+      AVAILABLE EVIDENCE
+      ============================================================
+
+      **Respondents:** {{computed_facts.totalRespondents}}
+
+      **Field distributions:**
+      {% for field in computed_facts.fieldStats %}
+      {{field.displayName}} ({{field.role}}): Present {{field.nPresent}}/{{computed_facts.totalRespondents}}{% if field.median %}, Median: {{field.median}}{% endif %}
+      {% endfor %}
+
+      {% if computed_facts.crossTabs %}
+      **Cross-tabulations (AVAILABLE with cell-level values):**
+      {% for ct in computed_facts.crossTabs %}
+      {{ct.rowDisplayName}} × {{ct.colDisplayName}} (n={{ct.totalN}})
+      {% endfor %}
+
+      **NOT available:**
+      No cross-tab exists between qualitative groupings and any
+      structured measure (completion, satisfaction, difficulty).
+      {% endif %}
+
+      {% if qualitative_coding and qualitative_coding.hasAcceptedCoding %}
+      **Accepted qualitative groupings (ONLY qualitative evidence for
+      this interpretation — do not reference respondent details or raw
+      text beyond what is stated here):**
+      {% for p in qualitative_coding.recurringPatterns %}
+      {{p.label}} — {{p.displayFrequency}}: {{p.definition}}
+      {% endfor %}
+      {% for p in qualitative_coding.individualObservations %}
+      {{p.label}} — {{p.displayFrequency}}: {{p.definition}}
+      {% endfor %}
+      {% endif %}
+
+      **Research problem:** {{project_problem_statement}}
+      **Source intent:** {{source_intent}}
+
+      ============================================================
+      OUTPUT
+      ============================================================
+
+      Write the interpretation paragraphs directly. No heading, no bullet
+      lists. Just prose that synthesizes across evidence types.
+
+      Do NOT output:
+      - "Readers should look for..."
+      - "Readers should consider..."
+      - Instructions or methodology guidance
+      - Respondent IDs not present in the supplied evidence
+      - Details from raw open-text entries
+
   - task_id: "evidence_gaps"
     skip_when: "not project_problem_statement"
     skip_output: |
@@ -269,26 +568,56 @@ ai_generation_tasks:
       The following ARE available from this survey:
       - {{computed_facts.totalRespondents}} unique respondents
       - Fields: {{computed_facts.schemaSummary}}
-      - Field distributions (value counts for all categorical fields)
+      - Field distributions with exact value counts for ALL categorical fields
+        (every category and its count is known — do not claim any category
+        is unknown, absent, or unrepresented if it appears in the distributions)
       - Ordinal medians (where researcher confirmed category order)
-      - Completion status distribution
-      - Cross-tabulations (completion × difficulty, completion × satisfaction)
+      - Completion status distribution (exact counts per status are known)
+      - Cross-tabulations with cell-level values
       - Missingness counts
 
+      IMPORTANT: All distribution categories and their counts are
+      deterministic facts. Do NOT claim that any reported category is
+      unknown, absent, or unrepresented. If Abandoned = 2, then 2
+      respondents with Abandoned status ARE represented in the sample.
+
       The following are NOT available:
+      {% if qualitative_coding and qualitative_coding.hasAcceptedCoding %}
+      - (Accepted qualitative coding IS available — do not list as missing)
+      {% else %}
       - Accepted qualitative-code prevalence (coding not performed)
+      {% endif %}
+      - WHY respondents selected a given completion status
+      - Which accepted qualitative groupings are associated with which
+        completion outcomes (no qualitative × completion cross-tab)
       - Population prevalence or representativeness
       - Causal attribution (survey is descriptive only)
       - Inferential significance (not computed)
 
       Do NOT claim a structured result is missing if it appears in the
-      list above.
+      list above. Gaps should focus on LINKAGE, CAUSE, and
+      GENERALIZATION — not whether categories or respondents exist.
       {% endif %}
 
+      {% if accepted_qualitative_summary %}
+      **Accepted qualitative groupings (ONLY qualitative evidence for gap identification):**
+      {{accepted_qualitative_summary}}
+
+      QUALITATIVE AUTHORITY: The groupings above are the ONLY qualitative
+      evidence available. Do not reference observations, friction types,
+      technical failures, or respondent behaviors not represented in these
+      accepted groupings. Do not introduce raw open-text material.
+      {% elif open_text_content %}
       **Open-text responses:**
       ---BEGIN DATA---
-      {% if open_text_content %}{{open_text_content}}{% else %}{{combined_file_content}}{% endif %}
+      {{open_text_content}}
       ---END DATA---
+      {% elif combined_file_content %}
+      **Open-text responses:**
+      ---BEGIN DATA---
+      {{combined_file_content}}
+      ---END DATA---
+      {% endif %}
 
       ============================================================
       RULES
@@ -309,7 +638,18 @@ ai_generation_tasks:
         - Product actions, feature changes, or design implementations
         - Structured distributions that ARE available (see above)
 
-      RULE 3 — TERMINOLOGY
+      RULE 3 — QUALITATIVE AUTHORITY BOUNDARY
+      When accepted qualitative groupings are provided above, they are
+      the ONLY qualitative evidence for gap identification. You may
+      identify what the accepted evidence cannot answer. You must NOT:
+        - Reference observations, friction types, or behaviors not
+          present in the accepted groupings
+        - Introduce raw open-text material, governance-only groupings,
+          no_grouping entries, or uncodable entries
+        - Resurrect discarded or pre-coding observations to invent
+          new gap premises
+
+      RULE 4 — TERMINOLOGY
       Do not use "theme" or "themes" to describe qualitative groupings.
       Use: "observation types," "qualitative categories," "friction
       types," "preliminary groupings."
@@ -340,18 +680,12 @@ ai_generation_tasks:
 output_template: |
   # Survey Synthesis: {{survey_name}}
 
+  **Analysis date:** {{analysis_date}}
+  **Run by:** {{run_by}}
+
   ## Executive Summary
 
-  {{#if computed_facts}}
-  > [!IMPORTANT]
-  > **{{computed_facts.totalRespondents}} unique respondents** analyzed.{{#each computed_facts.fieldStats}}{{#if this.median}} {{this.displayName}} median: **{{this.median}}**.{{/if}}{{/each}}{{#each computed_facts.fieldStats}}{{#if this.distribution}}{{/if}}{{/each}}
-
-  > [!WARNING]
-  > This survey is descriptive. Formal qualitative coding has not been performed. Empty cells are reported as missing without further distinction.
-  {{else}}
-  > [!WARNING]
-  > No computed facts available. This synthesis relies on qualitative interpretation only.
-  {{/if}}
+  {{ai_generated.executive_summary}}
 
   ---
 
@@ -360,7 +694,9 @@ output_template: |
   {{#if project_problem_statement}}
   **Research problem:** {{project_problem_statement}}
 
+  {{#if source_intent}}
   **This survey contributes:** {{source_intent}}
+  {{/if}}
   {{else}}
   > [!WARNING]
   > No project problem statement set. Run `/qori-start` to set one.
@@ -409,25 +745,58 @@ output_template: |
 
   ---
 
+  {{#if qualitative_coding}}
+  {{#if qualitative_coding.hasAcceptedCoding}}
+  ## What Respondents Described
+
+  *All counts below are computed deterministically from researcher-reviewed matches. The reporting unit is the unique respondent.*
+
+  {{#if qualitative_coding.recurringPatterns}}
+  ### Recurring Patterns
+
+  {{#each qualitative_coding.recurringPatterns}}
+  **{{this.label}}** — {{this.displayFrequency}}
+
+  {{this.definition}}
+
+  {{#if this.quotes}}
+  {{this.quotes}}
+  {{/if}}
+
+  ---
+
+  {{/each}}
+  {{/if}}
+
+  {{#if qualitative_coding.individualObservations}}
+  ### Individual Observations
+
+  {{#each qualitative_coding.individualObservations}}
+  **{{this.label}}** — {{this.displayFrequency}}
+
+  {{this.definition}}
+
+  {{#if this.quotes}}
+  {{this.quotes}}
+  {{/if}}
+
+  ---
+
+  {{/each}}
+  {{/if}}
+  {{/if}}
+  {{else}}
   ## Preliminary Qualitative Observations
 
   {{ai_generated.qualitative_observations}}
 
   ---
 
-  ## Integrated Interpretation
-
-  {{#if computed_facts}}
-  The structured evidence above establishes the distributional baseline from {{computed_facts.totalRespondents}} unique respondents. The qualitative observations offer preliminary interpretation of open-text entries. Readers should:
-
-  - **Look for convergence** — where structured distributions and qualitative observations point the same direction
-  - **Look for complementarity** — where open-text entries explain patterns visible in the distributions
-  - **Look for dissonance** — where qualitative observations seem to contradict distributional patterns (these warrant investigation, not resolution)
-
-  No new arithmetic is introduced in this section. No causal claims are made.
-  {{else}}
-  Without computed facts, integration is limited to the qualitative observations above.
   {{/if}}
+
+  ## What This Means
+
+  {{ai_generated.integrated_interpretation}}
 
   ---
 
@@ -463,7 +832,6 @@ output_template: |
   > **Source**
   >
   > Original file: {{#if provenance}}{{provenance.source_filename}}{{else}}{{document_names}}{{/if}}
-  > Evidence Source ID: {{#if provenance}}`{{provenance.source_public_id}}`{{else}}Not available{{/if}}
   > Respondents: {{#if computed_facts}}{{computed_facts.totalRespondents}}{{else}}Unknown{{/if}}
 
   > **Schema**
@@ -478,6 +846,42 @@ output_template: |
   > No schema — computed facts not available.
   {{/if}}
 
+  {{#if qualitative_coding}}
+  {{#if qualitative_coding.hasAcceptedCoding}}
+  > **Privacy Review**
+  >
+  > Approved as written: {{qualitative_coding.privacyReview.clear}}
+  > Approved with edits: {{qualitative_coding.privacyReview.redacted}}
+  > Excluded: {{qualitative_coding.privacyReview.restricted}}
+
+  > **Qualitative Method**
+  >
+  > Structured qualitative content analysis.
+  > Mixed inductive/deductive grouping development.
+
+  > **Grouping Review**
+  >
+  {{#if qualitative_coding.codebook}}
+  > Codebook version: {{qualitative_coding.codebook.version}}
+  > Reviewed by: {{qualitative_coding.codebook.reviewed_by}}
+  > Reviewed at: {{qualitative_coding.codebook.reviewed_at}}
+  {{/if}}
+
+  > **Match Review**
+  >
+  > Coding run version: {{qualitative_coding.codingRun.version}}
+  > Reviewed by: {{qualitative_coding.codingRun.reviewed_by}}
+  > Reviewed at: {{qualitative_coding.codingRun.reviewed_at}}
+
+  > **Aggregation**
+  >
+  > Reporting unit: unique respondent
+  > Denominator: eligible respondents with privacy-approved entries
+  > Recurring pattern threshold: ≥2 unique respondents
+  > All calculations deterministic — code-computed, not AI-generated
+  {{/if}}
+  {{/if}}
+
   > **Computation**
   >
   {{#if computed_facts}}
@@ -490,15 +894,25 @@ output_template: |
 
   > **Generation**
   >
-  > Template: Survey Synthesis v9.2
+  > Template: Survey Synthesis v10.2.1
   > Model: {{#if provenance}}{{provenance.model_used}}{{else}}Unknown{{/if}}
   > Generated: {{current_date_iso}}
 
   > **Analysis Authority**
   >
   > Structured statistics: deterministic — code-computed, no AI involvement
+  {{#if qualitative_coding}}
+  {{#if qualitative_coding.hasAcceptedCoding}}
+  > Qualitative groupings: Qori proposed, researcher reviewed and approved
+  > Qualitative matches: Qori proposed, researcher reviewed and approved
+  > Qualitative counts: deterministic — code-computed from accepted matches
+  > Quote selection: deterministic — governed text, code-selected (not AI-selected)
+  {{else}}
   > Open-text interpretation: preliminary AI-assisted interpretation — not formally coded
-  > Formal qualitative coding: not performed
+  {{/if}}
+  {{else}}
+  > Open-text interpretation: preliminary AI-assisted interpretation — not formally coded
+  {{/if}}
 
   > **Integrity**
   >
@@ -510,7 +924,7 @@ output_template: |
 
 output_options:
   path: "{{project_slug}}/00-discovery/"
-  filename: "{{topic_slug}}-survey-synthesis-{{current_date_iso}}.md"
+  filename: "{{project_slug}}--survey-synthesis--{{__derivation_fp}}.md"
 
 # ═══════════════════════════════════════════════════════════
 # METADATA
@@ -528,23 +942,37 @@ slack_ui:
     processing_failed: "Analysis failed. Please check that your file is valid CSV format."
 
 notes: |
-  v9.1: Final dev acceptance corrections.
-  - Ordinal distributions/cross-tabs render in confirmed measurement order
-  - Declared respondent IDs preserved in evidence quotes (not silently aliased)
-  - De-duplicated output: Dataset Scope removed; Structured Evidence is ONE location
-  - Soft qualitative prevalence language prohibited (no "several," "recurring," etc.)
-  - Emit contract aligned with evidence authority model:
-    survey_themes REMOVED (preliminary observations ≠ accepted themes)
-    discovered_metrics REMOVED (deterministic facts in evidence layer)
-    sample_demographics REMOVED (no confirmed demographic fields)
-    survey_findings KEPT (model-derived candidates, no new numbers)
-    discovered_barriers KEPT (tightened extraction rules)
-    knowledge_gaps KEPT (approved interpretive operation)
-  - Method & Provenance reports actual emit/authority/integrity state
-  - Executive Summary added
-  - Analysis Details collapsed
-  - Source hash moved to Integrity subsection in provenance toggle
+  v10.2: Evidence envelope — anti-fabrication boundary for all reader-facing tasks.
+  - All reader-facing AI tasks share one accepted evidence envelope
+  - Raw open_text_content withheld when accepted coding exists
+  - Evidence Gaps receives accepted_qualitative_summary instead of raw text
+  - Qualitative authority boundary rule added to Evidence Gaps
+  - Unsupported association rules (RULE 9/10 in integrated_interpretation, RULE 7/8 in executive_summary)
+  - Post-generation claim guard validates narrative against evidence envelope
+  - Bounded retry on claim violation; deterministic fallback on persistent failure
 
+  v10.1: Artifact correctness — idempotent foundation, narrative summary, bounded interpretation.
+  - Executive Summary is now AI-generated narrative (not fact-list)
+  - "Integrated Interpretation" renamed to "What This Means" with actual synthesis
+  - governance_only groupings excluded from research findings
+  - Empty "This survey contributes:" conditionally omitted
+
+  v10.0: Slice 2B — accepted qualitative coding integration.
+  - "What Respondents Described" section replaces "Preliminary Qualitative
+    Observations" when accepted coding run exists
+  - Recurring patterns (≥2 unique respondents) with deterministic counts
+  - Individual observations (1 respondent) — not called themes
+  - Deterministic governed illustrative quotes (up to 2 per grouping,
+    preferring distinct respondents, restricted entries excluded)
+  - Executive Summary includes qualitative pattern headlines when available
+  - Method & Provenance expanded with Privacy Review, Qualitative Method,
+    Grouping Review, Match Review, and Aggregation subsections
+  - Analysis Authority reflects researcher approval chain
+  - qualitative_observations AI task skipped when accepted coding exists
+  - survey_themes NOT emitted — "themes" terminology retired
+  - discovered_barriers NOT auto-emitted from qualitative patterns
+
+  v9.2: Emit contract and cascade alignment (superseded by v10.0).
   v9.0: Deterministic structured evidence architecture (superseded).
   v8.0: computed_facts integration (superseded).
   v7.0: Interleaved Handlebars/AI architecture (superseded).

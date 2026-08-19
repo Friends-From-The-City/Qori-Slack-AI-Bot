@@ -282,7 +282,7 @@ output_template: |
 
 output_options:
   path: "05-readouts/"
-  filename: "{{selected_study}}-leadership-brief-{{current_date_iso}}.md"
+  filename: "{{selected_study}}--leadership-readout--{{__derivation_fp}}.md"
 
 # ═══════════════════════════════════════════════════════════
 # METADATA

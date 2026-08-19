@@ -16,11 +16,10 @@ import express from 'express';
 import { App, LogLevel, SocketModeReceiver } from '@slack/bolt';
 import * as Sentry from '@sentry/node';
 import { scrubPII } from '../../config/sentry';
-import type { View } from '@slack/types';
 // ── Extracted handlers (TypeScript) ─────────────────────────────
 
-// Main /qori command
-import { qoriMainCommand, handleStudySelect } from './commands/qoriMainHandler';
+// study_select action (used by /qori-plan modal). /qori command removed in GOV-1B.
+import { handleStudySelect } from './commands/qoriMainHandler';
 
 // Project creation (Phase 2C)
 import { projectStartCommand, handleProjectCreateSubmission } from './commands/projectStartHandler';
@@ -43,6 +42,7 @@ import {
 
 // Research brief
 import { openResearchBriefModal } from './commands/modal-openers/briefModalOpener';
+import { briefCommand } from './commands/modal-openers/briefCommandOpener';
 import { handleBriefSubmission } from './commands/briefHandler';
 
 // Shared helpers
@@ -50,6 +50,7 @@ import { postEphemeralOrDM } from './slackHelpers';
 
 // Research plan
 import { openResearchPlanModal } from './commands/modal-openers/planModalOpener';
+import { planCommand } from './commands/modal-openers/planCommandOpener';
 import { handlePlanSubmission } from './commands/planHandler';
 
 // Brief → plan/study transitions
@@ -101,11 +102,9 @@ import { copyEmailFormatted } from './commands/messaging/messagingHandler';
 // Events
 import { handleMessageEvent } from './commands/messageEventHandler';
 
-// UI modals and services (used by inline /qori-plan and /qori-brief command handlers)
-import { studySetupModalPlanStudy } from './ui/studySetupModal';
-import { buildBriefEntryModal } from './ui/researchBriefEntryModal';
-import { getStudiesByUser } from '../../services/research_study.service';
-import { getProjectByChannelId } from '../../services/project.service';
+// UI modals and services (used by modal openers and handlers)
+// studySetupModalPlanStudy, buildBriefEntryModal, getStudiesByUser, getProjectByChannelId
+// moved to briefCommandOpener.ts and planCommandOpener.ts
 
 // ── Express router for Slack routes ─────────────────────────────
 
@@ -395,78 +394,10 @@ slackExpressRouter.post('/commands', (req: any, res: any) => {
 
 // ─── Slash commands (entry points) ──────────────────────────────
 
-slackApp.command('/qori', qoriMainCommand);
+// /qori command removed in GOV-1B — /qori-learn supersedes. Remove from Slack app manifest separately.
 slackApp.command('/qori-start', projectStartCommand);
-slackApp.command('/qori-brief', async ({ ack, client, command }) => {
-  await ack();
-
-  try {
-    // Phase 2D: Check if channel is bound to a project
-    const project = await getProjectByChannelId(command.channel_id);
-    if (!project) {
-      await postEphemeralOrDM(
-        client,
-        command.channel_id,
-        command.user_id,
-        `This channel isn't linked to a project yet.\n\n*Option 1:* Run \`/qori-start\` to create a new project with a dedicated channel, then run \`/qori-brief\` there.\n*Option 2:* Run \`/qori-brief\` in an existing project channel.`,
-      );
-      return;
-    }
-
-    let leadResearcher: string | null = null;
-    try {
-      const userInfo = await client.users.info({ user: command.user_id });
-      leadResearcher = userInfo.user?.real_name || userInfo.user?.profile?.display_name || null;
-    } catch (err) {
-      const errMessage = err instanceof Error ? err.message : String(err);
-      console.warn('Could not fetch Slack profile for brief modal:', errMessage);
-    }
-
-    try {
-      const modal = await buildBriefEntryModal({
-        leadResearcher,
-        channelId: command.channel_id,
-        projectId: project.id,
-        projectName: project.name,
-        projectSlug: project.slug,
-        source: 'qori_brief_command',
-        client,
-      });
-      // @ts-expect-error — modal blocks are Record<string,unknown>[] from JSON.parse; structurally valid at runtime
-      await client.views.open({ trigger_id: command.trigger_id, view: modal });
-    } catch (err: unknown) {
-      const errData = (err as Record<string, unknown>)?.data;
-      const messages = (errData as Record<string, unknown>)?.response_metadata as Record<string, unknown>;
-      console.error('❌ Error opening brief modal:');
-      console.error('Error data:', JSON.stringify(errData, null, 2));
-      if (messages?.messages) {
-        console.error('Validation errors:', JSON.stringify(messages.messages, null, 2));
-      }
-      await postEphemeralOrDM(
-        client,
-        command.channel_id,
-        command.user_id,
-        `❌ Error opening research brief modal. Check server logs for details.`,
-      );
-    }
-  } catch (outerErr) {
-    // Catch-all for any unexpected error
-    const errMsg = outerErr instanceof Error ? outerErr.message : String(outerErr);
-    console.error('❌ Unexpected error in /qori-brief:', outerErr);
-    await postEphemeralOrDM(
-      client,
-      command.channel_id,
-      command.user_id,
-      `❌ Unexpected error: ${errMsg}`,
-    );
-  }
-});
-slackApp.command('/qori-plan', async ({ ack, client, command }) => {
-  await ack();
-  const studies = await getStudiesByUser(command.user_id);
-  const modal = studySetupModalPlanStudy(studies, command.channel_id);
-  await client.views.open({ trigger_id: command.trigger_id, view: modal as View });
-});
+slackApp.command('/qori-brief', briefCommand);
+slackApp.command('/qori-plan', planCommand);
 slackApp.command('/qori-discover', discoverHandler);
 slackApp.command('/qori-fieldwork', fieldworkHandler);
 slackApp.command('/qori-analyze', analyzeNotesHandler);
@@ -557,6 +488,23 @@ slackApp.view('discover_survey_modal', handleDiscoverSubmission);
 import { handleSurveySchemaReviewAction, handleSurveySchemaConfirmation } from './commands/surveySubmissionHandler';
 slackApp.action('survey_review_schema', handleSurveySchemaReviewAction);
 slackApp.view('survey_schema_review_modal', handleSurveySchemaConfirmation);
+
+// Survey privacy review + qualitative synthesis (Slice 2A)
+import { handlePrivacyReviewAction, handlePrivacyReviewSubmission } from './commands/surveyPrivacyHandler';
+import { handleGenerateCodebook, handleOpenGroupingReview, handleCodebookReviewSubmission } from './commands/codebookHandler';
+import { handleRunSynthesisAction } from './commands/surveySynthesisAction';
+slackApp.action('survey_privacy_review', handlePrivacyReviewAction);
+slackApp.view('survey_privacy_review_modal', handlePrivacyReviewSubmission);
+slackApp.action('survey_run_synthesis', handleRunSynthesisAction);
+slackApp.action('survey_generate_codebook', handleGenerateCodebook);
+slackApp.action('survey_open_grouping_review', handleOpenGroupingReview);
+slackApp.view('codebook_review_modal', handleCodebookReviewSubmission);
+
+// Survey match review (Slice 2B)
+import { handleGenerateAssignments, handleOpenMatchReview, handleMatchReviewSubmission } from './commands/matchReviewHandler';
+slackApp.action('survey_generate_assignments', handleGenerateAssignments);
+slackApp.action('survey_open_match_review', handleOpenMatchReview);
+slackApp.view('match_review_modal', handleMatchReviewSubmission);
 
 // ─── Fieldwork & participants ───────────────────────────────────
 

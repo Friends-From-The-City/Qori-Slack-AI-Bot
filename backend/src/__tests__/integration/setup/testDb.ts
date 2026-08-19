@@ -32,6 +32,23 @@ import EvidenceSource from '../../../database/models/evidence_source';
 import EvidenceConstruct from '../../../database/models/evidence_construct';
 import EvidenceRelationship from '../../../database/models/evidence_relationship';
 import SurveyFieldSchema from '../../../database/models/survey_field_schema';
+import SurveyQualitativeEntry from '../../../database/models/survey_qualitative_entry';
+import SurveyCodebook from '../../../database/models/survey_codebook';
+import SurveyCode from '../../../database/models/survey_code';
+import SurveyCodeExample from '../../../database/models/survey_code_example';
+import SurveyCodingRun from '../../../database/models/survey_coding_run';
+import SurveyCodingAssignment from '../../../database/models/survey_coding_assignment';
+import SurveyCodingEntryReview from '../../../database/models/survey_coding_entry_review';
+import ResearchArtifact from '../../../database/models/research_artifact';
+import ArtifactEvidenceRef from '../../../database/models/artifact_evidence_ref';
+import DataSubject from '../../../database/models/data_subject';
+import DataSubjectLink from '../../../database/models/data_subject_link';
+import EvidenceSubjectAttribution from '../../../database/models/evidence_subject_attribution';
+import RecordsSchedule from '../../../database/models/records_schedule';
+import RecordsManagementAssignment from '../../../database/models/records_management_assignment';
+import RecordsHold from '../../../database/models/records_hold';
+import RecordsHoldTarget from '../../../database/models/records_hold_target';
+import RecordsDispositionEvent from '../../../database/models/records_disposition_event';
 
 let instance: Sequelize | null = null;
 
@@ -58,7 +75,12 @@ export function getTestDb(): Sequelize {
     StudyStatus, StudyParticipant, SessionObserver, StudyNotes,
     ResearchPlan, SessionSummary, StudyVariable, CreatedIssue, SlackUserState,
     DispositionAuditLog, EvidenceSource, EvidenceConstruct, EvidenceRelationship,
-    SurveyFieldSchema,
+    SurveyFieldSchema, SurveyQualitativeEntry, SurveyCodebook, SurveyCode, SurveyCodeExample,
+    SurveyCodingRun, SurveyCodingAssignment, SurveyCodingEntryReview,
+    ResearchArtifact, ArtifactEvidenceRef,
+    DataSubject, DataSubjectLink, EvidenceSubjectAttribution,
+    RecordsSchedule, RecordsManagementAssignment,
+    RecordsHold, RecordsHoldTarget, RecordsDispositionEvent,
   ];
 
   for (const defineModel of modelDefiners) {

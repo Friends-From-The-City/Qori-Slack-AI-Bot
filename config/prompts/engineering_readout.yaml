@@ -390,7 +390,7 @@ output_template: |
 
 output_options:
   path: "05-readouts/"
-  filename: "{{selected_study}}-engineering-readout-{{current_date_iso}}.md"
+  filename: "{{selected_study}}--engineering-readout--{{__derivation_fp}}.md"
 
 # ═══════════════════════════════════════════════════════════
 # METADATA

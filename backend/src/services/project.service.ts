@@ -71,6 +71,10 @@ export async function updateProject(id: number, data: UpdateProjectInput): Promi
 
 /**
  * Delete a project. Cascade deletes studies and variables.
+ *
+ * @deprecated Use Admin Center deletion flow (adminActionsHandler → handleDeleteStudyConfirm)
+ * which enforces assertProjectOwner and writes audit logs. This method bypasses authorization
+ * and audit logging. Zero handler call sites. Scheduled for removal or access restriction in GOV-2.
  */
 export async function deleteProject(id: number): Promise<boolean> {
   const project = await ProjectModel.findByPk(id);

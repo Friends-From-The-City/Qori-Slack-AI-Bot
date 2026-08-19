@@ -275,7 +275,7 @@ output_template: |
 
 output_options:
   path: "03-fieldwork/"
-  filename: "{{study_name}}_participant_tracker.md"
+  filename: "{{study_name}}--participant-tracker.md"
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # NOTIFICATIONS
