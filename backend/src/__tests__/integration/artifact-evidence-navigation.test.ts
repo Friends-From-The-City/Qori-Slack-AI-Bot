@@ -18,7 +18,7 @@
  * - Canonical evidence traversal works without artifact Markdown
  */
 
-import { getTestDb, truncateAll } from './setup/testDb';
+import { getTestDb, truncateAll, TEST_ORG_ID } from './setup/testDb';
 import {
   computeDerivationFingerprint,
   buildSemanticKey,
@@ -58,6 +58,7 @@ beforeAll(async () => {
   await truncateAll();
   const project = await Project.create({
     name: 'AEN Test', slug: 'aen-test', status: 'active', created_by: 'U_TEST',
+    organization_id: TEST_ORG_ID,
   });
   projectId = (project as any).id;
 

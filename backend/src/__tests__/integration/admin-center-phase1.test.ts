@@ -9,7 +9,7 @@
  * The previous TEST 3 (one-path) is no longer needed.
  */
 
-import { getTestDb, truncateAll } from './setup/testDb';
+import { getTestDb, truncateAll, TEST_ORG_ID } from './setup/testDb';
 import { isProjectOwner, assertProjectOwner } from '../../services/authorization.service';
 import { logDispositionAction, gatherParticipantRecordCounts } from '../../services/audit.service';
 import studyParticipantService from '../../services/study_participant.service';
@@ -52,6 +52,7 @@ describe('Admin Center Phase 1 Integration Tests', () => {
       slug: 'admin-center-test-project',
       channel_id: 'C_ADMIN_TEST',
       created_by: ownerId,
+      organization_id: TEST_ORG_ID,
     });
 
     await ProjectMemberModel.create({
@@ -130,6 +131,7 @@ describe('Admin Center Phase 1 Integration Tests', () => {
       slug: 'survivor-test-project',
       channel_id: 'C_SURVIVOR_TEST',
       created_by: ownerId,
+      organization_id: TEST_ORG_ID,
     });
 
     await ProjectMemberModel.create({

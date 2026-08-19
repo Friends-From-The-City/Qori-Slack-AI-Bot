@@ -8,7 +8,7 @@
  * Phase 2B schema: Uses project_id + study_id FKs instead of study_name.
  */
 
-import { getTestDb, truncateAll } from './setup/testDb';
+import { getTestDb, truncateAll, TEST_ORG_ID } from './setup/testDb';
 
 const sequelize = getTestDb();
 
@@ -26,6 +26,7 @@ beforeEach(async () => {
     slug: 'cascade-test-project',
     status: 'active',
     created_by: 'U_TEST',
+    organization_id: TEST_ORG_ID,
   });
   testProjectId = (project as unknown as { id: number }).id;
 

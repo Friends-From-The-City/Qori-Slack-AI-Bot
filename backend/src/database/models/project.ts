@@ -37,8 +37,8 @@ class Project extends Model<
   declare created_by: string;
   declare channel_id: string | null;
   declare team_slug: string | null;
-  /** PLAT-2: Organization scope. Nullable during migration transition. */
-  declare organization_id: ForeignKey<number> | null;
+  /** PLAT-2: Organization scope. Required — every project belongs to an org. */
+  declare organization_id: ForeignKey<number>;
   /** PLAT-2: Team scope within organization. */
   declare team_id: ForeignKey<number> | null;
   declare created_at: CreationOptional<Date>;
@@ -68,7 +68,7 @@ class Project extends Model<
     this.belongsTo(models.Organization, {
       foreignKey: 'organization_id',
       as: 'organization',
-      onDelete: 'SET NULL',
+      onDelete: 'CASCADE',
     });
 
     this.belongsTo(models.Team, {
@@ -132,7 +132,7 @@ export default (sequelize: Sequelize) => {
       },
       organization_id: {
         type: DataTypes.INTEGER,
-        allowNull: true,
+        allowNull: false,
       },
       team_id: {
         type: DataTypes.INTEGER,

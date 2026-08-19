@@ -11,7 +11,7 @@
  * Infrastructure: Uses injectSequelizeForTest() to unify DB connections (L004 fix).
  */
 
-import { getTestDb, truncateAll } from './setup/testDb';
+import { getTestDb, truncateAll, TEST_ORG_ID } from './setup/testDb';
 import { TEMPLATE_CONSUMES } from '../../helpers/slack/ui/cascadeReadinessBlocks';
 import { buildSessionDataStats, buildAvailableEnrichments, buildSynthesisCascadeData } from '../../helpers/slack/commands/researchSynthesisHandler';
 import { injectSequelizeForTest, clearInjectedSequelize, type VariableContext } from '../../helpers/studyVariables';
@@ -148,6 +148,7 @@ describe('cascade contract integration: buildSessionDataStats reads nuggets', ()
       slug: 'test-project',
       status: 'active',
       created_by: 'U12345',
+    organization_id: TEST_ORG_ID,
     });
     const study = await ResearchStudy.create({
       name: 'Test Study',
@@ -180,6 +181,7 @@ describe('cascade contract integration: buildSessionDataStats reads nuggets', ()
       slug: 'test-project',
       status: 'active',
       created_by: 'U12345',
+    organization_id: TEST_ORG_ID,
     });
     const study = await ResearchStudy.create({
       name: 'Test Study',
@@ -246,6 +248,7 @@ describe('cascade contract integration: buildAvailableEnrichments reads optional
       slug: 'test-project',
       status: 'active',
       created_by: 'U12345',
+    organization_id: TEST_ORG_ID,
     });
     const study = await ResearchStudy.create({
       name: 'Test Study',
@@ -277,6 +280,7 @@ describe('cascade contract integration: buildAvailableEnrichments reads optional
       slug: 'test-project',
       status: 'active',
       created_by: 'U12345',
+    organization_id: TEST_ORG_ID,
     });
     const study = await ResearchStudy.create({
       name: 'Test Study',
@@ -339,6 +343,7 @@ describe('cascade contract integration: buildSynthesisCascadeData readiness logi
       slug: 'test-project',
       status: 'active',
       created_by: 'U12345',
+    organization_id: TEST_ORG_ID,
     });
     const study = await ResearchStudy.create({
       name: 'Test Study',
@@ -377,6 +382,7 @@ describe('cascade contract integration: buildSynthesisCascadeData readiness logi
       slug: 'test-project',
       status: 'active',
       created_by: 'U12345',
+    organization_id: TEST_ORG_ID,
     });
     const study = await ResearchStudy.create({
       name: 'Test Study',

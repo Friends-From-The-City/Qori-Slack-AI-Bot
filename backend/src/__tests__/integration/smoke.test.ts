@@ -3,7 +3,7 @@
  * Creates a project and study via the models, queries them back, asserts shape.
  */
 
-import { getTestDb, truncateAll } from './setup/testDb';
+import { getTestDb, truncateAll, TEST_ORG_ID } from './setup/testDb';
 
 const sequelize = getTestDb();
 
@@ -20,6 +20,7 @@ beforeEach(async () => {
     slug: 'test-project',
     status: 'active',
     created_by: 'U_TEST',
+    organization_id: TEST_ORG_ID,
   });
   testProjectId = (project as unknown as { id: number }).id;
 });

@@ -13,7 +13,7 @@
  * - Raw SQL constraint enforcement
  */
 
-import { getTestDb, truncateAll } from './setup/testDb';
+import { getTestDb, truncateAll, TEST_ORG_ID } from './setup/testDb';
 import {
   injectSequelizeForTest as injectSchedule,
   clearInjectedSequelize as clearSchedule,
@@ -65,8 +65,8 @@ const sequelize = getTestDb();
 
 async function seedProject(slug = 'gov6-test'): Promise<number> {
   const [rows] = await sequelize.query(
-    `INSERT INTO projects (name, slug, status, created_by, created_at, updated_at)
-     VALUES ('GOV-6 Test', '${slug}', 'active', 'U_TEST', NOW(), NOW())
+    `INSERT INTO projects (name, slug, status, created_by, organization_id, created_at, updated_at)
+     VALUES ('GOV-6 Test', '${slug}', 'active', 'U_TEST', ${TEST_ORG_ID}, NOW(), NOW())
      RETURNING id`
   );
   return (rows as any[])[0].id;

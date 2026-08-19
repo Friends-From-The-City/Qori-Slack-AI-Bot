@@ -5,7 +5,7 @@
  * lifecycle management, reverse lookup, and evidence attachment.
  */
 
-import { getTestDb, truncateAll } from './setup/testDb';
+import { getTestDb, truncateAll, TEST_ORG_ID } from './setup/testDb';
 import {
   computeDerivationFingerprint,
   computeCascadeInputFingerprint,
@@ -38,6 +38,7 @@ beforeAll(async () => {
   await truncateAll();
   const project = await Project.create({
     name: 'Artifact Test', slug: 'artifact-test', status: 'active', created_by: 'U_TEST',
+    organization_id: TEST_ORG_ID,
   });
   projectId = (project as any).id;
 

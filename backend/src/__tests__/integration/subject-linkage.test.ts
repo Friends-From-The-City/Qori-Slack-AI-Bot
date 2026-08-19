@@ -10,7 +10,7 @@
  * - Link type CHECK constraint
  */
 
-import { getTestDb, truncateAll } from './setup/testDb';
+import { getTestDb, truncateAll, TEST_ORG_ID } from './setup/testDb';
 import type { Project } from '../../database/models/project';
 import type { ResearchStudy } from '../../database/models/research_study';
 import type { StudyParticipant } from '../../database/models/study_participant';
@@ -34,6 +34,7 @@ async function createProject(slug: string) {
     slug,
     created_by: 'U_OWNER',
     status: 'active',
+    organization_id: TEST_ORG_ID,
   });
 }
 

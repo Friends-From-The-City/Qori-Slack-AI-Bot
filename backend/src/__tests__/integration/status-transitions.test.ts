@@ -8,7 +8,7 @@
  * Phase 2B: Updated to create Project before ResearchStudy (FK required).
  */
 
-import { getTestDb, truncateAll } from './setup/testDb';
+import { getTestDb, truncateAll, TEST_ORG_ID } from './setup/testDb';
 import { PARTICIPANT_STATUS, ACTIVE_STATUSES, TERMINAL_STATUSES } from '../../constants/participantStatus';
 
 const sequelize = getTestDb();
@@ -24,6 +24,7 @@ beforeEach(async () => {
     slug: 'status-test-project',
     status: 'active',
     created_by: 'U_TEST',
+    organization_id: TEST_ORG_ID,
   });
   testProjectId = (project as unknown as { id: number }).id;
 });

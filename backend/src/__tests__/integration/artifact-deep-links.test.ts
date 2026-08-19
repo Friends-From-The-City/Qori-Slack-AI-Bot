@@ -18,7 +18,7 @@
  * - Structural: handlers use prepare/finalize flow
  */
 
-import { getTestDb, truncateAll } from './setup/testDb';
+import { getTestDb, truncateAll, TEST_ORG_ID } from './setup/testDb';
 import {
   computeDerivationFingerprint,
   buildSemanticKey,
@@ -51,6 +51,7 @@ beforeAll(async () => {
   await truncateAll();
   const project = await sequelize.models.Project.create({
     name: 'DeepLink Test', slug: 'deeplink-test', status: 'active', created_by: 'U_TEST',
+    organization_id: TEST_ORG_ID,
   });
   projectId = (project as any).id;
   const study = await sequelize.models.ResearchStudy.create({

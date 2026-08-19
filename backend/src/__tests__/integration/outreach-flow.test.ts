@@ -8,7 +8,7 @@
  * Phase 2B: Updated to create Project before ResearchStudy (FK required).
  */
 
-import { getTestDb, truncateAll } from './setup/testDb';
+import { getTestDb, truncateAll, TEST_ORG_ID } from './setup/testDb';
 import { PARTICIPANT_STATUS } from '../../constants/participantStatus';
 import type { OutreachMethod } from '../../types/common';
 
@@ -25,6 +25,7 @@ beforeEach(async () => {
     slug: 'outreach-test-project',
     status: 'active',
     created_by: 'U_TEST',
+    organization_id: TEST_ORG_ID,
   });
   testProjectId = (project as unknown as { id: number }).id;
 });

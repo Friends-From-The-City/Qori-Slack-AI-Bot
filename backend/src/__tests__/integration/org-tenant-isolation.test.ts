@@ -295,4 +295,187 @@ describe('Schema Constraints', () => {
       sequelize.query(`INSERT INTO project_memberships (project_id, actor_id, role) VALUES (1, 1, 'superadmin')`),
     ).rejects.toThrow();
   });
+
+  test('projects.organization_id is NOT NULL', async () => {
+    await expect(
+      sequelize.query(
+        `INSERT INTO projects (name, slug, status, created_by, created_at, updated_at)
+         VALUES ('No Org', 'plat2-test-no-org', 'active', 'U_TEST', NOW(), NOW())`,
+      ),
+    ).rejects.toThrow();
+  });
+});
+
+// ─── Hold Target Cross-Org Validation ──────────────────────────────
+
+describe('Hold Target Cross-Org Validation', () => {
+  // Import hold service with test injection
+  const holdService = require('../../services/records-hold.service');
+
+  beforeAll(() => {
+    holdService.injectSequelizeForTest(sequelize);
+  });
+
+  afterAll(() => {
+    holdService.clearInjectedSequelize();
+  });
+
+  test('same-project hold target succeeds', async () => {
+    const org = await OrgModel.create({ slug: 'plat2-test-hold-ok', name: 'Hold OK Org' });
+    const project = await ProjectModel.create({
+      name: 'Hold Test', slug: 'plat2-test-hold-proj',
+      created_by: 'U_TEST', organization_id: org.id,
+    });
+
+    // Create an evidence source in the project to use as a target
+    const [sourceRows] = await sequelize.query(
+      `INSERT INTO evidence_sources (public_id, project_id, source_type, label, created_by)
+       VALUES (gen_random_uuid(), ${project.id}, 'uploaded_document', 'Test Doc', 'U_TEST')
+       RETURNING public_id`,
+    ) as [Array<{ public_id: string }>, unknown];
+
+    const hold = await holdService.createHold({
+      project_id: project.id,
+      hold_type: 'legal',
+      title: 'Test Hold',
+      issued_by: 'U_TEST',
+      targets: [{ target_type: 'evidence_source', target_public_id: sourceRows[0].public_id }],
+    });
+
+    expect(hold.id).toBeGreaterThan(0);
+  });
+
+  test('cross-project hold target fails', async () => {
+    const org = await OrgModel.create({ slug: 'plat2-test-hold-xp', name: 'Cross Proj Org' });
+    const project1 = await ProjectModel.create({
+      name: 'Hold P1', slug: 'plat2-test-hold-p1',
+      created_by: 'U_TEST', organization_id: org.id,
+    });
+    const project2 = await ProjectModel.create({
+      name: 'Hold P2', slug: 'plat2-test-hold-p2',
+      created_by: 'U_TEST', organization_id: org.id,
+    });
+
+    // Create evidence source in project2
+    const [sourceRows] = await sequelize.query(
+      `INSERT INTO evidence_sources (public_id, project_id, source_type, label, created_by)
+       VALUES (gen_random_uuid(), ${project2.id}, 'uploaded_document', 'P2 Doc', 'U_TEST')
+       RETURNING public_id`,
+    ) as [Array<{ public_id: string }>, unknown];
+
+    // Try to create hold on project1 targeting evidence from project2
+    await expect(
+      holdService.createHold({
+        project_id: project1.id,
+        hold_type: 'legal',
+        title: 'Cross-Project Hold',
+        issued_by: 'U_TEST',
+        targets: [{ target_type: 'evidence_source', target_public_id: sourceRows[0].public_id }],
+      }),
+    ).rejects.toThrow(/Cross-project hold targets are not permitted/);
+  });
+
+  test('nonexistent target fails closed', async () => {
+    const org = await OrgModel.create({ slug: 'plat2-test-hold-nx', name: 'NX Org' });
+    const project = await ProjectModel.create({
+      name: 'NX Test', slug: 'plat2-test-hold-nx-proj',
+      created_by: 'U_TEST', organization_id: org.id,
+    });
+
+    await expect(
+      holdService.createHold({
+        project_id: project.id,
+        hold_type: 'legal',
+        title: 'NX Hold',
+        issued_by: 'U_TEST',
+        targets: [{ target_type: 'evidence_source', target_public_id: '00000000-0000-0000-0000-000000000000' }],
+      }),
+    ).rejects.toThrow(/not found/);
+  });
+
+  test('unknown target_type fails closed', async () => {
+    const org = await OrgModel.create({ slug: 'plat2-test-hold-unk', name: 'Unk Org' });
+    const project = await ProjectModel.create({
+      name: 'Unk Test', slug: 'plat2-test-hold-unk-proj',
+      created_by: 'U_TEST', organization_id: org.id,
+    });
+
+    await expect(
+      holdService.createHold({
+        project_id: project.id,
+        hold_type: 'legal',
+        title: 'Unk Hold',
+        issued_by: 'U_TEST',
+        targets: [{ target_type: 'unknown_type', target_public_id: 'abc' }],
+      }),
+    ).rejects.toThrow(/unknown target_type/);
+  });
+
+  test('cross-org hold target fails (different org projects)', async () => {
+    const org1 = await OrgModel.create({ slug: 'plat2-test-hold-xo1', name: 'Org 1' });
+    const org2 = await OrgModel.create({ slug: 'plat2-test-hold-xo2', name: 'Org 2' });
+    const project1 = await ProjectModel.create({
+      name: 'Org1 Proj', slug: 'plat2-test-hold-xo-p1',
+      created_by: 'U_TEST', organization_id: org1.id,
+    });
+    const project2 = await ProjectModel.create({
+      name: 'Org2 Proj', slug: 'plat2-test-hold-xo-p2',
+      created_by: 'U_TEST', organization_id: org2.id,
+    });
+
+    // Evidence in org2's project
+    const [sourceRows] = await sequelize.query(
+      `INSERT INTO evidence_sources (public_id, project_id, source_type, label, created_by)
+       VALUES (gen_random_uuid(), ${project2.id}, 'uploaded_document', 'Org2 Doc', 'U_TEST')
+       RETURNING public_id`,
+    ) as [Array<{ public_id: string }>, unknown];
+
+    // Hold on org1's project targeting org2's evidence
+    await expect(
+      holdService.createHold({
+        project_id: project1.id,
+        hold_type: 'legal',
+        title: 'Cross-Org Hold',
+        issued_by: 'U_TEST',
+        targets: [{ target_type: 'evidence_source', target_public_id: sourceRows[0].public_id }],
+      }),
+    ).rejects.toThrow(/Cross-project hold targets are not permitted/);
+  });
+});
+
+// ─── Additional Isolation Guarantees ───────────────────────────────
+
+describe('Isolation Guarantees', () => {
+  test('cross-org project membership detected', async () => {
+    const org1 = await OrgModel.create({ slug: 'plat2-test-iso-o1', name: 'Iso Org 1' });
+    const org2 = await OrgModel.create({ slug: 'plat2-test-iso-o2', name: 'Iso Org 2' });
+    const actor = await ActorModel.create({ organization_id: org2.id, display_name: 'PLAT2-test-iso', status: 'active' });
+    const project = await ProjectModel.create({
+      name: 'Iso Proj', slug: 'plat2-test-iso-proj', created_by: 'U_TEST', organization_id: org1.id,
+    });
+
+    // Membership exists but actor.org ≠ project.org
+    const membership = await MembershipModel.create({ project_id: project.id, actor_id: actor.id, role: 'researcher' });
+    const memberActor = await ActorModel.findByPk(membership.actor_id);
+    const memberProject = await ProjectModel.findByPk(membership.project_id);
+    expect(memberActor!.organization_id).not.toBe(memberProject!.organization_id);
+  });
+
+  test('evidence tables are project-scoped to org', async () => {
+    for (const table of ['evidence_sources', 'evidence_constructs', 'evidence_relationships']) {
+      const [cols] = await sequelize.query(`
+        SELECT column_name FROM information_schema.columns
+        WHERE table_name = '${table}' AND column_name = 'project_id'
+      `) as [Array<{ column_name: string }>, unknown];
+      expect(cols.length).toBe(1);
+    }
+  });
+
+  test('project.organization_id NOT NULL enforced at DB level', async () => {
+    const [colInfo] = await sequelize.query(`
+      SELECT is_nullable FROM information_schema.columns
+      WHERE table_name = 'projects' AND column_name = 'organization_id'
+    `) as [Array<{ is_nullable: string }>, unknown];
+    expect(colInfo[0].is_nullable).toBe('NO');
+  });
 });

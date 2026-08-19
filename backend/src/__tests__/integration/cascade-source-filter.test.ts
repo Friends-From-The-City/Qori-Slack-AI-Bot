@@ -12,7 +12,7 @@
  * following the pattern established in cascade-variable-store.test.ts.
  */
 
-import { getTestDb, truncateAll } from './setup/testDb';
+import { getTestDb, truncateAll, TEST_ORG_ID } from './setup/testDb';
 
 const sequelize = getTestDb();
 
@@ -45,6 +45,7 @@ beforeEach(async () => {
     slug: 'source-filter-test',
     status: 'active',
     created_by: 'U12345',
+    organization_id: TEST_ORG_ID,
   });
   testProjectId = (project as unknown as { id: number }).id;
 

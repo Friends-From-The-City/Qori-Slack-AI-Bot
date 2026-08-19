@@ -11,7 +11,7 @@
  * Known limitation (documented, not tested): GitHub artifacts are not deleted.
  */
 
-import { getTestDb, truncateAll } from './setup/testDb';
+import { getTestDb, truncateAll, TEST_ORG_ID } from './setup/testDb';
 import {
   exportParticipantData,
   deleteParticipantDSAR,
@@ -66,6 +66,7 @@ beforeEach(async () => {
     slug: 'dsar-test-project',
     status: 'active',
     created_by: 'U_TEST_USER',
+    organization_id: TEST_ORG_ID,
   });
   testProjectId = (project as unknown as { id: number }).id;
 

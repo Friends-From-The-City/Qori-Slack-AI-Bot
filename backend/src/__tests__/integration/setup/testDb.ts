@@ -111,6 +111,9 @@ export function getTestDb(): Sequelize {
 
 /**
  * Truncate all tables (CASCADE) for per-test isolation.
+ * Seeds a default test organization so project creation works with
+ * the NOT NULL organization_id constraint (PLAT-2).
+ *
  * Call in beforeEach() to ensure each test starts with a clean database.
  */
 export async function truncateAll(): Promise<void> {
@@ -123,4 +126,23 @@ export async function truncateAll(): Promise<void> {
   if (tables.length > 0) {
     await db.query(`TRUNCATE TABLE ${tables.join(', ')} RESTART IDENTITY CASCADE`);
   }
+  // Seed test organization (PLAT-2: projects.organization_id is NOT NULL)
+  await seedTestOrg();
+}
+
+/** ID of the test organization seeded by truncateAll(). Use in Project.create(). */
+export let TEST_ORG_ID: number;
+
+/**
+ * Seed a default test organization after truncation.
+ * Sets TEST_ORG_ID for use in test fixtures.
+ */
+async function seedTestOrg(): Promise<void> {
+  const db = getTestDb();
+  const [results] = await db.query(
+    `INSERT INTO organizations (slug, name, status)
+     VALUES ('test-org', 'Test Organization', 'active')
+     RETURNING id`,
+  ) as [Array<{ id: number }>, unknown];
+  TEST_ORG_ID = results[0].id;
 }
