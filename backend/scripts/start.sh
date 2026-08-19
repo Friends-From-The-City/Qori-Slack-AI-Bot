@@ -1,7 +1,7 @@
 #!/bin/sh
 # Qori Backend Startup Script
 # Runs migrations before starting the app, ensuring code+schema deploy together.
-# Used by Dockerfile CMD in both dev and prod Railway environments.
+# Used by Dockerfile CMD in any deployment environment.
 
 echo ">>> START.SH IS RUNNING <<<"
 
@@ -11,7 +11,7 @@ echo "=== Qori Backend Startup ==="
 echo "Environment: ${NODE_ENV:-development}"
 echo "Database: ${DB_HOST}:${DB_PORT:-5432}/${DB_NAME}"
 
-# Wait for database to be ready (Railway Postgres can take a moment)
+# Wait for database to be ready (managed databases can take a moment to accept connections)
 echo "Waiting for database connection..."
 MAX_RETRIES=30
 RETRY_COUNT=0
