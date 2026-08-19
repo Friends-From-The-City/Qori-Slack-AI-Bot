@@ -370,9 +370,10 @@ function initSentry() {
     return;
   }
 
-  // Railway provides RAILWAY_GIT_COMMIT_SHA automatically in deploy environments.
-  // This ties every Sentry event to the exact deployed commit.
-  const release = process.env.RAILWAY_GIT_COMMIT_SHA;
+  // Release tag ties every Sentry event to the exact deployed version.
+  // QORI_RELEASE_ID is the provider-neutral variable; RAILWAY_GIT_COMMIT_SHA
+  // is the legacy fallback for current Railway deployments.
+  const release = process.env.QORI_RELEASE_ID || process.env.RAILWAY_GIT_COMMIT_SHA;
 
   Sentry.init({
     dsn: SENTRY_DSN,

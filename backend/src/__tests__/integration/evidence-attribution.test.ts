@@ -13,7 +13,7 @@
  * - stale_due_to_disposition defaults false
  */
 
-import { getTestDb, truncateAll } from './setup/testDb';
+import { getTestDb, truncateAll, TEST_ORG_ID } from './setup/testDb';
 import {
   attributeConstructToSubject,
   backfillNuggetAttributions,
@@ -43,7 +43,7 @@ const AttributionModel = sequelize.models.EvidenceSubjectAttribution as typeof E
 // ─── Fixtures ───────────────────────────────────────────────────
 
 async function makeProject(slug: string) {
-  return ProjectModel.create({ name: `P-${slug}`, slug, created_by: 'U_OWNER', status: 'active' });
+  return ProjectModel.create({ name: `P-${slug}`, slug, created_by: 'U_OWNER', status: 'active', organization_id: TEST_ORG_ID });
 }
 
 async function makeStudy(projectId: number, name: string) {

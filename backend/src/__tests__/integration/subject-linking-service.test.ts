@@ -12,7 +12,7 @@
  * - No external PII persisted
  */
 
-import { getTestDb, truncateAll } from './setup/testDb';
+import { getTestDb, truncateAll, TEST_ORG_ID } from './setup/testDb';
 import {
   createSubjectForParticipant,
   linkSubjectToParticipant,
@@ -42,7 +42,7 @@ const DataSubjectLinkModel = sequelize.models.DataSubjectLink as typeof DataSubj
 // ─── Fixtures ───────────────────────────────────────────────────
 
 async function makeProject(slug: string) {
-  return ProjectModel.create({ name: `P-${slug}`, slug, created_by: 'U_OWNER', status: 'active' });
+  return ProjectModel.create({ name: `P-${slug}`, slug, created_by: 'U_OWNER', status: 'active', organization_id: TEST_ORG_ID });
 }
 
 async function makeStudy(projectId: number, name: string) {

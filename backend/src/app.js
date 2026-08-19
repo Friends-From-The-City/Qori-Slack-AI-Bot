@@ -43,8 +43,39 @@ if (NODE_ENV !== "development") {
   app.use(sentryMiddleware);
 }
 
+// Liveness probe — process is alive and accepting HTTP
 app.get("/health", (req, res) => {
-  res.status(200).json({ message: "Server is healthy" });
+  res.status(200).json({ status: "healthy" });
+});
+
+// Readiness probe — database reachable, migration state acceptable
+app.get("/health/ready", async (req, res) => {
+  const checks = { database: 'unknown', migrations: 'unknown' };
+  let ready = true;
+
+  try {
+    await sequelize.authenticate();
+    checks.database = 'ok';
+  } catch {
+    checks.database = 'unavailable';
+    ready = false;
+  }
+
+  if (checks.database === 'ok') {
+    try {
+      const [result] = await sequelize.query(
+        'SELECT COUNT(*) as count FROM "SequelizeMeta"',
+        { type: Sequelize.QueryTypes.SELECT }
+      );
+      checks.migrations = `${result.count} applied`;
+    } catch {
+      checks.migrations = 'unable to verify';
+      // Non-fatal — table may not exist in fresh databases before first migration
+    }
+  }
+
+  const status = ready ? 200 : 503;
+  res.status(status).json({ status: ready ? 'ready' : 'not_ready', checks });
 });
 
 configs.routerConfig(app);

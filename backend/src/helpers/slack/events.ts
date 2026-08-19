@@ -173,7 +173,7 @@ socketModeReceiver.client.on('hello', (event: { num_connections: number; debug_i
     if (ALERTS_CHANNEL_ID) {
       slackApp.client.chat.postMessage({
         channel: ALERTS_CHANNEL_ID,
-        text: `:rotating_light: *Socket Mode: ${event.num_connections} connections detected* — expected 1. Another process is sharing the prod app token. Commands will be round-robined and most will fail. Check Railway dev environment and local .env files for the prod app token (A08U0FLM4AG).`,
+        text: `:rotating_light: *Socket Mode: ${event.num_connections} connections detected* — expected 1. Another process is sharing this app token (${event.connection_info?.app_id || 'unknown'}). Commands will be round-robined and most will fail. Check other environments and local .env files for this app token.`,
       }).catch((err: Error) => {
         console.error('Failed to post num_connections alert:', err.message);
       });

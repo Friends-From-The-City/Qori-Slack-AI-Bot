@@ -5,7 +5,7 @@
  * All constructs are status: 'candidate' (no human review gate).
  */
 
-import { getTestDb, truncateAll } from './setup/testDb';
+import { getTestDb, truncateAll, TEST_ORG_ID } from './setup/testDb';
 import type { CreationAttributes } from 'sequelize';
 import type { EvidenceSource } from '../../database/models/evidence_source';
 import type { EvidenceConstruct } from '../../database/models/evidence_construct';
@@ -40,6 +40,7 @@ let otherStudyNuggetPublicId: string;
 async function setupFixtures() {
   const project = await Project.create({
     name: 'Synthesis Test', slug: 'synthesis-test', status: 'active', created_by: 'U_TEST',
+    organization_id: TEST_ORG_ID,
   });
   projectId = (project as any).id;
 

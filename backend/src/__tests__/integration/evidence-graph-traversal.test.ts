@@ -8,7 +8,7 @@
  * artifact independence.
  */
 
-import { getTestDb, truncateAll } from './setup/testDb';
+import { getTestDb, truncateAll, TEST_ORG_ID } from './setup/testDb';
 import {
   createSource, createConstruct, createSourceToConstruct, createConstructToConstruct,
   getRelationshipsToConstruct, getRelationshipsFromConstruct,
@@ -42,6 +42,7 @@ let rec1Id: number; let rec1PublicId: string;
 async function buildFullGraph() {
   const project = await Project.create({
     name: 'Graph Test', slug: 'graph-test', status: 'active', created_by: 'U_TEST',
+    organization_id: TEST_ORG_ID,
   });
   projectId = (project as any).id;
 

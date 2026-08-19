@@ -14,7 +14,7 @@
  * following the pattern established in cascade-variable-store.test.ts.
  */
 
-import { getTestDb, truncateAll } from './setup/testDb';
+import { getTestDb, truncateAll, TEST_ORG_ID } from './setup/testDb';
 
 const sequelize = getTestDb();
 
@@ -46,6 +46,7 @@ beforeEach(async () => {
     slug: 'cascade-test-project',
     status: 'active',
     created_by: 'U12345',
+    organization_id: TEST_ORG_ID,
   });
   testProjectId = (project as unknown as { id: number }).id;
 });
@@ -271,6 +272,7 @@ describe('Cross-template cascade data patterns', () => {
         slug: 'other-project',
         status: 'active',
         created_by: 'U12345',
+    organization_id: TEST_ORG_ID,
       });
       const project2Id = (project2 as unknown as { id: number }).id;
 

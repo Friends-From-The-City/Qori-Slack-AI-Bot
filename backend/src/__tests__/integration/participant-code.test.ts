@@ -4,7 +4,7 @@
  * transaction wrapping per ADR 0020.
  */
 
-import { getTestDb, truncateAll } from './setup/testDb';
+import { getTestDb, truncateAll, TEST_ORG_ID } from './setup/testDb';
 import studyParticipantService from '../../services/study_participant.service';
 
 const sequelize = getTestDb();
@@ -22,6 +22,7 @@ beforeEach(async () => {
     slug: 'pt-code-test-project',
     status: 'active',
     created_by: 'U_TEST',
+    organization_id: TEST_ORG_ID,
   });
   testProjectId = (project as unknown as { id: number }).id;
 

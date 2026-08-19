@@ -9,7 +9,7 @@
 
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { getTestDb, truncateAll } from './setup/testDb';
+import { getTestDb, truncateAll, TEST_ORG_ID } from './setup/testDb';
 import type { CreationAttributes } from 'sequelize';
 import type { EvidenceSource } from '../../database/models/evidence_source';
 import type { SurveyFieldSchema } from '../../database/models/survey_field_schema';
@@ -40,6 +40,7 @@ beforeEach(async () => {
   await truncateAll();
   const project = await Project.create({
     name: 'Survey Test Project', slug: 'survey-test', status: 'active', created_by: 'U_TEST',
+    organization_id: TEST_ORG_ID,
   });
   projectId = (project as any).id;
 });

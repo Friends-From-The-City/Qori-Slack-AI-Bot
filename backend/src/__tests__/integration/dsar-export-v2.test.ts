@@ -15,7 +15,7 @@
  * - Known limitations included
  */
 
-import { getTestDb, truncateAll } from './setup/testDb';
+import { getTestDb, truncateAll, TEST_ORG_ID } from './setup/testDb';
 import { exportSubjectData, type DSARExportPackage } from '../../services/dsar-export.service';
 import { createSubjectForParticipant, linkSubjectToSurveyRespondent } from '../../services/subject-linking.service';
 import { attributeConstructToSubject } from '../../services/evidence-attribution.service';
@@ -41,7 +41,7 @@ const SubjectModel = sequelize.models.DataSubject as typeof DataSubject;
 // ─── Fixtures ───────────────────────────────────────────────────
 
 async function makeProject(slug: string) {
-  return ProjectModel.create({ name: `P-${slug}`, slug, created_by: 'U_OWNER', status: 'active' });
+  return ProjectModel.create({ name: `P-${slug}`, slug, created_by: 'U_OWNER', status: 'active', organization_id: TEST_ORG_ID });
 }
 
 async function makeStudy(projectId: number, name: string) {

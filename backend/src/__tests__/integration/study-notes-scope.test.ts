@@ -10,7 +10,7 @@
  * proper relational queries.
  */
 
-import { getTestDb, truncateAll } from './setup/testDb';
+import { getTestDb, truncateAll, TEST_ORG_ID } from './setup/testDb';
 import studyNotesService from '../../services/study-notes.service';
 
 const sequelize = getTestDb();
@@ -37,6 +37,7 @@ beforeEach(async () => {
     slug: 'test-project',
     status: 'active',
     created_by: 'U12345',
+    organization_id: TEST_ORG_ID,
   });
   projectId = (project as unknown as { id: number }).id;
 

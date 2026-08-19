@@ -8,7 +8,7 @@
  * If this test passes, C1/C2 from the federal readiness matrix are remediated.
  */
 
-import { getTestDb, truncateAll } from './setup/testDb';
+import { getTestDb, truncateAll, TEST_ORG_ID } from './setup/testDb';
 import {
   isProjectMember, isProjectOwner,
   assertStudyAccess, assertProjectAccess, assertProjectOwner,
@@ -40,6 +40,7 @@ describe('Authorization Bypass Prevention (ADR 0024)', () => {
         name: 'Test Project',
         slug: 'test-project',
         created_by: 'U_OWNER',
+      organization_id: TEST_ORG_ID,
         status: 'active',
       });
 
@@ -62,6 +63,7 @@ describe('Authorization Bypass Prevention (ADR 0024)', () => {
         name: 'Secret Project',
         slug: 'secret-project',
         created_by: 'U_OWNER',
+      organization_id: TEST_ORG_ID,
         status: 'active',
       });
 
@@ -91,6 +93,7 @@ describe('Authorization Bypass Prevention (ADR 0024)', () => {
         name: 'Team Project',
         slug: 'team-project',
         created_by: 'U_OWNER',
+      organization_id: TEST_ORG_ID,
         status: 'active',
       });
 
@@ -121,6 +124,7 @@ describe('Authorization Bypass Prevention (ADR 0024)', () => {
         name: 'Private Project',
         slug: 'private-project',
         created_by: 'U_OWNER',
+      organization_id: TEST_ORG_ID,
         status: 'active',
       });
 
@@ -156,6 +160,7 @@ describe('Authorization Bypass Prevention (ADR 0024)', () => {
         name: 'Open Project',
         slug: 'open-project',
         created_by: 'U_OWNER',
+      organization_id: TEST_ORG_ID,
         status: 'active',
       });
 
@@ -175,6 +180,7 @@ describe('Authorization Bypass Prevention (ADR 0024)', () => {
         name: 'Closed Project',
         slug: 'closed-project',
         created_by: 'U_OWNER',
+      organization_id: TEST_ORG_ID,
         status: 'active',
       });
 
@@ -196,6 +202,7 @@ describe('Authorization Bypass Prevention (ADR 0024)', () => {
         name: 'Expandable Project',
         slug: 'expandable-project',
         created_by: 'U_OWNER',
+      organization_id: TEST_ORG_ID,
         status: 'active',
       });
 
@@ -214,6 +221,7 @@ describe('Authorization Bypass Prevention (ADR 0024)', () => {
         name: 'Test Project',
         slug: 'test-project-idem',
         created_by: 'U_OWNER',
+      organization_id: TEST_ORG_ID,
         status: 'active',
       });
 
@@ -233,6 +241,7 @@ describe('Authorization Bypass Prevention (ADR 0024)', () => {
         name: 'Owner Project',
         slug: 'owner-project',
         created_by: 'U_OWNER',
+      organization_id: TEST_ORG_ID,
         status: 'active',
       });
 
@@ -251,6 +260,7 @@ describe('Authorization Bypass Prevention (ADR 0024)', () => {
         name: 'Owned Project',
         slug: 'owned-project',
         created_by: 'U_OWNER',
+      organization_id: TEST_ORG_ID,
         status: 'active',
       });
 
@@ -281,6 +291,7 @@ describe('Authorization Bypass Prevention (ADR 0024)', () => {
         name: 'Project A',
         slug: 'project-a',
         created_by: 'U_OWNER_A',
+      organization_id: TEST_ORG_ID,
         status: 'active',
       });
       await ProjectMemberModel.create({
@@ -295,6 +306,7 @@ describe('Authorization Bypass Prevention (ADR 0024)', () => {
         name: 'Project B',
         slug: 'project-b',
         created_by: 'U_OWNER_B',
+      organization_id: TEST_ORG_ID,
         status: 'active',
       });
       await ProjectMemberModel.create({
@@ -325,6 +337,7 @@ describe('Authorization Bypass Prevention (ADR 0024)', () => {
         name: 'Approver Project',
         slug: 'approver-project',
         created_by: 'U_OWNER',
+      organization_id: TEST_ORG_ID,
         status: 'active',
       });
 
@@ -359,6 +372,7 @@ describe('Authorization Bypass Prevention (ADR 0024)', () => {
         name: 'No Stakeholder Project',
         slug: 'no-stakeholder',
         created_by: 'U_OWNER',
+      organization_id: TEST_ORG_ID,
         status: 'active',
       });
 
@@ -391,6 +405,7 @@ describe('Authorization Bypass Prevention (ADR 0024)', () => {
         name: 'Owner Test',
         slug: 'owner-test',
         created_by: 'U_OWNER',
+      organization_id: TEST_ORG_ID,
         status: 'active',
       });
 

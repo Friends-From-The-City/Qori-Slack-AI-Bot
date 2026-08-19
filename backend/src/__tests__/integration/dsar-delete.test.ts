@@ -27,7 +27,7 @@
  * - No runtime participant_code/prose search
  */
 
-import { getTestDb, truncateAll } from './setup/testDb';
+import { getTestDb, truncateAll, TEST_ORG_ID } from './setup/testDb';
 import {
   deleteSubjectData,
   deleteSubjectDataSafe,
@@ -74,6 +74,7 @@ const ArtifactRefModel = sequelize.models.ArtifactEvidenceRef as typeof Artifact
 async function makeProject(slug: string) {
   return ProjectModel.create({
     name: `P-${slug}`, slug, created_by: 'U_OWNER', status: 'active',
+    organization_id: TEST_ORG_ID,
   });
 }
 

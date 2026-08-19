@@ -17,7 +17,7 @@
  * - Deterministic re-render blocked when ai_generation_tasks present
  */
 
-import { getTestDb, truncateAll } from './setup/testDb';
+import { getTestDb, truncateAll, TEST_ORG_ID } from './setup/testDb';
 import {
   patchAnchoredBlock,
   patchMultipleBlocks,
@@ -42,6 +42,7 @@ const ArtifactRefModel = sequelize.models.ArtifactEvidenceRef;
 async function makeProject(slug: string) {
   return ProjectModel.create({
     name: `P-${slug}`, slug, created_by: 'U_OWNER', status: 'active',
+    organization_id: TEST_ORG_ID,
   });
 }
 

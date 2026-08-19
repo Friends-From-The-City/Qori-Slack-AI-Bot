@@ -6,7 +6,7 @@
  * evidence construct promotion.
  */
 
-import { getTestDb, truncateAll } from './setup/testDb';
+import { getTestDb, truncateAll, TEST_ORG_ID } from './setup/testDb';
 import type { CreationAttributes } from 'sequelize';
 import type { EvidenceSource } from '../../database/models/evidence_source';
 import type { SurveyQualitativeEntry } from '../../database/models/survey_qualitative_entry';
@@ -53,6 +53,7 @@ let entry3PublicId: string;
 async function setupFixtures() {
   const project = await Project.create({
     name: 'Coding Run Test', slug: 'coding-run-test', status: 'active', created_by: 'U_TEST',
+    organization_id: TEST_ORG_ID,
   });
   projectId = (project as any).id;
 
