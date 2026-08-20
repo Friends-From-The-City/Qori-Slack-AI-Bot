@@ -132,6 +132,35 @@ export interface MeResource {
   }>;
 }
 
+// ─── Review ────────────────────────────────────────────────────────
+
+export interface ReviewResult {
+  public_id: string;
+  construct_type: string;
+  review_status: string;
+  previous_status: string;
+  reviewed_at: string;
+  reviewed_by_display_name: string | null;
+  stale_due_to_disposition: boolean;
+  traceability_summary: {
+    upstream_count: number;
+    downstream_count: number;
+  };
+}
+
+// ─── Publication Status ────────────────────────────────────────────
+
+export interface PublicationStatusResource {
+  public_id: string;
+  workflow_status: string;
+  publication_status: string;
+  external_target: string | null;
+  external_reference: string | null;
+  last_attempt_at: string | null;
+  retryable: boolean;
+  error_code: string | null;
+}
+
 // ─── Governance ─────────────────────────────────────────────────────
 
 export interface GovernanceResource {
