@@ -33,7 +33,7 @@ export interface OrganizationContext {
   name: string;
 }
 
-export type AuthenticationProvider = 'slack' | 'oidc' | 'local_test';
+export type AuthenticationProvider = 'slack' | 'oidc' | 'session' | 'local_test';
 
 /**
  * Base application context — identity and authority only.

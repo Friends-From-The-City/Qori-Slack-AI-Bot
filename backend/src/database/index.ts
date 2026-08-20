@@ -46,6 +46,11 @@ import ActorIdentity from './models/actor_identity';
 import AdapterWorkspaceBinding from './models/adapter_workspace_binding';
 import RepositoryBinding from './models/repository_binding';
 import ProjectMembership from './models/project_membership';
+// WS-0: Branding + integration credentials
+import OrganizationBranding from './models/organization_branding';
+import IntegrationCredential from './models/integration_credential';
+// PLAT-3: Identity provider bindings
+import IdentityProviderBinding from './models/identity_provider_binding';
 
 
 // Set environment and configuration
@@ -102,6 +107,9 @@ const modelDefiners = [
   RecordsDispositionEvent,
   RepositoryBinding,
   ProjectMembership,
+  OrganizationBranding,
+  IntegrationCredential,
+  IdentityProviderBinding,
 ];
 
 // Register all models with Sequelize

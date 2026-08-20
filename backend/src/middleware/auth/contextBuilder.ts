@@ -47,13 +47,13 @@ export async function buildApplicationContext(
   let actor: Actor | null = null;
   let organization: Organization | null = null;
 
-  if (evidence.provider === 'local_test') {
-    // Test path: providerSubject is actor public_id
+  if (evidence.provider === 'local_test' || evidence.provider === 'session') {
+    // Direct path: providerSubject is actor public_id
     actor = await ActorModel.findOne({
       where: { public_id: evidence.providerSubject },
     });
     if (!actor) {
-      throw authenticationRequired('Unknown test actor');
+      throw authenticationRequired(evidence.provider === 'session' ? 'Session expired' : 'Unknown test actor');
     }
     organization = await OrganizationModel.findByPk(actor.organization_id);
   } else if (evidence.provider === 'oidc') {

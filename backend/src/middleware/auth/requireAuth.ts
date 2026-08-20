@@ -13,12 +13,13 @@
 
 import type { Request, Response, NextFunction } from 'express';
 import { oidcAdapter } from './oidcAdapter';
+import { sessionAdapter } from './sessionAdapter';
 import { localTestAdapter } from './localTestAdapter';
 import { buildApplicationContext } from './contextBuilder';
 import { AppError, authenticationRequired, ApiErrorCode } from '../../types/api-errors';
 import type { AuthAdapter, IdentityEvidence } from './types';
 
-const adapters: AuthAdapter[] = [oidcAdapter, localTestAdapter];
+const adapters: AuthAdapter[] = [oidcAdapter, sessionAdapter, localTestAdapter];
 
 export async function requireAuth(
   req: Request,

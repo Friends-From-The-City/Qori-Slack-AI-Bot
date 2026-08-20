@@ -58,6 +58,9 @@ import AdapterWorkspaceBinding from '../../../database/models/adapter_workspace_
 import RepositoryBinding from '../../../database/models/repository_binding';
 import ProjectMembership from '../../../database/models/project_membership';
 import IdentityProviderBinding from '../../../database/models/identity_provider_binding';
+// WS-0: Branding + integration credentials
+import OrganizationBranding from '../../../database/models/organization_branding';
+import IntegrationCredential from '../../../database/models/integration_credential';
 
 let instance: Sequelize | null = null;
 
@@ -93,6 +96,7 @@ export function getTestDb(): Sequelize {
     RecordsSchedule, RecordsManagementAssignment,
     RecordsHold, RecordsHoldTarget, RecordsDispositionEvent,
     RepositoryBinding, ProjectMembership, IdentityProviderBinding,
+    OrganizationBranding, IntegrationCredential,
   ];
 
   for (const defineModel of modelDefiners) {

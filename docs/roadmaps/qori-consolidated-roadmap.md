@@ -69,9 +69,10 @@ Qori is a deployable, channel-independent research operating system for public-s
 
 | Item | Description | Status |
 |------|-------------|--------|
-| **PLAT-1** | Government Deployment Foundation | SPEC ONLY |
-| **PLAT-2** | Organization/team/repo isolation | NOT STARTED |
-| **PLAT-3** | Channel-independent Application API | NOT STARTED |
+| **PLAT-1** | Government Deployment Foundation | COMPLETE / PRODUCTION |
+| **PLAT-2** | Organization/team/repo isolation | COMPLETE / PRODUCTION |
+| **PLAT-3** | Channel-independent Application API | COMPLETE / PRODUCTION |
+| **WS-0** | Workspace Enablement Foundation | DEV (PR pending) |
 
 ### RESEARCH INTELLIGENCE
 

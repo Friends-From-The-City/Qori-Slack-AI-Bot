@@ -92,13 +92,70 @@ Government deployments require institutional identity integration. The architect
 - Channel membership must not be the only way to check project access
 - No single authentication provider should be required for Qori to function
 
-## Migration Path
+## Implementation Status
 
-1. **PLAT-1 (this slice):** Document the boundary. No implementation changes.
-2. **PLAT-2:** Introduce canonical actor table. Map Slack user IDs to internal actors. Preserve backward compatibility.
-3. **PLAT-3:** Add OIDC adapter for API/web access. Decouple authorization from Slack channel membership.
-4. **Future:** SAML integration via identity broker for agencies that require it.
+| Phase | Status | Description |
+|-------|--------|-------------|
+| PLAT-1 | Complete | Boundary documented |
+| PLAT-2 | Complete | Canonical actor table, Slack ID → actor mapping |
+| PLAT-3 | Complete | OIDC adapter, identity provider bindings |
+| WS-0 | Complete | Web sessions, CSRF, logout, session adapter |
 
-## No ADR Required (Yet)
+## WS-0: Web Session + OIDC Runtime
 
-The authentication boundary is documented here as a deployment contract requirement. An ADR will be written when the canonical actor model is implemented (PLAT-2), as that is the architectural decision point.
+WS-0 added server-side session management for the Workspace web UI:
+
+### Session Architecture
+
+```
+Browser → OIDC IdP → auth code → Backend callback
+                                       │
+                                       ▼
+                              OIDC token validation
+                              (issuer, audience, JWKS sig, expiry)
+                                       │
+                                       ▼
+                              Actor resolution
+                              (identity_provider_bindings → actor)
+                                       │
+                                       ▼
+                              Session creation
+                              (Redis-backed, HttpOnly cookie)
+                                       │
+                                       ▼
+                              Subsequent requests use session cookie
+                              (no JWT needed per request)
+```
+
+### Auth Adapter Chain
+
+1. **OIDC Bearer** — validates JWT from Authorization header
+2. **Session** — checks server-side session cookie
+3. **Local Test** — `X-Test-Actor-PublicId` header (test env only)
+
+### CSRF Protection
+
+Double-submit cookie pattern:
+- `GET /api/v1/auth/csrf-token` → sets signed cookie + returns token
+- State-changing requests must include `X-CSRF-Token` header matching cookie
+- Bearer token requests are exempt (CSRF is a browser-origin attack)
+
+### Agency OIDC Configuration
+
+An agency supplies these values via deployment environment:
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `OIDC_ISSUER` | IdP issuer URL | `https://idp.agency.gov` |
+| `OIDC_CLIENT_ID` | Client/audience identifier | `qori-workspace` |
+| `OIDC_JWKS_URI` | JWKS endpoint | `https://idp.agency.gov/.well-known/jwks.json` |
+| `AUTH_CALLBACK_URL` | Callback after auth | `https://qori.agency.gov/api/v1/auth/callback` |
+
+### Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/v1/auth/csrf-token` | Get CSRF token |
+| `POST` | `/api/v1/auth/callback` | OIDC callback (establish session) |
+| `GET` | `/api/v1/auth/session` | Check session status |
+| `POST` | `/api/v1/auth/logout` | Destroy session |

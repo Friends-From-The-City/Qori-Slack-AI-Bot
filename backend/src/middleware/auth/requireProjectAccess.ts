@@ -36,8 +36,7 @@ declare global {
 /**
  * Create middleware that checks project access from a route parameter.
  *
- * Uses project ID (numeric) resolved by application services, or slug.
- * Projects don't have public_id yet — will be added in artifact migration.
+ * Resolves by: UUID public_id → numeric ID → slug (backwards-compat).
  *
  * @param paramName - route param containing the project identifier (default: 'projectId')
  */
@@ -51,7 +50,7 @@ export function requireProjectAccess(paramName = 'projectId') {
       return;
     }
 
-    const identifier = req.params[paramName];
+    const identifier = req.params[paramName] as string;
     if (!identifier) {
       res.status(400).json({
         error: { code: ApiErrorCode.VALIDATION_ERROR, message: `Missing ${paramName} parameter` },
@@ -60,15 +59,21 @@ export function requireProjectAccess(paramName = 'projectId') {
     }
 
     try {
-      // Resolve project — try numeric ID first, then slug
-      const numericId = Number(identifier);
-      const where: Record<string, unknown> = Number.isFinite(numericId) && numericId > 0
-        ? { id: numericId }
-        : { slug: identifier };
+      // Resolve project — try UUID public_id, then numeric ID, then slug
+      const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      let where: Record<string, unknown>;
+      if (uuidPattern.test(identifier)) {
+        where = { public_id: identifier };
+      } else {
+        const numericId = Number(identifier);
+        where = Number.isFinite(numericId) && numericId > 0
+          ? { id: numericId }
+          : { slug: identifier };
+      }
 
       const project = await ProjectModel.findOne({
         where,
-        attributes: ['id', 'slug', 'name', 'organization_id'],
+        attributes: ['id', 'public_id', 'slug', 'name', 'organization_id'],
       });
 
       if (!project) {
@@ -102,7 +107,7 @@ export function requireProjectAccess(paramName = 'projectId') {
       // Attach resolved project
       req.resolvedProject = {
         id: project.id,
-        publicId: project.slug, // slug serves as public identifier until public_id migration
+        publicId: project.public_id,
         slug: project.slug,
         name: project.name,
       };

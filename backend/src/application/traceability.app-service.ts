@@ -64,6 +64,13 @@ export async function getTraceGraph(
 
   if (direction === 'forward' || direction === 'both') {
     await traverseForward(startConstruct.id, EvidenceRelationshipModel, EvidenceConstructModel, nodes, edges, visited);
+
+    // Also include linked artifacts
+    const ArtifactEvidenceRefModel = sequelize.models.ArtifactEvidenceRef;
+    const ArtifactModel = sequelize.models.ResearchArtifact;
+    if (ArtifactEvidenceRefModel && ArtifactModel) {
+      await addArtifactNodes(startConstruct.id, ArtifactEvidenceRefModel, ArtifactModel, nodes, edges);
+    }
   }
 
   return {
@@ -143,6 +150,45 @@ async function traverseForward(
 
 // ─── Helpers ────────────────────────────────────────────────────────
 
+async function addArtifactNodes(
+  constructId: number,
+  ArtifactRefModel: any,
+  ArtifactModel: any,
+  nodes: Map<string, TraceNode>,
+  edges: TraceEdge[],
+) {
+  const refs = await ArtifactRefModel.findAll({
+    where: { evidence_construct_id: constructId },
+  });
+
+  for (const ref of refs) {
+    const artifact = await ArtifactModel.findByPk(ref.artifact_id);
+    if (!artifact) continue;
+
+    const artifactPublicId = artifact.public_id;
+    if (!nodes.has(artifactPublicId)) {
+      nodes.set(artifactPublicId, {
+        publicId: artifactPublicId,
+        type: 'artifact',
+        label: artifact.title || artifact.artifact_type,
+        status: artifact.publication_status || artifact.status || 'pending',
+      });
+    }
+
+    // Find the construct's public_id for the edge
+    for (const [pubId, node] of nodes.entries()) {
+      if (node.type !== 'artifact') {
+        edges.push({
+          from: pubId,
+          to: artifactPublicId,
+          relationship: 'materialized_in',
+        });
+        break;
+      }
+    }
+  }
+}
+
 function addNode(nodes: Map<string, TraceNode>, construct: any) {
   if (!nodes.has(construct.public_id)) {
     nodes.set(construct.public_id, {
@@ -150,6 +196,9 @@ function addNode(nodes: Map<string, TraceNode>, construct: any) {
       type: construct.construct_type || 'unknown',
       label: construct.label || null,
       status: construct.status || 'active',
+      provenance: construct.provenance_summary || undefined,
+      supportingEvidenceCount: construct.supporting_evidence_count ?? undefined,
+      studyPublicId: construct.study_public_id || undefined,
     });
   }
 }
