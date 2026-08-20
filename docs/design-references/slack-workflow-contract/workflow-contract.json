@@ -1,0 +1,251 @@
+{
+  "version": "1.0.0",
+  "generated": "2026-08-20",
+  "source": "repository inspection",
+  "workflows": [
+    {
+      "step": "project_creation",
+      "command": "/qori-start",
+      "handler": "projectStartHandler.ts",
+      "callback_id": "project_create_modal",
+      "inputs": [
+        { "key": "project_name", "type": "string", "required": true, "max_length": 80, "authority": "canonical", "persistence": "projects.name" },
+        { "key": "project_description", "type": "string", "required": false, "max_length": 500, "authority": "canonical", "persistence": "projects.description" },
+        { "key": "project_problem_statement", "type": "string", "required": true, "max_length": 2000, "authority": "canonical", "persistence": "projects.problem_statement" },
+        { "key": "project_stakeholder", "type": "user_id", "required": false, "authority": "canonical", "persistence": "project_members.is_stakeholder" },
+        { "key": "create_channel", "type": "boolean", "required": false, "default": true, "authority": "ephemeral", "workspace_drop": true }
+      ],
+      "consumes": [],
+      "commits": ["projects", "project_members", "github_scaffold"],
+      "emits": [],
+      "enables_next": ["discovery", "research_brief"]
+    },
+    {
+      "step": "discovery_desk_research",
+      "command": "/qori-discover",
+      "handler": "discoverHandler.ts",
+      "callback_id": "discover_desk_research_modal",
+      "inputs": [
+        { "key": "topic", "type": "string", "required": true, "authority": "cascade", "persistence": "study_variables (discovery scope)" },
+        { "key": "description", "type": "string", "required": true, "authority": "ai_input" },
+        { "key": "files", "type": "file_upload", "required": true, "authority": "ephemeral" },
+        { "key": "question_focus", "type": "string", "required": false, "authority": "ai_input" }
+      ],
+      "consumes": ["project_id"],
+      "commits": ["study_variables (discovery)", "evidence_sources", "evidence_constructs", "github_artifact"],
+      "emits": ["discovered_barriers", "discovered_metrics", "discovered_journeys", "methodology_recommendations", "knowledge_gaps", "source_artifacts"],
+      "enables_next": ["research_brief"]
+    },
+    {
+      "step": "discovery_stakeholder_synthesis",
+      "command": "/qori-discover",
+      "handler": "discoverHandler.ts",
+      "callback_id": "discover_stakeholder_modal",
+      "inputs": [
+        { "key": "topic", "type": "string", "required": true, "authority": "cascade" },
+        { "key": "description", "type": "string", "required": true, "authority": "ai_input" },
+        { "key": "files", "type": "file_upload", "required": true, "authority": "ephemeral" },
+        { "key": "question_focus", "type": "string", "required": false, "authority": "ai_input" }
+      ],
+      "consumes": ["project_id"],
+      "commits": ["study_variables (discovery)", "evidence_sources", "evidence_constructs", "github_artifact"],
+      "emits": ["stakeholder_constraints", "stakeholder_priorities", "alignment_gaps", "stakeholder_questions_for_users", "backstage_observations", "system_failure_modes"],
+      "enables_next": ["research_brief"]
+    },
+    {
+      "step": "discovery_survey_synthesis",
+      "command": "/qori-discover",
+      "handler": "discoverHandler.ts",
+      "callback_id": "discover_survey_modal",
+      "inputs": [
+        { "key": "survey_name", "type": "string", "required": true, "authority": "cascade" },
+        { "key": "description", "type": "string", "required": true, "authority": "ai_input" },
+        { "key": "files", "type": "file_upload", "required": true, "authority": "ephemeral" },
+        { "key": "question_focus", "type": "string", "required": false, "authority": "ai_input" }
+      ],
+      "consumes": ["project_id"],
+      "commits": ["study_variables (discovery)", "evidence_sources", "evidence_constructs", "github_artifact"],
+      "emits": ["survey_themes", "survey_findings", "survey_recommendations", "sample_demographics"],
+      "enables_next": ["research_brief"]
+    },
+    {
+      "step": "research_brief",
+      "command": "/qori-brief",
+      "handler": "briefHandler.ts",
+      "callback_id": "research_brief_modal",
+      "inputs": [
+        { "key": "problem_statement", "type": "string", "required": true, "inherited_from": "projects.problem_statement", "authority": "cascade" },
+        { "key": "learning_objectives", "type": "string", "required": true, "authority": "cascade", "persistence": "study_variables.research_objectives" },
+        { "key": "out_of_scope", "type": "string", "required": true, "authority": "cascade", "persistence": "study_variables.out_of_scope" },
+        { "key": "methodology", "type": "enum", "required": true, "values": ["Interviews", "Usability Testing", "Survey", "Mixed Methods", "Other"], "authority": "cascade", "persistence": "study_variables.methodology_selection" },
+        { "key": "participant_approach", "type": "string", "required": true, "authority": "cascade" },
+        { "key": "timeline", "type": "enum", "required": true, "values": ["2 weeks", "4 weeks", "6 weeks", "8+ weeks"], "authority": "cascade" },
+        { "key": "start_date", "type": "date", "required": true, "default": "next_monday", "authority": "cascade" },
+        { "key": "decision_deadline", "type": "date", "required": true, "authority": "cascade" },
+        { "key": "budget", "type": "string", "required": false, "authority": "cascade" },
+        { "key": "discovery_artifacts", "type": "checkbox_selection", "required": false, "default": "all_selected", "authority": "ephemeral" }
+      ],
+      "consumes": ["project_id", "project_slug", "project_problem_statement", "discovery_variables (optional)"],
+      "commits": ["research_studies", "study_variables", "github_artifact", "brief_status=pending_approval"],
+      "emits": ["research_questions", "target_barriers", "methodology_selection", "research_objectives", "out_of_scope", "participant_approach", "timeline_preference", "start_date", "decision_deadline", "budget"],
+      "enables_next": ["brief_approval"]
+    },
+    {
+      "step": "brief_approval",
+      "command": null,
+      "handler": "approvalFlowHandler.ts",
+      "inputs": [
+        { "key": "decision", "type": "enum", "required": true, "values": ["approve", "request_changes"], "authority": "canonical" },
+        { "key": "change_description", "type": "string", "required": false, "authority": "ephemeral" }
+      ],
+      "consumes": ["brief_status=pending_approval", "stakeholder_or_owner"],
+      "commits": ["research_studies.brief_status"],
+      "emits": [],
+      "enables_next": ["research_plan"]
+    },
+    {
+      "step": "research_plan",
+      "command": "/qori-plan",
+      "handler": "planHandler.ts",
+      "callback_id": "research_plan_modal",
+      "inputs": [
+        { "key": "lead_researcher", "type": "user_id", "required": true, "default": "current_user", "authority": "artifact" },
+        { "key": "research_method", "type": "enum", "required": true, "inherited_from": "study_variables.methodology_selection", "authority": "cascade" },
+        { "key": "num_participants", "type": "string", "required": true, "authority": "artifact" },
+        { "key": "session_duration", "type": "string", "required": true, "authority": "artifact" },
+        { "key": "start_date", "type": "date", "required": true, "default": "next_monday", "authority": "artifact" },
+        { "key": "operational_risks", "type": "string", "required": false, "authority": "cascade" }
+      ],
+      "consumes": ["brief_status=approved", "research_questions", "target_barriers", "methodology_selection"],
+      "commits": ["github_artifact", "study_variables"],
+      "emits": ["study_timeline", "risks", "deliverables"],
+      "enables_next": ["discussion_guide", "fieldwork"]
+    },
+    {
+      "step": "discussion_guide",
+      "command": "/qori-discuss",
+      "handler": "discussionGuideHandler.ts",
+      "callback_id": "discussion_guide_modal",
+      "inputs": [
+        { "key": "research_focus", "type": "string", "required": true, "inherited_from": "study_variables.research_objectives", "authority": "ai_input" },
+        { "key": "research_questions", "type": "string", "required": true, "inherited_from": "study_variables.research_questions", "authority": "ai_input" },
+        { "key": "research_method", "type": "enum", "required": true, "inherited_from": "study_variables.methodology_selection", "authority": "ai_input" },
+        { "key": "session_type", "type": "enum", "required": true, "authority": "ai_input" },
+        { "key": "session_duration", "type": "string", "required": true, "authority": "ai_input" },
+        { "key": "participant_description", "type": "string", "required": false, "authority": "ai_input" }
+      ],
+      "consumes": ["study_id", "research_objectives", "research_questions", "methodology_selection"],
+      "commits": ["github_artifact"],
+      "emits": [],
+      "enables_next": ["fieldwork"]
+    },
+    {
+      "step": "fieldwork_add_participant",
+      "command": "/qori-fieldwork",
+      "handler": "participantHandler.ts",
+      "callback_id": "add-participant-modal",
+      "inputs": [
+        { "key": "participant_name", "type": "string", "required": false, "authority": "canonical", "persistence": "study_participants" },
+        { "key": "scheduled_date", "type": "date", "required": false, "authority": "canonical" },
+        { "key": "session_time", "type": "time", "required": false, "authority": "canonical" },
+        { "key": "location", "type": "enum", "required": false, "authority": "canonical" },
+        { "key": "notes", "type": "string", "required": false, "authority": "canonical" }
+      ],
+      "consumes": ["study_id"],
+      "commits": ["study_participants", "participant_tracker.yaml"],
+      "emits": [],
+      "enables_next": ["session_notes", "participant_outreach"]
+    },
+    {
+      "step": "session_notes",
+      "command": "/qori-fieldwork → upload notes",
+      "handler": "sessionNotesHandler.ts",
+      "callback_id": "session_notes_submit",
+      "inputs": [
+        { "key": "study", "type": "study_id", "required": true, "authority": "ephemeral" },
+        { "key": "session", "type": "participant_id", "required": true, "authority": "ephemeral" },
+        { "key": "transcript_files", "type": "file_upload", "required": false, "authority": "ephemeral" },
+        { "key": "pasted_transcript", "type": "string", "required": false, "authority": "ephemeral" },
+        { "key": "observation_notes", "type": "string", "required": false, "authority": "ephemeral" },
+        { "key": "participant_real_name", "type": "string", "required": false, "authority": "ephemeral", "pii": true, "never_stored": true }
+      ],
+      "consumes": ["study_id", "participant_id"],
+      "commits": ["study_notes", "github_quarantine"],
+      "emits": [],
+      "enables_next": ["pii_review"]
+    },
+    {
+      "step": "pii_review",
+      "command": null,
+      "handler": "sessionNotesHandler.ts",
+      "inputs": [
+        { "key": "decision", "type": "enum", "required": true, "values": ["approve", "reject", "rescrub"], "authority": "canonical" },
+        { "key": "rescrub_terms", "type": "string_array", "required": false, "authority": "ephemeral" }
+      ],
+      "consumes": ["quarantined_notes"],
+      "commits": ["study_notes.pii_reviewed", "study_notes.pii_reviewed_by", "study_notes.pii_reviewed_at"],
+      "emits": [],
+      "enables_next": ["per_session_analysis"]
+    },
+    {
+      "step": "per_session_analysis",
+      "command": "/qori-analyze",
+      "handler": "analyzeNotesHandler.ts",
+      "callback_id": "analyze_notes_submit",
+      "inputs": [
+        { "key": "study", "type": "study_id", "required": true, "authority": "ephemeral" },
+        { "key": "session", "type": "participant_id", "required": true, "authority": "ephemeral" },
+        { "key": "notes_selection", "type": "checkbox_selection", "required": true, "authority": "ephemeral" }
+      ],
+      "consumes": ["approved_session_notes", "target_barriers", "research_questions"],
+      "commits": ["study_variables", "evidence_sources", "evidence_constructs", "github_artifact"],
+      "emits": ["atomic_nugget_core", "atomic_nugget_detail", "validated_themes", "unexpected_patterns", "participant_metadata", "task_completion_records", "barrier_validations"],
+      "enables_next": ["synthesis"]
+    },
+    {
+      "step": "synthesis",
+      "command": "/qori-synthesis",
+      "handler": "researchSynthesisHandler.ts",
+      "callback_id": "research-synthesis-modal",
+      "inputs": [
+        { "key": "study", "type": "study_id", "required": true, "authority": "ephemeral" },
+        { "key": "analysis_method", "type": "enum", "required": true, "values": ["affinity_mapping", "thematic_analysis", "cross_session_synthesis", "usability_issues", "recommendations", "executive_summary"], "authority": "ai_input" },
+        { "key": "enrichments", "type": "checkbox_selection", "required": false, "authority": "ephemeral" }
+      ],
+      "consumes": ["atomic_nugget_core", "validated_themes", "study_id"],
+      "commits": ["study_variables", "evidence_constructs", "github_artifact"],
+      "emits": ["findings", "recommendations", "themes", "personas"],
+      "enables_next": ["readout", "tickets"]
+    },
+    {
+      "step": "readout",
+      "command": "/qori-report",
+      "handler": "readoutHandler.ts",
+      "callback_id": "readout_modal_submit",
+      "inputs": [
+        { "key": "study", "type": "study_id", "required": true, "authority": "ephemeral" },
+        { "key": "readout_type", "type": "enum", "required": true, "values": ["research_readout", "targeted_readouts"], "authority": "ai_input" },
+        { "key": "audience", "type": "checkbox_selection", "required": false, "authority": "ephemeral" }
+      ],
+      "consumes": ["findings", "recommendations", "themes", "validated_themes"],
+      "commits": ["github_artifact", "evidence_constructs"],
+      "emits": [],
+      "enables_next": ["tickets"]
+    },
+    {
+      "step": "tickets",
+      "command": "/qori-tickets",
+      "handler": "ticketHandler.ts",
+      "callback_ids": ["tickets_step1_submit", "tickets_step2_submit"],
+      "inputs": [
+        { "key": "study", "type": "study_id", "required": true, "authority": "ephemeral" },
+        { "key": "audience", "type": "checkbox_selection", "required": true, "values": ["designer", "engineering", "accessibility"], "authority": "ephemeral" },
+        { "key": "selected_tickets", "type": "checkbox_selection", "required": true, "authority": "canonical" }
+      ],
+      "consumes": ["recommendations", "findings"],
+      "commits": ["github_issues"],
+      "emits": [],
+      "enables_next": []
+    }
+  ]
+}
