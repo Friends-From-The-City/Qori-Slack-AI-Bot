@@ -129,6 +129,39 @@ describe('sanitize', () => {
   });
 });
 
+describe('parseDatabaseUrl', () => {
+  test('parses full PostgreSQL URI into libpq env vars', () => {
+    const result = backup.parseDatabaseUrl(FAKE_DATABASE_URL);
+    expect(result.PGHOST).toBe('prod-db.example.com');
+    expect(result.PGPORT).toBe('5432');
+    expect(result.PGUSER).toBe('admin');
+    expect(result.PGPASSWORD).toBe(FAKE_PASSWORD);
+    expect(result.PGDATABASE).toBe('qori_prod');
+    expect(result.PGSSLMODE).toBe('require');
+  });
+
+  test('handles URI without port', () => {
+    const result = backup.parseDatabaseUrl('postgresql://user:pass@host/mydb');
+    expect(result.PGHOST).toBe('host');
+    expect(result.PGPORT).toBeUndefined();
+    expect(result.PGUSER).toBe('user');
+    expect(result.PGPASSWORD).toBe('pass');
+    expect(result.PGDATABASE).toBe('mydb');
+  });
+
+  test('handles URL-encoded special characters in password', () => {
+    const result = backup.parseDatabaseUrl('postgresql://user:p%40ss%23word@host/db');
+    expect(result.PGPASSWORD).toBe('p@ss#word');
+  });
+
+  test('result never contains the full connection URI', () => {
+    const result = backup.parseDatabaseUrl(FAKE_DATABASE_URL);
+    const allValues = Object.values(result).join(' ');
+    expect(allValues).not.toContain('postgresql://');
+    expect(allValues).not.toContain('postgres://');
+  });
+});
+
 describe('checkVersionCompatibility', () => {
   beforeEach(() => {
     execFileSync.mockReset();
@@ -186,9 +219,11 @@ describe('checkVersionCompatibility', () => {
       expect(arg).not.toContain('postgresql://');
       expect(arg).not.toContain(FAKE_PASSWORD);
     }
-    // It should be in the env instead
+    // Individual libpq env vars should be set instead
     const psqlOpts = psqlCall[2];
-    expect(psqlOpts.env.PGDATABASE).toBe(FAKE_DATABASE_URL);
+    expect(psqlOpts.env.PGHOST).toBe('prod-db.example.com');
+    expect(psqlOpts.env.PGPASSWORD).toBe(FAKE_PASSWORD);
+    expect(psqlOpts.env.PGDATABASE).toBe('qori_prod');
   });
 });
 
@@ -208,8 +243,10 @@ describe('runPgDump', () => {
       expect(arg).not.toContain('postgresql://');
       expect(arg).not.toContain(FAKE_PASSWORD);
     }
-    // Must be in env instead
-    expect(call[2].env.PGDATABASE).toBe(FAKE_DATABASE_URL);
+    // Individual libpq env vars must be set instead
+    expect(call[2].env.PGHOST).toBe('prod-db.example.com');
+    expect(call[2].env.PGPASSWORD).toBe(FAKE_PASSWORD);
+    expect(call[2].env.PGDATABASE).toBe('qori_prod');
   });
 
   test('calls pg_dump with correct flags', () => {
