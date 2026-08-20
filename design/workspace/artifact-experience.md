@@ -31,6 +31,16 @@ Artifact generation uses the staged ProgressStepper ("Drafting research readout 
 
 Draft (AI-suggested treatment until first human review), needs-review (reviewer assigned or open), approved, publishing, published, publication-failed, superseded, archived, generation-failed (retry from failed step), permission-denied (named, per `states-and-feedback.md`).
 
+## Backend Contract (UX-2B)
+
+**Publication status API:** `GET /api/v1/artifacts/:publicId/status` returns: `public_id`, `workflow_status`, `publication_status`, `external_target`, `external_reference`, `last_attempt_at`, `retryable`, `error_code`.
+
+**Retry:** `POST /api/v1/artifacts/:publicId/retry` — only when `publication_status = 'projection_failed'`. Transitions `projection_failed → publishing`. Does not regenerate content, does not alter workflow status, does not duplicate GitHub output (semantic_key idempotency). Already-published is idempotent no-op.
+
+**Error codes** are sanitized: `RATE_LIMITED`, `TARGET_NOT_FOUND`, `PERMISSION_DENIED`, `CONFLICT`, `TIMEOUT`, `PROJECTION_FAILED`. No raw provider errors exposed.
+
+**Publish gate:** `POST /api/v1/artifacts/:publicId/publish` requires workflow status `approved` or `written`. Returns `ARTIFACT_NOT_APPROVED` otherwise.
+
 ## Data contract
 
 Artifact: id, type, body (markdown), citations map, workflow status + history, versions, publication records per adapter (state, target URL, last attempt, error cause), review threads, permissions.

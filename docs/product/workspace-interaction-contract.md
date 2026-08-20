@@ -93,6 +93,30 @@ Every finding shows where it was used in recommendations. Every recommendation s
 - Both findings and recommendations support status tracking (draft, reviewed, accepted).
 - Severity and priority indicators are visible where applicable.
 
+### Review Lifecycle (UX-2B)
+
+Reviewable construct types: **finding**, **recommendation**, **theme**.
+
+**States:** `candidate` → `accepted` / `rejected`. Governance may set `overridden` (terminal).
+
+| Transition | Allowed | Audit |
+|------------|---------|-------|
+| candidate → accepted | Yes | `review_finding` / `review_recommendation` |
+| candidate → rejected | Yes | `review_finding` / `review_recommendation` |
+| accepted → rejected | Yes (re-review) | New audit record |
+| rejected → accepted | Yes (explicit re-review) | New audit record |
+| overridden → any | No (governance override is final) | N/A |
+
+**Authorization:** Project membership required. Cross-org review fails closed.
+
+**Orthogonality:** `stale_due_to_disposition` is independent of review status. Accepting a finding does not clear its stale flag, and a disposition event does not change a finding's review status.
+
+**API endpoints:**
+- `POST /api/v1/findings/:publicId/review` — body: `{ "decision": "accept" | "reject" }`
+- `POST /api/v1/recommendations/:publicId/review` — body: `{ "decision": "accept" | "reject" }`
+
+**Response:** `public_id`, `construct_type`, `review_status`, `previous_status`, `reviewed_at`, `reviewed_by_display_name`, `stale_due_to_disposition`, `traceability_summary`.
+
 ---
 
 ## Tags and Taxonomy (Future)
@@ -123,15 +147,34 @@ Artifacts are the documents produced by Qori workflows (briefs, plans, readouts,
 - **Review** -- examine the artifact with change tracking or diff view where applicable.
 - **Approve** -- mark the artifact as accepted by the researcher.
 - **Publish** -- deliver the approved artifact to the handoff adapter (currently GitHub).
-- **Retry** -- regenerate the artifact with the same or modified inputs after a failure.
+- **Retry** -- re-attempt a failed publication without regenerating research content.
 - **Version** -- artifacts maintain version history. Prior versions are accessible.
 - **Open in GitHub** -- direct link to the artifact in the handoff repository.
 
-### States
+### Workflow and Publication Status (UX-2B)
 
-Artifacts move through: `generating -> draft -> reviewed -> approved -> published -> (versioned)`.
+Artifacts carry two independent status dimensions:
 
-Failed generation produces a `failed` state with error context visible to the researcher.
+**Workflow status** (research lifecycle): `generating → draft → needs_review → approved → published → (versioned/archived/superseded)`
+
+**Publication status** (external projection): `not_published → publishing → published` or `→ projection_failed`
+
+A GitHub failure changes publication_status to `projection_failed` but **never** changes workflow_status. An approved artifact remains approved regardless of publication outcome.
+
+**Retry contract:**
+- Only `projection_failed` is retryable
+- Retry transitions: `projection_failed → publishing → published` (or `→ projection_failed` again)
+- Retry does NOT regenerate research content
+- Retry does NOT alter approved workflow status
+- Retry does NOT duplicate GitHub output (semantic_key idempotency)
+- Already-published → retry is a no-op (idempotent)
+- Location metadata (path, commit_sha, url) preserved on failure
+
+**Publication status API:** `GET /api/v1/artifacts/:publicId/status` returns `workflow_status`, `publication_status`, `external_target`, `external_reference`, `last_attempt_at`, `retryable`, `error_code`.
+
+**Error codes** are sanitized — no raw GitHub/provider errors exposed: `RATE_LIMITED`, `TARGET_NOT_FOUND`, `PERMISSION_DENIED`, `CONFLICT`, `TIMEOUT`, `PROJECTION_FAILED`.
+
+Failed generation produces a `failed` workflow state with error context visible to the researcher.
 
 ---
 

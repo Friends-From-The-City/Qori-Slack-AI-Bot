@@ -26,7 +26,9 @@ export type AuditAction =
   | 'deletion_error'
   | 'approve_transcript'
   | 'reject_transcript'
-  | 'rescrub_transcript';
+  | 'rescrub_transcript'
+  | 'review_finding'          // UX-2B: finding review decision
+  | 'review_recommendation';  // UX-2B: recommendation review decision
 
 export type AuditOutcome = 'success' | 'denied' | 'error';
 

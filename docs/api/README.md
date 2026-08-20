@@ -51,6 +51,11 @@ Error responses use deterministic, machine-readable codes:
 | `RESOURCE_NOT_FOUND` | 404 | Resource does not exist or is not visible to actor |
 | `VALIDATION_FAILED` | 422 | Request body failed schema validation |
 | `CONFLICT` | 409 | Operation conflicts with current resource state |
+| `REVIEW_NOT_ALLOWED` | 400 | Construct type does not support review |
+| `INVALID_REVIEW_TRANSITION` | 409 | Status transition not valid from current state |
+| `ARTIFACT_NOT_APPROVED` | 409 | Artifact must be approved before publication |
+| `PUBLICATION_NOT_RETRYABLE` | 409 | Publication is not in a retryable state |
+| `PROJECTION_FAILED` | 502 | External publication/projection failed |
 | `INTERNAL_ERROR` | 500 | Unexpected server error |
 
 Error response body:
@@ -120,6 +125,13 @@ All requests and responses use `Content-Type: application/json`.
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/:publicId/trace` | Traceability graph |
+| POST | `/:publicId/review` | Review finding (accept/reject) |
+
+### Recommendations (`/api/v1/recommendations`)
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/:publicId/trace` | Traceability graph |
+| POST | `/:publicId/review` | Review recommendation (accept/reject) |
 
 ### Admin (`/api/v1/admin`)
 | Method | Path | Description |

@@ -24,6 +24,14 @@ export enum ApiErrorCode {
   PROJECTION_FAILED = 'PROJECTION_FAILED',
   /** Entity is in a state that does not allow this operation */
   INVALID_STATE = 'INVALID_STATE',
+  /** Construct type does not support review operations */
+  REVIEW_NOT_ALLOWED = 'REVIEW_NOT_ALLOWED',
+  /** Requested status transition is not valid from current state */
+  INVALID_REVIEW_TRANSITION = 'INVALID_REVIEW_TRANSITION',
+  /** Artifact must be approved before this operation */
+  ARTIFACT_NOT_APPROVED = 'ARTIFACT_NOT_APPROVED',
+  /** Publication is not in a retryable state */
+  PUBLICATION_NOT_RETRYABLE = 'PUBLICATION_NOT_RETRYABLE',
   /** Unexpected server error — details intentionally omitted */
   INTERNAL_ERROR = 'INTERNAL_ERROR',
 }
@@ -87,4 +95,20 @@ export function projectionFailed(message: string): AppError {
 
 export function governanceReviewRequired(message = 'Governance review required'): AppError {
   return new AppError(ApiErrorCode.GOVERNANCE_REVIEW_REQUIRED, message, 403);
+}
+
+export function reviewNotAllowed(message: string): AppError {
+  return new AppError(ApiErrorCode.REVIEW_NOT_ALLOWED, message, 400);
+}
+
+export function invalidReviewTransition(message: string): AppError {
+  return new AppError(ApiErrorCode.INVALID_REVIEW_TRANSITION, message, 409);
+}
+
+export function artifactNotApproved(message = 'Artifact must be approved before publication'): AppError {
+  return new AppError(ApiErrorCode.ARTIFACT_NOT_APPROVED, message, 409);
+}
+
+export function publicationNotRetryable(message = 'Publication is not in a retryable state'): AppError {
+  return new AppError(ApiErrorCode.PUBLICATION_NOT_RETRYABLE, message, 409);
 }
