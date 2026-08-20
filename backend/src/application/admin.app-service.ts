@@ -15,6 +15,7 @@ import sequelize from '../database';
 import type { Organization } from '../database/models/organization';
 import type { Team } from '../database/models/team';
 import type { Actor } from '../database/models/actor';
+import type { OrganizationMembership } from '../database/models/organization_membership';
 import type { ProjectMembership } from '../database/models/project_membership';
 import type { Project } from '../database/models/project';
 import type { IntegrationCredential } from '../database/models/integration_credential';
@@ -28,25 +29,48 @@ const ActorModel = sequelize.models.Actor as typeof Actor;
 const ProjectMembershipModel = sequelize.models.ProjectMembership as typeof ProjectMembership;
 const ProjectModel = sequelize.models.Project as typeof Project;
 
-// ─── Authorization ─────────────────────────────────────────────────
+// ─── Organization-Level Authorization ──────────────────────────────
 
 /**
- * Check if actor has admin/owner role in any project within the org.
- * For now, any authenticated actor in the org can perform admin reads.
- * Write operations require at least one owner-role project membership.
+ * Resolve the actor's organization membership.
+ * Returns null if no membership exists (fail-closed).
+ */
+async function getOrgMembership(ctx: ApplicationContext): Promise<OrganizationMembership | null> {
+  const OrgMembershipModel = sequelize.models.OrganizationMembership as typeof OrganizationMembership | undefined;
+  if (!OrgMembershipModel) return null;
+
+  return OrgMembershipModel.findOne({
+    where: {
+      organization_id: ctx.organization.id,
+      actor_id: ctx.actor.id,
+    },
+  });
+}
+
+/**
+ * Assert the actor has org-level owner or admin role.
+ *
+ * SECURITY CONTRACT:
+ * - Authorization comes from organization_memberships, NOT project_memberships
+ * - A project owner without org admin role is DENIED
+ * - Session/token metadata cannot override this check
+ * - Fails closed on missing model or membership
  */
 async function assertOrgAdmin(ctx: ApplicationContext): Promise<void> {
-  const membership = await ProjectMembershipModel.findOne({
-    where: { actor_id: ctx.actor.id, role: 'owner' },
-    include: [{
-      model: ProjectModel,
-      as: 'project',
-      where: { organization_id: ctx.organization.id },
-      attributes: ['id'],
-    }],
-  });
-  if (!membership) {
+  const membership = await getOrgMembership(ctx);
+  if (!membership || !['owner', 'admin'].includes(membership.role)) {
     throw authorizationDenied('Organization admin access required');
+  }
+}
+
+/**
+ * Assert the actor has org-level owner role specifically.
+ * Used for destructive/sensitive operations.
+ */
+async function assertOrgOwner(ctx: ApplicationContext): Promise<void> {
+  const membership = await getOrgMembership(ctx);
+  if (!membership || membership.role !== 'owner') {
+    throw authorizationDenied('Organization owner access required');
   }
 }
 

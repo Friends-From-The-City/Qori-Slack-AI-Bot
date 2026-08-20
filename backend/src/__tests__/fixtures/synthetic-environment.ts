@@ -236,7 +236,18 @@ export async function seedSyntheticEnvironment(sequelize: Sequelize): Promise<Se
       }
     }
 
-    // 5. Branding
+    // 5. Organization memberships (Sam Taylor = owner, others = member)
+    for (const actorResult of result.actors) {
+      const role = actorResult.display_name === 'Sam Taylor' ? 'owner' : 'member';
+      await sequelize.query(
+        `INSERT INTO organization_memberships (organization_id, actor_id, role)
+         VALUES (:orgId, :actorId, :role)
+         ON CONFLICT (organization_id, actor_id) DO NOTHING`,
+        { replacements: { orgId, actorId: actorResult.id, role }, transaction: t },
+      );
+    }
+
+    // 6. Branding
     if (result.organization) {
       await sequelize.query(
         `INSERT INTO organization_branding (organization_id, display_name, short_name, public_url, theme_tokens)

@@ -11,12 +11,9 @@ import { authorizationDenied, resourceNotFound, validationError } from '../types
 import sequelize from '../database';
 import type { OrganizationBranding, OrganizationBranding as OrgBrandingType } from '../database/models/organization_branding';
 import { ALLOWED_LOGO_CONTENT_TYPES, MAX_LOGO_SIZE_BYTES } from '../database/models/organization_branding';
-import type { ProjectMembership } from '../database/models/project_membership';
-import type { Project } from '../database/models/project';
+import type { OrganizationMembership } from '../database/models/organization_membership';
 
 const BrandingModel = sequelize.models.OrganizationBranding as typeof OrganizationBranding | undefined;
-const ProjectMembershipModel = sequelize.models.ProjectMembership as typeof ProjectMembership;
-const ProjectModel = sequelize.models.Project as typeof Project;
 
 // ─── Types ─────────────────────────────────────────────────────────
 
@@ -36,19 +33,22 @@ export interface LogoValidationResult {
   errors: string[];
 }
 
-// ─── Authorization ─────────────────────────────────────────────────
+// ─── Organization-Level Authorization ──────────────────────────────
 
 async function assertOrgAdmin(ctx: ApplicationContext): Promise<void> {
-  const membership = await ProjectMembershipModel.findOne({
-    where: { actor_id: ctx.actor.id, role: 'owner' },
-    include: [{
-      model: ProjectModel,
-      as: 'project',
-      where: { organization_id: ctx.organization.id },
-      attributes: ['id'],
-    }],
+  const OrgMembershipModel = sequelize.models.OrganizationMembership as typeof OrganizationMembership | undefined;
+  if (!OrgMembershipModel) {
+    throw authorizationDenied('Organization membership model not available');
+  }
+
+  const membership = await OrgMembershipModel.findOne({
+    where: {
+      organization_id: ctx.organization.id,
+      actor_id: ctx.actor.id,
+    },
   });
-  if (!membership) {
+
+  if (!membership || !['owner', 'admin'].includes(membership.role)) {
     throw authorizationDenied('Organization admin access required');
   }
 }
