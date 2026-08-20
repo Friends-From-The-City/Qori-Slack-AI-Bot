@@ -8,8 +8,11 @@
 
 All requests require authentication via one of:
 
-- **OIDC Bearer token** -- `Authorization: Bearer <token>` header. Tokens are validated against the configured OIDC provider. The token's claims establish the actor's identity, organization membership, and role.
-- **Test headers** (non-production only) -- `X-Test-Actor-Id`, `X-Test-Org-Id`, `X-Test-Role` headers bypass OIDC validation in test environments. These headers are rejected in production.
+- **OIDC Bearer token** -- `Authorization: Bearer <token>` header. Tokens are validated against the configured OIDC provider.
+- **Session cookie** -- `qori.sid` cookie established via `/api/v1/auth/callback`. Used by the Workspace web UI.
+- **Test headers** (non-production only) -- `X-Test-Actor-PublicId` header bypasses OIDC validation in test environments.
+
+State-changing browser requests must include a `X-CSRF-Token` header (obtained from `GET /api/v1/auth/csrf-token`). Bearer token requests are exempt from CSRF.
 
 Unauthenticated requests receive a `401` with error code `AUTHENTICATION_REQUIRED`.
 
@@ -70,3 +73,77 @@ Cross-organization access is not supported. Platform-level admin operations (if 
 ## Content Type
 
 All requests and responses use `Content-Type: application/json`.
+
+## Endpoint Index
+
+### Authentication (`/api/v1/auth`)
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/csrf-token` | Get CSRF token |
+| POST | `/callback` | OIDC callback (establish session) |
+| GET | `/session` | Check session status |
+| POST | `/logout` | Destroy session |
+
+### Current Actor (`/api/v1/me`)
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/` | Current actor profile + org + memberships |
+
+### Projects (`/api/v1/projects`)
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/` | List accessible projects |
+| GET | `/:projectSlug` | Get project (by slug or public_id) |
+| GET | `/:projectSlug/studies` | Studies for a project |
+| GET | `/:projectSlug/governance` | Governance summary |
+
+### Studies (`/api/v1/studies`)
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/:studyId` | Get study |
+| GET | `/:studyId/sources` | Evidence sources |
+| GET | `/:studyId/evidence` | Evidence constructs |
+| GET | `/:studyId/artifacts` | Artifacts |
+
+### Artifacts (`/api/v1/artifacts`)
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/:publicId` | Get artifact |
+| GET | `/:publicId/preview` | Artifact content preview |
+| GET | `/:publicId/provenance` | Artifact provenance |
+| POST | `/:publicId/approve` | Approve artifact |
+| POST | `/:publicId/publish` | Publish to GitHub |
+| POST | `/:publicId/retry` | Retry failed publication |
+| GET | `/:publicId/status` | Publication status |
+
+### Findings (`/api/v1/findings`)
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/:publicId/trace` | Traceability graph |
+
+### Admin (`/api/v1/admin`)
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/organization` | Organization profile |
+| PATCH | `/organization` | Update organization |
+| GET | `/teams` | List teams |
+| POST | `/teams` | Create team |
+| PATCH | `/teams/:teamPublicId` | Update team |
+| GET | `/actors` | List actors |
+| GET | `/actors/:actorPublicId` | Get actor with memberships |
+| GET | `/projects/:id/memberships` | List project memberships |
+| POST | `/projects/:id/memberships` | Add membership |
+| DELETE | `/projects/:id/memberships/:actorId` | Remove membership |
+| GET | `/integrations` | Integration status |
+
+### Branding (`/api/v1/branding`)
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/` | Get org branding config |
+| PUT | `/` | Update branding (admin) |
+| POST | `/logo/validate` | Validate logo upload |
+
+### Search (`/api/v1/search`)
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/` | Search (placeholder — returns 501) |

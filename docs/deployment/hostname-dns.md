@@ -122,17 +122,17 @@ Qori makes outbound HTTPS connections to:
 
 If the deployment environment uses an outbound proxy or firewall, these destinations must be allowed. Configure `HTTPS_PROXY` / `NO_PROXY` environment variables if an outbound proxy is required.
 
-## Current State (pre-Workspace)
+## Current State (WS-0)
 
-In the current Slack-only deployment:
+As of WS-0, the application API is live and consumes all hostname-related variables:
 
-- Qori uses **Socket Mode** for Slack communication — no inbound HTTP from Slack is required
-- The HTTP server (`PORT`) is used only for the health check endpoint (`/health`)
-- `PUBLIC_APP_URL`, `PUBLIC_API_URL`, and `AUTH_CALLBACK_URL` are **not yet consumed** by application code — they are reserved for PLAT-3 (Application API) and UX-3 (Workspace)
-- `CORS_ALLOWED_ORIGIN` is consumed but optional (no web frontend exists yet)
-- `TRUSTED_PROXY` is consumed by Express but only relevant when the health endpoint is behind a proxy
+- `CORS_ALLOWED_ORIGINS` — consumed by CORS middleware for API access control
+- `AUTH_CALLBACK_URL` — used by the OIDC callback endpoint (`/api/v1/auth/callback`)
+- `TRUSTED_PROXY` — consumed by Express for correct `req.ip` and `req.protocol`
+- `PUBLIC_APP_URL` / `PUBLIC_API_URL` — available for link generation in notifications
+- `WEBHOOK_BASE_URL` — available for external service registration
 
-These variables are defined now so that deployment planning and infrastructure provisioning can proceed ahead of PLAT-3 and Workspace implementation.
+Slack still uses Socket Mode (no inbound HTTP from Slack required).
 
 ## Related Documents
 

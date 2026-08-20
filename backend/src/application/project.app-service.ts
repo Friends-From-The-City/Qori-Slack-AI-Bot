@@ -31,10 +31,10 @@ export async function listProjects(ctx: ApplicationContext): Promise<ProjectReso
 }
 
 /**
- * Get a single project by slug, verifying org scope and membership.
+ * Get a single project by slug or public_id, verifying org scope and membership.
  */
-export async function getProject(ctx: ApplicationContext, slug: string): Promise<ProjectResource> {
-  const project = await getProjectBySlugOrId(slug, ctx.organization.id) as any;
+export async function getProject(ctx: ApplicationContext, slugOrPublicId: string): Promise<ProjectResource> {
+  const project = await getProjectBySlugOrId(slugOrPublicId, ctx.organization.id) as any;
   if (!project) throw resourceNotFound('Project');
 
   const isMember = await isProjectMemberByActor(ctx.actor.id, project.id);
@@ -87,7 +87,7 @@ export async function getProjectGovernance(
   ]);
 
   return {
-    project_public_id: projectSlug,
+    project_public_id: project.public_id || projectSlug,
     active_holds_count: holdsCount,
     pending_dispositions_count: 0, // Requires eligibility evaluation — deferred
     records_assignments_count: assignmentsCount,
@@ -102,12 +102,18 @@ async function getProjectBySlugOrId(slugOrId: string, orgId: number) {
   if (Number.isFinite(numericId) && numericId > 0) {
     return getProjectByIdAndOrg(numericId, orgId);
   }
+  // Try public_id (UUID) first, then fall back to slug
+  const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (uuidPattern.test(slugOrId)) {
+    const byPublicId = await ProjectModel.findOne({ where: { public_id: slugOrId, organization_id: orgId } });
+    if (byPublicId) return byPublicId;
+  }
   return ProjectModel.findOne({ where: { slug: slugOrId, organization_id: orgId } });
 }
 
 function mapProjectResource(p: any, orgPublicId: string): ProjectResource {
   return {
-    public_id: p.slug, // slug as public identifier until UUID migration
+    public_id: p.public_id || p.slug,
     slug: p.slug,
     name: p.name,
     description: p.description || null,

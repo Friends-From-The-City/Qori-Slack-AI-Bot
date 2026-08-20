@@ -35,6 +35,22 @@ The deploying organization provides:
 
 **No dependency on any specific GitHub organization.** The `GITHUB_OWNER` variable controls which organization Qori writes to. There are no hard-coded organization names in application code.
 
+### Per-Organization Credential Boundary (WS-0)
+
+In multi-org deployments, each organization can have its own GitHub credential:
+
+| Table | Purpose |
+|-------|---------|
+| `integration_credentials` | Maps org → credential reference (e.g., `env:GITHUB_TOKEN_ORG1`) |
+
+The `credential-resolver.service.ts` resolves credentials in order:
+1. **Org-specific**: `integration_credentials` row for the org + provider
+2. **Global fallback**: `GITHUB_TOKEN` env var (backward-compatible for single-org)
+
+Credential references use a `ref:` format — currently `env:VAR_NAME` for environment variables. Future formats (`vault:`, `aws-sm:`) can be added without schema changes.
+
+Cross-org credential use is impossible: the resolver always scopes by `organization_id`.
+
 ## Portability Audit
 
 ### Clean (no org-specific references in application code)

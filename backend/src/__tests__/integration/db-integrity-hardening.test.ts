@@ -18,8 +18,8 @@ const sequelize = getTestDb();
 /** Insert a project and return its id */
 async function seedProject(slug = 'test-proj'): Promise<number> {
   const [rows] = await sequelize.query(
-    `INSERT INTO projects (name, slug, status, created_by, organization_id, created_at, updated_at)
-     VALUES ('Test', '${slug}', 'active', 'U_TEST', ${TEST_ORG_ID}, NOW(), NOW())
+    `INSERT INTO projects (name, slug, public_id, status, created_by, organization_id, created_at, updated_at)
+     VALUES ('Test', '${slug}', gen_random_uuid(), 'active', 'U_TEST', ${TEST_ORG_ID}, NOW(), NOW())
      RETURNING id`
   );
   return (rows as any[])[0].id;
@@ -294,16 +294,16 @@ describe('GOV-3A Database Integrity Hardening', () => {
   describe('projects.status CHECK', () => {
     it('rejects invalid project status', async () => {
       await expectRejected(
-        `INSERT INTO projects (name, slug, status, created_by, organization_id, created_at, updated_at)
-         VALUES ('Bad', 'bad-proj', 'deleted', 'U_TEST', ${TEST_ORG_ID}, NOW(), NOW())`,
+        `INSERT INTO projects (name, slug, public_id, status, created_by, organization_id, created_at, updated_at)
+         VALUES ('Bad', 'bad-proj', gen_random_uuid(), 'deleted', 'U_TEST', ${TEST_ORG_ID}, NOW(), NOW())`,
         'chk_project_status'
       );
     });
 
     it('accepts valid project status', async () => {
       await sequelize.query(
-        `INSERT INTO projects (name, slug, status, created_by, organization_id, created_at, updated_at)
-         VALUES ('Good', 'good-proj', 'archived', 'U_TEST', ${TEST_ORG_ID}, NOW(), NOW())`
+        `INSERT INTO projects (name, slug, public_id, status, created_by, organization_id, created_at, updated_at)
+         VALUES ('Good', 'good-proj', gen_random_uuid(), 'archived', 'U_TEST', ${TEST_ORG_ID}, NOW(), NOW())`
       );
     });
   });

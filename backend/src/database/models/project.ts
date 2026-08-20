@@ -13,6 +13,7 @@ import {
   type HasManyCountAssociationsMixin,
   type Sequelize,
 } from 'sequelize';
+import { randomUUID } from 'crypto';
 import type { ResearchStudy } from './research_study';
 
 /**
@@ -29,6 +30,8 @@ class Project extends Model<
 > {
   // — Attributes —
   declare id: CreationOptional<number>;
+  /** Stable UUID — immutable after creation, used as canonical external identifier */
+  declare public_id: CreationOptional<string>;
   declare name: string;
   declare slug: string;
   declare description: string | null;
@@ -92,6 +95,12 @@ export default (sequelize: Sequelize) => {
         type: DataTypes.INTEGER,
         primaryKey: true,
         autoIncrement: true,
+      },
+      public_id: {
+        type: DataTypes.UUID,
+        allowNull: false,
+        unique: true,
+        defaultValue: () => randomUUID(),
       },
       name: {
         type: DataTypes.STRING(255),

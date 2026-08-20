@@ -23,8 +23,10 @@ const { NODE_ENV, DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT, PORT, DB_DIAL
 
 const { parseTrustedProxy } = require('./middleware/trustedProxy');
 const { createSecurityMiddleware } = require('./middleware/security');
-const { createApiRateLimiter } = require('./middleware/rateLimiter');
+const { createApiRateLimiter, createAuthRateLimiter, createAiRateLimiter } = require('./middleware/rateLimiter');
 const { apiErrorHandler } = require('./middleware/apiErrorHandler');
+const { createSessionMiddleware } = require('./middleware/session');
+const { csrfProtection } = require('./middleware/csrf');
 
 const app = express();
 
@@ -46,9 +48,18 @@ app.use(cors(configs.corsConfig));
 app.use(compression(configs.compressionConfig));
 app.use(cookieParser());
 
+// ─── Session middleware (before API routes) ──
+app.use('/api', createSessionMiddleware());
+
 // ─── Security headers for API routes ──
 app.use('/api', createSecurityMiddleware());
 app.use('/api', createApiRateLimiter());
+
+// ─── Auth endpoint rate limiting ──
+app.use('/api/v1/auth', createAuthRateLimiter());
+
+// ─── CSRF protection for state-changing browser requests ──
+app.use('/api', csrfProtection);
 
 // ─── API routes (v1) ──
 const apiRouterModule = require('./routes/api');

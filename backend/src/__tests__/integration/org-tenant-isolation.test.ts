@@ -299,8 +299,8 @@ describe('Schema Constraints', () => {
   test('projects.organization_id is NOT NULL', async () => {
     await expect(
       sequelize.query(
-        `INSERT INTO projects (name, slug, status, created_by, created_at, updated_at)
-         VALUES ('No Org', 'plat2-test-no-org', 'active', 'U_TEST', NOW(), NOW())`,
+        `INSERT INTO projects (name, slug, public_id, status, created_by, created_at, updated_at)
+         VALUES ('No Org', 'plat2-test-no-org', gen_random_uuid(), 'active', 'U_TEST', NOW(), NOW())`,
       ),
     ).rejects.toThrow();
   });

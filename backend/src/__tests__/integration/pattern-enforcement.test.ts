@@ -168,7 +168,11 @@ describe('pattern: as-any budget enforcement', () => {
     // Budget raised 235 → 265 by PLAT-3 (application services use `as any` for Sequelize model
     // access across test/production sequelize instances, route param casts, OIDC jose dynamic
     // import, and application service Sequelize model lookups on generic sequelize.models).
-    expect(total).toBeLessThanOrEqual(275);
+    // Budget raised 275 → 300 by WS-0 (admin/branding app-services use `as any` for Sequelize
+    // association access, model attribute casts, credential resolver model lookups, session
+    // adapter provider cast, and branding model association registration — same bounded
+    // categories as PLAT-3).
+    expect(total).toBeLessThanOrEqual(300);
   });
 
   it('events.ts has no more than 1 as-any cast (excluding comments)', () => {

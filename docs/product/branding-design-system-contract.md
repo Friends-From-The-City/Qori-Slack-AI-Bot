@@ -63,7 +63,82 @@ Organizations cannot inject arbitrary CSS. All visual customization flows throug
 
 ### No branding admin UI yet
 
-Branding configuration is managed through deployment configuration (environment variables or configuration files), not through a self-service admin interface. A branding admin UI may be introduced in a future phase once the token system is stable and validated.
+Branding configuration is managed through the `/api/v1/branding` API (requires org admin role) and deployment configuration. A visual branding admin UI may be introduced in a future phase once the token system is stable and validated.
+
+---
+
+## Logo Storage Contract (WS-0)
+
+Logo and favicon uploads follow a provider-neutral storage adapter pattern. Binary assets are NOT stored in Postgres.
+
+### Upload Flow
+
+```
+Client
+  │
+  ▼
+POST /api/v1/branding/logo/validate
+  │ (content type, size, filename validation)
+  │
+  ▼
+Upload to storage adapter (future implementation)
+  │
+  ▼
+Storage adapter returns stable asset reference
+  │
+  ▼
+PUT /api/v1/branding { logo_asset_ref: "...", logo_content_type: "...", ... }
+  │ (stores reference in organization_branding table)
+  │
+  ▼
+Workspace shell renders via asset reference
+```
+
+### Validation (implemented in WS-0)
+
+| Check | Rule |
+|-------|------|
+| Content type | Must be `image/png`, `image/jpeg`, `image/svg+xml`, or `image/webp` |
+| File size | Maximum 2MB (2,097,152 bytes) |
+| Filename | No executable extensions (`.exe`, `.bat`, `.js`, `.html`, `.php`, etc.) |
+| Alt text | Required for accessibility (stored alongside reference) |
+
+### Storage Adapter Interface (contract only — implementation is UX-3 scope)
+
+```typescript
+interface AssetStorageAdapter {
+  /** Upload a validated asset, return a stable reference */
+  upload(input: {
+    organizationId: number;
+    contentType: string;
+    sizeBytes: number;
+    data: Buffer | ReadableStream;
+    altText: string;
+  }): Promise<{ assetRef: string; publicUrl: string }>;
+
+  /** Resolve an asset reference to a serveable URL */
+  resolve(assetRef: string): Promise<string | null>;
+
+  /** Delete an asset by reference */
+  delete(assetRef: string): Promise<void>;
+}
+```
+
+### Supported Future Backends
+
+| Backend | Asset Ref Format | Notes |
+|---------|-----------------|-------|
+| S3-compatible | `s3://{bucket}/{key}` | MinIO, AWS S3, agency-hosted |
+| Azure Blob | `azure://{container}/{blob}` | Azure Government compatible |
+| Local filesystem | `file://{path}` | Development only |
+
+### What is NOT stored in Postgres
+
+- Binary image data (logos, favicons)
+- Base64-encoded images
+- Large JSONB blobs containing asset data
+
+The `organization_branding.logo_asset_ref` column stores only the reference string. The storage adapter resolves it to a serveable URL at render time.
 
 ### Theme validation
 
