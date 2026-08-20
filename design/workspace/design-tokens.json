@@ -1,0 +1,86 @@
+{
+  "$schema": "https://design-tokens.github.io/community-group/format/",
+  "meta": {
+    "name": "Qori Workspace tokens",
+    "version": "0.1.0",
+    "themable": "Agencies override brand + semantic aliases at runtime; primitives and layout are fixed. See branding-model.md."
+  },
+  "space": { "1": "4px", "2": "8px", "3": "12px", "4": "16px", "5": "24px", "6": "32px", "7": "48px", "8": "64px" },
+  "type": {
+    "family": {
+      "display": "'Space Grotesk', 'Public Sans', sans-serif",
+      "ui": "'Public Sans', system-ui, sans-serif",
+      "mono": "ui-monospace, 'SF Mono', Menlo, monospace"
+    },
+    "scale": {
+      "h1": { "size": "28px", "line": "34px", "weight": 600, "family": "display" },
+      "h2": { "size": "22px", "line": "28px", "weight": 600, "family": "display" },
+      "h3": { "size": "18px", "line": "24px", "weight": 600, "family": "display" },
+      "h4": { "size": "15px", "line": "20px", "weight": 600, "family": "ui" },
+      "body": { "size": "15px", "line": "22px", "weight": 400, "family": "ui" },
+      "body-strong": { "size": "15px", "line": "22px", "weight": 600, "family": "ui" },
+      "secondary": { "size": "13px", "line": "18px", "weight": 400, "family": "ui" },
+      "caption": { "size": "12px", "line": "16px", "weight": 500, "family": "ui" },
+      "mono": { "size": "13px", "line": "18px", "weight": 400, "family": "mono" }
+    }
+  },
+  "radius": { "sm": "4px", "md": "8px", "lg": "12px", "full": "999px" },
+  "elevation": {
+    "0": "none",
+    "sm": "0 1px 2px rgba(26,25,21,0.06)",
+    "md": "0 4px 16px rgba(26,25,21,0.10)",
+    "lg": "0 8px 32px rgba(26,25,21,0.14)"
+  },
+  "border": { "width": "1px", "width-emphasis": "2px" },
+  "layout": {
+    "content-max": "1440px",
+    "sidenav": "264px",
+    "sidenav-collapsed": "64px",
+    "topbar": "56px",
+    "drawer": "480px",
+    "trace-panel": "384px",
+    "grid-columns": 12,
+    "gutter": "24px",
+    "gutter-narrow": "16px",
+    "page-pad": { "xl": "32px", "md": "24px", "sm": "16px" }
+  },
+  "breakpoints": { "sm": "0", "md": "768px", "lg": "1024px", "xl": "1440px" },
+  "motion": {
+    "fast": "100ms",
+    "base": "180ms",
+    "slow": "240ms",
+    "ease": "cubic-bezier(0.2, 0.8, 0.2, 1)",
+    "reduced": "fade only, max 100ms"
+  },
+  "focus": { "ring": "2px solid {color.focus}", "offset": "2px" },
+  "color": {
+    "primitives-note": "Warm-neutral defaults. Agencies retheme via semantic aliases only.",
+    "paper": "#FAF9F7",
+    "surface": "#FFFFFF",
+    "surface-muted": "#F3F1ED",
+    "surface-hover": "#F6F4F0",
+    "surface-selected": "#FBF4DC",
+    "text": "#1A1915",
+    "text-muted": "#5C594F",
+    "text-on-brand": "#1A1915",
+    "border": "#E5E2DA",
+    "border-emphasis": "#C9C5BA",
+    "brand": "#FFD43B",
+    "brand-ink": "#1A1915",
+    "link": "#3D5A99",
+    "focus": "#3D5A99",
+    "success": "#2E7D4F",
+    "success-surface": "#E8F3EC",
+    "warning": "#9A6A00",
+    "warning-surface": "#FBF1DC",
+    "error": "#B3372B",
+    "error-surface": "#FBE9E6",
+    "info": "#2F6C8F",
+    "info-surface": "#E7F1F6",
+    "stale": "{color.warning}",
+    "ai-suggested-border": "{color.border-emphasis}",
+    "ai-suggested-surface": "{color.surface-muted}"
+  },
+  "agency-themable": ["color.brand", "color.brand-ink", "color.link", "color.focus", "color.surface-selected"],
+  "fixed": ["space", "type.scale", "radius", "layout", "breakpoints", "motion", "focus", "semantic state colors (success/warning/error/info)"]
+}
