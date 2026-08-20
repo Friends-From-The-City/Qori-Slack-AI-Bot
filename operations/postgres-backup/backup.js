@@ -47,6 +47,7 @@ const { execFileSync } = require('child_process');
 const fs = require('fs');
 const { join } = require('path');
 const { tmpdir } = require('os');
+const { URL } = require('url');
 const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
 
 // --- Configuration ---
@@ -110,6 +111,29 @@ function logError(event, error, meta = {}) {
   console.error(JSON.stringify(entry));
 }
 
+// --- Connection string parsing ---
+
+/**
+ * Parses a PostgreSQL connection URI into individual libpq env vars.
+ * This keeps the full connection string out of argv, preventing credential
+ * leakage when Node's execFileSync embeds commands in error messages.
+ */
+function parseDatabaseUrl(databaseUrl) {
+  const parsed = new URL(databaseUrl);
+  const pgEnv = {};
+  if (parsed.hostname) pgEnv.PGHOST = parsed.hostname;
+  if (parsed.port) pgEnv.PGPORT = parsed.port;
+  if (parsed.username) pgEnv.PGUSER = decodeURIComponent(parsed.username);
+  if (parsed.password) pgEnv.PGPASSWORD = decodeURIComponent(parsed.password);
+  // pathname is "/dbname", strip the leading slash
+  const dbName = parsed.pathname.replace(/^\//, '');
+  if (dbName) pgEnv.PGDATABASE = dbName;
+  // Pass through sslmode from query params if present
+  const sslmode = parsed.searchParams.get('sslmode');
+  if (sslmode) pgEnv.PGSSLMODE = sslmode;
+  return pgEnv;
+}
+
 // --- Validation ---
 
 function validateEnv() {
@@ -149,9 +173,10 @@ function checkVersionCompatibility(databaseUrl) {
   }
 
   // Get server version via psql (lightweight, no dump).
-  // Connection string passed via PGDATABASE env var to avoid argv leakage.
+  // Connection parsed into individual libpq env vars to avoid argv leakage.
   let serverMajor;
   try {
+    const pgEnv = { ...process.env, ...parseDatabaseUrl(databaseUrl) };
     const serverVersionStr = execFileSync('psql', [
       '--no-psqlrc',
       '--tuples-only',
@@ -159,7 +184,7 @@ function checkVersionCompatibility(databaseUrl) {
     ], {
       encoding: 'utf8',
       timeout: 15000,
-      env: { ...process.env, PGDATABASE: databaseUrl },
+      env: pgEnv,
       stdio: ['ignore', 'pipe', 'pipe'],
     }).trim();
     serverMajor = parsePgMajorVersion(serverVersionStr);
@@ -185,11 +210,11 @@ function checkVersionCompatibility(databaseUrl) {
 // --- pg_dump ---
 
 function runPgDump(databaseUrl, outputPath) {
-  // Connection string is passed via PGDATABASE env var (libpq standard) so it
-  // never appears in the argv array. If execFileSync throws, Node embeds the
-  // command+args in the error message — keeping the URL out of args prevents
-  // credential leakage in logs.
-  const pgEnv = { ...process.env, PGDATABASE: databaseUrl };
+  // Connection URI is decomposed into individual libpq env vars (PGHOST,
+  // PGPORT, PGUSER, PGPASSWORD, PGDATABASE, PGSSLMODE) so it never appears
+  // in the argv array. If execFileSync throws, Node embeds the command+args
+  // in the error message — keeping credentials out of args prevents leakage.
+  const pgEnv = { ...process.env, ...parseDatabaseUrl(databaseUrl) };
 
   try {
     execFileSync('pg_dump', [
@@ -203,7 +228,7 @@ function runPgDump(databaseUrl, outputPath) {
       env: pgEnv,
     });
   } catch (err) {
-    // Belt-and-suspenders: sanitize in case stderr still contains the URL
+    // Belt-and-suspenders: sanitize in case stderr still contains credentials
     throw new Error(sanitize(err.message));
   }
 }
@@ -393,6 +418,7 @@ async function main() {
 // Export for testing
 module.exports = {
   validateEnv,
+  parseDatabaseUrl,
   parsePgMajorVersion,
   checkVersionCompatibility,
   runPgDump,
