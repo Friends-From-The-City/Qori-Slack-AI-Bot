@@ -391,7 +391,8 @@ describe('PLAT-3 Application API Integration', () => {
 
       const result = await projectAppService.getProject(ctx, 'stable-slug');
 
-      expect(result.public_id).toBe('stable-slug');
+      // public_id is now a UUID (WS-0 migration), slug remains human-readable
+      expect(result.public_id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
       expect(result.slug).toBe('stable-slug');
       // Internal ID should NOT be in the response
       expect((result as any).id).toBeUndefined();

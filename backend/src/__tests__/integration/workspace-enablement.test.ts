@@ -464,11 +464,11 @@ describe('Slack integration preserved', () => {
 
 describe('Accessibility foundation', () => {
   it('exports accessibility contract constants', () => {
-    const a11y = require('../../../accessibility');
-    expect(a11y.ACCESSIBILITY_TARGET).toBe('WCAG 2.2 AA');
-    expect(a11y.SECTION_508_ALIGNMENT).toBe(true);
-    expect(a11y.announcements).toBeTruthy();
-    expect(a11y.keyboardPatterns).toBeTruthy();
+    const { ACCESSIBILITY_TARGET, SECTION_508_ALIGNMENT, announcements, keyboardPatterns } = require('../../../accessibility/index');
+    expect(ACCESSIBILITY_TARGET).toBe('WCAG 2.2 AA');
+    expect(SECTION_508_ALIGNMENT).toBe(true);
+    expect(announcements).toBeTruthy();
+    expect(keyboardPatterns).toBeTruthy();
   });
 });
 
@@ -476,7 +476,7 @@ describe('Accessibility foundation', () => {
 
 describe('Synthetic environment', () => {
   it('exports deterministic fixture constants', () => {
-    const { SYNTHETIC } = require('../../fixtures/synthetic-environment');
+    const { SYNTHETIC } = require('../../../__tests__/fixtures/synthetic-environment');
     expect(SYNTHETIC.org.slug).toBe('demo-agency');
     expect(SYNTHETIC.actors.researcher1.displayName).toBe('Alex Rivera');
     expect(SYNTHETIC.projects.active.slug).toBe('claims-redesign');
