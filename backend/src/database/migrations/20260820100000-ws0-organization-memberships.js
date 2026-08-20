@@ -59,32 +59,23 @@ module.exports = {
 
     // ── Backfill ────────────────────────────────────────────────────
     //
-    // Mapping rule:
-    //   For each organization, find actors that exist in that org.
-    //   The FIRST actor created in each org (lowest actor.id) becomes 'owner'.
-    //   All other actors become 'member'.
+    // BOOTSTRAP RULE:
+    //   All existing actors are backfilled as 'member' ONLY.
+    //   No actor is inferred as owner from creation order, email,
+    //   Slack identity, GitHub identity, project ownership, or first login.
     //
-    // This is deterministic and conservative:
-    //   - Does NOT grant org admin to every project owner
-    //   - Only the earliest actor (likely the person who set up the org) gets owner
-    //   - Everyone else starts as member — admin can be granted manually
+    //   Organization owner must be assigned explicitly via:
+    //   1. The bootstrap CLI command: npm run admin:bootstrap-owner
+    //   2. Direct SQL by the deployment operator
+    //
+    //   Until an owner is assigned, admin API endpoints return 403 for
+    //   all actors. This is intentional — it forces explicit operator
+    //   assignment of the initial org owner.
     //
     await queryInterface.sequelize.query(`
       INSERT INTO organization_memberships (organization_id, actor_id, role)
-      SELECT
-        a.organization_id,
-        a.id,
-        CASE
-          WHEN a.id = first_actor.min_id THEN 'owner'
-          ELSE 'member'
-        END
+      SELECT a.organization_id, a.id, 'member'
       FROM actors a
-      INNER JOIN (
-        SELECT organization_id, MIN(id) as min_id
-        FROM actors
-        WHERE status = 'active'
-        GROUP BY organization_id
-      ) first_actor ON a.organization_id = first_actor.organization_id
       WHERE a.status = 'active'
       ON CONFLICT DO NOTHING
     `);

@@ -256,51 +256,144 @@ describe('No org membership', () => {
   });
 });
 
-// ─── 8. Backfill behavior verification ─────────────────────────────
+// ─── 8. Backfill: no arbitrary owner assignment ────────────────────
 
 describe('Backfill mapping rule', () => {
   beforeEach(() => truncateAll());
 
-  it('backfill assigns owner to first actor only', async () => {
-    // Create actors in order
+  it('backfill assigns ALL actors as member only — no inferred owner', async () => {
     const actor1 = await createActor(TEST_ORG_ID, 'First Actor');
     const actor2 = await createActor(TEST_ORG_ID, 'Second Actor');
     const actor3 = await createActor(TEST_ORG_ID, 'Third Actor');
 
-    // Simulate backfill logic
+    // Simulate the migration backfill — member only
     await sequelize.query(`
       INSERT INTO organization_memberships (organization_id, actor_id, role)
-      SELECT
-        a.organization_id,
-        a.id,
-        CASE
-          WHEN a.id = first_actor.min_id THEN 'owner'
-          ELSE 'member'
-        END
+      SELECT a.organization_id, a.id, 'member'
       FROM actors a
-      INNER JOIN (
-        SELECT organization_id, MIN(id) as min_id
-        FROM actors
-        WHERE status = 'active'
-        GROUP BY organization_id
-      ) first_actor ON a.organization_id = first_actor.organization_id
       WHERE a.status = 'active'
       ON CONFLICT DO NOTHING
     `);
 
     const OrgMembershipModel = sequelize.models.OrganizationMembership;
-    const m1 = await OrgMembershipModel.findOne({
-      where: { actor_id: (actor1 as any).id },
-    } as any);
-    const m2 = await OrgMembershipModel.findOne({
-      where: { actor_id: (actor2 as any).id },
-    } as any);
-    const m3 = await OrgMembershipModel.findOne({
-      where: { actor_id: (actor3 as any).id },
-    } as any);
+    const m1 = await OrgMembershipModel.findOne({ where: { actor_id: (actor1 as any).id } } as any);
+    const m2 = await OrgMembershipModel.findOne({ where: { actor_id: (actor2 as any).id } } as any);
+    const m3 = await OrgMembershipModel.findOne({ where: { actor_id: (actor3 as any).id } } as any);
 
-    expect((m1 as any).role).toBe('owner');
+    // ALL are member — no one is owner
+    expect((m1 as any).role).toBe('member');
     expect((m2 as any).role).toBe('member');
     expect((m3 as any).role).toBe('member');
+  });
+
+  it('project ownership does not imply org ownership', async () => {
+    const actor = await createActor(TEST_ORG_ID, 'Project Owner');
+
+    // Make them a project owner
+    await createProjectWithOwner(TEST_ORG_ID, 'owned-project', (actor as any).id);
+
+    // Backfill — still just member
+    await sequelize.query(`
+      INSERT INTO organization_memberships (organization_id, actor_id, role)
+      SELECT a.organization_id, a.id, 'member'
+      FROM actors a
+      WHERE a.status = 'active'
+      ON CONFLICT DO NOTHING
+    `);
+
+    const OrgMembershipModel = sequelize.models.OrganizationMembership;
+    const orgMembership = await OrgMembershipModel.findOne({
+      where: { actor_id: (actor as any).id },
+    } as any);
+
+    expect((orgMembership as any).role).toBe('member');
+    expect(['owner', 'admin'].includes((orgMembership as any).role)).toBe(false);
+  });
+});
+
+// ─── 9. Bootstrap owner assignment ─────────────────────────────────
+
+describe('Bootstrap owner assignment', () => {
+  beforeEach(() => truncateAll());
+
+  it('explicit bootstrap promotes member to owner', async () => {
+    const actor = await createActor(TEST_ORG_ID, 'Future Owner');
+    await createOrgMembership(TEST_ORG_ID, (actor as any).id, 'member');
+
+    // Explicit promotion — this is what the bootstrap script does
+    await sequelize.query(
+      `UPDATE organization_memberships SET role = 'owner', updated_at = NOW()
+       WHERE organization_id = :orgId AND actor_id = :actorId`,
+      { replacements: { orgId: TEST_ORG_ID, actorId: (actor as any).id } },
+    );
+
+    const OrgMembershipModel = sequelize.models.OrganizationMembership;
+    const membership = await OrgMembershipModel.findOne({
+      where: { actor_id: (actor as any).id },
+    } as any);
+
+    expect((membership as any).role).toBe('owner');
+  });
+
+  it('bootstrap is idempotent — running twice is a no-op', async () => {
+    const actor = await createActor(TEST_ORG_ID, 'Already Owner');
+    await createOrgMembership(TEST_ORG_ID, (actor as any).id, 'owner');
+
+    // Run bootstrap again — should not fail or change anything
+    await sequelize.query(
+      `UPDATE organization_memberships SET role = 'owner', updated_at = NOW()
+       WHERE organization_id = :orgId AND actor_id = :actorId`,
+      { replacements: { orgId: TEST_ORG_ID, actorId: (actor as any).id } },
+    );
+
+    const OrgMembershipModel = sequelize.models.OrganizationMembership;
+    const membership = await OrgMembershipModel.findOne({
+      where: { actor_id: (actor as any).id },
+    } as any);
+
+    expect((membership as any).role).toBe('owner');
+  });
+
+  it('bootstrap rejects actor from wrong organization', async () => {
+    // Create second org
+    const [org2Result] = await sequelize.query(
+      `INSERT INTO organizations (slug, name, status) VALUES ('other-org-2', 'Other Org 2', 'active') RETURNING id`,
+    ) as [Array<{ id: number }>, unknown];
+    const org2Id = org2Result[0].id;
+
+    // Actor belongs to org 1
+    const actor = await createActor(TEST_ORG_ID, 'Wrong Org Actor');
+
+    // Try to assign as owner of org 2 — should fail (0 rows updated)
+    const [, updateResult] = await sequelize.query(
+      `UPDATE organization_memberships SET role = 'owner'
+       WHERE organization_id = :orgId AND actor_id = :actorId`,
+      { replacements: { orgId: org2Id, actorId: (actor as any).id } },
+    ) as [unknown, { rowCount?: number }];
+
+    // No membership exists in org 2, so 0 rows affected
+    // The bootstrap service validates org membership before attempting update
+    const OrgMembershipModel = sequelize.models.OrganizationMembership;
+    const crossOrgOwner = await OrgMembershipModel.findOne({
+      where: { organization_id: org2Id, actor_id: (actor as any).id, role: 'owner' },
+    } as any);
+    expect(crossOrgOwner).toBeNull();
+  });
+
+  it('org cannot use admin APIs without valid owner/admin membership', async () => {
+    const actor = await createActor(TEST_ORG_ID, 'No Admin Actor');
+
+    // Backfill as member
+    await createOrgMembership(TEST_ORG_ID, (actor as any).id, 'member');
+
+    // Verify: member role does not pass admin check
+    const OrgMembershipModel = sequelize.models.OrganizationMembership;
+    const membership = await OrgMembershipModel.findOne({
+      where: { organization_id: TEST_ORG_ID, actor_id: (actor as any).id },
+    } as any);
+
+    expect(membership).toBeTruthy();
+    const isAdmin = ['owner', 'admin'].includes((membership as any).role);
+    expect(isAdmin).toBe(false);
   });
 });

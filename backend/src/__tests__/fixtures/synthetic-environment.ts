@@ -236,14 +236,24 @@ export async function seedSyntheticEnvironment(sequelize: Sequelize): Promise<Se
       }
     }
 
-    // 5. Organization memberships (Sam Taylor = owner, others = member)
+    // 5. Organization memberships
+    //    All actors start as 'member' (migration backfill rule).
+    //    Sam Taylor is then explicitly promoted to 'owner' (bootstrap rule).
     for (const actorResult of result.actors) {
-      const role = actorResult.display_name === 'Sam Taylor' ? 'owner' : 'member';
       await sequelize.query(
         `INSERT INTO organization_memberships (organization_id, actor_id, role)
-         VALUES (:orgId, :actorId, :role)
+         VALUES (:orgId, :actorId, 'member')
          ON CONFLICT (organization_id, actor_id) DO NOTHING`,
-        { replacements: { orgId, actorId: actorResult.id, role }, transaction: t },
+        { replacements: { orgId, actorId: actorResult.id }, transaction: t },
+      );
+    }
+    // Explicit bootstrap: promote Sam Taylor to owner
+    const adminActor = result.actors.find(a => a.display_name === 'Sam Taylor');
+    if (adminActor) {
+      await sequelize.query(
+        `UPDATE organization_memberships SET role = 'owner', updated_at = NOW()
+         WHERE organization_id = :orgId AND actor_id = :actorId`,
+        { replacements: { orgId, actorId: adminActor.id }, transaction: t },
       );
     }
 
