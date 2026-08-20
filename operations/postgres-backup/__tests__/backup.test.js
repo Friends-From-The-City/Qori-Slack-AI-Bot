@@ -18,6 +18,12 @@ jest.mock('child_process', () => ({
 
 const backup = require('../backup');
 
+// --- Fake credentials used across secret-leak tests ---
+const FAKE_DATABASE_URL = 'postgresql://admin:SuperSecret123@prod-db.example.com:5432/qori_prod?sslmode=require';
+const FAKE_S3_ACCESS_KEY = 'AKIAIOSFODNN7EXAMPLE';
+const FAKE_S3_SECRET_KEY = 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY';
+const FAKE_PASSWORD = 'SuperSecret123';
+
 describe('validateEnv', () => {
   const originalEnv = process.env;
 
@@ -65,31 +71,216 @@ describe('buildObjectKey', () => {
   });
 });
 
+describe('parsePgMajorVersion', () => {
+  test('parses "pg_dump (PostgreSQL) 18.4"', () => {
+    expect(backup.parsePgMajorVersion('pg_dump (PostgreSQL) 18.4')).toBe(18);
+  });
+
+  test('parses "pg_dump (PostgreSQL) 15.19"', () => {
+    expect(backup.parsePgMajorVersion('pg_dump (PostgreSQL) 15.19')).toBe(15);
+  });
+
+  test('parses bare version "18.6"', () => {
+    expect(backup.parsePgMajorVersion(' 18.6')).toBe(18);
+  });
+
+  test('returns null for unparseable input', () => {
+    expect(backup.parsePgMajorVersion('no version here')).toBeNull();
+  });
+});
+
+describe('sanitize', () => {
+  test('redacts postgresql:// connection strings', () => {
+    const input = 'Command failed: pg_dump --dbname postgresql://user:pass@host:5432/db';
+    const result = backup.sanitize(input);
+    expect(result).not.toContain('postgresql://');
+    expect(result).not.toContain('pass');
+    expect(result).toContain('[REDACTED]');
+  });
+
+  test('redacts postgres:// connection strings', () => {
+    const input = 'Error connecting to postgres://admin:secret@db.example.com/mydb';
+    const result = backup.sanitize(input);
+    expect(result).not.toContain('postgres://');
+    expect(result).not.toContain('secret');
+  });
+
+  test('redacts password= parameters', () => {
+    const input = 'connection string: host=db password=MySecret123 dbname=qori';
+    const result = backup.sanitize(input);
+    expect(result).not.toContain('MySecret123');
+  });
+
+  test('redacts AWS-style access keys', () => {
+    const result = backup.sanitize(`key is ${FAKE_S3_ACCESS_KEY}`);
+    expect(result).not.toContain(FAKE_S3_ACCESS_KEY);
+  });
+
+  test('redacts Bearer tokens', () => {
+    const input = 'Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.test.payload';
+    const result = backup.sanitize(input);
+    expect(result).not.toContain('eyJhbGciOiJIUzI1NiJ9');
+  });
+
+  test('returns non-string values unchanged', () => {
+    expect(backup.sanitize(42)).toBe(42);
+    expect(backup.sanitize(null)).toBeNull();
+    expect(backup.sanitize(undefined)).toBeUndefined();
+  });
+});
+
+describe('parseDatabaseUrl', () => {
+  test('parses full PostgreSQL URI into libpq env vars', () => {
+    const result = backup.parseDatabaseUrl(FAKE_DATABASE_URL);
+    expect(result.PGHOST).toBe('prod-db.example.com');
+    expect(result.PGPORT).toBe('5432');
+    expect(result.PGUSER).toBe('admin');
+    expect(result.PGPASSWORD).toBe(FAKE_PASSWORD);
+    expect(result.PGDATABASE).toBe('qori_prod');
+    expect(result.PGSSLMODE).toBe('require');
+  });
+
+  test('handles URI without port', () => {
+    const result = backup.parseDatabaseUrl('postgresql://user:pass@host/mydb');
+    expect(result.PGHOST).toBe('host');
+    expect(result.PGPORT).toBeUndefined();
+    expect(result.PGUSER).toBe('user');
+    expect(result.PGPASSWORD).toBe('pass');
+    expect(result.PGDATABASE).toBe('mydb');
+  });
+
+  test('handles URL-encoded special characters in password', () => {
+    const result = backup.parseDatabaseUrl('postgresql://user:p%40ss%23word@host/db');
+    expect(result.PGPASSWORD).toBe('p@ss#word');
+  });
+
+  test('result never contains the full connection URI', () => {
+    const result = backup.parseDatabaseUrl(FAKE_DATABASE_URL);
+    const allValues = Object.values(result).join(' ');
+    expect(allValues).not.toContain('postgresql://');
+    expect(allValues).not.toContain('postgres://');
+  });
+});
+
+describe('checkVersionCompatibility', () => {
+  beforeEach(() => {
+    execFileSync.mockReset();
+  });
+
+  test('server 18 / client 18 → permitted', () => {
+    // First call: pg_dump --version
+    execFileSync.mockReturnValueOnce('pg_dump (PostgreSQL) 18.4');
+    // Second call: psql SHOW server_version
+    execFileSync.mockReturnValueOnce(' 18.6');
+
+    const result = backup.checkVersionCompatibility(FAKE_DATABASE_URL);
+    expect(result.compatible).toBe(true);
+    expect(result.clientMajor).toBe(18);
+    expect(result.serverMajor).toBe(18);
+  });
+
+  test('server 18 / client 15 → blocked before dump', () => {
+    execFileSync.mockReturnValueOnce('pg_dump (PostgreSQL) 15.19');
+    execFileSync.mockReturnValueOnce(' 18.6');
+
+    expect(() => backup.checkVersionCompatibility(FAKE_DATABASE_URL))
+      .toThrow('pg_dump client major 15 is older than PostgreSQL server major 18');
+  });
+
+  test('server 18 / client 19 → permitted (newer client ok)', () => {
+    execFileSync.mockReturnValueOnce('pg_dump (PostgreSQL) 19.0');
+    execFileSync.mockReturnValueOnce(' 18.6');
+
+    const result = backup.checkVersionCompatibility(FAKE_DATABASE_URL);
+    expect(result.compatible).toBe(true);
+  });
+
+  test('psql unavailable → proceeds with client-only check', () => {
+    execFileSync.mockReturnValueOnce('pg_dump (PostgreSQL) 18.4');
+    execFileSync.mockImplementationOnce(() => { throw new Error('psql not found'); });
+
+    const result = backup.checkVersionCompatibility(FAKE_DATABASE_URL);
+    expect(result.compatible).toBe(true);
+    expect(result.clientMajor).toBe(18);
+    expect(result.serverMajor).toBeNull();
+  });
+
+  test('version check does not leak DATABASE_URL in psql args', () => {
+    execFileSync.mockReturnValueOnce('pg_dump (PostgreSQL) 18.4');
+    execFileSync.mockReturnValueOnce(' 18.6');
+
+    backup.checkVersionCompatibility(FAKE_DATABASE_URL);
+
+    // psql call is the second invocation
+    const psqlCall = execFileSync.mock.calls[1];
+    const psqlArgs = psqlCall[1];
+    // DATABASE_URL must NOT appear in argv
+    for (const arg of psqlArgs) {
+      expect(arg).not.toContain('postgresql://');
+      expect(arg).not.toContain(FAKE_PASSWORD);
+    }
+    // Individual libpq env vars should be set instead
+    const psqlOpts = psqlCall[2];
+    expect(psqlOpts.env.PGHOST).toBe('prod-db.example.com');
+    expect(psqlOpts.env.PGPASSWORD).toBe(FAKE_PASSWORD);
+    expect(psqlOpts.env.PGDATABASE).toBe('qori_prod');
+  });
+});
+
 describe('runPgDump', () => {
   beforeEach(() => {
     execFileSync.mockReset();
   });
 
+  test('calls pg_dump without DATABASE_URL in args', () => {
+    execFileSync.mockReturnValue(Buffer.from(''));
+    backup.runPgDump(FAKE_DATABASE_URL, '/tmp/test.dump');
+
+    const call = execFileSync.mock.calls[0];
+    const args = call[1];
+    // Connection string must NOT be in the argument array
+    for (const arg of args) {
+      expect(arg).not.toContain('postgresql://');
+      expect(arg).not.toContain(FAKE_PASSWORD);
+    }
+    // Individual libpq env vars must be set instead
+    expect(call[2].env.PGHOST).toBe('prod-db.example.com');
+    expect(call[2].env.PGPASSWORD).toBe(FAKE_PASSWORD);
+    expect(call[2].env.PGDATABASE).toBe('qori_prod');
+  });
+
   test('calls pg_dump with correct flags', () => {
     execFileSync.mockReturnValue(Buffer.from(''));
-    backup.runPgDump('postgresql://user:pass@host/db', '/tmp/test.dump');
+    backup.runPgDump(FAKE_DATABASE_URL, '/tmp/test.dump');
 
     expect(execFileSync).toHaveBeenCalledWith('pg_dump', [
       '--format=custom',
       '--no-owner',
       '--no-privileges',
-      '--dbname', 'postgresql://user:pass@host/db',
       '--file', '/tmp/test.dump',
     ], expect.objectContaining({
       timeout: 600000,
     }));
   });
 
-  test('throws on pg_dump failure', () => {
+  test('throws sanitized error on pg_dump failure', () => {
     execFileSync.mockImplementation(() => {
-      throw new Error('pg_dump failed');
+      throw new Error(
+        `Command failed: pg_dump --format=custom --file /tmp/test.dump\n` +
+        `pg_dump: error: connection to server at "prod-db.example.com" failed: ` +
+        `postgresql://admin:SuperSecret123@prod-db.example.com:5432/qori_prod`
+      );
     });
-    expect(() => backup.runPgDump('postgresql://...', '/tmp/test.dump')).toThrow('pg_dump failed');
+
+    expect(() => backup.runPgDump(FAKE_DATABASE_URL, '/tmp/test.dump')).toThrow();
+
+    try {
+      backup.runPgDump(FAKE_DATABASE_URL, '/tmp/test.dump');
+    } catch (err) {
+      expect(err.message).not.toContain('SuperSecret123');
+      expect(err.message).not.toContain('postgresql://admin');
+      expect(err.message).toContain('[REDACTED]');
+    }
   });
 });
 
@@ -225,6 +416,165 @@ describe('cleanup', () => {
 
   test('handles null path gracefully', () => {
     expect(() => backup.cleanup(null)).not.toThrow();
+  });
+});
+
+// ============================================================
+// SECRET-LEAK REGRESSION TESTS
+// ============================================================
+
+describe('secret-leak regression', () => {
+  const originalEnv = process.env;
+
+  beforeEach(() => {
+    process.env = {
+      ...originalEnv,
+      DATABASE_URL: FAKE_DATABASE_URL,
+      BACKUP_S3_ACCESS_KEY_ID: FAKE_S3_ACCESS_KEY,
+      BACKUP_S3_SECRET_ACCESS_KEY: FAKE_S3_SECRET_KEY,
+      BACKUP_S3_BUCKET: 'test-bucket',
+      BACKUP_S3_REGION: 'us-east-1',
+      BACKUP_S3_ENDPOINT: 'https://s3.example.com',
+    };
+  });
+
+  afterEach(() => {
+    process.env = originalEnv;
+  });
+
+  test('DATABASE_URL does not appear in success log output', () => {
+    const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+    try {
+      backup.log('backup_completed', { object_key: 'test/key.dump', dump_size_bytes: 1024 });
+
+      const allOutput = consoleSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+      expect(allOutput).not.toContain(FAKE_DATABASE_URL);
+      expect(allOutput).not.toContain('postgresql://');
+      expect(allOutput).not.toContain(FAKE_PASSWORD);
+    } finally {
+      consoleSpy.mockRestore();
+    }
+  });
+
+  test('DATABASE_URL does not appear in command failure logs', () => {
+    const consoleErrSpy = jest.spyOn(console, 'error').mockImplementation();
+    try {
+      // Simulate the exact failure scenario: pg_dump error containing DATABASE_URL
+      const fakeError = new Error(
+        `Command failed: pg_dump --dbname ${FAKE_DATABASE_URL}\n` +
+        `pg_dump: error: server version 18.6; pg_dump version 15.19`
+      );
+
+      backup.logError('backup_failed', fakeError);
+
+      const allOutput = consoleErrSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+      expect(allOutput).not.toContain(FAKE_DATABASE_URL);
+      expect(allOutput).not.toContain('postgresql://admin');
+      expect(allOutput).not.toContain(FAKE_PASSWORD);
+    } finally {
+      consoleErrSpy.mockRestore();
+    }
+  });
+
+  test('database password does not appear in sanitized error messages', () => {
+    const consoleErrSpy = jest.spyOn(console, 'error').mockImplementation();
+    try {
+      const fakeError = new Error(
+        `connection to server failed: password=SuperSecret123 host=prod-db.example.com`
+      );
+
+      backup.logError('backup_failed', fakeError);
+
+      const allOutput = consoleErrSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+      expect(allOutput).not.toContain('SuperSecret123');
+    } finally {
+      consoleErrSpy.mockRestore();
+    }
+  });
+
+  test('pg_dump stderr cannot echo connection credentials into structured logs', () => {
+    const consoleErrSpy = jest.spyOn(console, 'error').mockImplementation();
+    try {
+      // Simulate stderr that contains the full connection string
+      const stderrError = new Error(
+        `pg_dump: error: connection to server at "prod-db.example.com" (1.2.3.4), port 5432 failed: ` +
+        `postgresql://admin:SuperSecret123@prod-db.example.com:5432/qori_prod?sslmode=require`
+      );
+
+      backup.logError('backup_failed', stderrError);
+
+      const allOutput = consoleErrSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+      expect(allOutput).not.toContain('SuperSecret123');
+      expect(allOutput).not.toContain('postgresql://admin');
+
+      // Verify the structured log is valid JSON and has sanitized content
+      const parsed = JSON.parse(consoleErrSpy.mock.calls[0][0]);
+      expect(parsed.error_message).not.toContain('SuperSecret123');
+      expect(parsed.error_message).toContain('[REDACTED]');
+      expect(parsed.error_class).toBe('Error');
+    } finally {
+      consoleErrSpy.mockRestore();
+    }
+  });
+
+  test('S3 credentials remain absent from log output', () => {
+    const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+    const consoleErrSpy = jest.spyOn(console, 'error').mockImplementation();
+    try {
+      backup.log('backup_started');
+      backup.log('upload_completed', { object_key: 'test.dump', dump_size_bytes: 100 });
+      backup.logError('upload_failed', new Error('S3 timeout'));
+
+      const allOutput = [
+        ...consoleSpy.mock.calls,
+        ...consoleErrSpy.mock.calls,
+      ].map((c) => c.join(' ')).join('\n');
+
+      expect(allOutput).not.toContain(FAKE_S3_ACCESS_KEY);
+      expect(allOutput).not.toContain(FAKE_S3_SECRET_KEY);
+    } finally {
+      consoleSpy.mockRestore();
+      consoleErrSpy.mockRestore();
+    }
+  });
+
+  test('version mismatch produces sanitized error without credentials', () => {
+    execFileSync.mockReset();
+    execFileSync.mockReturnValueOnce('pg_dump (PostgreSQL) 15.19');
+    execFileSync.mockReturnValueOnce(' 18.6');
+
+    const consoleErrSpy = jest.spyOn(console, 'error').mockImplementation();
+    try {
+      try {
+        backup.checkVersionCompatibility(FAKE_DATABASE_URL);
+      } catch (err) {
+        backup.logError('backup_failed', err);
+      }
+
+      const allOutput = consoleErrSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+      expect(allOutput).not.toContain(FAKE_DATABASE_URL);
+      expect(allOutput).not.toContain(FAKE_PASSWORD);
+
+      // Should contain the sanitized version mismatch message
+      const parsed = JSON.parse(consoleErrSpy.mock.calls[0][0]);
+      expect(parsed.error_message).toContain('client major 15');
+      expect(parsed.error_message).toContain('server major 18');
+    } finally {
+      consoleErrSpy.mockRestore();
+    }
+  });
+
+  test('runPgDump does not pass DATABASE_URL as a command argument', () => {
+    execFileSync.mockReset();
+    execFileSync.mockReturnValue(Buffer.from(''));
+
+    backup.runPgDump(FAKE_DATABASE_URL, '/tmp/test.dump');
+
+    const call = execFileSync.mock.calls[0];
+    const allArgs = call[1].join(' ');
+    expect(allArgs).not.toContain(FAKE_DATABASE_URL);
+    expect(allArgs).not.toContain('postgresql://');
+    expect(allArgs).not.toContain(FAKE_PASSWORD);
   });
 });
 

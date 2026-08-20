@@ -47,6 +47,7 @@ const { execFileSync } = require('child_process');
 const fs = require('fs');
 const { join } = require('path');
 const { tmpdir } = require('os');
+const { URL } = require('url');
 const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
 
 // --- Configuration ---
@@ -61,6 +62,30 @@ const REQUIRED_ENV = [
 ];
 
 const ENVIRONMENT = process.env.BACKUP_ENVIRONMENT || 'production';
+
+// --- Credential patterns (used for sanitization) ---
+
+const CREDENTIAL_PATTERNS = [
+  // Connection strings: postgresql://..., postgres://...
+  /postgres(?:ql)?:\/\/[^\s'"]+/gi,
+  // Generic password= in query strings or configs
+  /password=[^\s&'"]+/gi,
+  // Bearer / Basic auth headers
+  /(?:Bearer|Basic)\s+[A-Za-z0-9+/=._~-]+/gi,
+  // AWS-style keys (AKIA...)
+  /AKIA[A-Z0-9]{16}/g,
+  // Long base64-ish secrets (40+ chars, likely tokens)
+  /(?:secret|token|key|authorization)[=:\s]["']?[A-Za-z0-9+/=._~-]{20,}["']?/gi,
+];
+
+function sanitize(text) {
+  if (typeof text !== 'string') return text;
+  let sanitized = text;
+  for (const pattern of CREDENTIAL_PATTERNS) {
+    sanitized = sanitized.replace(pattern, '[REDACTED]');
+  }
+  return sanitized;
+}
 
 // --- Logging ---
 
@@ -80,10 +105,33 @@ function logError(event, error, meta = {}) {
     event,
     environment: ENVIRONMENT,
     error_class: error.constructor.name,
-    error_message: error.message,
+    error_message: sanitize(error.message),
     ...meta,
   };
   console.error(JSON.stringify(entry));
+}
+
+// --- Connection string parsing ---
+
+/**
+ * Parses a PostgreSQL connection URI into individual libpq env vars.
+ * This keeps the full connection string out of argv, preventing credential
+ * leakage when Node's execFileSync embeds commands in error messages.
+ */
+function parseDatabaseUrl(databaseUrl) {
+  const parsed = new URL(databaseUrl);
+  const pgEnv = {};
+  if (parsed.hostname) pgEnv.PGHOST = parsed.hostname;
+  if (parsed.port) pgEnv.PGPORT = parsed.port;
+  if (parsed.username) pgEnv.PGUSER = decodeURIComponent(parsed.username);
+  if (parsed.password) pgEnv.PGPASSWORD = decodeURIComponent(parsed.password);
+  // pathname is "/dbname", strip the leading slash
+  const dbName = parsed.pathname.replace(/^\//, '');
+  if (dbName) pgEnv.PGDATABASE = dbName;
+  // Pass through sslmode from query params if present
+  const sslmode = parsed.searchParams.get('sslmode');
+  if (sslmode) pgEnv.PGSSLMODE = sslmode;
+  return pgEnv;
 }
 
 // --- Validation ---
@@ -95,20 +143,94 @@ function validateEnv() {
   }
 }
 
+// --- Version preflight ---
+
+/**
+ * Extracts the major version number from a pg_dump/pg_restore --version string.
+ * Example: "pg_dump (PostgreSQL) 18.4" → 18
+ */
+function parsePgMajorVersion(versionString) {
+  const match = versionString.match(/(\d+)(?:\.\d+)?/);
+  return match ? parseInt(match[1], 10) : null;
+}
+
+/**
+ * Checks that pg_dump client major version is >= server major version.
+ * A client older than the server will produce incompatible dumps.
+ * Pass databaseUrl to query the server version via pg_dump's --version output
+ * against the server version obtained from a lightweight psql check.
+ */
+function checkVersionCompatibility(databaseUrl) {
+  // Get client version
+  const clientVersionStr = execFileSync('pg_dump', ['--version'], {
+    encoding: 'utf8',
+    timeout: 10000,
+  }).trim();
+  const clientMajor = parsePgMajorVersion(clientVersionStr);
+
+  if (clientMajor === null) {
+    throw new Error('Could not determine pg_dump client version');
+  }
+
+  // Get server version via psql (lightweight, no dump).
+  // Connection parsed into individual libpq env vars to avoid argv leakage.
+  let serverMajor;
+  try {
+    const pgEnv = { ...process.env, ...parseDatabaseUrl(databaseUrl) };
+    const serverVersionStr = execFileSync('psql', [
+      '--no-psqlrc',
+      '--tuples-only',
+      '--command', 'SHOW server_version;',
+    ], {
+      encoding: 'utf8',
+      timeout: 15000,
+      env: pgEnv,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    }).trim();
+    serverMajor = parsePgMajorVersion(serverVersionStr);
+  } catch {
+    // If psql is unavailable, skip server check — pg_dump will fail
+    // on its own if versions are incompatible
+    log('version_check_warning', {
+      message: 'Could not query server version; proceeding with client-only check',
+      client_major: clientMajor,
+    });
+    return { clientMajor, serverMajor: null, compatible: true };
+  }
+
+  if (serverMajor !== null && clientMajor < serverMajor) {
+    throw new Error(
+      `pg_dump client major ${clientMajor} is older than PostgreSQL server major ${serverMajor}`
+    );
+  }
+
+  return { clientMajor, serverMajor, compatible: true };
+}
+
 // --- pg_dump ---
 
 function runPgDump(databaseUrl, outputPath) {
-  // pg_dump via DATABASE_URL, custom format, no-owner, no-privileges
-  execFileSync('pg_dump', [
-    '--format=custom',
-    '--no-owner',
-    '--no-privileges',
-    '--dbname', databaseUrl,
-    '--file', outputPath,
-  ], {
-    stdio: ['ignore', 'pipe', 'pipe'],
-    timeout: 600000, // 10 minutes
-  });
+  // Connection URI is decomposed into individual libpq env vars (PGHOST,
+  // PGPORT, PGUSER, PGPASSWORD, PGDATABASE, PGSSLMODE) so it never appears
+  // in the argv array. If execFileSync throws, Node embeds the command+args
+  // in the error message — keeping credentials out of args prevents leakage.
+  const pgEnv = { ...process.env, ...parseDatabaseUrl(databaseUrl) };
+
+  try {
+    execFileSync('pg_dump', [
+      '--format=custom',
+      '--no-owner',
+      '--no-privileges',
+      '--file', outputPath,
+    ], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      timeout: 600000, // 10 minutes
+      env: pgEnv,
+    });
+  } catch (err) {
+    // Belt-and-suspenders: sanitize in case stderr still contains credentials
+    throw new Error(sanitize(err.message));
+  }
 }
 
 function verifyDump(dumpPath) {
@@ -237,19 +359,26 @@ async function main() {
     const tempDir = fs.mkdtempSync(join(tmpdir(), 'qori-backup-'));
     dumpPath = join(tempDir, 'backup.dump');
 
+    // 3. Version preflight
+    const versionInfo = checkVersionCompatibility(process.env.DATABASE_URL);
+    log('version_check_passed', {
+      client_major: versionInfo.clientMajor,
+      server_major: versionInfo.serverMajor,
+    });
+
     log('backup_started');
 
-    // 3. Run pg_dump
+    // 4. Run pg_dump
     const dumpStart = Date.now();
     runPgDump(process.env.DATABASE_URL, dumpPath);
     const dumpDuration = Date.now() - dumpStart;
     log('dump_completed', { duration_ms: dumpDuration });
 
-    // 4. Verify dump
+    // 5. Verify dump
     const dumpSize = verifyDump(dumpPath);
     log('dump_verified', { dump_size_bytes: dumpSize });
 
-    // 5. Upload to S3
+    // 6. Upload to S3
     const s3Client = createS3Client();
     const bucket = process.env.BACKUP_S3_BUCKET;
     const objectKey = buildObjectKey(timestamp);
@@ -263,11 +392,11 @@ async function main() {
       duration_ms: uploadDuration,
     });
 
-    // 6. Upload metadata sidecar
+    // 7. Upload metadata sidecar
     const metadataKey = await uploadMetadata(s3Client, bucket, objectKey, timestamp, dumpSize);
     log('metadata_uploaded', { metadata_key: metadataKey });
 
-    // 7. Cleanup local dump
+    // 8. Cleanup local dump
     cleanup(dumpPath);
     dumpPath = null;
 
@@ -289,6 +418,9 @@ async function main() {
 // Export for testing
 module.exports = {
   validateEnv,
+  parseDatabaseUrl,
+  parsePgMajorVersion,
+  checkVersionCompatibility,
   runPgDump,
   verifyDump,
   buildObjectKey,
@@ -296,10 +428,12 @@ module.exports = {
   uploadMetadata,
   cleanup,
   createS3Client,
+  sanitize,
   log,
   logError,
   main,
   REQUIRED_ENV,
+  CREDENTIAL_PATTERNS,
 };
 
 // Run if invoked directly
