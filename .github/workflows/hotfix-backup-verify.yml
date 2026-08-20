@@ -1,0 +1,71 @@
+name: Hotfix – Backup Dockerfile Verification
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'operations/postgres-backup/**'
+  push:
+    branches: [hotfix/prod-backup-pg18]
+
+jobs:
+  # ── Job 1: Build the Dockerfile and verify PG18 client tools ──
+  docker-build-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build backup Docker image
+        run: |
+          docker build \
+            -t qori-backup:hotfix-verify \
+            operations/postgres-backup/
+
+      - name: Verify pg_dump version (must be 18.x)
+        run: |
+          PG_DUMP_VERSION=$(docker run --rm qori-backup:hotfix-verify pg_dump --version)
+          echo "pg_dump version: $PG_DUMP_VERSION"
+          echo "$PG_DUMP_VERSION" | grep -qE 'PostgreSQL\) 18\.' || {
+            echo "::error::pg_dump is NOT PostgreSQL 18.x: $PG_DUMP_VERSION"
+            exit 1
+          }
+          echo "pg_dump_version=$PG_DUMP_VERSION" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Verify pg_restore version (must be 18.x)
+        run: |
+          PG_RESTORE_VERSION=$(docker run --rm qori-backup:hotfix-verify pg_restore --version)
+          echo "pg_restore version: $PG_RESTORE_VERSION"
+          echo "$PG_RESTORE_VERSION" | grep -qE 'PostgreSQL\) 18\.' || {
+            echo "::error::pg_restore is NOT PostgreSQL 18.x: $PG_RESTORE_VERSION"
+            exit 1
+          }
+          echo "pg_restore_version=$PG_RESTORE_VERSION" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Summary
+        run: |
+          echo "## Backup Dockerfile Verification" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          docker run --rm qori-backup:hotfix-verify pg_dump --version >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          docker run --rm qori-backup:hotfix-verify pg_restore --version >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "✅ Both tools are PostgreSQL 18.x" >> "$GITHUB_STEP_SUMMARY"
+
+  # ── Job 2: Run the backup unit test suite ──
+  backup-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        working-directory: operations/postgres-backup
+        run: npm ci
+
+      - name: Run backup tests
+        working-directory: operations/postgres-backup
+        run: npx jest --verbose
