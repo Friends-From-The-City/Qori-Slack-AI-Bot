@@ -38,3 +38,7 @@ Document is semantic HTML; citations are links with accessible names ("Citation 
 ## Unresolved
 - Inline tracked edits v1 vs regenerate-only
 - Multiple reviewers / approval quorum per org config?
+
+
+## UX-2 reconciliation addendum
+Workspace is the primary reading surface — never force GitHub to read outputs. Margin custody band per section (which canonical evidence it reflects; CA-002 caveat rendered once, quietly). Workflow chip + publication chip separate fields. Actions: review, approve, publish, retry (idempotent), open in GitHub, publication history. "Approved + projection failed" reads as approved with failed external projection. Class: artifact viewer.

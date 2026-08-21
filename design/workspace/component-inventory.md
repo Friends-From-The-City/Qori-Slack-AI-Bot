@@ -1,5 +1,11 @@
 # Component Inventory
 
+**Scale discipline (fixed, product-wide):** all component padding/margin/gap values come from the space scale (4/8/12/16/24/32/48/64); panels use layout tokens (trace-panel 384, drawer 480); no off-scale values in any component or screen.
+
+**List-row leading rule (fixed):** every two-line row (title + meta) sets title line-height 1.5 and meta line-height 1.6 with ≥4px separation — applies to WorkQueueItem, StudyCard, EvidenceItem, SearchResults, and any DataTable stacked-card render.
+
+**Icon spacing rule (fixed):** icon-to-label gap is always `space.2` (8px) via flex `gap`, never a text space; icons sit in a fixed 16px box so labels align vertically down a list. Lucide in implementation (specimens use placeholder glyphs).
+
 Format per component: **Purpose · Anatomy · Variants · States · Interaction/Keyboard · Responsive · A11y · Data contract**. Universal states (hover/focus/loading/disabled/etc.) follow `states-and-feedback.md`; only component-specific states are listed.
 
 ---
@@ -157,6 +163,48 @@ Per `states-and-feedback.md`. Skeleton variants: card, row, text-block, document
 - **Anatomy**: section header · field groups (label-above, 720px max) · save bar (sticky, dirty-state aware) · per-field help.
 - **A11y**: USWDS form behaviors; error summary focus; no raw credentials shown (masked, "Rotate" actions only).
 - **Data**: config schema per section, permissions, validation.
+
+## LifecycleRail (UX-2)
+- **Purpose**: Study navigation = the lifecycle + custody spine. Computes next action.
+- **Anatomy**: node per stage (label + mono counts + review badge) · current marker (brand square) · dependency-state rendering per node (locked 🔒+unlock text / readiness ⚠ / suggested → / free) · next-action slot under current node.
+- **Variants**: full rail (desktop), stage strip (tablet), sheet (mobile).
+- **Keyboard**: vertical arrow nav; locked nodes focusable, announce unlock condition.
+- **A11y**: `nav` "Study lifecycle"; node names include state + counts ("Analysis, current, 2 items need review").
+- **Data**: stages[], dependency states, counts, computed next action.
+
+## CitationChip / PeekCard / TrailDrawer (UX-2, Phase 4B)
+- **CitationChip**: mono ID + 2px custody underline; clusters collapse to +N (expand on focus/click). Enter = peek, Shift-Enter = trail. SR: "supported by N evidence items…".
+- **PeekCard**: quote · participant/source line · state chip · open-trail/open-entity actions. Also triggered by peekable counts (dotted underline) — lists the counted items with an "open" action. Non-modal popover, blur dismiss, no scroll shift.
+- **TrailDrawer**: pinned origin card ("← back to …", Esc returns) · hop cards on 3px yellow spine (statement + chips + counts) · seam rows (✂ + reason) · downstream tab (grey BECAME list) · "view full ledger".
+- **Data**: hop chain w/ states+counts, seams, origin ref.
+
+## CustodyBand (UX-2)
+- **Purpose**: BUILT FROM · VIA · IF ACCEPTED FEEDS strip on any construct; margin variant per readout section.
+- **Anatomy**: 3px yellow left spine · segments stacked label-over-value (4px gap), 32px between segments · values are linked human document names + trailing mono ID chips · inline warnings (no-match pressure, thin evidence).
+- **Data**: breadth counts, chain refs, forward consequence, warnings.
+
+## ProvenanceField (UX-2)
+- **Purpose**: Prefilled-with-provenance form field — the ask-less/prefill-more primitive.
+- **Anatomy**: label · provenance line ("From the approved brief — change if needed" + source link) · input (editable) · changed-marker when overridden.
+- **Variants**: prefilled (editable), derived (read-only context row, no input), must-ask (plain field).
+- **A11y**: provenance in `aria-describedby`; override announced.
+- **Data**: value, source ref, editable flag.
+
+## ReadinessWarning (UX-2)
+- **Purpose**: Cascade-gate block: what's missing, why it matters, where to fix. No submit while unmet.
+- **Data**: missing vars → human names, target link, degradation statement (warn-only variants).
+
+## DecisionBar (UX-2, Phase 3)
+- **Purpose**: Anchored gate decision row. Large targets (Fitts's), single-letter keys shown on buttons, disabled states carry reasons ("locked · read to end").
+- **Data**: verbs[], enable conditions, keymap.
+
+## ScrubChip / ScrubLedger (UX-2)
+- **ScrubChip**: ink chip, mono token ([PHONE-02]); candidate = dashed underline + ✦; selection = info surface. SR names type+index.
+- **ScrubLedger**: counts by type (auto/rescrub/candidates open) + rescrub input; terms never stored.
+
+## StateChipRow (UX-2, Phase 4)
+- **Purpose**: The 13-state grammar as one component; fixed order review · disposition · governance; 3-chip ceiling per row.
+- **Data**: states[] per axis.
 
 ## FileUpload
 - **Purpose**: Source ingestion (transcripts, notes, recordings-as-text).

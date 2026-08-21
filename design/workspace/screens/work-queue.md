@@ -33,3 +33,16 @@ Items are list items with full accessible names (kind + statement + age); inline
 ## Unresolved
 - Assignment model (personal vs team queue views)
 - Digest cadence relationship with Slack notifications
+
+
+## UX-2 reconciliation addendum
+WHAT NEEDS ME NOW: brief approvals, PII reviews, analysis completed (info), findings review, artifact approvals, publication failures, stale evidence. Not a Slack-notification mirror. Row = item + study + why + age + one action deep-linking to the gate. FUTURE: evidence-candidate queue joins here (SA-6). Class: review queue.
+
+## Refinements (Block 1 review)
+- Empty queue = success state: "Nothing needs you right now" + running-studies links, never a dead end.
+- Ages >3d escalate: warning tone + "aging".
+- Kind renders as an inline mono chip on each row (APPROVAL/PRIVACY/FINDINGS/FAILURE), not stacked section headers.
+
+## Notification model (explicit constraint)
+There is NO notification infrastructure (no push, no email, no toasts-as-notifications). The Work Queue IS the notification system: every event that would have been a Slack DM (approval requests, PII reviews, completed analyses, failures, stale evidence) lands here, surfaces on Home's "Needs your review," and counts in the nav badge. Toasts confirm the user's OWN actions only.
+GAP (Phase 9): infrequent users — a stakeholder approver may not log in daily; a pending approval can sit unseen. Out-of-band nudge (email) requires a backend capability that does not exist; flagged, not designed around.

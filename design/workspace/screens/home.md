@@ -44,3 +44,12 @@ h1 = greeting; each panel a labeled region with h2; queue items announce counts;
 ## Unresolved
 - Personalized panel show/hide in v1.1? (v1 fixed order)
 - Activity feed granularity (per-event vs digest)
+
+
+## UX-2 reconciliation addendum
+Order confirmed: 1) Needs your review (focal) — briefs to approve, PII reviews, findings to review, artifacts to approve, failed publications, stale evidence. 2) Active studies with lifecycle position + computed next action. 3) Start research persistent primary. 4) Recent work. 5) Search & Ask entry. No vanity metrics. Class: full page.
+
+## Refinements (Block 1 review)
+- Greeting line: "Hello, {name} · {date}" — count lives in the "Needs your review" header only.
+- Study-card next action is a text link ("Next: …") — reverted from button treatment per review; buttons on Home stay reserved for queue-item actions.
+- Search field placeholder advertises the unified surface: "Search, or ask Qori a question…".

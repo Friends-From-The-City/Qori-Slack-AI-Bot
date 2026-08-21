@@ -35,4 +35,21 @@ The UI never shows these as database constructs. See `content-design.md` for the
 
 ## Status
 
-UX-1 design-only. No frontend code. Implementation (UX-3) begins after review of this package.
+UX-2 complete and user-approved (Phases 1–8): constraints, document-type inventory, gate patterns, state vocabulary, traceability system, foundations (tokens v0.2), component library, page contracts, and all six Phase 8 screen blocks + interaction layer. This package is the implementation contract for CC (UX-3).
+
+## Approved screen mockups (project root)
+Phase 8 Block 1 — Orient and Start (Home, Work Queue, New Project, Project)
+Phase 8 Block 2 — Define (Discovery, Brief form, Brief approval, Plan, Guide)
+Phase 8 Block 3 — Fieldwork (Study shell + lifecycle rail, Participants, Sources, PII review)
+Phase 8 Block 4 — Analyze & Synthesize (Session analysis, Evidence, Synthesis, Finding review)
+Phase 8 Block 5 — Deliver (Outputs + readout drawer, Artifact viewer, Tickets drawer)
+Phase 8 Block 6 — Cross-cutting (Search & Ask, Survey pipeline, Admin)
+Phase 8 — Interaction Layer (participant drawer, peek + trail, dialogs, ⌘K palette, toasts)
+
+## CC implementation order (approved)
+1. App shell + Home + New Project + Brief form + Brief approval (the operating loop)
+2. PII review (unblocks analysis)
+3. Plan + Synthesis initiation + UX-2B review UI
+4. Work Queue wiring
+5. Readout viewer + publish; tickets after CA-003
+Design rules binding implementation: design-system.md (product-wide rules list), design-tokens.json v0.2, component-inventory.md (fixed rules header), content-design.md (provenance voice, no pipeline vocabulary), uswds-mapping.md, classifications.md.

@@ -20,6 +20,8 @@ Plain, specific, research-oriented, calm, transparent about AI. Sentence case ev
 | Suggested (by Qori) | AI-generated candidate |
 | Published to GitHub | pushed, committed |
 | Evidence is getting old (stale) | TTL expired, decay threshold |
+| Carries through / from your brief | cascades, consumes, emits, variables |
+| What discovery found | emitted artifacts, discovery variables |
 
 Note: "nugget" is backend vocabulary (ADR-0037). The UI groups nuggets under **Evidence**; an individual nugget is an **evidence item**.
 
@@ -39,3 +41,12 @@ Note: "nugget" is backend vocabulary (ADR-0037). The UI groups nuggets under **E
 ## Terminology governance
 
 New UI strings that introduce a research concept must map to an entry in this file. Agency branding may change the org name shown, never the research vocabulary.
+
+
+## Provenance-label voice (rule, from Block 2 review)
+Provenance lines on prefilled fields name the SOURCE DOCUMENT in research language, never pipeline mechanics:
+- Say "Suggested by your stakeholder synthesis — the questions it raised for user research", never "Seeded from SS-001's questions" or any cascade-variable name ("barrier coverage", "target_barriers").
+- Verbs: "Suggested by / From / Recommends". Forbidden: seeded, injected, cascaded, populated, projected.
+- Artifact IDs (DR-001) stay in custody chips and citations — not in sentence prose.
+- The source-document name in a provenance line is ALWAYS a link to that document (opens in a peek, full view on explicit open) — provenance you can't follow isn't provenance.
+- CONSUMES/EMITS/ASKS are contract vocabulary: design docs and admin diagnostics only. Researcher UI says what you get, in plain words ("You get: themes, knowledge gaps, and a recommended method"), never variable names.

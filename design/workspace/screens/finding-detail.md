@@ -38,18 +38,6 @@ h1 = statement; strip = ordered list labeled "Lineage"; panel `complementary` la
 ## API
 `GET /findings/:id`, `GET /findings/:id/lineage`, `POST /findings/:id/review` (accept/edit/dismiss), tags PATCH.
 
-## Backend Contract (UX-2B)
-
-Review endpoint: `POST /api/v1/findings/:publicId/review` with body `{ "decision": "accept" | "reject" }`.
-
-Review states: `candidate → accepted`, `candidate → rejected`. Re-review (accepted↔rejected) allowed with new audit record. `overridden` is governance-terminal.
-
-Response includes: `public_id`, `construct_type`, `review_status`, `previous_status`, `reviewed_at`, `reviewed_by_display_name`, `stale_due_to_disposition`, `traceability_summary { upstream_count, downstream_count }`.
-
-Authorization: project membership required. Cross-org review fails closed.
-
-CD note: "Dismiss" maps to `reject` decision. "Edit" is not a review state transition — it modifies the construct payload (deferred to UX-3 implementation).
-
 ## Unresolved
 - Multi-study findings: grouping order in backward section (by study then source?)
 - Finding-level commenting/discussion in v1?
