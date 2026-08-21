@@ -149,8 +149,21 @@ Reserved for future media support. No runtime implementation.
 | `locator` | JSONB with type-specific anchor coordinates |
 | `redacted_text_snapshot` | Frozen text at span creation time (post-PII, participant codes only) |
 | `content_hash` | SHA-256 of `redacted_text_snapshot` — detects drift if source content changes |
-| `source_version_ref` | GitHub commit SHA or equivalent version marker of the source at span creation |
+| `source_version_ref` | Provider-neutral opaque version identifier of the source at span creation (see below) |
 | `anchor_status` | `valid`, `stale`, `broken` — see section 12 (Source Mutation) |
+
+### Source Version Reference (Provider-Neutral)
+
+`source_version_ref` is an opaque provider-neutral version identifier. It does NOT assume GitHub or any specific storage provider. The span architecture must not introduce a provider dependency.
+
+| Source Origin | `source_version_ref` Value | Example |
+|--------------|---------------------------|---------|
+| GitHub-stored content | Commit SHA or blob SHA | `a1b2c3d4e5f6...` |
+| Uploaded object/blob | Object version or immutable asset version | `v3` or `obj-uuid-v2` |
+| Transcript (post-PII) | Transcript revision identifier or content hash | `rev-2` or `sha256:abc...` |
+| No external version | `content_hash` value (self-referencing) | `sha256:abc...` |
+
+When no external version system exists, `content_hash` + `created_at` together establish the version. The span records what the content looked like at creation time regardless of storage provider.
 
 ### Reuse of Existing IDs
 
@@ -163,6 +176,7 @@ Reserved for future media support. No runtime implementation.
 - No content storage — the span points to content in the source, storing only a snapshot
 - No PII — `redacted_text_snapshot` is post-review content only. Real names never stored.
 - No media content — `media` locator is coordinates only, not audio/video data
+- No provider dependency — `source_version_ref` is opaque, not GitHub-specific
 
 ---
 
@@ -279,6 +293,51 @@ research_comments
 
 ---
 
+## 5.5. Construct-to-Span Provenance (FK-Backed)
+
+### Proposed Table: `evidence_construct_source_spans`
+
+Canonical FK-backed link between a promoted evidence construct and its exact source span. This is the persisted provenance relationship — not a JSONB-only reference.
+
+```
+evidence_construct_source_spans
+├── id                INTEGER PK AUTO_INCREMENT
+├── construct_id      INTEGER FK → evidence_constructs(id) CASCADE NOT NULL
+├── source_span_id    INTEGER FK → research_source_spans(id) CASCADE NOT NULL
+├── relationship_role VARCHAR(30) NOT NULL DEFAULT 'evidentiary_basis'
+├── created_at        TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+```
+
+**UNIQUE constraint:** `(construct_id, source_span_id, relationship_role)` — prevents duplicate linkage.
+
+### Relationship Roles
+
+| Role | Meaning |
+|------|---------|
+| `evidentiary_basis` | This span is the primary source text that the evidence construct was promoted from |
+| `supporting_span` | This span provides additional supporting context (secondary reference) |
+
+Keep the vocabulary minimal. Expand only when a concrete product need requires it.
+
+### Design Rationale
+
+The `evidence_relationship` table (source → construct via `DERIVED_FROM`) establishes lineage between the file-level `evidence_source` and the promoted construct. The `evidence_construct_source_spans` join table adds the sub-file precision: which exact span within that source the construct was promoted from.
+
+The span reference MAY also appear in `evidence_relationship.provenance` JSONB for convenient rendering, but the FK-backed join table is the canonical link. If the JSONB reference and the FK disagree, the FK wins.
+
+### Invariant
+
+```
+Promote to Evidence
+  → evidence_construct created (nugget)
+  → evidence_relationship: source DERIVED_FROM nugget
+  → evidence_construct_source_spans: nugget → exact span (evidentiary_basis)
+```
+
+The source span remains a provenance anchor. It does NOT become an evidence graph construct or node in `evidence_relationships`.
+
+---
+
 ## 6. Promote to Evidence — State Transition
 
 ### Flow
@@ -301,29 +360,37 @@ research_comments
    - payload: { text: span.redacted_text_snapshot, ... }
    - status: 'candidate' (enters UX-2B review pipeline)
    - created_by: actor public_id
-   
+
 5. System creates evidence_relationship:
    - from_source_id: span.source_id
    - to_construct_id: new nugget.id
    - relationship_type: 'DERIVED_FROM'
    - provenance: { method: 'manual_promotion', source_span_id: span.public_id }
 
-6. If annotation exists:
+6. System creates FK-backed span provenance:
+   - evidence_construct_source_spans record:
+     construct_id: new nugget.id
+     source_span_id: span.id
+     relationship_role: 'evidentiary_basis'
+
+7. If annotation exists:
    - annotation.status = 'promoted'
    - annotation.promoted_construct_id = new nugget.id
    - Annotation body preserved in construct.derivation_context.researcher_note
 
-7. Promoted nugget enters existing cascade/synthesis pipeline:
+8. Promoted nugget enters existing cascade/synthesis pipeline:
    - Available to /qori-synthesis as upstream evidence
    - Lineage visible in traceability graph
 ```
+
+Steps 4, 5, 6, and 7 execute atomically within a single database transaction. If any step fails, the entire promotion rolls back.
 
 ### Promotion Invariants
 
 | Invariant | Enforcement |
 |-----------|------------|
 | Explicit action required | No UI selection alone creates evidence. "Promote to Evidence" is a distinct action. |
-| Auditable | Construct `derivation_context` records promotion source (span public_id, annotation public_id, actor) |
+| Auditable | `derivation_context` records span + annotation public_ids. FK-backed `evidence_construct_source_spans` provides canonical link. |
 | Idempotent | Same span + same actor + same content_hash → returns existing construct (semantic_key dedup) |
 | Scoped | org_id / project_id / study_id on all models; cross-org promotion impossible |
 | Reversible only through governance | Once promoted, only governed disposition (reject, override) can reverse. Not a casual undo. |
@@ -385,33 +452,44 @@ Cross-org access: fails closed. Organization scope enforced at query layer.
 
 ## 9. Lineage Model
 
-### Target Lineage Chain
+### Target Lineage
+
+The canonical evidence graph is based on `evidence_constructs` and `evidence_relationships`. Source spans provide exact evidentiary provenance via FK-backed `evidence_construct_source_spans`, but spans are NOT graph nodes.
 
 ```
 evidence_source (file-level)
-  └─ research_source_span (sub-file anchor)
-       └─ evidence_construct (nugget, derivation_type: 'human')
-            └─ evidence_construct (theme, via SYNTHESIZED_FROM)
-                 └─ evidence_construct (finding)
-                      └─ evidence_construct (recommendation)
-                           └─ research_artifact (readout, via artifact_evidence_ref)
-                                └─ external handoff (GitHub Issue, via IMPLEMENTED_BY)
+   ↓
+source_span (provenance anchor — exact text, FK-backed to construct)
+   ↓
+candidate/promoted nugget (evidence_construct, derivation_type: 'human')
+   ↓
+theme (evidence_construct, via SYNTHESIZED_FROM)
+   ↓
+finding (evidence_construct)
+   ↓
+recommendation (evidence_construct)
+   ↓
+artifact (research_artifact, via artifact_evidence_ref)
+   ↓
+implementation handoff (external, via IMPLEMENTED_BY — future CA-003)
 ```
 
-### Relationship Types Used
+### Canonical Evidence Graph Relationships
 
-| From | To | Type | When |
-|------|----|------|------|
-| evidence_source | nugget (construct) | DERIVED_FROM | Manual promotion or AI extraction |
-| nugget | theme | SYNTHESIZED_FROM | Synthesis |
-| theme | finding | SYNTHESIZED_FROM | Readout generation |
-| recommendation | ticket (construct) | IMPLEMENTED_BY | Future (CA-003) |
+| From | To | Relationship | Provenance |
+|------|----|-------------|------------|
+| evidence_source | nugget | `DERIVED_FROM` (evidence_relationships) | `{ method: 'manual_promotion' }` |
+| source_span | nugget | FK-backed (evidence_construct_source_spans) | `relationship_role: 'evidentiary_basis'` |
+| nugget | theme | `SYNTHESIZED_FROM` (evidence_relationships) | `{ created_by_template: ... }` |
+| theme | finding | `SYNTHESIZED_FROM` (evidence_relationships) | — |
+| recommendation | ticket | `IMPLEMENTED_BY` (evidence_relationships) | Future (CA-003) |
+| construct | artifact | `reflects` (artifact_evidence_refs) | — |
 
 ### What Does NOT Enter Lineage
 
+- **Source spans** — provenance anchors with FK-backed link to constructs via `evidence_construct_source_spans`. Spans are NOT nodes in `evidence_relationships`. The lineage node is the promoted construct.
 - **Annotations** — working notes, not evidence edges. Annotation body preserved in promoted construct's `derivation_context.researcher_note` only.
-- **Comments** — collaboration objects. No `evidence_relationship` touches comments.
-- **Source spans** — spans are referenced in `evidence_relationship.provenance.source_span_id` but are not lineage nodes themselves. The lineage node is the promoted construct.
+- **Comments** — collaboration objects. No `evidence_relationship` or `evidence_construct_source_spans` row touches comments.
 
 ---
 
@@ -505,10 +583,12 @@ If the underlying transcript or source document is modified after spans are crea
 
 ### Version Reference
 
-`source_version_ref` stores the GitHub commit SHA (or equivalent version marker) of the source at span creation time. This enables:
-- Deterministic content retrieval at the original version
-- Diff between current and span-creation version
+`source_version_ref` stores the provider-neutral version identifier of the source at span creation time (see Section 3, Source Version Reference). This enables:
+- Deterministic content retrieval at the original version (provider-specific resolution)
+- Diff between current and span-creation version where the provider supports it
 - Audit trail for when the source diverged
+
+No provider dependency is introduced. If no external versioning exists, `content_hash` + `created_at` establish the version.
 
 ---
 
@@ -567,8 +647,8 @@ If the underlying transcript or source document is modified after spans are crea
 Proposed decomposition for future implementation. Do not execute during this task.
 
 ### SA-1: Stable Source Span Model
-- Migration: create `research_source_spans` table
-- Service: span CRUD with content hash computation
+- Migration: create `research_source_spans` table + `evidence_construct_source_spans` join table
+- Service: span CRUD with content hash computation, provider-neutral version resolution
 - API: POST/GET/DELETE span endpoints
 - **Prerequisite for:** SA-2, SA-4, SA-5, SA-6
 
@@ -585,9 +665,10 @@ Proposed decomposition for future implementation. Do not execute during this tas
 - **Independent of:** SA-1, SA-2 (comments can attach to existing constructs/artifacts)
 
 ### SA-4: Promote-to-Evidence Application Service + Audit
-- Service: promotion workflow (authorization → privacy → construct creation → lineage → audit)
+- Service: promotion workflow (authorization → privacy → construct creation → evidence_relationship + evidence_construct_source_spans → audit)
+- Atomic transaction: construct + DERIVED_FROM relationship + FK-backed span link + annotation status update
 - Extends: `evidence.service.ts` with human-derivation path
-- **Requires:** SA-1 (source span), SA-2 (annotation status update)
+- **Requires:** SA-1 (source span + join table), SA-2 (annotation status update)
 
 ### SA-5: Transcript / Source Content APIs
 - API: serve transcript/source content for Workspace source viewer

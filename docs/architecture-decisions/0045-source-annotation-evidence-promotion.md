@@ -36,15 +36,26 @@ Annotations are NOT comments. Annotations may be promoted to evidence; comments 
 
 Collaboration/discussion objects with typed target references (source, span, annotation, construct, artifact). Comments never enter the evidence graph. Comments are not sent to LLM models by default.
 
+### 4. Construct-to-Span Provenance (`evidence_construct_source_spans`)
+
+FK-backed join table linking promoted evidence constructs to their exact source spans. This is the canonical provenance link — not a JSONB-only reference. JSONB provenance may duplicate the reference for convenient rendering, but the FK wins if they disagree.
+
 ### Evidence Promotion
 
-Explicit `Promote to Evidence` action creates a canonical `evidence_construct` (nugget, `derivation_type: 'human'`) with `DERIVED_FROM` lineage to the source. Promotion is:
+Explicit `Promote to Evidence` action creates a canonical `evidence_construct` (nugget, `derivation_type: 'human'`) with:
+- `DERIVED_FROM` lineage to the evidence_source (file-level)
+- FK-backed `evidence_construct_source_spans` link to the exact source span (sub-file)
 
+Promotion is:
 - Explicit (no UI selection alone creates evidence)
-- Auditable (derivation_context records source span, actor, annotation)
+- Auditable (derivation_context + FK-backed span link)
 - Idempotent (semantic_key prevents duplicate nuggets from same span)
 - Privacy-preserving (only post-PII content, participant codes only)
 - Governed by existing candidate → accepted review workflow (UX-2B)
+
+### Source Version
+
+`source_version_ref` is provider-neutral — not GitHub-specific. Supports commit SHAs, object versions, transcript revision IDs, or content-hash self-reference depending on source origin.
 
 ### Source Mutation
 
