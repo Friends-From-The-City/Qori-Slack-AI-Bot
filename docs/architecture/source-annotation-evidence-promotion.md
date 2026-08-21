@@ -302,13 +302,24 @@ Canonical FK-backed link between a promoted evidence construct and its exact sou
 ```
 evidence_construct_source_spans
 ├── id                INTEGER PK AUTO_INCREMENT
-├── construct_id      INTEGER FK → evidence_constructs(id) CASCADE NOT NULL
-├── source_span_id    INTEGER FK → research_source_spans(id) CASCADE NOT NULL
+├── construct_id      INTEGER FK → evidence_constructs(id) ON DELETE CASCADE NOT NULL
+├── source_span_id    INTEGER FK → research_source_spans(id) ON DELETE RESTRICT NOT NULL
 ├── relationship_role VARCHAR(30) NOT NULL DEFAULT 'evidentiary_basis'
 ├── created_at        TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 ```
 
 **UNIQUE constraint:** `(construct_id, source_span_id, relationship_role)` — prevents duplicate linkage.
+
+### FK Deletion Semantics
+
+| FK | On Delete | Rationale |
+|----|-----------|-----------|
+| `construct_id` | **CASCADE** | Deleting the canonical construct removes the join row it owns. Evidence construct deletion is governed by existing lifecycle rules. |
+| `source_span_id` | **RESTRICT** | A source span referenced by promoted/canonical evidence is evidentiary provenance. Deleting it would silently erase the historical source basis. The database prevents this. |
+
+**Consequence:** A source span that has been used as `evidentiary_basis` for a promoted nugget cannot be deleted through ordinary deletion. The application must check for references before attempting span deletion and return `SOURCE_SPAN_IN_USE` if references exist. Archival is preferred over hard deletion for research provenance.
+
+If an explicitly authorized destructive records operation (DSAR, governed disposition) requires removing source material, the governance/lifecycle path handles the cascade — not ordinary application deletion.
 
 ### Relationship Roles
 
@@ -526,8 +537,17 @@ Model proposal alone is NEVER accepted evidence. The existing candidate/accepted
 POST   /api/v1/sources/:sourcePublicId/spans     — Create span
 GET    /api/v1/sources/:sourcePublicId/spans     — List spans for source
 GET    /api/v1/spans/:spanPublicId               — Get span
-DELETE /api/v1/spans/:spanPublicId               — Delete span (only if no promoted evidence)
+DELETE /api/v1/spans/:spanPublicId               — Delete/archive span (see deletion contract below)
 ```
+
+**Span deletion contract:**
+
+| Condition | Behavior | Response |
+|-----------|----------|----------|
+| Span has no `evidence_construct_source_spans` references | Deletion proceeds | 204 No Content |
+| Span is referenced by canonical evidence | Fail closed | 409 `SOURCE_SPAN_IN_USE` — "This span is referenced by promoted evidence and cannot be deleted. Archive it instead." |
+
+Prefer archival (e.g., `anchor_status: 'archived'`) over hard deletion for research provenance. Hard deletion of evidence-referenced spans requires an explicitly authorized governance operation, not ordinary API deletion.
 
 ### Annotations
 
@@ -569,6 +589,7 @@ If the underlying transcript or source document is modified after spans are crea
 | Content at locator matches snapshot | `valid` | Span is current |
 | Content at locator differs from snapshot | `stale` | Source changed; span may not match current content |
 | Source file deleted or locator invalid | `broken` | Span cannot be resolved |
+| Researcher or governance archived the span | `archived` | Span retained for provenance but hidden from active views |
 
 3. **`redacted_text_snapshot` is NEVER modified.** The snapshot preserves what the researcher saw when they created the span. This is intentional — the historical basis of a promoted evidence nugget must not be silently rewritten by a source edit.
 
@@ -730,11 +751,19 @@ SA-8 (coding/media) ── later, after SA-1 + SA-6
 
 5. **Scope creep toward social platform.** Comments + annotations + threading could expand toward full collaboration. Mitigation: keep comments minimal (no reactions, no mentions, no real-time).
 
+### Resolved Questions
+
+1. **Source deletion and provenance survival.** Three distinct rules:
+
+   - **Source spans supporting canonical evidence:** Provenance must survive. `evidence_construct_source_spans.source_span_id` is `ON DELETE RESTRICT` — the database prevents deletion. The application returns `SOURCE_SPAN_IN_USE`. Archival is preferred over hard deletion. Only an explicitly authorized governance operation (DSAR, governed disposition) may remove source material referenced by canonical evidence.
+
+   - **Annotations and comments:** Lifecycle is policy-driven. `research_annotations.source_span_id` is `SET NULL` — deleting a span orphans the annotation (broken anchor) but does not delete the annotation. Comments follow the same pattern via `target_type + target_id` (application resolves broken targets gracefully).
+
+   - **Canonical evidence:** Must never silently lose its historical source basis. The promoted construct's `redacted_text_snapshot` (frozen in the span) and `derivation_context` preserve the evidentiary record even if the upstream source is later disposed through governance.
+
+2. **Promoted nuggets reference both span and source.** Resolved: `DERIVED_FROM` edge to `evidence_source` (file-level lineage) + FK-backed `evidence_construct_source_spans` (sub-file provenance). The FK is canonical; JSONB provenance may duplicate for convenience.
+
 ### Open Questions
-
-1. **Should annotations survive source deletion?** Current proposal: `source_span_id` is SET NULL on source delete, preserving the annotation with a broken anchor. Is this correct, or should annotations cascade-delete with their source?
-
-2. **Should promoted nuggets reference the span or the source?** Current proposal: both — `DERIVED_FROM` edge to `evidence_source`, span reference in provenance JSONB. This preserves lineage even if spans are later deleted.
 
 3. **Comment edit history:** Is `edited_at` sufficient, or does the platform need full edit history for audit? Current proposal: `edited_at` only (minimal viable).
 
