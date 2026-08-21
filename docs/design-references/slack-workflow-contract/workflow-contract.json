@@ -1,10 +1,12 @@
 {
-  "version": "1.0.0",
+  "version": "1.1.0",
   "generated": "2026-08-20",
-  "source": "repository inspection",
+  "source": "runtime code verification",
+  "notes": "All steps marked 'implemented' verified against handler and modal source code. INTENDED items are architectural direction, not runtime behavior.",
   "workflows": [
     {
       "step": "project_creation",
+      "status": "implemented",
       "command": "/qori-start",
       "handler": "projectStartHandler.ts",
       "callback_id": "project_create_modal",
@@ -22,6 +24,7 @@
     },
     {
       "step": "discovery_desk_research",
+      "status": "implemented",
       "command": "/qori-discover",
       "handler": "discoverHandler.ts",
       "callback_id": "discover_desk_research_modal",
@@ -38,6 +41,7 @@
     },
     {
       "step": "discovery_stakeholder_synthesis",
+      "status": "implemented",
       "command": "/qori-discover",
       "handler": "discoverHandler.ts",
       "callback_id": "discover_stakeholder_modal",
@@ -54,6 +58,7 @@
     },
     {
       "step": "discovery_survey_synthesis",
+      "status": "implemented",
       "command": "/qori-discover",
       "handler": "discoverHandler.ts",
       "callback_id": "discover_survey_modal",
@@ -69,19 +74,115 @@
       "enables_next": ["research_brief"]
     },
     {
+      "step": "survey_upload",
+      "status": "implemented",
+      "command": null,
+      "handler": "surveySubmissionHandler.ts",
+      "_note": "Triggered from /qori-discover survey flow. Phase 1: CSV upload, parse, infer schema, stage in Redis (TTL 2h), send DM with Review Schema button.",
+      "inputs": [
+        { "key": "csv_file", "type": "file_upload", "required": true, "authority": "ephemeral" }
+      ],
+      "consumes": ["project_id"],
+      "commits": ["evidence_sources", "redis_staging (TTL 2h)"],
+      "emits": [],
+      "enables_next": ["survey_schema_review"]
+    },
+    {
+      "step": "survey_schema_review",
+      "status": "implemented",
+      "command": null,
+      "handler": "surveySubmissionHandler.ts",
+      "callback_id": "survey_schema_review_modal",
+      "action_id": "survey_review_schema",
+      "_note": "Paginated modal (20 fields/page, max 100 fields). Researcher confirms ALL field roles, ordinal order, demographic flags.",
+      "inputs": [
+        { "key": "field_roles", "type": "static_select_per_field", "required": true, "authority": "canonical", "persistence": "survey_field_schemas" },
+        { "key": "ordinal_order", "type": "string_per_ordinal_field", "required": false, "authority": "canonical" },
+        { "key": "demographic_flag", "type": "checkbox_per_field", "required": false, "authority": "canonical" }
+      ],
+      "consumes": ["evidence_source_id", "redis_staged_csv"],
+      "commits": ["survey_field_schemas", "evidence_constructs"],
+      "emits": [],
+      "enables_next": ["survey_privacy_review"]
+    },
+    {
+      "step": "survey_privacy_review",
+      "status": "implemented",
+      "command": null,
+      "handler": "surveyPrivacyHandler.ts",
+      "callback_id": "survey_privacy_review_modal",
+      "action_id": "survey_privacy_review",
+      "_note": "Researcher reviews PII-flagged fields before synthesis proceeds.",
+      "inputs": [
+        { "key": "privacy_decisions", "type": "per_field_review", "required": true, "authority": "canonical" }
+      ],
+      "consumes": ["evidence_source_id", "survey_field_schemas"],
+      "commits": ["survey_field_schemas (privacy flags)"],
+      "emits": [],
+      "enables_next": ["survey_codebook_review"]
+    },
+    {
+      "step": "survey_codebook_review",
+      "status": "implemented",
+      "command": null,
+      "handler": "codebookHandler.ts",
+      "action_id": "survey_generate_codebook",
+      "_note": "AI generates groupings (codes) for open-text fields. Researcher reviews and accepts or regenerates. Internal domain: survey_codebooks, survey_codes.",
+      "inputs": [
+        { "key": "codebook_acceptance", "type": "action_button", "required": true, "authority": "canonical" }
+      ],
+      "consumes": ["evidence_source_id", "survey_field_schemas"],
+      "commits": ["survey_codebooks", "survey_codes"],
+      "emits": [],
+      "enables_next": ["survey_match_review"]
+    },
+    {
+      "step": "survey_match_review",
+      "status": "implemented",
+      "command": null,
+      "handler": "matchReviewHandler.ts",
+      "callback_id": "match_review_modal",
+      "action_id": "survey_open_match_review",
+      "_note": "Researcher reviews AI-generated response-to-code assignments.",
+      "inputs": [
+        { "key": "match_decisions", "type": "per_response_review", "required": true, "authority": "canonical" }
+      ],
+      "consumes": ["survey_codebooks", "survey_codes", "evidence_source_id"],
+      "commits": ["survey_coding_runs"],
+      "emits": [],
+      "enables_next": ["survey_synthesis"]
+    },
+    {
+      "step": "survey_synthesis",
+      "status": "implemented",
+      "command": null,
+      "handler": "surveySynthesisAction.ts",
+      "action_id": "survey_run_synthesis",
+      "_note": "Runs final survey synthesis after all review steps complete.",
+      "inputs": [],
+      "consumes": ["evidence_source_id", "confirmed_codebook", "confirmed_matches"],
+      "commits": ["study_variables", "github_artifact"],
+      "emits": ["survey_themes", "survey_findings"],
+      "enables_next": ["research_brief"]
+    },
+    {
       "step": "research_brief",
+      "status": "implemented",
       "command": "/qori-brief",
       "handler": "briefHandler.ts",
       "callback_id": "research_brief_modal",
       "inputs": [
+        { "key": "study_name", "type": "string", "required": true, "authority": "canonical", "persistence": "research_studies.name" },
+        { "key": "stakeholder", "type": "user_id", "required": true, "authority": "canonical", "persistence": "project_members.is_stakeholder" },
         { "key": "problem_statement", "type": "string", "required": true, "inherited_from": "projects.problem_statement", "authority": "cascade" },
         { "key": "learning_objectives", "type": "string", "required": true, "authority": "cascade", "persistence": "study_variables.research_objectives" },
-        { "key": "out_of_scope", "type": "string", "required": true, "authority": "cascade", "persistence": "study_variables.out_of_scope" },
-        { "key": "methodology", "type": "enum", "required": true, "values": ["Interviews", "Usability Testing", "Survey", "Mixed Methods", "Other"], "authority": "cascade", "persistence": "study_variables.methodology_selection" },
+        { "key": "out_of_scope", "type": "string", "required": false, "authority": "cascade", "persistence": "study_variables.out_of_scope" },
+        { "key": "research_method", "type": "static_select", "required": true, "values": ["usability_testing", "user_interviews", "contextual_inquiry", "concept_testing", "survey", "card_sorting", "tree_testing", "mixed_methods"], "authority": "cascade", "persistence": "study_variables.methodology_selection" },
+        { "key": "method_override", "type": "string", "required": false, "authority": "cascade", "_note": "Custom method for combined/custom approaches not in dropdown" },
         { "key": "participant_approach", "type": "string", "required": true, "authority": "cascade" },
-        { "key": "timeline", "type": "enum", "required": true, "values": ["2 weeks", "4 weeks", "6 weeks", "8+ weeks"], "authority": "cascade" },
-        { "key": "start_date", "type": "date", "required": true, "default": "next_monday", "authority": "cascade" },
-        { "key": "decision_deadline", "type": "date", "required": true, "authority": "cascade" },
+        { "key": "recruitment_sources", "type": "string", "required": false, "authority": "cascade" },
+        { "key": "start_date", "type": "date", "required": false, "authority": "cascade" },
+        { "key": "decision_deadline", "type": "date", "required": false, "authority": "cascade" },
         { "key": "budget", "type": "string", "required": false, "authority": "cascade" },
         { "key": "discovery_artifacts", "type": "checkbox_selection", "required": false, "default": "all_selected", "authority": "ephemeral" }
       ],
@@ -92,8 +193,11 @@
     },
     {
       "step": "brief_approval",
+      "status": "implemented",
       "command": null,
-      "handler": "approvalFlowHandler.ts",
+      "handler": "approval/approvalFlowHandler.ts",
+      "_note": "Delegates to approval.app-service.ts via requestChangesHandler",
+      "brief_status_values": ["pending_approval", "approved", "changes_requested"],
       "inputs": [
         { "key": "decision", "type": "enum", "required": true, "values": ["approve", "request_changes"], "authority": "canonical" },
         { "key": "change_description", "type": "string", "required": false, "authority": "ephemeral" }
@@ -105,34 +209,33 @@
     },
     {
       "step": "research_plan",
+      "status": "implemented",
       "command": "/qori-plan",
       "handler": "planHandler.ts",
       "callback_id": "research_plan_modal",
+      "_note": "Only 2 modal inputs. All other data (methodology, participants, timeline, etc.) consumed from cascade via approved brief variables.",
       "inputs": [
         { "key": "lead_researcher", "type": "user_id", "required": true, "default": "current_user", "authority": "artifact" },
-        { "key": "research_method", "type": "enum", "required": true, "inherited_from": "study_variables.methodology_selection", "authority": "cascade" },
-        { "key": "num_participants", "type": "string", "required": true, "authority": "artifact" },
-        { "key": "session_duration", "type": "string", "required": true, "authority": "artifact" },
-        { "key": "start_date", "type": "date", "required": true, "default": "next_monday", "authority": "artifact" },
         { "key": "operational_risks", "type": "string", "required": false, "authority": "cascade" }
       ],
-      "consumes": ["brief_status=approved", "research_questions", "target_barriers", "methodology_selection"],
+      "consumes": ["brief_status=approved", "research_questions", "target_barriers", "methodology_selection", "participant_approach", "start_date", "out_of_scope"],
       "commits": ["github_artifact", "study_variables"],
       "emits": ["study_timeline", "risks", "deliverables"],
       "enables_next": ["discussion_guide", "fieldwork"]
     },
     {
       "step": "discussion_guide",
+      "status": "implemented",
       "command": "/qori-discuss",
       "handler": "discussionGuideHandler.ts",
       "callback_id": "discussion_guide_modal",
       "inputs": [
         { "key": "research_focus", "type": "string", "required": true, "inherited_from": "study_variables.research_objectives", "authority": "ai_input" },
         { "key": "research_questions", "type": "string", "required": true, "inherited_from": "study_variables.research_questions", "authority": "ai_input" },
-        { "key": "research_method", "type": "enum", "required": true, "inherited_from": "study_variables.methodology_selection", "authority": "ai_input" },
-        { "key": "session_type", "type": "enum", "required": true, "authority": "ai_input" },
-        { "key": "session_duration", "type": "string", "required": true, "authority": "ai_input" },
-        { "key": "participant_description", "type": "string", "required": false, "authority": "ai_input" }
+        { "key": "research_method", "type": "static_select", "required": true, "inherited_from": "study_variables.methodology_selection", "authority": "ai_input", "values": ["usability_testing", "user_interviews", "card_sorting", "concept_testing", "contextual_inquiry", "tree_testing", "mixed_methods"] },
+        { "key": "session_length", "type": "static_select", "required": true, "default": "60", "values": ["30", "45", "60", "75", "90"], "authority": "ai_input" },
+        { "key": "task_count", "type": "static_select", "required": true, "default": "5", "values": ["1", "2", "3", "4", "5", "6", "7"], "authority": "ai_input" },
+        { "key": "lead_moderator", "type": "user_id", "required": true, "default": "current_user", "authority": "artifact" }
       ],
       "consumes": ["study_id", "research_objectives", "research_questions", "methodology_selection"],
       "commits": ["github_artifact"],
@@ -141,6 +244,7 @@
     },
     {
       "step": "fieldwork_add_participant",
+      "status": "implemented",
       "command": "/qori-fieldwork",
       "handler": "participantHandler.ts",
       "callback_id": "add-participant-modal",
@@ -158,7 +262,8 @@
     },
     {
       "step": "session_notes",
-      "command": "/qori-fieldwork → upload notes",
+      "status": "implemented",
+      "command": "/qori-fieldwork -> upload notes",
       "handler": "sessionNotesHandler.ts",
       "callback_id": "session_notes_submit",
       "inputs": [
@@ -176,6 +281,7 @@
     },
     {
       "step": "pii_review",
+      "status": "implemented",
       "command": null,
       "handler": "sessionNotesHandler.ts",
       "inputs": [
@@ -189,6 +295,7 @@
     },
     {
       "step": "per_session_analysis",
+      "status": "implemented",
       "command": "/qori-analyze",
       "handler": "analyzeNotesHandler.ts",
       "callback_id": "analyze_notes_submit",
@@ -204,6 +311,7 @@
     },
     {
       "step": "synthesis",
+      "status": "implemented",
       "command": "/qori-synthesis",
       "handler": "researchSynthesisHandler.ts",
       "callback_id": "research-synthesis-modal",
@@ -226,31 +334,46 @@
     },
     {
       "step": "readout",
+      "status": "implemented",
       "command": "/qori-report",
       "handler": "readoutHandler.ts",
       "callback_id": "readout_modal_submit",
       "inputs": [
         { "key": "study", "type": "study_id", "required": true, "authority": "ephemeral" },
         { "key": "readout_type", "type": "enum", "required": true, "values": ["research_readout", "targeted_readouts"], "authority": "ai_input" },
-        { "key": "audience", "type": "checkbox_selection", "required": false, "authority": "ephemeral" }
+        { "key": "audience", "type": "checkbox_selection", "required": false, "values": ["Design Team", "Engineering Team", "Accessibility Team", "Executive Leadership"], "authority": "ephemeral", "_note": "Product Leadership exists as alias in app-service (maps to leadership_readout.yaml) but is NOT a modal option" }
       ],
-      "consumes": ["research_readout_data (GitHub aggregation — CA-002)", "validated_themes", "personas", "journey_stages"],
-      "_note": "CA-002: readout currently reads rendered GitHub artifacts at runtime, not canonical evidence",
+      "consumes": ["research_readout_data (GitHub aggregation -- CA-002)", "validated_themes", "personas", "journey_stages"],
+      "_ca002_note": "CURRENT: readout reads rendered GitHub artifacts at runtime, not canonical evidence. INTENDED: consume canonical evidence state.",
+      "targeted_audience_template_map": {
+        "Design Team": "designer_readout.yaml",
+        "Engineering Team": "engineering_readout.yaml",
+        "Accessibility Team": "accessibility_readout.yaml",
+        "Executive Leadership": "leadership_readout.yaml"
+      },
       "commits": ["github_artifact", "evidence_constructs"],
       "emits": [],
       "enables_next": ["tickets"]
     },
     {
       "step": "tickets",
+      "status": "implemented",
       "command": "/qori-tickets",
       "handler": "ticketHandler.ts",
       "callback_ids": ["tickets_step1_submit", "tickets_step2_submit"],
+      "_note": "ticketHandler.ts reads ticket_candidates from study_variables in Postgres (design_ticket_candidates, engineering_ticket_candidates, accessibility_ticket_candidates) and creates GitHub Issues directly. github_issues_generator.yaml exists as a template but is NOT the runtime consumer.",
       "inputs": [
         { "key": "study", "type": "study_id", "required": true, "authority": "ephemeral" },
         { "key": "audience", "type": "checkbox_selection", "required": true, "values": ["designer", "engineering", "accessibility"], "authority": "ephemeral" },
         { "key": "selected_tickets", "type": "checkbox_selection", "required": true, "authority": "canonical" }
       ],
-      "consumes": ["recommendations", "findings"],
+      "audience_variable_map": {
+        "designer": { "variable_key": "design_ticket_candidates", "source_template": "designer_readout" },
+        "engineering": { "variable_key": "engineering_ticket_candidates", "source_template": "engineering_readout" },
+        "accessibility": { "variable_key": "accessibility_ticket_candidates", "source_template": "accessibility_readout" }
+      },
+      "_ca003_note": "CURRENT: Ticket candidates emitted to study_variables, consumed by ticketHandler directly. No canonical recommendation-to-ticket lineage. INTENDED: Canonical recommendation -> handoff -> IMPLEMENTED_BY lineage.",
+      "consumes": ["design_ticket_candidates", "engineering_ticket_candidates", "accessibility_ticket_candidates"],
       "commits": ["github_issues"],
       "emits": [],
       "enables_next": []
