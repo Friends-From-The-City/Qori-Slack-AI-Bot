@@ -1,6 +1,13 @@
 # Workflow Dependencies
 
-For each workflow stage: what enables it and what it enables next.
+All dependencies documented here reflect CURRENT runtime behavior verified against handler code and application services.
+
+**Convention:**
+- **CURRENT** = what runtime code enforces today
+- **INTENDED** = approved direction not yet in runtime
+- **HARD DEPENDENCY** = system-enforced; operation fails without prerequisite
+- **SOFT / RECOMMENDED** = conventional sequence; system allows out-of-order
+- **OPTIONAL BRANCH** = researcher may skip entirely
 
 ## Dependency Table
 
@@ -112,8 +119,8 @@ For each workflow stage: what enables it and what it enables next.
 
 ### Research Synthesis (`/qori-synthesis`)
 
-**Consumes:** Analyzed sessions (nuggets, themes from session_summary), study context
-**Commits:** Synthesis artifact (GitHub), findings/recommendations variables, evidence constructs
+**Consumes:** Analyzed sessions (nuggets from session_summary), study context, optional enrichments (themes, barriers, questions, personas, jobs, constraints)
+**Commits:** Synthesis artifact (GitHub), method-specific cascade variables, evidence constructs (theme, persona, journey_stage, usability_finding depending on method)
 **Enables:** Research Readout, Tickets
 
 **Hard dependency:** Analyzed session notes (nuggets exist)
@@ -123,12 +130,13 @@ For each workflow stage: what enables it and what it enables next.
 
 ### Research Readout (`/qori-report`)
 
-**Consumes:** Findings, recommendations, themes from synthesis
-**Commits:** Readout artifact (GitHub), evidence construct linkage
-**Enables:** Publication, Tickets
+**Consumes:** GitHub-rendered artifacts at runtime (CA-002) + cascade context where declared by template
+**Commits:** Readout artifact (GitHub)
+**Enables:** Tickets
 
-**Hard dependency:** Findings/recommendations exist
-**Types:** research_readout (full), targeted_readouts (per audience)
+**Hard dependency:** Synthesis outputs exist (themes, issues, opportunities — varies by method)
+**Types:** research_readout (full), targeted_readouts (per audience: designer, engineering, accessibility, leadership)
+**Note (CA-002):** Currently reads rendered GitHub Markdown as `research_readout_data`. Architecturally intended to consume canonical evidence/domain state instead.
 
 ---
 
@@ -145,9 +153,44 @@ For each workflow stage: what enables it and what it enables next.
 
 ## Navigation Model for Workspace
 
-| Pattern | When |
-|---------|------|
-| **Locked step** | Brief must be approved before Plan |
-| **Warning** | Synthesis without enough sessions analyzed |
-| **Suggested next** | "Run /qori-brief next" after project creation |
-| **Free navigation** | Discovery, Discussion Guide, Ask can run anytime |
+CD should use these dependency classifications to determine Workspace navigation:
+
+| Dependency Type | Workspace Pattern | Current Examples |
+|----------------|-------------------|------------------|
+| HARD DEPENDENCY | Locked step / disabled action | Brief must be approved before Plan; nuggets must exist before synthesis |
+| SOFT / RECOMMENDED | Suggested next action (non-blocking) | Discovery before brief; analysis before synthesis |
+| OPTIONAL BRANCH | Free navigation | Discovery, Discussion Guide, Ask Qori — available at any time |
+| CASCADE GATE | Warning with missing context | Discussion guide without research_objectives shows readiness blocks |
+
+### CURRENT Hard Dependencies (System-Enforced)
+
+| Step | Requires | Enforcement Point |
+|------|---------|-------------------|
+| Brief | Project exists | `briefHandler.ts` — project_id from metadata |
+| Plan | Brief approved (`brief_status=approved`) | `planHandler.ts` — validates study exists with approved brief |
+| Discussion Guide | Study exists + research_objectives | Cascade readiness gate in `discussionGuideHandler.ts` |
+| Session Notes | Study + participant exist | `sessionNotesHandler.ts` — session picker requires participants |
+| Analysis | Approved session notes (`pii_reviewed=true`) | `analyzeNotesHandler.ts` — loads only approved notes |
+| Synthesis | Nuggets exist (`atomic_nugget_core` in study_variables) | `synthesis.app-service.ts:140-153` — validates nuggets |
+| Readout | Synthesis outputs exist | `readout.app-service.ts` — aggregates study content |
+| Tickets | Ticket candidates in study_variables | `ticketHandler.ts:273-281` — loads from StudyVariable |
+
+### CURRENT Soft Dependencies (Recommended but Not Enforced)
+
+| Step | Recommended After | Why |
+|------|------------------|-----|
+| Discovery | Project creation | Enriches brief with pre-study evidence |
+| Plan | Brief approval | Plan elaborates on brief methodology |
+| Discussion Guide | Plan | Guide can pre-fill from plan context |
+| Multiple analyses | First analysis | More sessions = better synthesis |
+| All synthesis types | Affinity mapping | Themes from affinity enrich other methods |
+
+### CURRENT Optional Branches (Free Navigation)
+
+| Step | Available When | No Prerequisites Beyond |
+|------|---------------|------------------------|
+| Discovery | Project exists | None |
+| Discussion Guide | Study exists | Cascade gate shows warnings only |
+| Ask Qori | Any time | Project context |
+| Participant add | Study exists | None |
+| Observer add | Study exists | None |

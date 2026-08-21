@@ -36,11 +36,11 @@ The actual supported sequence of research activities in Qori, derived from code 
     │
     ├─── /qori-synthesis (Cross-Session Synthesis)
     │    ├── Affinity Mapping
-    │    ├── Thematic Analysis
-    │    ├── Cross-Session Synthesis
+    │    ├── Journey Mapping
+    │    ├── Persona Generation
+    │    ├── Jobs to Be Done
     │    ├── Usability Issues
-    │    ├── Recommendations
-    │    └── Executive Summary
+    │    └── Design Opportunities
     │
     ├─── /qori-report (Research Readout)
     │    ├── Full Research Readout
