@@ -12,7 +12,7 @@ Complete inventory of all registered Slack commands from `events.ts`, with Works
 | `/qori-discover` | `discoverHandler` | Discovery hub (desk research, stakeholder, survey) | CORE WORKSPACE MVP |
 | `/qori-fieldwork` | `fieldworkHandler` | Fieldwork dashboard (participants, observers, outreach, notes) | LATER WORKSPACE |
 | `/qori-analyze` | `analyzeNotesHandler` | Analyze session notes (per-session) | CORE WORKSPACE MVP |
-| `/qori-synthesis` | `researchSynthesisHandler` | Run synthesis (affinity, thematic, cross-session, usability, recs, exec summary) | CORE WORKSPACE MVP |
+| `/qori-synthesis` | `researchSynthesisHandler` | Run synthesis (affinity mapping, journey mapping, persona generation, jobs to be done, usability issues, design opportunities) | CORE WORKSPACE MVP |
 | `/qori-report` | `readoutHandler` | Generate research readout or targeted readouts | CORE WORKSPACE MVP |
 | `/qori-tickets` | `ticketHandler` | Create GitHub Issues from recommendations | LATER WORKSPACE |
 | `/qori-ask` | `askHandler` | Cross-study variable search with LLM interpretation | LATER WORKSPACE |

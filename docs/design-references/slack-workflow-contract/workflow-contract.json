@@ -212,9 +212,16 @@
         { "key": "analysis_method", "type": "enum", "required": true, "values": ["affinity_mapping", "journey_mapping", "persona_generation", "jobs_to_be_done", "usability_issues", "design_opportunities"], "authority": "ai_input" },
         { "key": "enrichments", "type": "checkbox_selection", "required": false, "authority": "ephemeral" }
       ],
-      "consumes": ["atomic_nugget_core", "validated_themes", "study_id"],
+      "consumes": ["atomic_nugget_core", "atomic_nugget_detail", "study_id"],
       "commits": ["study_variables", "evidence_constructs", "github_artifact"],
-      "emits": ["findings", "recommendations", "themes", "personas"],
+      "emits_by_method": {
+        "affinity_mapping": ["validated_themes", "unexpected_patterns"],
+        "journey_mapping": ["journey_stages", "journey_pain_points"],
+        "persona_generation": ["personas", "persona_design_implications"],
+        "jobs_to_be_done": ["validated_jobs"],
+        "usability_issues": ["prioritized_issues"],
+        "design_opportunities": ["design_hmw_opportunities"]
+      },
       "enables_next": ["readout", "tickets"]
     },
     {
@@ -227,7 +234,8 @@
         { "key": "readout_type", "type": "enum", "required": true, "values": ["research_readout", "targeted_readouts"], "authority": "ai_input" },
         { "key": "audience", "type": "checkbox_selection", "required": false, "authority": "ephemeral" }
       ],
-      "consumes": ["findings", "recommendations", "themes", "validated_themes"],
+      "consumes": ["research_readout_data (GitHub aggregation — CA-002)", "validated_themes", "personas", "journey_stages"],
+      "_note": "CA-002: readout currently reads rendered GitHub artifacts at runtime, not canonical evidence",
       "commits": ["github_artifact", "evidence_constructs"],
       "emits": [],
       "enables_next": ["tickets"]

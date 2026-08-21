@@ -1,122 +1,261 @@
 # Workspace Gap Analysis
 
-Comparison of actual Slack workflows against `design/workspace/` screens and flows.
+Comparison of actual runtime researcher workflows against the current Workspace design package (`design/workspace/`). Every classification is based on runtime code inspection, not inference.
 
-## Screens Designed (12) — Coverage Status
+## Current vs Intended Convention
 
-| Screen | Slack Equivalent | Coverage |
-|--------|-----------------|----------|
-| Home | No direct equivalent (Slack is channel-based) | ✅ New surface |
-| Study Overview | Project channel + /qori-fieldwork dashboard | ✅ Covered |
-| Sources | /qori-fieldwork → upload notes | ✅ Covered |
-| Evidence | /qori-analyze output | ✅ Covered |
-| Finding Detail | No current Slack surface | ✅ New surface |
-| Recommendation Detail | No current Slack surface | ✅ New surface |
-| Work Queue | DM notifications from Qori | ✅ New surface |
-| Artifact Review | GitHub links in DMs | ✅ New surface |
-| Project | /qori-start output | ✅ Covered |
-| Search | /qori-ask | ✅ Covered |
-| Ask Qori | /qori-ask | ✅ Covered |
-| Admin | /qori-admin | ✅ Covered |
+Throughout this document:
+- **CURRENT** = what runtime code actually does today
+- **INTENDED** = approved architectural/product direction not yet in runtime
+- **NOT IMPLEMENTED** = capability absent from runtime
 
-## MISSING Screens — Must Design
+---
 
-### BLOCKING (required for core research lifecycle)
+## Design Package Coverage (12 Screens Delivered)
 
-| Missing Screen | Slack Equivalent | Priority | Notes |
-|----------------|-----------------|----------|-------|
-| **New Project Form** | `/qori-start` modal | P0 | 5 fields: name, description, problem statement, stakeholder, channel toggle (drop channel toggle for web) |
-| **Research Brief Form** | `/qori-brief` modal | P0 | 10 fields + discovery artifact checkboxes |
-| **Brief Approval Workflow** | DM with Approve/Request Changes buttons | P0 | Approval banner on brief detail + notification |
-| **Research Plan Form** | `/qori-plan` modal | P0 | 6 fields, cascade pre-fill from brief |
-| **Synthesis Initiation Form** | `/qori-synthesis` modal | P0 | Method select + enrichment checkboxes + session stats |
-| **Transcript/Source Review** | DM with Approve/Reject/Rescrub buttons | P0 | PII review workflow — highlighted terms, approve/reject/rescrub |
+| Screen | Covers Slack Workflow | Backend Capability | Gap |
+|--------|----------------------|-------------------|-----|
+| Home | No direct Slack equivalent | IMPLEMENTED (project/study queries) | None — new surface |
+| Study Overview | `/qori-fieldwork` dashboard | IMPLEMENTED | None |
+| Sources | `/qori-fieldwork` → upload notes | IMPLEMENTED | Missing: source ingestion form |
+| Evidence | `/qori-analyze` output | IMPLEMENTED | None |
+| Finding Detail | No Slack surface (API only) | IMPLEMENTED (UX-2B) | None |
+| Recommendation Detail | No Slack surface (API only) | IMPLEMENTED (UX-2B) | None |
+| Work Queue | DM notifications | IMPLEMENTED (audit/status queries) | None — new surface |
+| Artifact Review | GitHub links in DMs | IMPLEMENTED (artifact API) | None |
+| Project | `/qori-start` output | IMPLEMENTED | Missing: project creation form |
+| Search | `/qori-ask` | PARTIALLY IMPLEMENTED (variable search, no full-text) | None |
+| Ask Qori | `/qori-ask` | PARTIALLY IMPLEMENTED | None |
+| Admin | `/qori-admin` | IMPLEMENTED | None |
 
-### IMPORTANT (completes research lifecycle)
+---
 
-| Missing Screen | Slack Equivalent | Priority | Notes |
-|----------------|-----------------|----------|-------|
-| **Discussion Guide Form** | `/qori-discuss` modal | P1 | Cascade pre-fill from brief |
-| **Session Analysis Form** | `/qori-analyze` modal | P1 | Progressive: study → session → notes picker |
-| **Research Readout Form** | `/qori-report` modal | P1 | Readout type + audience selection |
-| **Discovery Workflows** | `/qori-discover` hub + type modals | P1 | Three types: desk research, stakeholder, survey |
+## MISSING Screens — Blocking (P0)
 
-### LATER (domain-specific or can remain Slack-only)
+### 1. New Project Form
 
-| Missing Screen | Slack Equivalent | Priority | Notes |
-|----------------|-----------------|----------|-------|
-| Participant Management | `/qori-fieldwork` → participants | P2 | Add/update/track participants |
-| Participant Outreach | Outreach sub-modals | P2 | Email composition, templates |
-| Observer Management | Observer sub-modals | P2 | Add observers, self-join |
-| Codebook Generation | `/qori-synthesis` → codebook | P2 | Survey-specific |
-| Ticket Creation | `/qori-tickets` two-step modal | P2 | GitHub Issues from recommendations |
+**Slack:** `/qori-start` → `project_create_modal` (5 fields)
+**Backend:** IMPLEMENTED — `projectStartHandler.ts`, `project.service.ts`
+**Design coverage:** None — no "Create Project" screen in design package
+**Researcher inputs:** Project name, problem statement, description, stakeholder, channel toggle (drop for web)
+**Interaction class:** Guided setup (2-3 steps) or simple form
+**Priority:** P0 — prerequisite for all other workflows
 
-### NOT NEEDED (Slack-specific)
+### 2. Research Brief Form
+
+**Slack:** `/qori-brief` → `research_brief_modal` (13 fields + discovery checkboxes)
+**Backend:** IMPLEMENTED — `briefHandler.ts`, `brief.app-service.ts`, `research_brief.yaml` v6.0
+**Design coverage:** None — no brief creation screen
+**Researcher inputs:** Problem statement, learning objectives, out of scope, methodology, participant approach, recruitment sources, start date, decision deadline, budget, stakeholder, discovery artifact selection
+**Pre-fill from cascade:** problem_statement (project), methodology (discovery), research_questions (discovery), out_of_scope (barrier coverage), participant_approach (discovery)
+**Interaction class:** Full-page form with cascade-driven pre-fill + discovery artifact picker
+**Priority:** P0 — approval gate for all downstream research
+
+### 3. Brief Approval Workflow
+
+**Slack:** DM with Approve / Request Changes buttons → resubmit cycle
+**Backend:** IMPLEMENTED — `approvalFlowHandler.ts`, `requestChangesHandler.ts`, `resubmitBriefHandler.ts`, `approval.app-service.ts`
+**Design coverage:** None — no approval surface designed
+**States:** pending_approval → approved | changes_requested → (resubmit) → pending_approval
+**Interaction class:** Approval banner on brief detail page + notification in work queue
+**Priority:** P0 — blocks plan creation
+
+### 4. Research Plan Form
+
+**Slack:** `/qori-plan` → plan modal (2 researcher fields; rest from cascade)
+**Backend:** IMPLEMENTED — `planHandler.ts`, `plan.app-service.ts`, `research_plan.yaml` v4.7
+**Design coverage:** None — no plan creation screen
+**Researcher inputs:** Lead researcher, operational risks
+**All other content from cascade:** methodology, questions, barriers, timeline, participants, deliverables
+**Interaction class:** Simple form (most content inherited)
+**Priority:** P0 — follows approved brief
+
+### 5. Synthesis Initiation Form
+
+**Slack:** `/qori-synthesis` → `research-synthesis-modal` (method + enrichments)
+**Backend:** IMPLEMENTED — `researchSynthesisHandler.ts`, `synthesis.app-service.ts`, 6 YAML templates
+**Design coverage:** None — design shows evidence list but not synthesis initiation
+**Researcher inputs:** Analysis method (6 options), enrichment checkboxes (dynamic)
+**Display:** Session stats (participant/nugget counts), enrichment availability
+**Interaction class:** Side panel or modal (lightweight selection)
+**Priority:** P0 — core analysis workflow
+
+### 6. Transcript/Source PII Review
+
+**Slack:** DM-based with Approve / Reject / Rescrub buttons
+**Backend:** IMPLEMENTED — `sessionNotesHandler.ts` (approve, reject, rescrub flows)
+**Design coverage:** None — "Sources" screen doesn't show review workflow
+**Researcher inputs:** PII terms to scrub, attestation checkbox, approve/reject/rescrub decision
+**Interaction class:** Source viewer with inline PII highlights + action bar
+**Priority:** P0 — blocks analysis
+
+---
+
+## MISSING Screens — Important (P1)
+
+### 7. Discussion Guide Form
+
+**Slack:** `/qori-discuss` → `discussion_guide_modal` (6 fields, cascade pre-fill)
+**Backend:** IMPLEMENTED — `discussionGuideHandler.ts`
+**Design coverage:** None
+**Interaction class:** Full-page form with cascade pre-fill
+
+### 8. Session Analysis Form
+
+**Slack:** `/qori-analyze` → progressive modal (study → session → notes)
+**Backend:** IMPLEMENTED — `analyzeNotesHandler.ts`, `transcript.app-service.ts`
+**Design coverage:** None
+**Interaction class:** Guided flow (progressive disclosure)
+
+### 9. Research Readout Form
+
+**Slack:** `/qori-report` → readout modal (type + audience selection)
+**Backend:** IMPLEMENTED — `readoutHandler.ts`, `readout.app-service.ts`
+**Design coverage:** None — artifact review screen exists but not readout initiation
+**Interaction class:** Simple form (type select, audience checkboxes)
+
+### 10. Discovery Workflows
+
+**Slack:** `/qori-discover` → hub + 3 type modals
+**Backend:** IMPLEMENTED — `discoverHandler.ts`, 3 YAML templates
+**Design coverage:** None — mentioned in contract but no screens
+**Interaction class:** Full page with type tabs, file upload per type
+
+---
+
+## MISSING Screens — Later (P2)
+
+### 11. Participant Management
+
+**Slack:** `/qori-fieldwork` → add/update participant sub-modals
+**Backend:** IMPLEMENTED — `participantHandler.ts`, `study_participant.service.ts`
+**Design coverage:** None
+**Interaction class:** Table/grid with add/edit actions
+
+### 12. Participant Outreach
+
+**Slack:** 6 outreach type modals with YAML templates
+**Backend:** IMPLEMENTED — `participantOutreachHandler.ts` (1242 lines)
+**Design coverage:** None
+**Interaction class:** Template-driven message composer
+
+### 13. Observer Management
+
+**Slack:** Add observer modal with capacity validation + self-join
+**Backend:** IMPLEMENTED — `addObserverHandler.ts`
+**Design coverage:** None
+**Interaction class:** Multi-select form with capacity indicators
+
+### 14. Survey Pipeline (Schema → Privacy → Codebook → Match)
+
+**Slack:** 5 handler files with paginated review modals
+**Backend:** IMPLEMENTED — `surveySubmissionHandler.ts`, `surveyPrivacyHandler.ts`, `codebookHandler.ts`, `matchReviewHandler.ts`, `surveySynthesisAction.ts`
+**Design coverage:** None — zero survey screens in design package
+**Interaction class:** Multi-stage guided flow with review tables
+
+### 15. Ticket Creation
+
+**Slack:** `/qori-tickets` → 2-step modal
+**Backend:** IMPLEMENTED — `ticketHandler.ts`, GitHub Issues API
+**Design coverage:** None
+**Interaction class:** Selection form + preview
+
+---
+
+## NOT NEEDED (Slack-Specific)
 
 | Slack Feature | Why No Web Equivalent |
 |--------------|----------------------|
-| `/qori-learn` onboarding tour | Replace with web onboarding |
-| `/qori-repo` repository config | Admin settings page |
-| `/qori-sync` GitHub sync | Background sync, no UI needed |
+| `/qori-learn` onboarding tour | Web onboarding — different approach |
+| `/qori-repo` repository config | Admin settings integration |
+| `/qori-sync` GitHub sync | Background operation, no UI |
 | Channel binding | No channels in web |
-| DM notifications | Replace with in-app notifications |
+| DM notifications | In-app notifications |
+| Observer self-join CTA | Direct invite in web |
 
-## MISSING Flows — Must Design
+---
 
-| Flow | Current Slack Pattern | Suggested Web Pattern |
-|------|----------------------|----------------------|
-| Brief → Approval → Plan | DM buttons between modals | Guided flow or approval banner |
-| Transcript → PII Review → Approve | DM with review buttons | Inline review panel |
-| Analyze → Synthesize → Report | Sequential slash commands | Study pipeline progress view |
+## Source-Analysis Capability Flags
 
-## Repeated/Redundant Fields Across Modals
+CURRENT runtime support for source analysis capabilities:
 
-| Field | Appears In | Opportunity |
-|-------|-----------|-------------|
-| Study selection | analyze, synthesis, report, fieldwork, tickets | Auto-resolve from study context page |
-| Research method | brief, plan, discussion guide | Collect once in brief, cascade |
-| Problem statement | project creation, brief | Collect once in project, pre-fill |
-| Start date | brief, plan | Collect once in brief, inherit |
+| Capability | Status | Evidence |
+|-----------|--------|----------|
+| Inline transcript highlighting | NOT IMPLEMENTED | Transcripts stored as plain text; no span-level markup |
+| Exact-span annotations | NOT IMPLEMENTED | No span anchor model in study_notes or evidence_source |
+| Researcher comments on sources | NOT IMPLEMENTED | No comment model on study_notes |
+| Qualitative coding on transcript | NOT IMPLEMENTED | Coding happens in AI pipeline (/qori-analyze), not manual |
+| Manual nugget creation | NOT IMPLEMENTED | Nuggets created only by AI extraction (session_summary.yaml) |
+| Promote-to-evidence | NOT IMPLEMENTED | Evidence constructs created only by AI extraction pipelines |
+| Stable span anchors | NOT IMPLEMENTED | No span reference model exists |
+| Media clips (audio/video) | NOT IMPLEMENTED | Only text-based transcripts supported |
 
-## Fields That Could Be Derived Automatically
+**CURRENT:** All evidence creation is AI-driven. Researcher reviews AI output but cannot manually create, edit, or promote individual evidence items from either Slack or API.
 
-| Field | Currently Asked | Could Be Derived From |
-|-------|----------------|----------------------|
-| Lead researcher | Plan modal (users_select) | Session auth (logged-in user) |
-| Start date | Brief + Plan modals | Default: next Monday |
-| Study name | Not asked (Phase 2D: = project_slug) | Auto-derived, correct |
-| Session stats | Shown in synthesis modal | Auto-computed from study_variables |
-| Enrichment availability | Checkboxes in synthesis modal | Auto-detected from existing variables |
+**INTENDED:** UX-2B review contract (accept/reject) exists for findings/recommendations/themes at the construct level. No inline/span-level review is planned.
 
-## Suggested Surface Types for Missing Screens
+---
 
-| Screen | Suggested Type | Rationale |
-|--------|---------------|-----------|
-| New Project | Guided setup (2-3 steps) | Simple form, but stakeholder needs user picker |
-| Research Brief | Full-page form | 10+ fields, discovery artifact selection |
-| Brief Approval | Approval banner + inline actions | Not a separate page |
-| Research Plan | Full-page form | 6 fields, pre-filled from brief |
-| Synthesis Initiation | Side panel or modal | Method select + options |
-| Transcript Review | Source viewer with inline PII highlights | Critical for privacy workflow |
-| Discussion Guide | Full-page form | Pre-filled from brief cascade |
-| Session Analysis | Guided flow (study → session → notes) | Progressive disclosure |
-| Research Readout | Full-page form | Type selection + options |
-| Discovery | Full page with type tabs | Three sub-workflows |
+## Flows Designed vs. Missing
+
+### Designed (6 flows)
+
+| Flow | Coverage |
+|------|---------|
+| Start a Study | Covers study overview but NOT project creation or brief |
+| Review a Finding | Covers finding detail + UX-2B accept/reject |
+| Review and Publish Artifact | Covers artifact lifecycle |
+| Search and Ask | Covers search + Ask Qori |
+| Inspect Traceability | Covers lineage navigation |
+| Administer Organization | Covers admin basics |
+
+### Missing Flows
+
+| Flow | Current Slack Pattern | Needed |
+|------|----------------------|--------|
+| Create Project → Brief → Approval → Plan | Multi-command chain with DM approval | P0 — core lifecycle |
+| Upload → PII Review → Approve | DM-based review buttons | P0 — blocks analysis |
+| Analyze → Synthesize → Report | Sequential command execution | P1 — analysis workflow |
+| Discovery → Brief enrichment | Hub → type modal → brief checkboxes | P1 |
+| Survey pipeline (5 stages) | Sequential handler chain | P2 |
+| Participant outreach | 6 outreach type modals | P2 |
+
+---
+
+## Architecture Defects Affecting Workspace Design
+
+### CA-002: Readout Projection Boundary Violation
+
+**CURRENT:** Readout generation reads rendered GitHub artifacts at runtime (`readout.app-service.ts:113-166`) and passes them as `research_readout_data` to the YAML template.
+
+**INTENDED:** Readout should consume canonical evidence/domain state plus structured contextual inputs.
+
+**Impact on Workspace:** The artifact review screen may show content generated from GitHub projections rather than canonical evidence. This doesn't block Workspace v1 but affects data lineage fidelity.
+
+### CA-003: Ticket Candidate Terminal Traceability Gap
+
+**CURRENT:** Readout templates emit `*_ticket_candidates` → `ticketHandler` reads via direct DB query → creates GitHub Issues with template-local IDs. No canonical recommendation → ticket lineage.
+
+**INTENDED:** Canonical recommendation identity → deterministic handoff → persisted IMPLEMENTED_BY lineage.
+
+**Impact on Workspace:** Ticket/handoff screens cannot show canonical traceability from recommendation to issue.
+
+---
 
 ## Unresolved Product Questions for CD
 
-1. **Should participant management be in Workspace v1?** Currently complex Slack workflows (outreach templates, email formatting, status tracking). Recommend Slack-only for v1.
+1. **Participant management scope:** Should it be in Workspace v1? Currently 1700+ lines of Slack handler code. Recommend: P2 (v1.1) unless PM prioritizes.
 
-2. **How should brief approval work in Workspace?** Currently DM-based. Options: approval banner on brief page, notification + action button in work queue, or dedicated approval queue.
+2. **Survey pipeline scope:** 5-stage handler chain with 3000+ lines. Fully functional but complex. Recommend: P2 unless survey studies are v1 priority.
 
-3. **Should researchers be able to edit AI-generated content inline?** Currently not supported — researcher reviews GitHub artifact. Workspace could add inline editing with version tracking.
+3. **Brief approval UX:** Currently DM-based. Options: approval banner on brief page, work queue item, or dedicated approval queue.
 
-4. **Should the analysis pipeline be more interactive?** Currently AI generates all evidence. Workspace could add manual nugget creation, theme editing, finding promotion. Significant scope increase.
+4. **Inline editing of AI content:** Currently NOT IMPLEMENTED anywhere. Should Workspace add editing of generated artifacts/evidence? Significant scope.
 
-5. **Multi-study support:** Phase 2D forces single study per project. If Workspace enables multi-study, study name input must be restored and slug derivation changed.
+5. **Interactive analysis workspace:** Currently all AI-driven (no manual nugget/theme manipulation). Should Workspace add manual evidence creation? Significant scope.
 
-6. **Discovery timing:** Currently free-form. Should Workspace suggest "do discovery first" or allow any-order navigation?
+6. **Multi-study support:** Phase 2D forces single study per project. If Workspace enables multi-study, study name input must be restored.
 
-7. **Observer/fieldwork workflows:** The observer DM guide (`observerGuideDM.ts`) sends session-specific instructions via Slack DM. No web equivalent needed, or should observers get a read-only Workspace view?
+7. **Discovery timing guidance:** Should Workspace suggest "do discovery first" or allow free navigation? Currently free navigation.
 
-8. **Survey pipeline:** The survey submission → schema review → privacy review → codebook → match review → synthesis pipeline is complex and survey-specific. Should this be Workspace v1 or v1.1?
+8. **Observer workflows:** Should observers get read-only Workspace access? Currently Slack DM-only.
