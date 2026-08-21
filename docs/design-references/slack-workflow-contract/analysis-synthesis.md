@@ -64,14 +64,16 @@ The synthesis modal dynamically shows:
 
 ### Analysis Methods (YAML Templates)
 
-| Method | Template | What It Produces |
-|--------|----------|-----------------|
-| Affinity Mapping | `affinity_mapping.yaml` | Grouped themes from nuggets |
-| Thematic Analysis | `thematic_analysis.yaml` | Coded themes with evidence |
-| Cross-Session Synthesis | `cross_session_synthesis.yaml` | Cross-participant patterns |
-| Usability Issues | `usability_issues.yaml` | Prioritized usability findings |
-| Recommendations | `recommendations.yaml` | Actionable recommendations from findings |
-| Executive Summary | `executive_summary.yaml` | High-level summary for stakeholders |
+| Method | Value | Template | What It Produces |
+|--------|-------|----------|-----------------|
+| Affinity Mapping | `affinity_mapping` | `affinity_mapping.yaml` | Grouped themes from nuggets |
+| Journey Mapping | `journey_mapping` | `journey_mapping.yaml` | Experience maps across sessions |
+| Persona Generation | `persona_generation` | `persona_generator.yaml` | Research-grounded personas |
+| Jobs to Be Done | `jobs_to_be_done` | `jobs_to_be_done.yaml` | User jobs and outcomes |
+| Usability Issues | `usability_issues` | `usability_issues_extractor.yaml` | Prioritized usability findings |
+| Design Opportunities | `design_opportunities` | `design_opportunity_generator.yaml` | HMW statements and design directions |
+
+Source of truth: `backend/src/application/synthesis.app-service.ts:64-71` (`ANALYSIS_YAML_MAPPING`).
 
 ### Process
 1. Researcher selects study → analysis method → enrichments
@@ -82,12 +84,7 @@ The synthesis modal dynamically shows:
 6. Artifact written to GitHub
 
 ### Recommended Analysis Order
-The `/qori-synthesis` modal shows enrichment availability, implying this order:
-1. Affinity Mapping or Thematic Analysis (produces themes)
-2. Cross-Session Synthesis (consumes themes)
-3. Usability Issues (produces prioritized issues)
-4. Recommendations (consumes findings + issues)
-5. Executive Summary (consumes everything)
+The `/qori-synthesis` modal shows enrichment availability. Enrichments become available as prior synthesis runs produce variables. The modal does not enforce ordering — researchers choose based on what enrichments are available.
 
 ### What Researcher Controls
 - Analysis method selection

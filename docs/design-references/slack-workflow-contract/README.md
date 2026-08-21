@@ -27,6 +27,7 @@ This package documents the complete researcher workflow as it exists today in Qo
 | [workflow-dependencies.md](workflow-dependencies.md) | Dependency/unlock rules between workflow stages |
 | [workspace-gap-analysis.md](workspace-gap-analysis.md) | Missing Workspace screens and flows |
 | [workflow-contract.json](workflow-contract.json) | Machine-readable workflow contract |
+| [claims-audit.md](claims-audit.md) | False claims found and corrected, with runtime evidence |
 
 ## Source of Truth
 

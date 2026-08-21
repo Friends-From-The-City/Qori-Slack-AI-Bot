@@ -116,7 +116,9 @@ Field tables for every researcher-facing modal in the current Slack surface. Eac
 | Session stats | (read-only) | display | — | Participant/nugget breakdown | — |
 | Enrichments | enrichment_checkboxes | checkboxes | No | Auto-detected from existing variables | EPHEMERAL |
 
-**Options for analysis_method:** affinity_mapping, thematic_analysis, cross_session_synthesis, usability_issues, recommendations, executive_summary
+**Options for analysis_method:** affinity_mapping, journey_mapping, persona_generation, jobs_to_be_done, usability_issues, design_opportunities
+
+Source of truth: `backend/src/helpers/slack/ui/researchSynthesisModal.ts:222-247` and `backend/src/application/synthesis.app-service.ts:64-71`.
 
 **Enrichment checkboxes (dynamic):** themes, barriers, research_questions, personas, metadata, constraints, jobs — shown only when corresponding cascade variables exist.
 

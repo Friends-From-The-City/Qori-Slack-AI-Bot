@@ -13,12 +13,12 @@ Every researcher-facing artifact currently produced by Qori.
 | Stakeholder Synthesis | `stakeholder_synthesis.yaml` | `/qori-discover` (stakeholder) | `discovery` | No | Yes (GitHub) |
 | Survey Synthesis | `survey_synthesis.yaml` | `/qori-discover` (survey) | `discovery` | No | Yes (GitHub) |
 | Session Summary | `session_summary.yaml` | `/qori-analyze` submission | `synthesis` | No | Yes (GitHub) |
-| Affinity Mapping | `affinity_mapping.yaml` | `/qori-synthesis` (affinity) | `synthesis` | No | Yes (GitHub) |
-| Thematic Analysis | `thematic_analysis.yaml` | `/qori-synthesis` (thematic) | `synthesis` | No | Yes (GitHub) |
-| Cross-Session Synthesis | `cross_session_synthesis.yaml` | `/qori-synthesis` (cross) | `synthesis` | No | Yes (GitHub) |
-| Usability Issues | `usability_issues.yaml` | `/qori-synthesis` (usability) | `synthesis` | No | Yes (GitHub) |
-| Recommendations | `recommendations.yaml` | `/qori-synthesis` (recs) | `synthesis` | No | Yes (GitHub) |
-| Executive Summary | `executive_summary.yaml` | `/qori-synthesis` (exec) | `synthesis` | No | Yes (GitHub) |
+| Affinity Mapping | `affinity_mapping.yaml` | `/qori-synthesis` (affinity_mapping) | `synthesis` | No | Yes (GitHub) |
+| Journey Mapping | `journey_mapping.yaml` | `/qori-synthesis` (journey_mapping) | `synthesis` | No | Yes (GitHub) |
+| Persona Generation | `persona_generator.yaml` | `/qori-synthesis` (persona_generation) | `synthesis` | No | Yes (GitHub) |
+| Jobs to Be Done | `jobs_to_be_done.yaml` | `/qori-synthesis` (jobs_to_be_done) | `synthesis` | No | Yes (GitHub) |
+| Usability Issues | `usability_issues_extractor.yaml` | `/qori-synthesis` (usability_issues) | `synthesis` | No | Yes (GitHub) |
+| Design Opportunities | `design_opportunity_generator.yaml` | `/qori-synthesis` (design_opportunities) | `synthesis` | No | Yes (GitHub) |
 | Research Readout | `research_readout.yaml` v5.4.1 | `/qori-report` (readout) | `readout` | No | Yes (GitHub) |
 | Targeted Readout | `targeted_readout.yaml` | `/qori-report` (targeted) | `readout` | No | Yes (GitHub) |
 | GitHub Issues | (ticket template) | `/qori-tickets` | `tickets` | No | Yes (GitHub Issues) |

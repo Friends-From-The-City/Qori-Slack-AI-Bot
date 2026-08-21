@@ -209,7 +209,7 @@
       "callback_id": "research-synthesis-modal",
       "inputs": [
         { "key": "study", "type": "study_id", "required": true, "authority": "ephemeral" },
-        { "key": "analysis_method", "type": "enum", "required": true, "values": ["affinity_mapping", "thematic_analysis", "cross_session_synthesis", "usability_issues", "recommendations", "executive_summary"], "authority": "ai_input" },
+        { "key": "analysis_method", "type": "enum", "required": true, "values": ["affinity_mapping", "journey_mapping", "persona_generation", "jobs_to_be_done", "usability_issues", "design_opportunities"], "authority": "ai_input" },
         { "key": "enrichments", "type": "checkbox_selection", "required": false, "authority": "ephemeral" }
       ],
       "consumes": ["atomic_nugget_core", "validated_themes", "study_id"],

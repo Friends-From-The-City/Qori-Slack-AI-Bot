@@ -117,7 +117,7 @@ For each workflow stage: what enables it and what it enables next.
 **Enables:** Research Readout, Tickets
 
 **Hard dependency:** Analyzed session notes (nuggets exist)
-**Types:** affinity_mapping, thematic_analysis, cross_session_synthesis, usability_issues, recommendations, executive_summary
+**Types:** affinity_mapping, journey_mapping, persona_generation, jobs_to_be_done, usability_issues, design_opportunities
 
 ---
 
