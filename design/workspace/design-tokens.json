@@ -3,25 +3,26 @@
   "meta": {
     "name": "Qori Workspace tokens",
     "version": "0.1.0",
-    "themable": "Agencies override brand + semantic aliases at runtime; primitives and layout are fixed. See branding-model.md."
+    "themable": "Agencies override brand + semantic aliases at runtime; primitives and layout are fixed. See branding-model.md.",
+    "scale-discipline": "Every spacing value in product UI MUST be a space-scale step; panels use layout tokens. Off-scale values are defects."
   },
   "space": { "1": "4px", "2": "8px", "3": "12px", "4": "16px", "5": "24px", "6": "32px", "7": "48px", "8": "64px" },
   "type": {
     "family": {
-      "display": "'Space Grotesk', 'Public Sans', sans-serif",
+      "display": "'Public Sans', system-ui, sans-serif",
       "ui": "'Public Sans', system-ui, sans-serif",
       "mono": "ui-monospace, 'SF Mono', Menlo, monospace"
     },
     "scale": {
-      "h1": { "size": "28px", "line": "34px", "weight": 600, "family": "display" },
-      "h2": { "size": "22px", "line": "28px", "weight": 600, "family": "display" },
-      "h3": { "size": "18px", "line": "24px", "weight": 600, "family": "display" },
+      "h1": { "size": "28px", "line": "34px", "weight": 700, "family": "ui" },
+      "h2": { "size": "22px", "line": "28px", "weight": 700, "family": "ui" },
+      "h3": { "size": "18px", "line": "24px", "weight": 700, "family": "ui" },
       "h4": { "size": "15px", "line": "20px", "weight": 600, "family": "ui" },
-      "body": { "size": "15px", "line": "22px", "weight": 400, "family": "ui" },
-      "body-strong": { "size": "15px", "line": "22px", "weight": 600, "family": "ui" },
-      "secondary": { "size": "13px", "line": "18px", "weight": 400, "family": "ui" },
+      "body": { "size": "15px", "line": "24px", "weight": 400, "family": "ui" },
+      "body-strong": { "size": "15px", "line": "24px", "weight": 600, "family": "ui" },
+      "secondary": { "size": "13px", "line": "20px", "weight": 400, "family": "ui" },
       "caption": { "size": "12px", "line": "16px", "weight": 500, "family": "ui" },
-      "mono": { "size": "13px", "line": "18px", "weight": 400, "family": "mono" }
+      "mono": { "size": "13px", "line": "20px", "weight": 400, "family": "mono" }
     }
   },
   "radius": { "sm": "4px", "md": "8px", "lg": "12px", "full": "999px" },
@@ -62,6 +63,7 @@
     "surface-selected": "#FBF4DC",
     "text": "#1A1915",
     "text-muted": "#5C594F",
+    "text-meta": "#44423C",
     "text-on-brand": "#1A1915",
     "border": "#E5E2DA",
     "border-emphasis": "#C9C5BA",
@@ -79,8 +81,47 @@
     "info-surface": "#E7F1F6",
     "stale": "{color.warning}",
     "ai-suggested-border": "{color.border-emphasis}",
-    "ai-suggested-surface": "{color.surface-muted}"
+    "ai-suggested-surface": "{color.surface-muted}",
+    "state": {
+      "comment": "Phase 4 state grammar — every state = shape + glyph + text, never color alone. Chips use border style + glyph; colors here are the supporting tone.",
+      "proposed-border": "{color.border-emphasis}",
+      "proposed-style": "dashed 1px + ✦ glyph",
+      "accepted-border": "{color.text}",
+      "accepted-style": "solid 1px + ✓ glyph, no fill (quiet)",
+      "rejected-border": "{color.border-emphasis}",
+      "rejected-text": "{color.text-muted}",
+      "overridden-surface": "{color.text}",
+      "overridden-text": "{color.paper}",
+      "revisit-surface": "{color.warning-surface}",
+      "revisit-border": "{color.warning}",
+      "privacy-pending-border": "{color.border-emphasis}",
+      "privacy-clear-border": "{color.text}",
+      "privacy-redacted-surface": "{color.text}",
+      "privacy-redacted-text": "{color.brand}",
+      "privacy-restricted-surface": "{color.surface-muted}",
+      "hold-surface": "{color.text}",
+      "hold-text": "{color.paper}",
+      "archived-surface": "{color.surface-muted}",
+      "archived-text": "{color.text-muted}"
+    },
+    "custody": {
+      "comment": "Traceability signature (Phase 4B). Yellow = backward custody only; forward BECAME is grey. Not agency-themable.",
+      "mark": "{color.brand}",
+      "underline-width": "2px",
+      "spine-width": "3px",
+      "became": "{color.text-muted}",
+      "seam-label": "{color.text-muted}"
+    },
+    "dependency": {
+      "comment": "Lifecycle rail node states (workflow-dependencies.md classes)",
+      "locked": "{color.error}",
+      "readiness-warn": "{color.warning}",
+      "suggested": "{color.success}",
+      "free": "{color.text-muted}",
+      "current-marker": "{color.brand}"
+    }
   },
   "agency-themable": ["color.brand", "color.brand-ink", "color.link", "color.focus", "color.surface-selected"],
-  "fixed": ["space", "type.scale", "radius", "layout", "breakpoints", "motion", "focus", "semantic state colors (success/warning/error/info)"]
+  "uswds-mapping": "See uswds-mapping.md — semantic token → USWDS foundation → override allowance. State + custody + dependency tokens are NOT agency-themable.",
+  "fixed": ["space", "type.scale", "radius", "layout", "breakpoints", "motion", "focus", "semantic state colors (success/warning/error/info)", "color.state.*", "color.custody.*", "color.dependency.*"]
 }

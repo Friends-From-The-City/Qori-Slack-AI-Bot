@@ -67,3 +67,33 @@ Findings/recommendations/artifacts get canonical top-level routes (they outlive 
 ## What is never in the IA
 
 Database vocabulary (constructs, variables, cascade, embeddings), raw integration internals, per-agency custom sections.
+
+
+## Lifecycle navigation (Phase B revision)
+
+Study navigation is dependency-aware, not free-form. Each step renders one of four states from workflow-dependencies.md:
+- LOCKED (hard dependency unmet): shown with what unlocks it ("Plan unlocks when the brief's objectives and questions exist")
+- READINESS WARNING (cascade gate): guide without objectives -> warning view, no submit
+- SUGGESTED NEXT (soft): non-blocking prompt after each commit
+- FREE: discovery, guide, ask, participants, observers
+
+## Entry points for starting research
+
+- Home: "Start research" primary action -> New Project (guided, 3 fields: name, problem statement, optional approver)
+- Project page: "Create brief" when no study exists (Phase 2D: one study per project, study inherits project slug — no study-name ask)
+- Empty states on Studies/Sources link to their prerequisite step, never dead-end
+
+## New routes (P0-P2 surfaces)
+
+| Surface | Route |
+|---|---|
+| New Project | /projects/new |
+| Brief form | /studies/:id/brief/new |
+| Brief approval | banner on /studies/:id/brief + /queue item |
+| Plan form | /studies/:id/plan/new |
+| Synthesis initiation | panel over /studies/:id/evidence |
+| PII review | /studies/:id/sources/:noteId/review |
+| Session analysis | /studies/:id/sources -> analyze action |
+| Readout initiation | /studies/:id/outputs -> new readout |
+| Discovery hub | /projects/:id/discovery |
+| Survey pipeline | /projects/:id/discovery/surveys/:surveyId/(schema|privacy|codebook|matches) |
